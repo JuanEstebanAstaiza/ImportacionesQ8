@@ -1,0 +1,218 @@
+{
+  "main": {
+    "id": "612851b059831946",
+    "type": "split",
+    "children": [
+      {
+        "id": "c86abcab995b95fb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f459d60cd271d13b",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Mapa-Conexiones-Obsidian"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "214e994744f4a0ba",
+    "type": "split",
+    "children": [
+      {
+        "id": "8745f894f2beded1",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8a41a9d1b898f365",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de archivos"
+            }
+          },
+          {
+            "id": "d0fa8fcadf2304d4",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Buscar"
+            }
+          },
+          {
+            "id": "04adf40a7fac12d9",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "8e2b96735ca492d1",
+    "type": "split",
+    "children": [
+      {
+        "id": "58334fbc2b456f33",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4fb23bfb7213bee1",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Enlaces entrantes de Mapa-Conexiones-Obsidian"
+            }
+          },
+          {
+            "id": "185dc606794e5e25",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Enlaces salientes de Mapa-Conexiones-Obsidian"
+            }
+          },
+          {
+            "id": "e2f8bef234f313da",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "2af21595c3dd77f7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas las propiedades"
+            }
+          },
+          {
+            "id": "b4ed19a84d02f558",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Esquema de Mapa-Conexiones-Obsidian"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false
+    }
+  },
+  "active": "f459d60cd271d13b",
+  "lastOpenFiles": [
+    "Propuesta_Plataforma_Importacion.md",
+    "Inversionistas/Metricas-MVP.md",
+    "Inversionistas/Modelo-Negocio.md",
+    "Inversionistas/Pitch-Inversionistas.md",
+    "Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md",
+    "Fases-Desarrollo/Semana-2-Red-y-Ordenes/Tareas-Semana-2.md",
+    "Fases-Desarrollo/Semana-1-Fundaciones-y-Cotizaciones/Tareas-Semana-1.md",
+    "Frontend/UX-UI-Guia.md",
+    "Frontend/Wireframes.md",
+    "Frontend/Pantallas-Admin.md",
+    "Frontend/Pantallas-Importador.md",
+    "Frontend/Pantallas-Solicitante.md",
+    "Backend/Matching-Cotizaciones.md",
+    "Backend/Chat-WebSocket.md",
+    "Backend/Pagos-Wompi.md",
+    "Backend/Autenticacion.md",
+    "Backend/Base-Datos.md",
+    "Backend/API-Rest.md",
+    "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
+    "00-Index-y-Navegacion/README.md",
+    "Inversionistas",
+    "Fases-Desarrollo/Semana-3-Chat-y-Pulido",
+    "Fases-Desarrollo/Semana-2-Red-y-Ordenes",
+    "Fases-Desarrollo/Semana-1-Fundaciones-y-Cotizaciones",
+    "Fases-Desarrollo",
+    "Frontend",
+    "Backend",
+    "00-Index-y-Navegacion",
+    "Bienvenido.md"
+  ]
+}
