@@ -17,203 +17,878 @@ Semana 3 del MVP a 3 semanas. Entregables: Chat 1 a 1 en tiempo real ligado a or
 
 ---
 
-## 🔧 Tareas Backend
+## 🔧 Tareas Backend — Semana 3
 
-### Tarea 1: Implementar chat en tiempo real con WebSocket + Redis Pub/Sub
+### Tarea 3.1: Implementar chat en tiempo real con WebSocket + Redis Pub/Sub
 
 **Módulo:** Backend/Chat-WebSocket  
 **Duración estimada:** 2 días  
-**Responsable:** Desarrollador Backend
+**Responsable:** Desarrollador Backend Senior
 
-- [ ] Endpoint WebSocket: `ws://api.importacionesq8.com/ws/chat/{conversacion_id}`
-- [ ] Validar JWT token en la conexión WebSocket
-- [ ] Verificar que el usuario está autorizado en la conversación (solicitante o importador)
-- [ ] Suscribirse al canal Redis Pub/Sub correspondiente a la conversación: `chat:{conversacion_id}`
-- [ ] Al recibir mensaje del cliente, guardar en MySQL y publicar en Redis:
-  - INSERT INTO mensajes_chat (conversacion_id, remitente_id, contenido, tipo)
-  - PUBLISH chat:{conversacion_id} {mensaje_data}
-- [ ] Crear conversación automáticamente al confirmar pago (webhook Wompi)
+#### Descripción
+Implementar el sistema de chat en tiempo real usando WebSocket para la comunicación bidireccional y Redis Pub/Sub para la distribución de mensajes entre instancias del servidor. Este es el entregable más crítico de esta semana.
 
-**Documentación relacionada:** [[Backend/Chat-WebSocket]]
+#### Pasos de implementación
+
+1. **Instalar dependencias** — Agregar a `requirements.txt`:
+   - `websockets==12.0`
+   - `redis==5.0.1` (si no está ya instalado)
+
+2. **Configurar WebSocket en FastAPI** (`main.py`)
+   ```python
+   from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+   
+   app = FastAPI()
+   
+   # Almacén de conexiones WebSocket activas: {conversacion_id: [websocket1, websocket2]}
+   active_connections: dict[str, list[WebSocket]] = {}
+   
+   @app.websocket("/ws/chat/{conversation_id}")
+   async def websocket_chat(websocket: WebSocket, conversation_id: str):
+       """
+       Endpoint WebSocket para chat en tiempo real.
+       
+       - Valida el JWT token del cliente
+       - Verifica que el usuario está autorizado en la conversación
+       - Suscribe al canal Redis Pub/Sub correspondiente
+       - Reenvía mensajes entre clientes y Redis
+       """
+       # 1. Aceptar conexión WebSocket
+       await websocket.accept()
+       
+       # 2. Validar JWT token del cliente (extraído de query params)
+       token = websocket.query_params.get("token")
+       if not token:
+           await websocket.close(code=4001, reason="Token no proporcionado")
+           return
+       
+       try:
+           payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+           user_id = payload["sub"]
+           rol = payload["rol"]
+       except jwt.InvalidTokenError:
+           await websocket.close(code=4001, reason="Token inválido")
+           return
+       
+       # 3. Verificar que el usuario está autorizado en la conversación
+       db = SessionLocal()
+       try:
+         conversacion = db.query(ConversacionChat).filter(
+             ConversacionChat.id == conversation_id
+         ).first()
+         
+         if not conversacion or (
+             conversacion.solicitante_id != user_id and 
+             conversacion.importador_id != user_id
+         ):
+             await websocket.close(code=4003, reason="No autorizado")
+             return
+       finally:
+           db.close()
+       
+       # 4. Agregar conexión al almacén de conexiones activas
+       if conversation_id not in active_connections:
+           active_connections[conversation_id] = []
+       active_connections[conversation_id].append(websocket)
+       
+       try:
+           while True:
+               # 5. Recibir mensaje del cliente
+               data = await websocket.receive_json()
+               
+               # 6. Validar y guardar el mensaje en MySQL
+               db = SessionLocal()
+               try:
+                   nuevo_mensaje = MensajeChat(
+                       conversacion_id=conversation_id,
+                       remitente_id=user_id,
+                       contenido=data["contenido"],
+                       tipo="texto"
+                   )
+                   db.add(nuevo_mensaje)
+                   db.commit()
+                   
+                   # 7. Publicar mensaje en Redis Pub/Sub para reenviar a otros clientes
+                   redis_client.publish(
+                       f"chat:{conversation_id}",
+                       json.dumps({
+                           "tipo": "mensaje",
+                           "conversacion_id": conversation_id,
+                           "remitente_id": user_id,
+                           "contenido": data["contenido"],
+                           "tipo_mensaje": "texto",
+                           "fecha_envio": datetime.now().isoformat()
+                       })
+                   )
+               finally:
+                   db.close()
+       
+       except WebSocketDisconnect:
+           # 8. Remover conexión cuando el cliente se desconecta
+           if conversation_id in active_connections:
+               active_connections[conversation_id].remove(websocket)
+               if not active_connections[conversation_id]:
+                   del active_connections[conversation_id]
+   ```
+
+3. **Implementar servicio de reenvío de mensajes desde Redis** (`services/chat_service.py`)
+   - Función `listen_redis_channel(conversation_id)` que escucha el canal Redis Pub/Sub y reenvía los mensajes a las conexiones WebSocket activas
+   
+4. **Crear modelo ORM para ConversacionChat** (`models/chat.py`)
+   - Campos: id (UUID), orden_id FK → ordenes.id, solicitante_id FK, importador_id FK, fecha_creacion
+
+5. **Crear modelo ORM para MensajeChat** (`models/chat.py`)
+   - Campos: id (UUID), conversacion_id FK → conversaciones_chat.id, remitente_id FK, contenido, tipo (ENUM: "texto", "archivo"), fecha_envio
+
+6. **Integrar con endpoint POST /pagos/webhook/wompi** — Crear conversación de chat automáticamente al confirmar pago (ya implementado en Tarea 2.3)
+
+#### Criterios de aceptación
+
+- [ ] El WebSocket se conecta correctamente y valida el JWT token del cliente
+- [ ] Los mensajes enviados por un cliente se guardan en MySQL y se reenvían a otros clientes vía Redis Pub/Sub
+- [ ] Cuando un cliente se desconecta, la conexión se remueve correctamente del almacén de conexiones activas
+- [ ] El chat funciona entre el solicitante y el importador asignado a una orden
+
+#### Entregables
+
+1. Endpoint WebSocket `/ws/chat/{conversation_id}` funcional con validación JWT
+2. Servicio de reenvío de mensajes desde Redis Pub/Sub
+3. Modelos ORM para ConversacionChat y MensajeChat
+4. Integración del chat con el flujo de confirmación de pago
 
 ---
 
-### Tarea 2: Implementar endpoints REST de chat como fallback
+### Tarea 3.2: Implementar endpoints REST de chat como fallback
 
 **Módulo:** Backend/API-Rest  
 **Duración estimada:** 0.5 día  
 **Responsable:** Desarrollador Backend
 
-- [ ] Endpoint GET /chat/conversaciones (listar conversaciones del usuario autenticado)
-- [ ] Endpoint GET /chat/conversaciones/{id}/mensajes (obtener mensajes de una conversación — paginados, últimos 50)
-- [ ] Endpoint POST /chat/conversaciones/{id}/mensajes (enviar mensaje vía REST como fallback)
+#### Descripción
+Implementar los endpoints REST para cargar el historial de mensajes y enviar mensajes como fallback cuando la conexión WebSocket falla.
 
-**Documentación relacionada:** [[Backend/API-Rest]]
+#### Pasos de implementación
+
+1. **Implementar endpoint GET /chat/conversaciones** (`routers/chat.py`) — Listar conversaciones del usuario autenticado
+   ```python
+   @app.get("/chat/conversaciones")
+   async def listar_conversaciones(
+       current_user: dict = Depends(require_rol("solicitante")),
+       db: Session = Depends(get_db)
+   ):
+       # Solicitante ve sus conversaciones como solicitante
+       conversaciones = db.query(ConversacionChat).filter(
+           ConversacionChat.solicitante_id == current_user["user_id"]
+       ).order_by(ConversacionChat.fecha_creacion.desc()).all()
+       
+       return [{
+           "id": str(c.id),
+           "orden_id": str(c.orden_id),
+           "importador_id": str(c.importador_id),
+           "fecha_creacion": c.fecha_creacion.isoformat(),
+           "ultimo_mensaje": None  # Se puede optimizar con subquery
+       } for c in conversaciones]
+   ```
+
+2. **Implementar endpoint GET /chat/conversaciones/{id}/mensajes** (`routers/chat.py`) — Obtener mensajes de una conversación (paginados, últimos 50)
+   ```python
+   @app.get("/chat/conversaciones/{conversation_id}/mensajes")
+   async def obtener_mensajes(
+       conversation_id: str,
+       limite: int = 50,
+       offset: int = 0,
+       current_user: dict = Depends(require_rol("solicitante")),
+       db: Session = Depends(get_db)
+   ):
+       # Verificar que el usuario está autorizado en la conversación
+       conversacion = db.query(ConversacionChat).filter(
+           ConversacionChat.id == conversation_id,
+           (ConversacionChat.solicitante_id == current_user["user_id"]) |
+           (ConversacionChat.importador_id == current_user["user_id"])
+       ).first()
+       
+       if not conversacion:
+           raise HTTPException(status_code=403, detail="No autorizado")
+       
+       # Obtener mensajes paginados
+       mensajes = db.query(MensajeChat).filter(
+           MensajeChat.conversacion_id == conversation_id
+       ).order_by(MensajeChat.fecha_envio.desc()).offset(offset).limit(limite).all()
+       
+       return [{
+           "id": str(m.id),
+           "remitente_id": str(m.remitente_id),
+           "contenido": m.contenido,
+           "tipo_mensaje": m.tipo,
+           "fecha_envio": m.fecha_envio.isoformat()
+       } for m in mensajes]
+   ```
+
+3. **Implementar endpoint POST /chat/conversaciones/{id}/mensajes** (`routers/chat.py`) — Enviar mensaje vía REST como fallback
+   ```python
+   @app.post("/chat/conversaciones/{conversation_id}/mensajes")
+   async def enviar_mensaje_rest(
+       conversation_id: str,
+       mensaje: dict,  # {"contenido": "Hola"}
+       current_user: dict = Depends(require_rol("solicitante")),
+       db: Session = Depends(get_db)
+   ):
+       # Verificar que el usuario está autorizado en la conversación
+       conversacion = db.query(ConversacionChat).filter(
+           ConversacionChat.id == conversation_id,
+           (ConversacionChat.solicitante_id == current_user["user_id"]) |
+           (ConversacionChat.importador_id == current_user["user_id"])
+       ).first()
+       
+       if not conversacion:
+           raise HTTPException(status_code=403, detail="No autorizado")
+       
+       # Guardar mensaje en MySQL
+       nuevo_mensaje = MensajeChat(
+           conversacion_id=conversation_id,
+           remitente_id=current_user["user_id"],
+           contenido=mensaje["contenido"],
+           tipo="texto"
+       )
+       db.add(nuevo_mensaje)
+       db.commit()
+       
+       # Publicar en Redis Pub/Sub para reenviar a otros clientes
+       redis_client.publish(
+           f"chat:{conversation_id}",
+           json.dumps({
+               "tipo": "mensaje",
+               "conversacion_id": conversation_id,
+               "remitente_id": current_user["user_id"],
+               "contenido": mensaje["contenido"],
+               "tipo_mensaje": "texto",
+               "fecha_envio": datetime.now().isoformat()
+           })
+       )
+       
+       return {"success": True}
+   ```
+
+#### Criterios de aceptación
+
+- [ ] GET /chat/conversaciones retorna conversaciones del usuario autenticado (200 OK)
+- [ ] GET /chat/conversaciones/{id}/mensajes retorna mensajes paginados (últimos 50) o 403 si no está autorizado
+- [ ] POST /chat/conversaciones/{id}/mensajes envía mensaje vía REST como fallback
+
+#### Entregables
+
+1. Endpoint GET /chat/conversaciones funcional
+2. Endpoint GET /chat/conversaciones/{id}/mensajes funcional con paginación
+3. Endpoint POST /chat/conversaciones/{id}/mensajes funcional como fallback
 
 ---
 
-### Tarea 3: Implementar repositorio de documentos por orden
+### Tarea 3.3: Implementar repositorio de documentos por orden
 
 **Módulo:** Backend/API-Rest  
 **Duración estimada:** 1 día  
 **Responsable:** Desarrollador Backend
 
-- [ ] Modelo DocumentoOrden con campos: orden_id, nombre, url, tipo
-- [ ] Endpoint GET /ordenes/{id}/documentos (listar documentos de una orden)
-- [ ] Endpoint POST /ordenes/{id}/documentos (subir documento a una orden — importador/admin)
-- [ ] Tipos de documentos: factura_proforma, factura_comercial, packing_list, comprobante_pago
+#### Descripción
+Implementar el modelo y endpoints REST para que las órdenes tengan documentos adjuntos accesibles desde el detalle de la orden.
 
-**Documentación relacionada:** [[Backend/API-Rest]]
+#### Pasos de implementación
+
+1. **Crear esquema Pydantic para DocumentoOrden** (`schemas/orden.py`)
+   ```python
+   from pydantic import BaseModel
+   
+   class DocumentoOrdenCreate(BaseModel):
+       nombre: str
+       tipo: str  # "factura_proforma", "factura_comercial", "packing_list", "comprobante_pago"
+   
+   class DocumentoOrdenResponse(BaseModel):
+       id: str
+       orden_id: str
+       nombre: str
+       url: str
+       tipo: str
+   ```
+
+2. **Crear modelo ORM para DocumentoOrden** (`models/orden.py`) — Ya creado en Tarea 2.2, verificar que existe
+
+3. **Implementar endpoint GET /ordenes/{id}/documentos** (`routers/ordenes.py`) — Listar documentos de una orden
+   ```python
+   @app.get("/ordenes/{orden_id}/documentos")
+   async def listar_documentos(
+       orden_id: str,
+       current_user: dict = Depends(require_rol("solicitante")),
+       db: Session = Depends(get_db)
+   ):
+       # Verificar que el usuario está autorizado en la orden
+       orden = db.query(Orden).filter(
+           Orden.id == orden_id,
+           (Orden.solicitante_id == current_user["user_id"]) |
+           (Orden.importador_id == current_user["user_id"])
+       ).first()
+       
+       if not orden:
+           raise HTTPException(status_code=403, detail="No autorizado")
+       
+       # Obtener documentos de la orden
+       documentos = db.query(DocumentoOrden).filter(
+           DocumentoOrden.orden_id == orden_id
+       ).all()
+       
+       return [{
+           "id": str(d.id),
+           "nombre": d.nombre,
+           "url": d.url,
+           "tipo": d.tipo
+       } for d in documentos]
+   ```
+
+4. **Implementar endpoint POST /ordenes/{id}/documentos** (`routers/ordenes.py`) — Subir documento a una orden (solo importador/admin)
+   ```python
+   @app.post("/ordenes/{orden_id}/documentos")
+   async def subir_documento(
+       orden_id: str,
+       documento: DocumentoOrdenCreate,
+       current_user: dict = Depends(require_rol("importador")),
+       db: Session = Depends(get_db)
+   ):
+       # Verificar que el importador está autorizado en la orden
+       orden = db.query(Orden).filter(
+           Orden.id == orden_id,
+           Orden.importador_id == current_user["user_id"]
+       ).first()
+       
+       if not orden:
+           raise HTTPException(status_code=403, detail="No autorizado")
+       
+       # Subir documento al servicio de almacenamiento (S3/Cloudinary)
+       url_documento = await subir_documento_almacenamiento(documento.nombre, documento.tipo)
+       
+       # Crear registro en la base de datos
+       nuevo_documento = DocumentoOrden(
+           orden_id=orden_id,
+           nombre=documento.nombre,
+           url=url_documento,
+           tipo=documento.tipo
+       )
+       db.add(nuevo_documento)
+       db.commit()
+       
+       return {"success": True, "url": url_documento}
+   ```
+
+#### Criterios de aceptación
+
+- [ ] GET /ordenes/{id}/documentos retorna documentos de una orden (200 OK) o 403 si no está autorizado
+- [ ] POST /ordenes/{id}/documentos sube un documento a la orden (solo importador/admin)
+
+#### Entregables
+
+1. Endpoint GET /ordenes/{id}/documentos funcional con verificación de autorización
+2. Endpoint POST /ordenes/{id}/documentos funcional para subir documentos
 
 ---
 
-### Tarea 4: Implementar panel de administración interno (disputas)
+### Tarea 3.4: Implementar panel de administración interno (disputas)
 
 **Módulo:** Backend/API-Rest  
 **Duración estimada:** 1 día  
-**Responsable:** Desarrollador Backend
+**Responsable:** Desarrollador Backend Senior
 
-- [ ] Endpoint GET /admin/cotizaciones-abiertas (listar todas las cotizaciones abiertas activas — solo admin)
-- [ ] Endpoint GET /admin/disputas (listar órdenes en disputa — solo admin)
-- [ ] Endpoint POST /admin/importadores/{id}/verificar (verificar empresa importadora — solo admin)
-- [ ] Endpoint PUT /admin/importadores/{id}/estado (activar/desactivar importador de la red — solo admin)
+#### Descripción
+Implementar los endpoints REST para el panel de administración interno donde el equipo puede ver cotizaciones abiertas activas, disputas e importadores vinculados.
 
-**Documentación relacionada:** [[Backend/API-Rest]]
+#### Pasos de implementación
+
+1. **Implementar endpoint GET /admin/cotizaciones-abiertas** (`routers/admin.py`) — Listar todas las cotizaciones abiertas activas (solo admin)
+   ```python
+   @app.get("/admin/cotizaciones-abiertas")
+   async def listar_cotizaciones_abiertas(
+       current_user: dict = Depends(require_rol("admin")),
+       db: Session = Depends(get_db)
+   ):
+       cotizaciones = db.query(Cotizacion).filter(
+           Cotizacion.estado == "abierta"
+       ).order_by(Cotizacion.fecha_creacion.desc()).all()
+       
+       return [{
+           "id": str(c.id),
+           "solicitante_id": str(c.solicitante_id),
+           "pais_importacion": c.pais_importacion,
+           "linea_producto": c.linea_producto,
+           "fecha_creacion": c.fecha_creacion.isoformat(),
+           "importadores_matching": redis_client.hgetall(f"cotizacion_abierta:{c.id}"),
+           "respuestas_recibidas": redis_client.get(f"cotizacion_abierta:{c.id}:respuestas") or 0,
+           "ventana_restante": redis_client.ttl(f"cotizacion_abierta:{c.id}")
+       } for c in cotizaciones]
+   ```
+
+2. **Implementar endpoint GET /admin/disputas** (`routers/admin.py`) — Listar órdenes en disputa (solo admin)
+3. **Implementar endpoint POST /admin/importadores/{id}/verificar** (`routers/admin.py`) — Verificar empresa importadora (solo admin)
+4. **Implementar endpoint PUT /admin/importadores/{id}/estado** (`routers/admin.py`) — Activar/desactivar importador de la red (solo admin)
+
+#### Criterios de aceptación
+
+- [ ] GET /admin/cotizaciones-abiertas retorna cotizaciones abiertas activas con importadores matching y ventana restante
+- [ ] GET /admin/disputas retorna órdenes en disputa
+- [ ] POST /admin/importadores/{id}/verificar verifica empresa importadora (solo admin)
+- [ ] PUT /admin/importadores/{id}/estado activa/desactiva importador de la red (solo admin)
+
+#### Entregables
+
+1. Endpoint GET /admin/cotizaciones-abiertas funcional con datos de Redis
+2. Endpoint GET /admin/disputas funcional
+3. Endpoint POST /admin/importadores/{id}/verificar funcional
+4. Endpoint PUT /admin/importadores/{id}/estado funcional
 
 ---
 
-## 🎨 Tareas Frontend
+## 🎨 Tareas Frontend — Semana 3
 
-### Tarea 5: Implementar chat con asesor (solicitante)
+### Tarea 3.5: Implementar chat con asesor (solicitante)
 
 **Módulo:** Frontend/Pantallas-Solicitante  
 **Duración estimada:** 2 días  
-**Responsable:** Desarrollador Frontend
+**Responsable:** Desarrollador Frontend Senior
 
-- [ ] Pantalla P9 — Chat con Asesor
-- [ ] Panel lateral izquierdo: lista de conversaciones (por orden/cotización) con último mensaje y hora
-- [ ] Área principal de chat: mensajes en tiempo real, burbujas de mensajes (izquierda = importador, derecha = solicitante)
-- [ ] Indicador "en línea" del importador cuando está conectado vía WebSocket
-- [ ] Campo de texto para escribir mensajes con botón de adjuntar archivos
-- [ ] Botón enviar: envía el mensaje vía WebSocket
-- [ ] Fallback REST si la conexión WebSocket falla
-- [ ] Integración con API REST: GET /chat/conversaciones, GET /chat/conversaciones/{id}/mensajes
+#### Descripción
+Implementar la pantalla P9 — Chat con Asesor para el solicitante con panel lateral de conversaciones, área principal de chat y conexión WebSocket en tiempo real.
 
-**Documentación relacionada:** [[Frontend/Pantallas-Solicitante]], [[Frontend/Wireframes]]
+#### Pasos de implementación
+
+1. **Crear página de chat** (`app/chat/page.tsx`)
+   - Panel lateral izquierdo: lista de conversaciones (por orden/cotización) con último mensaje y hora
+   - Área principal de chat: mensajes en tiempo real, burbujas de mensajes (izquierda = importador, derecha = solicitante)
+   - Indicador "en línea" del importador cuando está conectado vía WebSocket
+   - Campo de texto para escribir mensajes con botón de adjuntar archivos
+
+2. **Crear componente de lista de conversaciones** (`components/ConversacionList.tsx`)
+   ```typescript
+   interface ConversacionItemProps {
+     id: string;
+     importadorNombre: string;
+     ultimoMensaje: string;
+     horaUltimoMensaje: string;
+     onClick: (id: string) => void;
+   }
+   
+   export function ConversacionItem({ importadorNombre, ultimoMensaje, horaUltimoMensaje, onClick }: ConversacionItemProps) {
+     return (
+       <div 
+         className="p-4 border-b hover:bg-gray-50 cursor-pointer"
+         onClick={() => onClick(id)}
+       >
+         <h3 className="font-semibold">{importadorNombre}</h3>
+         <p className="text-sm text-gray-600 truncate">{ultimoMensaje}</p>
+         <span className="text-xs text-gray-400">{horaUltimoMensaje}</span>
+       </div>
+     );
+   }
+   ```
+
+3. **Crear componente de área de chat** (`components/ChatArea.tsx`)
+   ```typescript
+   interface ChatAreaProps {
+     conversacionId: string;
+     importadorNombre: string;
+     importadorEnLinea: boolean;
+   }
+   
+   export function ChatArea({ conversacionId, importadorNombre, importadorEnLinea }: ChatAreaProps) {
+     const [mensajes, setMensajes] = useState<Array<{remitente_id: string; contenido: string; fecha_envio: string}>>([]);
+     const [nuevoMensaje, setNuevoMensaje] = useState("");
+     
+     // Conectar WebSocket
+     useEffect(() => {
+       const token = localStorage.getItem('token');
+       const ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversacionId}?token=${token}`);
+       
+       ws.onmessage = (event) => {
+         const data = JSON.parse(event.data);
+         if (data.tipo === "mensaje") {
+           setMensajes(prev => [...prev, data]);
+         }
+       };
+       
+       // Cargar historial de mensajes vía REST
+       axios.get(`/chat/conversaciones/${conversacionId}/mensajes?limite=50`)
+         .then(res => setMensajes(res.data.reverse()));
+       
+       return () => ws.close();
+     }, [conversacionId]);
+     
+     const enviarMensaje = async () => {
+       if (!nuevoMensaje.trim()) return;
+       
+       // Intentar enviar vía WebSocket primero
+       try {
+         ws.send(JSON.stringify({ contenido: nuevoMensaje }));
+       } catch (error) {
+         // Fallback REST si WebSocket falla
+         await axios.post(`/chat/conversaciones/${conversacionId}/mensajes`, {
+           contenido: nuevoMensaje
+         });
+       }
+       
+       setNuevoMensaje("");
+     };
+     
+     return (
+       <div className="flex flex-col h-full">
+         {/* Header con nombre del importador y estado en línea */}
+         <div className="p-4 border-b flex items-center justify-between">
+           <h2 className="text-lg font-semibold">{importadorNombre}</h2>
+           <span className={`w-3 h-3 rounded-full ${importadorEnLinea ? 'bg-green-500' : 'bg-gray-300'}`} />
+         </div>
+         
+         {/* Área de mensajes */}
+         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+           {mensajes.map((mensaje, index) => (
+             <div key={index} className={`flex ${mensaje.remitente_id === currentUserId ? 'justify-end' : 'justify-start'}`}>
+               <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                 mensaje.remitente_id === currentUserId 
+                   ? 'bg-blue-600 text-white' 
+                   : 'bg-gray-100 text-gray-900'
+               }`}>
+                 <p>{mensaje.contenido}</p>
+                 <span className="text-xs opacity-75">
+                   {new Date(mensaje.fecha_envio).toLocaleTimeString()}
+                 </span>
+               </div>
+             </div>
+           ))}
+         </div>
+         
+         {/* Campo de texto y botón enviar */}
+         <div className="p-4 border-t flex gap-2">
+           <input
+             type="text"
+             value={nuevoMensaje}
+             onChange={(e) => setNuevoMensaje(e.target.value)}
+             onKeyDown={(e) => e.key === 'Enter' && enviarMensaje()}
+             placeholder="Escribe un mensaje..."
+             className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+           />
+           <button 
+             onClick={enviarMensaje}
+             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+           >
+             Enviar
+           </button>
+         </div>
+       </div>
+     );
+   }
+   ```
+
+4. **Implementar fetch de conversaciones** — Llamar a GET /chat/conversaciones al cargar la página
+
+5. **Implementar indicador "en línea"** — Usar Redis Pub/Sub para detectar cuando el importador se conecta/desconecta del WebSocket
+
+#### Criterios de aceptación
+
+- [ ] El panel lateral muestra lista de conversaciones con último mensaje y hora
+- [ ] Los mensajes en tiempo real se muestran como burbujas (izquierda = importador, derecha = solicitante)
+- [ ] El indicador "en línea" muestra el estado del importador cuando está conectado vía WebSocket
+- [ ] El campo de texto permite escribir mensajes con botón enviar
+- [ ] Si la conexión WebSocket falla, los mensajes se envían vía REST como fallback
+
+#### Entregables
+
+1. Página de chat funcional con panel lateral y área principal
+2. Componente de lista de conversaciones con último mensaje y hora
+3. Componente de área de chat con burbujas de mensajes en tiempo real
+4. Conexión WebSocket con fallback REST
+5. Indicador "en línea" del importador
 
 ---
 
-### Tarea 6: Implementar chat con asesor (importador)
+### Tarea 3.6: Implementar chat con asesor (importador)
 
 **Módulo:** Frontend/Pantallas-Importador  
 **Duración estimada:** 1 día  
 **Responsable:** Desarrollador Frontend
 
-- [ ] Chat integrado en la bandeja de solicitudes del importador
-- [ ] Conversaciones organizadas por orden/cotización
-- [ ] Mensajes en tiempo real vía WebSocket
-- [ ] Indicador "en línea" del solicitante cuando está conectado
+#### Descripción
+Implementar el chat integrado en la bandeja de solicitudes del importador, organizado por orden/cotización.
 
-**Documentación relacionada:** [[Frontend/Pantallas-Importador]], [[Frontend/Wireframes]]
+#### Pasos de implementación
+
+1. **Crear componente de chat para importador** (`components/ChatImportador.tsx`)
+   - Chat integrado en la bandeja de solicitudes del importador
+   - Conversaciones organizadas por orden/cotización
+   - Mensajes en tiempo real vía WebSocket
+   - Indicador "en línea" del solicitante cuando está conectado
+
+2. **Implementar fetch de conversaciones** — Llamar a GET /chat/conversaciones al cargar la página
+
+3. **Conexión WebSocket** — Conectar al WebSocket para recibir mensajes en tiempo real
+
+#### Criterios de aceptación
+
+- [ ] El chat se integra en la bandeja de solicitudes del importador
+- [ ] Las conversaciones están organizadas por orden/cotización
+- [ ] Los mensajes se muestran en tiempo real vía WebSocket
+- [ ] El indicador "en línea" muestra el estado del solicitante cuando está conectado
+
+#### Entregables
+
+1. Componente de chat para importador integrado en la bandeja de solicitudes
+2. Conexión WebSocket con mensajes en tiempo real
+3. Indicador "en línea" del solicitante
 
 ---
 
-### Tarea 7: Implementar repositorio de documentos (solicitante)
+### Tarea 3.7: Implementar repositorio de documentos (solicitante)
 
 **Módulo:** Frontend/Pantallas-Solicitante  
 **Duración estimada:** 1 día  
 **Responsable:** Desarrollador Frontend
 
-- [ ] Pantalla P12 — Repositorio de Documentos
-- [ ] Sección de facturas: factura proforma, comprobante de pago
-- [ ] Sección de documentos del proveedor: packing list
-- [ ] Enlaces de descarga para cada documento
-- [ ] Integración con API REST: GET /ordenes/{id}/documentos
+#### Descripción
+Implementar la pantalla P12 — Repositorio de Documentos donde el solicitante puede ver y descargar los documentos adjuntos a una orden.
 
-**Documentación relacionada:** [[Frontend/Pantallas-Solicitante]], [[Frontend/Wireframes]]
+#### Pasos de implementación
+
+1. **Crear página de repositorio de documentos** (`app/ordenes/[id]/documentos/page.tsx`)
+   - Sección de facturas: factura proforma, comprobante de pago
+   - Sección de documentos del proveedor: packing list
+   - Enlaces de descarga para cada documento
+
+2. **Implementar fetch de documentos** — Llamar a GET /ordenes/{id}/documentos al cargar la página
+
+3. **Crear componente de tarjeta de documento** (`components/DocumentoCard.tsx`)
+   ```typescript
+   interface DocumentoCardProps {
+     nombre: string;
+     url: string;
+     tipo: string;
+   }
+   
+   export function DocumentoCard({ nombre, url, tipo }: DocumentoCardProps) {
+     return (
+       <div className="bg-white rounded-xl shadow-sm p-6">
+         <h3 className="font-semibold mb-2">{nombre}</h3>
+         <p className="text-sm text-gray-600 mb-4 capitalize">{tipo.replace('_', ' ')}</p>
+         <a 
+           href={url}
+           target="_blank"
+           rel="noopener noreferrer"
+           className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+         >
+           Descargar
+         </a>
+       </div>
+     );
+   }
+   ```
+
+#### Criterios de aceptación
+
+- [ ] El repositorio muestra secciones organizadas por tipo (facturas, documentos del proveedor)
+- [ ] Cada documento tiene un enlace de descarga funcional
+- [ ] Los documentos se listan correctamente desde el backend
+
+#### Entregables
+
+1. Página de repositorio de documentos funcional con secciones organizadas
+2. Componente de tarjeta de documento con enlace de descarga
+3. Fetch de documentos desde el backend
 
 ---
 
-### Tarea 8: Implementar perfil y configuración de empresa importadora (P1)
+### Tarea 3.8: Implementar perfil y configuración de empresa importadora (P1)
 
 **Módulo:** Frontend/Pantallas-Importador  
 **Duración estimada:** 1 día  
 **Responsable:** Desarrollador Frontend
 
-- [ ] Pantalla P13 — Perfil y Configuración de Empresa Importadora
-- [ ] Formulario de perfil: nombre, logo, países, categorías, capacidad
-- [ ] Tags de países y categorías con botón "+" para agregar nuevos
-- [ ] Lista de asesores con foto, nombre, email, WhatsApp del asesor
-- [ ] Botón "Agregar Asesor": modal o formulario inline
+#### Descripción
+Implementar la pantalla P13 — Perfil y Configuración de Empresa Importadora con formulario de perfil, tags de países y categorías, y lista de asesores.
 
-**Documentación relacionada:** [[Frontend/Pantallas-Importador]], [[Frontend/Wireframes]]
+#### Pasos de implementación
+
+1. **Crear página de perfil** (`app/importador/perfil/page.tsx`)
+   - Formulario de perfil: nombre, logo, países, categorías, capacidad
+   - Tags de países y categorías con botón "+" para agregar nuevos
+   - Lista de asesores con foto, nombre, email, WhatsApp del asesor
+   - Botón "Agregar Asesor": modal o formulario inline
+
+2. **Implementar fetch de datos del perfil** — Llamar a GET /importadores/{id} al cargar la página
+
+3. **Implementar envío del formulario** — Llamar a PUT /importadores/{id} para actualizar el perfil
+
+#### Criterios de aceptación
+
+- [ ] El formulario de perfil permite editar nombre, logo, países, categorías y capacidad
+- [ ] Los tags de países y categorías se pueden agregar con botón "+"
+- [ ] La lista de asesores muestra foto, nombre, email y WhatsApp del asesor
+- [ ] El botón "Agregar Asesor" abre un modal o formulario inline
+
+#### Entregables
+
+1. Página de perfil funcional con formulario completo
+2. Tags de países y categorías con botón "+" para agregar nuevos
+3. Lista de asesores con información completa
+4. Botón "Agregar Asesor" funcional
 
 ---
 
-### Tarea 9: Implementar panel de administración interno (P1)
+### Tarea 3.9: Implementar panel de administración interno (P1)
 
 **Módulo:** Frontend/Pantallas-Admin  
 **Duración estimada:** 1.5 días  
-**Responsable:** Desarrollador Frontend
+**Responsable:** Desarrollador Frontend Senior
 
-- [ ] Pantalla P14 — Panel de Administración Interno
-- [ ] Tabs: Cotizaciones Abiertas | Disputas | Importadores Vinculados
-- [ ] Tarjetas de cotización abierta activa con solicitante, importadores matching, propuestas recibidas, ventana restante
-- [ ] Tarjetas de disputa con orden, solicitante, importador, motivo, botón "Mediar"
-- [ ] Tarjetas de importador vinculado con estado, especialidad, calificación, verificado, botones de acción
+#### Descripción
+Implementar la pantalla P14 — Panel de Administración Interno con tabs para cotizaciones abiertas, disputas e importadores vinculados.
 
-**Documentación relacionada:** [[Frontend/Pantallas-Admin]], [[Frontend/Wireframes]]
+#### Pasos de implementación
+
+1. **Crear página de panel admin** (`app/admin/page.tsx`)
+   - Tabs: Cotizaciones Abiertas | Disputas | Importadores Vinculados
+   - Tarjetas de cotización abierta activa con solicitante, importadores matching, propuestas recibidas, ventana restante
+   - Tarjetas de disputa con orden, solicitante, importador, motivo, botón "Mediar"
+   - Tarjetas de importador vinculado con estado, especialidad, calificación, verificado, botones de acción
+
+2. **Implementar fetch de cotizaciones abiertas** — Llamar a GET /admin/cotizaciones-abiertas al cargar la página
+
+3. **Implementar fetch de disputas** — Llamar a GET /admin/disputas al cargar la página
+
+4. **Implementar fetch de importadores vinculados** — Llamar a GET /importadores (todos) al cargar la página
+
+#### Criterios de aceptación
+
+- [ ] El panel admin muestra tabs funcionales (Cotizaciones Abiertas | Disputas | Importadores Vinculados)
+- [ ] Las tarjetas de cotización abierta muestran solicitante, importadores matching y ventana restante
+- [ ] Las tarjetas de disputa muestran orden, solicitante, importador y botón "Mediar"
+- [ ] Las tarjetas de importador vinculado muestran estado, especialidad, calificación y botones de acción
+
+#### Entregables
+
+1. Página de panel admin funcional con tabs
+2. Tarjetas de cotización abierta activa con datos de Redis
+3. Tarjetas de disputa con botón "Mediar"
+4. Tarjetas de importador vinculado con botones de acción
 
 ---
 
-### Tarea 10: Ajustes de UI/UX y pulido general
+### Tarea 3.10: Ajustes de UI/UX y pulido general
 
 **Módulo:** Frontend  
 **Duración estimada:** 2 días  
-**Responsable:** Desarrollador Frontend
+**Responsable:** Desarrollador Frontend Senior
 
-- [ ] Revisar consistencia visual entre todas las pantallas
-- [ ] Verificar que los botones de acción principal estén en posición fija y predecible
-- [ ] Asegurar distinción visual clara entre "dirigida" y "abierta" con etiquetas de color
-- [ ] Optimizar mobile-first para formulario de cotización y chat
-- [ ] Agregar indicadores de carga (skeleton loading, spinners) en todas las acciones asíncronas
-- [ ] Revisar accesibilidad: contraste de colores, navegación por teclado, atributos ARIA
+#### Descripción
+Revisar consistencia visual entre todas las pantallas, verificar que los botones de acción principal estén en posición fija y predecible, asegurar distinción visual clara entre "dirigida" y "abierta", optimizar mobile-first para formulario de cotización y chat.
 
-**Documentación relacionada:** [[Frontend/UX-UI-Guia]]
+#### Pasos de implementación
+
+1. **Revisar consistencia visual** — Verificar que todas las pantallas usen los mismos componentes base (Button, Card, Badge) con los colores definidos en el sistema de diseño
+
+2. **Verificar botones de acción principal** — Asegurar que el botón de acción principal (solicitar cotización, aceptar oferta, responder, pagar) esté siempre en una posición fija y predecible
+
+3. **Asegurar distinción visual entre "dirigida" y "abierta"** — Verificar que las etiquetas de modalidad usen colores consistentes:
+   - Dirigida: 🟢 Verde (#10B981) con badge verde
+   - Abierta: 🟡 Amarillo (#F59E0B) con badge amarillo
+
+4. **Optimizar mobile-first** — Verificar que el formulario de cotización y chat sean completamente funcionales en móvil:
+   - Formulario: campos ocupan ancho completo, botón "Enviar Cotización" fijo en la parte inferior (sticky bottom)
+   - Chat: panel lateral colapsable, área de mensajes ocupa todo el ancho
+
+5. **Agregar indicadores de carga** — Implementar skeleton loading para listas y tarjetas, spinners para acciones asíncronas
+
+6. **Revisar accesibilidad** — Verificar contraste de colores, navegación por teclado y atributos ARIA
+
+#### Criterios de aceptación
+
+- [ ] Todas las pantallas usan los mismos componentes base con los colores definidos en el sistema de diseño
+- [ ] Los botones de acción principal están siempre en posición fija y predecible
+- [ ] Las etiquetas de modalidad (Dirigida/Abierta) usan colores consistentes
+- [ ] El formulario de cotización es completamente funcional en móvil
+- [ ] El chat es completamente funcional en móvil con panel lateral colapsable
+- [ ] Los indicadores de carga (skeleton loading, spinners) están implementados
+
+#### Entregables
+
+1. Consistencia visual verificada entre todas las pantallas
+2. Botones de acción principal en posición fija y predecible
+3. Distinción visual clara entre "dirigida" y "abierta" con etiquetas de color
+4. Mobile-first optimizado para formulario de cotización y chat
+5. Indicadores de carga implementados
 
 ---
 
 ## 🧪 Tareas de Testing y QA
 
-### Tarea 11: Pruebas con importadores piloto
+### Tarea 3.11: Pruebas con importadores piloto
 
 **Módulo:** General  
 **Duración estimada:** 2 días  
 **Responsable:** Equipo completo
 
-- [ ] Identificar y contactar a 2-3 empresas importadoras adicionales para pruebas
-- [ ] Configurar cuentas de prueba en el entorno de staging
-- [ ] Ejecutar flujo completo: solicitud → propuesta → pago → orden → seguimiento
-- [ ] Recopilar feedback de los importadores piloto sobre la experiencia de uso
-- [ ] Documentar bugs y problemas encontrados
+#### Descripción
+Identificar y contactar a 2-3 empresas importadoras adicionales para pruebas, configurar cuentas de prueba en el entorno de staging, ejecutar flujo completo y recopilar feedback.
+
+#### Pasos de implementación
+
+1. **Identificar y contactar importadores piloto** — Contactar a 2-3 empresas importadoras adicionales que estén interesadas en probar la plataforma
+2. **Configurar cuentas de prueba** — Crear cuentas de solicitante e importador en el entorno de staging
+3. **Ejecutar flujo completo** — Solicitante crea cotización → Importadores responden → Solicitante acepta oferta → Pago con Wompi → Orden activa → Seguimiento del pedido
+4. **Recopilar feedback** — Documentar bugs y problemas encontrados durante las pruebas
+5. **Priorizar correcciones** — Clasificar los problemas por severidad (crítico, alto, medio, bajo)
+
+#### Criterios de aceptación
+
+- [ ] Al menos 2-3 importadores han probado el flujo completo sin bloqueos críticos
+- [ ] Los bugs encontrados se documentan y priorizan para corrección
+- [ ] El feedback de los importadores piloto se recopila y analiza
+
+#### Entregables
+
+1. Cuentas de prueba configuradas en staging
+2. Flujo completo ejecutado con éxito por 2-3 importadores piloto
+3. Documentación de bugs encontrados y priorizados
+4. Feedback recopilado de los importadores piloto
 
 ---
 
-### Tarea 12: Pruebas unitarias e integración
+### Tarea 3.12: Pruebas unitarias e integración
 
 **Módulo:** General  
 **Duración estimada:** 1.5 días  
 **Responsable:** Desarrollador Backend + Frontend
 
-- [ ] Pruebas unitarias para endpoints de autenticación
-- [ ] Pruebas unitarias para CRUD de cotizaciones y órdenes
-- [ ] Pruebas de integración para flujo completo: registro → login → crear cotización → enviar propuesta → checkout → orden
-- [ ] Pruebas de WebSocket para chat en tiempo real
-- [ ] Pruebas de UI para componentes críticos (formulario, chat, línea de estados)
+#### Descripción
+Implementar pruebas unitarias para endpoints de autenticación, CRUD de cotizaciones y órdenes, pruebas de integración para el flujo completo, pruebas de WebSocket para chat en tiempo real y pruebas de UI para componentes críticos.
+
+#### Pasos de implementación
+
+1. **Pruebas unitarias para endpoints de autenticación** — Usar pytest para probar POST /auth/register, POST /auth/login, POST /auth/refresh
+2. **Pruebas unitarias para CRUD de cotizaciones y órdenes** — Probar POST /cotizaciones, GET /cotizaciones, GET /ordenes
+3. **Pruebas de integración para flujo completo** — Probar el flujo: registro → login → crear cotización → enviar propuesta → checkout → orden
+4. **Pruebas de WebSocket para chat en tiempo real** — Usar websockets library para probar la conexión y envío de mensajes
+5. **Pruebas de UI para componentes críticos** — Usar React Testing Library para probar el formulario, chat y línea de estados
+
+#### Criterios de aceptación
+
+- [ ] Las pruebas unitarias para endpoints de autenticación pasan correctamente
+- [ ] Las pruebas unitarias para CRUD de cotizaciones y órdenes pasan correctamente
+- [ ] La prueba de integración del flujo completo pasa correctamente
+- [ ] Las pruebas de WebSocket para chat en tiempo real pasan correctamente
+- [ ] Las pruebas de UI para componentes críticos pasan correctamente
+
+#### Entregables
+
+1. Pruebas unitarias para endpoints de autenticación
+2. Pruebas unitarias para CRUD de cotizaciones y órdenes
+3. Prueba de integración del flujo completo
+4. Pruebas de WebSocket para chat en tiempo real
+5. Pruebas de UI para componentes críticos
 
 ---
 
-## 📊 Criterios de aceptación — Semana 3
+## 📊 Criterios de aceptación — Semana 3 (Resumen)
 
 | Entregable | Criterio de aceptación |
 |------------|----------------------|
@@ -229,13 +904,13 @@ Semana 3 del MVP a 3 semanas. Entregables: Chat 1 a 1 en tiempo real ligado a or
 
 ```mermaid
 graph TD
-    A[Tarea 1: Chat WebSocket] --> B[Tarea 5: Chat Solicitante Frontend]
-    C[Tarea 2: Endpoints REST Chat] --> D[Chat como fallback]
+    A[Tarea 3.1: Chat WebSocket] --> B[Tarea 3.5: Chat Solicitante Frontend]
+    C[Tarea 3.2: Endpoints REST Chat] --> D[Chat como fallback]
     
-    E[Tarea 3: Repositorio Documentos] --> F[Tarea 7: Repositorio Docs Solicitante]
-    G[Tarea 4: Panel Admin API] --> H[Tarea 9: Panel Admin Frontend]
+    E[Tarea 3.3: Repositorio Documentos] --> F[Tarea 3.7: Repositorio Docs Solicitante]
+    G[Tarea 3.4: Panel Admin API] --> H[Tarea 3.9: Panel Admin Frontend]
     
-    I[Tarea 8: Perfil Importador] --> J[Perfil importador funcional]
+    I[Tarea 3.8: Perfil Importador] --> J[Perfil importador funcional]
     B --> K[Chat en tiempo real funcional]
     F --> L[Repositorio de documentos funcional]
     H --> M[Panel admin funcional]
