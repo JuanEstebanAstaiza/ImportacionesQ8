@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: importacionesq8_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: importacionesq8
+      MYSQL_USER: usuario_q8
+      MYSQL_PASSWORD: contraseña_q8
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: importacionesq8_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: .
+    container_name: importacionesq8_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://usuario_q8:contraseña_q8@mysql/importacionesq8
+      SECRET_KEY: clave-secreta-para-desarrollo-cambiar-en-produccion-2024
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Backend Tests (usa SQLite, no necesita MySQL/Redis)
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: importacionesq8_tests
+    environment:
+      DATABASE_URL: sqlite:////app/test.db
+      SECRET_KEY: clave-secreta-para-desarrollo-cambiar-en-produccion-2024
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+    volumes:
+      - ./test_data:/app/test_data
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local

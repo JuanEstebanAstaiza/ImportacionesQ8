@@ -185,6 +185,18 @@
   },
   "active": "f459d60cd271d13b",
   "lastOpenFiles": [
+    "Backend/services/__pycache__/matching_service.cpython-314.pyc",
+    "Backend/tests/__pycache__/test_cotizaciones.cpython-314-pytest-9.0.3.pyc",
+    "Backend/tests/__pycache__/test_importadores.cpython-314-pytest-9.0.3.pyc",
+    "Backend/routers/__pycache__/cotizaciones.cpython-314.pyc",
+    "Backend/routers/__pycache__/importadores.cpython-314.pyc",
+    "Backend/services/__pycache__/__init__.cpython-314.pyc",
+    "Backend/services/__pycache__/auth_service.cpython-314.pyc",
+    "Backend/services/__pycache__",
+    "Backend/schemas/__pycache__/__init__.cpython-314.pyc",
+    "Backend/schemas/__pycache__/cotizacion.cpython-314.pyc",
+    "Backend/schemas/__pycache__/importador.cpython-314.pyc",
+    "Backend/README.md",
     "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
     "Propuesta_Plataforma_Importacion.md",
     "Inversionistas/Metricas-MVP.md",
@@ -205,14 +217,6 @@
     "Backend/Base-Datos.md",
     "Backend/API-Rest.md",
     "00-Index-y-Navegacion/README.md",
-    "Inversionistas",
-    "Fases-Desarrollo/Semana-3-Chat-y-Pulido",
-    "Fases-Desarrollo/Semana-2-Red-y-Ordenes",
-    "Fases-Desarrollo/Semana-1-Fundaciones-y-Cotizaciones",
-    "Fases-Desarrollo",
-    "Frontend",
-    "Backend",
-    "00-Index-y-Navegacion",
     "Bienvenido.md"
   ]
 }
