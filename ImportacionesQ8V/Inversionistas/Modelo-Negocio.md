@@ -1,4 +1,4 @@
-# 💡 Modelo de Negocio — ImportacionesQ8
+# Modelo de Negocio — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Modelo de negocio de la plataforma ImportacionesQ8: cómo generamos valor para a
 
 ---
 
-## 🎯 Propuesta de Valor
+## Propuesta de Valor
 
 ### Para los Compradores (Solicitantes):
 
@@ -28,7 +28,7 @@ Modelo de negocio de la plataforma ImportacionesQ8: cómo generamos valor para a
 
 ---
 
-## 💰 Fuentes de Ingreso
+## Fuentes de Ingreso
 
 ### 1. Comisión por Intermediación (Principal)
 
@@ -62,7 +62,7 @@ Servicios complementarios que generan ingresos adicionales:
 
 ---
 
-## 📊 Proyección Financiera (5 años)
+## Proyeccion Financiera (5 anos)
 
 ### Año 1 — Lanzamiento y Validación
 
@@ -105,7 +105,7 @@ Servicios complementarios que generan ingresos adicionales:
 
 ---
 
-## 🔄 Flujo de Valor — Cómo funciona la plataforma
+## Flujo de Valor — Como funciona la plataforma
 
 ```mermaid
 graph TD
@@ -130,7 +130,7 @@ graph TD
 
 ---
 
-## 🏗️ Estructura de Costos
+## Estructura de Costos
 
 ### Costos Fijos (Mensuales)
 
@@ -151,7 +151,7 @@ graph TD
 
 ---
 
-## 📈 Métricas Clave del Negocio
+## Metricas Clave del Negocio
 
 ### Métricas de Adquisición
 
@@ -176,7 +176,7 @@ graph TD
 
 ---
 
-## 🎯 Estrategia de Crecimiento
+## Estrategia de Crecimiento
 
 ### Fase 1 — Lanzamiento (Meses 1-6)
 
@@ -198,7 +198,7 @@ graph TD
 
 ---
 
-## 🏆 Ventaja Competitiva Sostenible
+## Ventaja Competitiva Sostenible
 
 1. **Efecto red:** Cuantos más importadores se unen, más atractivo es para compradores y viceversa.
 2. **Datos acumulados:** Cada cotización y orden genera datos que mejoran el matching y la experiencia del usuario.

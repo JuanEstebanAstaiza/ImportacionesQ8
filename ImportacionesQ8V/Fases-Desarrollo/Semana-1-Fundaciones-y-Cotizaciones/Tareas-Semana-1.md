@@ -1,4 +1,4 @@
-# 📅 Semana 1: Fundaciones y Módulo de Cotizaciones — ImportacionesQ8
+# Semana 1: Fundaciones y Modulo de Cotizaciones — ImportacionesQ8
 
 ## Descripción general
 
@@ -10,7 +10,7 @@ Semana 1 del MVP a 3 semanas. Entregables: Autenticación, perfiles (solicitante
 
 ---
 
-## 📋 Resumen de entregables
+## Resumen de entregables
 
 | Entregable | Módulo | Prioridad |
 |------------|--------|-----------|
@@ -22,7 +22,7 @@ Semana 1 del MVP a 3 semanas. Entregables: Autenticación, perfiles (solicitante
 
 ---
 
-## 🔧 Tareas Backend — Semana 1
+## Tareas Backend — Semana 1
 
 ### Tarea 1.1: Configurar proyecto FastAPI y base de datos MySQL
 
@@ -35,7 +35,7 @@ Inicializar el proyecto backend con FastAPI, configurar la conexión a MySQL y c
 
 #### Pasos de implementación
 
-1. **Crear estructura del proyecto** ✅ COMPLETADO
+1. **Crear estructura del proyecto**
     ```
     proyecto/backend/
     ├── main.py                    # Punto de entrada principal
@@ -77,7 +77,7 @@ Inicializar el proyecto backend con FastAPI, configurar la conexión a MySQL y c
     └── requirements.txt           # Dependencias Python
     ```
 
-2. **Instalar dependencias** (`proyecto/backend/requirements.txt`) ✅ COMPLETADO
+2. **Instalar dependencias** (`proyecto/backend/requirements.txt`)
     - `fastapi==0.104.1`
     - `uvicorn[standard]==0.24.0`
     - `sqlalchemy==2.0.23`
@@ -92,7 +92,7 @@ Inicializar el proyecto backend con FastAPI, configurar la conexión a MySQL y c
     - `httpx==0.25.2`
     - `pytest-cov==4.1.0`
 
-3. **Configurar variables de entorno** (`proyecto/backend/.env`) ✅ COMPLETADO
+3. **Configurar variables de entorno** (`proyecto/backend/.env`)
     ```
     DATABASE_URL=mysql+pymysql://usuario_q8:contraseña_q8@mysql/importacionesq8
     SECRET_KEY=tu-secreto-aqui-para-jwt
@@ -103,19 +103,19 @@ Inicializar el proyecto backend con FastAPI, configurar la conexión a MySQL y c
     COTIZACION_ABIERTA_TTL=259200  # 72 horas en segundos
     ```
 
-4. **Crear conexión a MySQL** (`proyecto/backend/database.py`) ✅ COMPLETADO
+4. **Crear conexión a MySQL** (`proyecto/backend/database.py`)
     - Configurar SQLAlchemy engine con `create_engine(DATABASE_URL)`
     - Crear sesión con `sessionmaker`
     - Crear base de datos si no existe (usando `engine.connect()` y `CREATE DATABASE IF NOT EXISTS`)
     - Función `get_db()` para dependencia FastAPI
 
-5. **Crear modelos ORM** — Implementado ✅ COMPLETADO:
+5. **Crear modelos ORM** — Implementado:
     - `proyecto/backend/models/usuario.py` — Usuario (id, email, password_hash, rol, perfil_completo, fecha_creacion)
     - `proyecto/backend/models/importador.py` — Importador (id, nombre_empresa, logo_url, especialidad_producto JSON, paises_origen JSON, calificacion_promedio, tiempo_respuesta_promedio, capacidad_volumen, estado, fecha_registro)
     - `proyecto/backend/models/asesor.py` — Asesor (id, importador_id FK, nombre, foto_url, whatsapp)
     - `proyecto/backend/models/cotizacion.py` — Cotización con Enums: ModalidadCotizacion, NivelPersonalizacion, TipoCalidad, ModalidadImportacion, EstadoCotizacion
 
-6. **Ejecutar migraciones** — Crear tablas en MySQL usando SQLAlchemy ORM ✅ COMPLETADO
+6. **Ejecutar migraciones** — Crear tablas en MySQL usando SQLAlchemy ORM
     ```python
     from database import engine, Base
     Base.metadata.create_all(bind=engine)
@@ -149,7 +149,7 @@ Implementar el endpoint de registro de nuevo usuario (solicitante o importador) 
 
 #### Pasos de implementación
 
-1. **Crear esquema Pydantic para registro** (`proyecto/backend/schemas/auth.py`) ✅ COMPLETADO
+1. **Crear esquema Pydantic para registro** (`proyecto/backend/schemas/auth.py`)
     ```python
     from pydantic import BaseModel, EmailStr
     
@@ -172,12 +172,12 @@ Implementar el endpoint de registro de nuevo usuario (solicitante o importador) 
         perfil_completo: bool
     ```
 
-2. **Implementar servicio de autenticación** (`proyecto/backend/services/auth_service.py`) ✅ COMPLETADO
+2. **Implementar servicio de autenticación** (`proyecto/backend/services/auth_service.py`)
     - Función `hash_password(password)`: usar `bcrypt.hashpw(password.encode(), bcrypt.gensalt())` con truncamiento a 72 bytes para evitar ValueError de bcrypt
     - Función `verify_password(plain_password, hashed_password)`: usar `bcrypt.checkpw()` con truncamiento a 72 bytes
     - Función `create_access_token(user_id, rol)`: usar `jwt.encode({"sub": user_id, "rol": rol}, SECRET_KEY, algorithm=ALGORITHM)`
 
-3. **Implementar endpoint POST /auth/register** (`proyecto/backend/routers/auth.py`) ✅ COMPLETADO
+3. **Implementar endpoint POST /auth/register** (`proyecto/backend/routers/auth.py`)
     ```python
     @app.post("/auth/register", response_model=TokenResponse)
     async def registrar_usuario(registro: RegistroRequest):
@@ -188,7 +188,7 @@ Implementar el endpoint de registro de nuevo usuario (solicitante o importador) 
         # 5. Generar JWT token
     ```
 
-4. **Crear dependencia de autenticación** (`proyecto/backend/utils/dependencies.py`) ✅ COMPLETADO
+4. **Crear dependencia de autenticación** (`proyecto/backend/utils/dependencies.py`)
     - Función `get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security))` que valida el JWT token y devuelve `{user_id, rol}`
     - Función `require_rol(rol)` para proteger endpoints por rol
 
@@ -220,7 +220,7 @@ Implementar el endpoint de inicio de sesión que valida credenciales y retorna u
 
 #### Pasos de implementación
 
-1. **Crear esquema Pydantic para login** (`proyecto/backend/schemas/auth.py`) ✅ COMPLETADO
+1. **Crear esquema Pydantic para login** (`proyecto/backend/schemas/auth.py`)
     ```python
     class LoginRequest(BaseModel):
         email: EmailStr
@@ -230,7 +230,7 @@ Implementar el endpoint de inicio de sesión que valida credenciales y retorna u
         perfil_completo: bool
     ```
 
-2. **Implementar endpoint POST /auth/login** (`proyecto/backend/routers/auth.py`) ✅ COMPLETADO
+2. **Implementar endpoint POST /auth/login** (`proyecto/backend/routers/auth.py`)
     ```python
     @app.post("/auth/login", response_model=LoginResponse)
     async def iniciar_sesion(login: LoginRequest):
@@ -239,8 +239,8 @@ Implementar el endpoint de inicio de sesión que valida credenciales y retorna u
         # 3. Generar JWT token
     ```
 
-3. **Implementar endpoint POST /auth/refresh** (`proyecto/backend/routers/auth.py`) ✅ COMPLETADO — Renovación de token JWT expirado
-4. **Implementar endpoint POST /auth/logout** (`proyecto/backend/routers/auth.py`) ✅ COMPLETADO — Cierra sesión del usuario
+3. **Implementar endpoint POST /auth/refresh** (`proyecto/backend/routers/auth.py`) — Renovación de token JWT expirado
+4. **Implementar endpoint POST /auth/logout** (`proyecto/backend/routers/auth.py`) — Cierra sesión del usuario
 
 #### Criterios de aceptación
 
@@ -270,7 +270,7 @@ Implementar el modelo ORM para Importador con campos JSON para especialidad_prod
 
 #### Pasos de implementación
 
-1. **Crear esquema Pydantic para Importador** (`proyecto/backend/schemas/importador.py`) ✅ COMPLETADO
+1. **Crear esquema Pydantic para Importador** (`proyecto/backend/schemas/importador.py`)
     ```python
     class ImportadorCreate(BaseModel):
         nombre_empresa: str
@@ -293,17 +293,17 @@ Implementar el modelo ORM para Importador con campos JSON para especialidad_prod
         estado: str  # "activo" o "inactivo"
     ```
 
-2. **Crear modelo ORM para Importador** (`proyecto/backend/models/importador.py`) ✅ COMPLETADO
+2. **Crear modelo ORM para Importador** (`proyecto/backend/models/importador.py`)
     - Campos: id (String(36) UUID), nombre_empresa, logo_url, especialidad_producto (JSON), paises_origen (JSON), calificacion_promedio, tiempo_respuesta_promedio, capacidad_volumen, estado (String), fecha_registro
 
-3. **Implementar endpoint GET /importadores** (`proyecto/backend/routers/importadores.py`) ✅ COMPLETADO
+3. **Implementar endpoint GET /importadores** (`proyecto/backend/routers/importadores.py`)
     - Listar importadores activos con filtros opcionales: `?especialidad=textiles&pais=china`
     - Usar LIKE para compatibilidad con MySQL y SQLite en búsquedas JSON
 
-4. **Implementar endpoint GET /importadores/{id}** (`proyecto/backend/routers/importadores.py`) ✅ COMPLETADO
+4. **Implementar endpoint GET /importadores/{id}** (`proyecto/backend/routers/importadores.py`)
     - Obtener detalles de un importador específico
 
-5. **Implementar endpoint POST /importadores** (`proyecto/backend/routers/importadores.py`) — Solo para admin (proteger con dependencia `require_rol("admin")`) ✅ COMPLETADO
+5. **Implementar endpoint POST /importadores** (`proyecto/backend/routers/importadores.py`) — Solo para admin (proteger con dependencia `require_rol("admin")`)
     - Crear nuevo importador en la base de datos
 
 #### Criterios de aceptación
@@ -335,7 +335,7 @@ Implementar el modelo ORM para Cotización con todos los campos del formulario, 
 
 #### Pasos de implementación
 
-1. **Crear esquema Pydantic para Cotización** (`proyecto/backend/schemas/cotizacion.py`) ✅ COMPLETADO
+1. **Crear esquema Pydantic para Cotización** (`proyecto/backend/schemas/cotizacion.py`)
     ```python
     class CotizacionCreate(BaseModel):
         modalidad: str  # "dirigida" o "abierta"
@@ -375,20 +375,20 @@ Implementar el modelo ORM para Cotización con todos los campos del formulario, 
         estado: str  # "creada", "dirigida", "abierta", etc.
     ```
 
-2. **Crear modelo ORM para Cotización** (`proyecto/backend/models/cotizacion.py`) ✅ COMPLETADO
+2. **Crear modelo ORM para Cotización** (`proyecto/backend/models/cotizacion.py`)
     - Campos: id (String(36) UUID), solicitante_id, importador_id (nullable), modalidad (String), foto_producto, pais_importacion, nivel_personalizacion (String), nombre_producto, descripcion_cliente, link_referencia, linea_producto, tipo_calidad (String), modalidad_importacion (String), cantidad_minima, precio_objetivo_usd, incoterm, notas_adicionales, estado (String con Enum de estados), fecha_creacion, fecha_actualizacion
 
-3. **Implementar endpoint POST /cotizaciones** (`proyecto/backend/routers/cotizaciones.py`) ✅ COMPLETADO
+3. **Implementar endpoint POST /cotizaciones** (`proyecto/backend/routers/cotizaciones.py`)
     - Crear nueva cotización con validación de campos requeridos
     - Si modalidad="dirigida", verificar que importador_id sea válido y exista
     - Si modalidad="abierta", ejecutar el motor de matching (ver Tarea 1.6)
 
-4. **Implementar endpoint GET /cotizaciones** (`proyecto/backend/routers/cotizaciones.py`) ✅ COMPLETADO
+4. **Implementar endpoint GET /cotizaciones** (`proyecto/backend/routers/cotizaciones.py`)
     - Listar cotizaciones del usuario autenticado filtradas por rol:
       - Solicitante: solo sus propias cotizaciones
       - Importador: cotizaciones dirigidas a su empresa + cotizaciones abiertas que le aplican
 
-5. **Implementar endpoint GET /cotizaciones/{id}** (`proyecto/backend/routers/cotizaciones.py`) ✅ COMPLETADO
+5. **Implementar endpoint GET /cotizaciones/{id}** (`proyecto/backend/routers/cotizaciones.py`)
     - Obtener detalles de una cotización específica (solo si el usuario tiene acceso)
 
 #### Criterios de aceptación
@@ -419,10 +419,10 @@ Implementar el motor de matching simple para cotizaciones abiertas: reglas por p
 
 #### Pasos de implementación
 
-1. **Instalar dependencias** — Agregar a `proyecto/backend/requirements.txt`: ✅ COMPLETADO
+1. **Instalar dependencias** — Agregar a `proyecto/backend/requirements.txt`:
     - `redis>=5.0.0`
 
-2. **Configurar Redis** (`proyecto/backend/config.py`) ✅ COMPLETADO
+2. **Configurar Redis** (`proyecto/backend/config.py`)
     ```python
     import redis
     
@@ -434,15 +434,15 @@ Implementar el motor de matching simple para cotizaciones abiertas: reglas por p
     COTIZACION_ABIERTA_TTL = 259200  # 72 horas en segundos
     ```
 
-3. **Implementar función de matching** (`proyecto/backend/services/matching_service.py`) ✅ COMPLETADO
+3. **Implementar función de matching** (`proyecto/backend/services/matching_service.py`)
     - Función `matching_cotizacion_abierta(cotizacion_id, pais_importacion, linea_producto, db)`: Encuentra importadores activos que cumplen AMBAS condiciones (país + categoría) usando LIKE para compatibilidad con MySQL y SQLite
     - Guardar en Redis con TTL de 72 horas (259200 segundos) solo si Redis está disponible
     - Funciones adicionales: `obtener_importadores_matching()`, `registrar_respuesta_importador()`, `verificar_cotizacion_abierta_activa()`, `expirar_cotizacion_abierta()`, `obtener_propuestas_recibidas()`
 
-4. **Implementar función de notificación a importadores** ✅ COMPLETADO
+4. **Implementar función de notificación a importadores**
     - Para MVP: guardar en Redis y el frontend del importador consultará periódicamente (polling) o usará Server-Sent Events (SSE)
 
-5. **Integrar con endpoint POST /cotizaciones** — Llamar a `matching_cotizacion_abierta()` cuando modalidad="abierta" ✅ COMPLETADO
+5. **Integrar con endpoint POST /cotizaciones** — Llamar a `matching_cotizacion_abierta()` cuando modalidad="abierta"
 
 #### Criterios de aceptación
 
@@ -460,21 +460,21 @@ Implementar el motor de matching simple para cotizaciones abiertas: reglas por p
 
 ---
 
-## 📊 Criterios de aceptación — Semana 1 (Resumen)
+## Criterios de aceptacion — Semana 1 (Resumen)
 
 | Entregable | Criterio de aceptación | Estado |
 |------------|----------------------|--------|
 | Autenticación | Usuarios pueden registrarse, iniciar sesión y obtener JWT token. Los endpoints protegidos requieren autenticación válida. | ✅ COMPLETADO |
 | Perfiles | Se pueden crear importadores desde el backend (admin). Los importadores tienen campos de especialidad y país de origen. | ✅ COMPLETADO |
-| Formulario de cotización | El formulario se puede completar con todos los campos requeridos y enviar al backend. Las validaciones funcionan correctamente. | ⏳ PENDIENTE (Frontend) |
-| Selección de modalidad | El usuario puede elegir entre "Cotización Dirigida" y "Red de Importadores". La selección redirige a la pantalla correcta. | ⏳ PENDIENTE (Frontend) |
-| Catálogo de importadores | Se pueden listar, buscar y filtrar importadores por país y categoría. Se puede seleccionar un importador para cotización dirigida. | ✅ COMPLETADO (Backend) / ⏳ PENDIENTE (Frontend) |
+| Formulario de cotización | El formulario se puede completar con todos los campos requeridos y enviar al backend. Las validaciones funcionan correctamente. | Pendiente (Frontend) |
+| Selección de modalidad | El usuario puede elegir entre "Cotización Dirigida" y "Red de Importadores". La selección redirige a la pantalla correcta. | Pendiente (Frontend) |
+| Catálogo de importadores | Se pueden listar, buscar y filtrar importadores por país y categoría. Se puede seleccionar un importador para cotización dirigida. | ✅ COMPLETADO (Backend) / Pendiente (Frontend) |
 
 ---
 
-## 🧪 Testing — Semana 1
+## Testing — Semana 1
 
-### Tests implementados: 63 tests pasando ✅
+### Tests implementados: 63 tests pasando
 
 - **tests/test_auth.py** — 41 tests de autenticación
   - Registro con datos válidos/inválidos
@@ -499,7 +499,7 @@ Implementar el motor de matching simple para cotizaciones abiertas: reglas por p
 
 ---
 
-## 🔗 Dependencias entre tareas
+## Dependencias entre tareas
 
 ```mermaid
 graph TD
@@ -525,10 +525,10 @@ graph TD
 
 ---
 
-## 📝 Notas adicionales
+## Notas adicionales
 
 - **Prioridad:** Las tareas P0 deben completarse antes de las P1. No se puede avanzar a la Semana 2 sin tener el formulario de cotización funcional.
-- **Testing:** Cada tarea debe incluir al menos pruebas unitarias básicas para los endpoints y componentes principales. ✅ Implementado con 63 tests pasando (ver `proyecto/backend/tests/`)
+- **Testing:** Cada tarea debe incluir al menos pruebas unitarias básicas para los endpoints y componentes principales. Implementado con 63 tests pasando (ver `proyecto/backend/tests/`)
 - **Documentación:** Actualizar la documentación del vault en Obsidian con cualquier cambio significativo en los endpoints o pantallas.
 - **Compatibilidad MySQL/SQLite:** Se implementó un patrón de compatibilidad usando LIKE para búsquedas JSON (en lugar de json_contains) y String(36) para UUIDs, permitiendo que los tests se ejecuten con SQLite mientras la producción usa MySQL.
 - **Infraestructura Docker:** docker-compose.yml en `proyecto/backend/` orquesta 4 servicios: MySQL, Redis, Backend API y Tests (con SQLite).

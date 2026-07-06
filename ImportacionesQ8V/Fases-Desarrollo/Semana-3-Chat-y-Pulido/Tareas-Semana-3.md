@@ -1,4 +1,4 @@
-# 📅 Semana 3: Chat, Documentos y Pulido — ImportacionesQ8
+# Semana 3: Chat, Documentos y Pulido — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Semana 3 del MVP a 3 semanas. Entregables: Chat 1 a 1 en tiempo real ligado a or
 
 ---
 
-## 📋 Resumen de entregables
+## Resumen de entregables
 
 | Entregable | Módulo | Prioridad |
 |------------|--------|-----------|
@@ -17,7 +17,7 @@ Semana 3 del MVP a 3 semanas. Entregables: Chat 1 a 1 en tiempo real ligado a or
 
 ---
 
-## 🔧 Tareas Backend — Semana 3
+## Tareas Backend — Semana 3
 
 ### Tarea 3.1: Implementar chat en tiempo real con WebSocket + Redis Pub/Sub
 
@@ -443,7 +443,7 @@ Implementar los endpoints REST para el panel de administración interno donde el
 
 ---
 
-## 🎨 Tareas Frontend — Semana 3
+## Tareas Frontend — Semana 3
 
 ### Tarea 3.5: Implementar chat con asesor (solicitante)
 
@@ -789,8 +789,8 @@ Revisar consistencia visual entre todas las pantallas, verificar que los botones
 2. **Verificar botones de acción principal** — Asegurar que el botón de acción principal (solicitar cotización, aceptar oferta, responder, pagar) esté siempre en una posición fija y predecible
 
 3. **Asegurar distinción visual entre "dirigida" y "abierta"** — Verificar que las etiquetas de modalidad usen colores consistentes:
-   - Dirigida: 🟢 Verde (#10B981) con badge verde
-   - Abierta: 🟡 Amarillo (#F59E0B) con badge amarillo
+   - Dirigida: Verde (#10B981) con badge verde
+   - Abierta: Amarillo (#F59E0B) con badge amarillo
 
 4. **Optimizar mobile-first** — Verificar que el formulario de cotización y chat sean completamente funcionales en móvil:
    - Formulario: campos ocupan ancho completo, botón "Enviar Cotización" fijo en la parte inferior (sticky bottom)
@@ -819,7 +819,7 @@ Revisar consistencia visual entre todas las pantallas, verificar que los botones
 
 ---
 
-## 🧪 Tareas de Testing y QA
+## Tareas de Testing y QA
 
 ### Tarea 3.11: Pruebas con importadores piloto
 
@@ -888,7 +888,7 @@ Implementar pruebas unitarias para endpoints de autenticación, CRUD de cotizaci
 
 ---
 
-## 📊 Criterios de aceptación — Semana 3 (Resumen)
+## Criterios de aceptacion — Semana 3 (Resumen)
 
 | Entregable | Criterio de aceptación |
 |------------|----------------------|
@@ -900,7 +900,7 @@ Implementar pruebas unitarias para endpoints de autenticación, CRUD de cotizaci
 
 ---
 
-## 🔗 Dependencias entre tareas
+## Dependencias entre tareas
 
 ```mermaid
 graph TD
@@ -918,7 +918,7 @@ graph TD
 
 ---
 
-## 📝 Notas adicionales
+## Notas adicionales
 
 - **Prioridad:** Las tareas P0 deben completarse antes de las P1. El chat en tiempo real es el entregable más crítico de esta semana.
 - **Testing con importadores piloto:** Es fundamental validar que el flujo completo funcione sin bloqueos críticos antes del lanzamiento.

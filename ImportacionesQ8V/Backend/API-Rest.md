@@ -1,4 +1,4 @@
-# ⚙️ API REST — ImportacionesQ8
+# API REST — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 
 ---
 
-## 📋 Endpoints principales
+## Endpoints principales
 
 ### Autenticación
 
@@ -61,7 +61,7 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 
 ---
 
-## 📐 Modelos de datos principales
+## Modelos de datos principales
 
 ### Cotización
 
@@ -153,7 +153,7 @@ class Usuario(BaseModel):
 
 ---
 
-## 🔐 Autenticación y autorización
+## Autenticación y autorización
 
 ### Flujo de autenticación JWT
 
@@ -174,7 +174,7 @@ class Usuario(BaseModel):
 
 ---
 
-## 🔄 Webhooks de Wompi
+## Webhooks de Wompi
 
 ### Flujo de webhook de pago
 
@@ -210,7 +210,7 @@ sequenceDiagram
 
 ---
 
-## 📊 Endpoints de administración (solo admin)
+## Endpoints de administracion (solo admin)
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
@@ -221,7 +221,7 @@ sequenceDiagram
 
 ---
 
-## 📝 Convenciones de la API
+## Convenciones de la API
 
 - **Formato de respuesta:** JSON con estructura uniforme: `{"success": true/false, "data": {...}, "error": null}`
 - **Paginación:** Todos los endpoints que retornan listas soportan `?page=1&limit=20`

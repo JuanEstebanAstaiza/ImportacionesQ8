@@ -1,4 +1,4 @@
-# 🎨 Pantallas del Solicitante — ImportacionesQ8
+# Pantallas del Solicitante — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 ---
 
-## 📋 Inventario de pantallas del solicitante
+## Inventario de pantallas del solicitante
 
 | # | Pantalla | Módulo | Prioridad |
 |---|----------|--------|-----------|
@@ -38,8 +38,8 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │   ┌───────────────────────────┐     │
 │   │  Iniciar Sesión           │     │
 │   │                           │     │
-│   │  📧 Email: [___________]  │     │
-│   │  🔒 Contraseña: [______]  │     │
+│   │  Email: [___________]     │     │
+│   │  Contraseña: [______]     │     │
 │   │                           │     │
 │   │   ○ Solicitante           │     │
 │   │   ○ Importador            │     │
@@ -93,26 +93,26 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │                                     │
 │  ── Cotizaciones Recientes ──        │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
+│  │ Textiles - China          │      │
 │  │ Estado: Propuestas rec.   │      │
 │  │ Hace 2 horas              │      │
 │  └───────────────────────────┘      │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Electrónica - China    │      │
+│  │ Electrónica - China       │      │
 │  │ Estado: Orden activa      │      │
 │  │ Hace 3 días               │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Órdenes Activas ──              │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Electrónica - China    │      │
+│  │ Electrónica - China       │      │
 │  │ Estado: En tránsito       │      │
 │  │ [Ver detalle]             │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Asesor Asignado ──              │
 │  ┌───────────────────────────┐      │
-│  │ 👤 María López            │      │
+│  │ Maria Lopez               │      │
 │  │ Importadora ABC           │      │
 │  │ [Chat] [WhatsApp]         │      │
 │  └───────────────────────────┘      │
@@ -134,11 +134,11 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 | Estado | Color | Descripción |
 |--------|-------|-------------|
-| Cotización creada | 🔵 Azul | Recién creada, sin enviar |
-| Dirigida | 🟢 Verde | Enviada a importador específico |
-| Abierta / Propuestas recibidas | 🟡 Amarillo | Respuestas de la red de importadores |
-| Cotización aceptada | 🟣 Morado | Aceptó oferta, pendiente de pago |
-| Orden activa | 🟠 Naranja | Pago confirmado, orden en curso |
+| Cotización creada | Azul | Recién creada, sin enviar |
+| Dirigida | Verde | Enviada a importador específico |
+| Abierta / Propuestas recibidas | Amarillo | Respuestas de la red de importadores |
+| Cotización aceptada | Morado | Aceptó oferta, pendiente de pago |
+| Orden activa | Naranja | Pago confirmado, orden en curso |
 
 ---
 
@@ -156,22 +156,22 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │   ¿Cómo quieres enviar tu solicitud?│
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🎯 Cotización Dirigida   │      │
+│  │  Cotización Dirigida      │      │
 │  │                           │      │
 │  │  Elige un importador      │      │
 │  │  específico               │      │
 │  │                           │      │
-│  │  → Buscar importador      │      │
+│  │  Buscar importador        │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🌐 Red de Importadores   │      │
+│  │  Red de Importadores      │      │
 │  │                           │      │
 │  │  Difunde a toda la red    │      │
 │  │  y recibe múltiples       │      │
 │  │  propuestas               │      │
 │  │                           │      │
-│  │  → Difundir a la red      │      │
+│  │  Difundir a la red        │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -205,7 +205,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │                                     │
 │   Elige una importadora             │
 │                                     │
-│  🔍 [Buscar por nombre o especialidad]│
+│  Buscar por nombre o especialidad   │
 │                                     │
 │  Filtros:                           │
 │  País: [China ▼]  Categoría: [▼]    │
@@ -213,17 +213,17 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │  ── Importadores Disponibles ──      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora ABC       │      │
+│  │  Importadora ABC          │      │
 │  │  Textiles, Ropa           │      │
-│  │  ⭐⭐⭐⭐⭐ 4.8          │      │
+│  │  Calificacion: 4.8        │      │
 │  │  Respuesta: ~24h          │      │
 │  │  [Seleccionar]            │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora XYZ       │      │
+│  │  Importadora XYZ          │      │
 │  │  Electrónica, Tecnología  │      │
-│  │  ⭐⭐⭐⭐ 4.5            │      │
+│  │  Calificacion: 4.5        │      │
 │  │  Respuesta: ~48h          │      │
 │  │  [Seleccionar]            │      │
 │  └───────────────────────────┘      │
@@ -272,8 +272,8 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │                                     │
 │  ── Foto del Producto ──            │
 │  ┌───────────────────────────┐      │
-│  │  📷 Arrastra una imagen    │      │
-│  │     o haz clic para subir  │      │
+│  │  Cargar imagen del producto│      │
+│  │                           │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Información del Producto ──      │
@@ -359,13 +359,13 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 ├─────────────────────────────────────┤
 │                                     │
 │   Propuestas Recibidas              │
-│   📦 Textiles - China               │
+│   Textiles - China                  │
 │   [3 de 5 importadores respondieron] │
 │                                     │
 │  ── Propuestas Activas ──           │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora ABC       │      │
+│  │  Importadora ABC          │      │
 │  │  Precio: $150.00 USD      │      │
 │  │  Tiempo estimado: 30 días │      │
 │  │  Incoterm: FOB            │      │
@@ -375,7 +375,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora XYZ       │      │
+│  │  Importadora XYZ          │      │
 │  │  Precio: $135.00 USD      │      │
 │  │  Tiempo estimado: 45 días │      │
 │  │  Incoterm: CIF            │      │
@@ -387,8 +387,8 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │  ── Pendientes de Responder ──      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora DEF       │      │
-│  │  ⏳ Esperando respuesta   │      │
+│  │  Importadora DEF          │      │
+│  │  Esperando respuesta      │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -438,7 +438,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │                                     │
 │  ┌───────────────────────────┐      │
 │  │  Procesado por Wompi       │      │
-│  │  🔒 Pago seguro            │      │
+│  │  Pago seguro               │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -472,34 +472,34 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 ├─────────────────────────────────────┤
 │                                     │
 │   Orden #ORD-001                    │
-│   📦 Electrónica - China            │
+│   Electrónica - China               │
 │                                     │
 │  ── Estado Actual: En Tránsito ──    │
 │                                     │
-│  Cotización aceptada     ✅         │
-│  En producción             ✅       │
-│  En tránsito internacional  🔵      │
-│  En aduana / nacionalización   ⬜   │
-│  En bodega local               ⬜   │
-│  Entregado                     ⬜   │
+│  Cotización aceptada     [completado]│
+│  En producción             [completado]│
+│  En tránsito internacional  [actual] │
+│  En aduana / nacionalizacion   [pendiente]│
+│  En bodega local               [pendiente]│
+│  Entregado                     [pendiente]│
 │                                     │
 │  ── Información de la Orden ──       │
 │                                     │
 │  Importador: Importadora ABC        │
-│  Asesor: María López                │
+│  Asesor: Maria Lopez                │
 │  Precio acordado: $150.00 USD       │
 │  Tiempo estimado: 30 días           │
 │                                     │
 │  ── Historial de Estados ──         │
 │                                     │
-│  ✅ Cotización aceptada - 05/07     │
-│  ✅ En producción - 08/07           │
-│  🔵 En tránsito internacional - 12/07│
+│  [completado] Cotización aceptada - 05/07│
+│  [completado] En producción - 08/07   │
+│  [actual] En tránsito internacional - 12/07│
 │                                     │
 │  ── Documentos Adjuntos ──          │
 │                                     │
-│  📄 Factura Proforma                │
-│  📄 Packing List                    │
+│  Factura Proforma                   │
+│  Packing List                       │
 │                                     │
 ├─────────────────────────────────────┤
 │   [Chat con Asesor]  [Reportar      │
@@ -509,7 +509,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 ### Componentes necesarios
 
-- **Línea de estados visual:** Timeline horizontal con iconos (✅ completado, 🔵 actual, ⬜ pendiente)
+- **Linea de estados visual:** Timeline horizontal con indicadores ([completado], [actual], [pendiente])
 - **Información general:** Importador, asesor, precio, tiempo estimado
 - **Historial de estados:** Lista cronológica con fecha y hora de cada cambio de estado
 - **Sección de documentos:** Lista de archivos adjuntos con enlaces de descarga
@@ -519,12 +519,12 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 | Estado | Icono | Color |
 |--------|-------|-------|
-| Cotización aceptada | ✅ | Verde |
-| En producción | ✅ | Verde |
-| En tránsito internacional | 🔵 | Azul |
-| En aduana / nacionalización | ⬜ | Gris |
-| En bodega local | ⬜ | Gris |
-| Entregado | ✅ | Verde |
+| Cotización aceptada | [completado] | Verde |
+| En producción | [completado] | Verde |
+| En tránsito internacional | [actual] | Azul |
+| En aduana / nacionalizacion | [pendiente] | Gris |
+| En bodega local | [pendiente] | Gris |
+| Entregado | [completado] | Verde |
 
 ---
 
@@ -542,20 +542,20 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │  ── Conversaciones ──               │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Electrónica - China    │      │
+│  │  Electrónica - China        │      │
 │  │ Importadora ABC           │      │
-│  │ Última: María López:      │      │
+│  │ Última: Maria Lopez:      │      │
 │  │   "Tu pedido está en      │      │
 │  │    tránsito"              │      │
-│  │ Hace 2 horas        🔵3   │      │
+│  │ Hace 2 horas        [3]   │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
+│  │ Textiles - China          │      │
 │  │ Importadora XYZ           │      │
 │  │ Última: Tú:               │      │
 │  │   "Gracias por la info"   │      │
-│  │ Hace 1 día            ⬜0 │      │
+│  │ Hace 1 día            [0] │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -567,25 +567,25 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 ```
 ┌─────────────────────────────────────┐
-│  ← Volver    📦 Electrónica - China │
+│  ← Volver    Electrónica - China    │
 ├─────────────────────────────────────┤
 │                                     │
-│  ── Chat con María López            │
+│  ── Chat con Maria Lopez            │
 │     Importadora ABC · En línea      │
 │                                     │
 │  [05/07]                            │
 │                                     │
-│  María: Hola, tu pedido está en     │
+│  Maria: Hola, tu pedido está en     │
 │         tránsito internacional      │
 │  ──────────────────────────────     │
 │                                     │
 │  Tú: Perfecto, ¿cuándo llega?       │
 │  ──────────────────────────────     │
 │                                     │
-│  María: Estimado para el viernes    │
+│  Maria: Estimado para el viernes    │
 │         ─────────────────────────── │
 │                                     │
-│  [📎 Adjuntar]  [Escribe un mensaje]│
+│  [Adjuntar]  [Escribe un mensaje]   │
 ├─────────────────────────────────────┤
 │   [Enviar]                          │
 └─────────────────────────────────────┘
@@ -595,7 +595,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 - **Panel lateral izquierdo:** Lista de conversaciones (por orden/cotización) con último mensaje y hora
 - **Área principal de chat:** Mensajes en tiempo real, burbujas de mensajes (izquierda = importador, derecha = solicitante)
-- **Indicador "en línea":** Punto verde junto al nombre del importador cuando está conectado
+- **Indicador "en línea":** Indicador de estado junto al nombre del importador cuando está conectado
 - **Campo de texto:** Input para escribir mensajes con botón de adjuntar archivos
 - **Botón enviar:** Envía el mensaje vía WebSocket
 
@@ -615,16 +615,16 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │   Documentos - Orden #ORD-001       │
 │                                     │
 │  ── Facturas ──                     │
-│  📄 Factura Proforma                │
+│  Factura Proforma                   │
 │     Importadora ABC · 05/07         │
 │     [Descargar]                     │
 │                                     │
-│  📄 Comprobante de Pago             │
+│  Comprobante de Pago                │
 │     Wompi · 05/07                   │
 │     [Descargar]                     │
 │                                     │
 │  ── Documentos del Proveedor ──      │
-│  📄 Packing List                    │
+│  Packing List                       │
 │     Importadora ABC · 12/07         │
 │     [Descargar]                     │
 │                                     │
@@ -654,11 +654,11 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 │                                     │
 │  ── Todas las Cotizaciones (12) ──   │
 │                                     │
-│  📦 Textiles - China                │
+│  Textiles - China                   │
 │     Dirigida · Propuestas rec.      │
 │     Hace 2 horas                    │
 │                                     │
-│  📦 Electrónica - China             │
+│  Electrónica - China                │
 │     Abierta · Orden activa          │
 │     Hace 3 días                     │
 │                                     │
@@ -671,7 +671,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 ---
 
-## 📝 Criterios de diseño transversales para el solicitante
+## Criterios de diseno transversales para el solicitante
 
 - **Consistencia con el formulario de referencia:** Los nombres y el orden de los campos de cotización deben sentirse familiares para un solicitante que ya usó el sistema original.
 - **Estado siempre visible:** En cualquier pantalla de orden o cotización, el usuario debe poder ver en qué punto del proceso está sin tener que preguntarle al asesor por chat.

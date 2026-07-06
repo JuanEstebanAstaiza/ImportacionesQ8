@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Fases-Desarrollo/Semana-1-Fundaciones-y-Cotizaciones/Tareas-Semana-1.md",
+                "file": "Fases-Desarrollo/Semana-2-Red-y-Ordenes/Tareas-Semana-2.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Tareas-Semana-1"
+              "title": "Tareas-Semana-2"
             }
           }
         ]
@@ -185,6 +185,10 @@
   },
   "active": "f459d60cd271d13b",
   "lastOpenFiles": [
+    "Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md",
+    "Inversionistas/Modelo-Negocio.md",
+    "Inversionistas/Pitch-Inversionistas.md",
+    "Fases-Desarrollo/Semana-1-Fundaciones-y-Cotizaciones/Tareas-Semana-1.md",
     "Backend/services/__pycache__/matching_service.cpython-314.pyc",
     "Backend/tests/__pycache__/test_cotizaciones.cpython-314-pytest-9.0.3.pyc",
     "Backend/tests/__pycache__/test_importadores.cpython-314-pytest-9.0.3.pyc",
@@ -195,16 +199,11 @@
     "Backend/services/__pycache__",
     "Backend/schemas/__pycache__/__init__.cpython-314.pyc",
     "Backend/schemas/__pycache__/cotizacion.cpython-314.pyc",
-    "Backend/schemas/__pycache__/importador.cpython-314.pyc",
     "Backend/README.md",
     "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
     "Propuesta_Plataforma_Importacion.md",
     "Inversionistas/Metricas-MVP.md",
-    "Inversionistas/Modelo-Negocio.md",
-    "Inversionistas/Pitch-Inversionistas.md",
-    "Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md",
     "Fases-Desarrollo/Semana-2-Red-y-Ordenes/Tareas-Semana-2.md",
-    "Fases-Desarrollo/Semana-1-Fundaciones-y-Cotizaciones/Tareas-Semana-1.md",
     "Frontend/UX-UI-Guia.md",
     "Frontend/Wireframes.md",
     "Frontend/Pantallas-Admin.md",

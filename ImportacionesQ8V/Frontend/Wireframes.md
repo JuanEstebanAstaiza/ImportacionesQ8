@@ -1,4 +1,4 @@
-# 📐 Wireframes — ImportacionesQ8
+# Wireframes — ImportacionesQ8
 
 ## Descripción general
 
@@ -56,8 +56,8 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │   ┌───────────────────────────┐     │
 │   │  Iniciar Sesión           │     │
 │   │                           │     │
-│   │  📧 Email: [___________]  │     │
-│   │  🔒 Contraseña: [______]  │     │
+│   │  Email: [___________]     │     │
+│   │  Contraseña: [______]     │     │
 │   │                           │     │
 │   │   ○ Solicitante           │     │
 │   │   ○ Importador            │     │
@@ -92,21 +92,21 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │                                     │
 │  ── Cotizaciones Recientes ──        │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
+│  │ Textiles - China          │      │
 │  │ Estado: Propuestas rec.   │      │
 │  │ Hace 2 horas              │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Órdenes Activas ──              │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Electrónica - China    │      │
+│  │ Electrónica - China       │      │
 │  │ Estado: En tránsito       │      │
 │  │ [Ver detalle]             │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Asesor Asignado ──              │
 │  ┌───────────────────────────┐      │
-│  │ 👤 María López            │      │
+│  │ Maria Lopez               │      │
 │  │ Importadora ABC           │      │
 │  │ [Chat] [WhatsApp]         │      │
 │  └───────────────────────────┘      │
@@ -128,22 +128,22 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │   ¿Cómo quieres enviar tu solicitud?│
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🎯 Cotización Dirigida   │      │
+│  │  Cotización Dirigida      │      │
 │  │                           │      │
 │  │  Elige un importador      │      │
 │  │  específico               │      │
 │  │                           │      │
-│  │  → Buscar importador      │      │
+│  │  Buscar importador        │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🌐 Red de Importadores   │      │
+│  │  Red de Importadores      │      │
 │  │                           │      │
 │  │  Difunde a toda la red    │      │
 │  │  y recibe múltiples       │      │
 │  │  propuestas               │      │
 │  │                           │      │
-│  │  → Difundir a la red      │      │
+│  │  Difundir a la red        │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -162,24 +162,24 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │                                     │
 │   Elige una importadora             │
 │                                     │
-│  🔍 [Buscar por nombre o especialidad]│
+│  Buscar por nombre o especialidad   │
 │                                     │
 │  Filtros: País: [China ▼] Categoría:[▼]│
 │                                     │
 │  ── Importadores Disponibles ──      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora ABC       │      │
+│  │  Importadora ABC          │      │
 │  │  Textiles, Ropa           │      │
-│  │  ⭐⭐⭐⭐⭐ 4.8          │      │
+│  │  Calificacion: 4.8        │      │
 │  │  Respuesta: ~24h          │      │
 │  │  [Seleccionar]            │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora XYZ       │      │
+│  │  Importadora XYZ          │      │
 │  │  Electrónica, Tecnología  │      │
-│  │  ⭐⭐⭐⭐ 4.5            │      │
+│  │  Calificacion: 4.5        │      │
 │  │  Respuesta: ~48h          │      │
 │  │  [Seleccionar]            │      │
 │  └───────────────────────────┘      │
@@ -205,8 +205,8 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │                                     │
 │  ── Foto del Producto ──            │
 │  ┌───────────────────────────┐      │
-│  │  📷 Arrastra una imagen    │      │
-│  │     o haz clic para subir  │      │
+│  │  Cargar imagen del producto│      │
+│  │                           │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  País de importación: [China ▼]     │
@@ -259,13 +259,13 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 ├─────────────────────────────────────┤
 │                                     │
 │   Propuestas Recibidas              │
-│   📦 Textiles - China               │
+│   Textiles - China                  │
 │   [3 de 5 importadores respondieron] │
 │                                     │
 │  ── Propuestas Activas ──           │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora ABC       │      │
+│  │  Importadora ABC          │      │
 │  │  Precio: $150.00 USD      │      │
 │  │  Tiempo estimado: 30 días │      │
 │  │  Incoterm: FOB            │      │
@@ -275,7 +275,7 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora XYZ       │      │
+│  │  Importadora XYZ          │      │
 │  │  Precio: $135.00 USD      │      │
 │  │  Tiempo estimado: 45 días │      │
 │  │  Incoterm: CIF            │      │
@@ -287,8 +287,8 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │  ── Pendientes de Responder ──      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │  🏢 Importadora DEF       │      │
-│  │  ⏳ Esperando respuesta   │      │
+│  │  Importadora DEF          │      │
+│  │  Esperando respuesta      │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -323,7 +323,7 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │                                     │
 │  ┌───────────────────────────┐      │
 │  │  Procesado por Wompi       │      │
-│  │  🔒 Pago seguro            │      │
+│  │  Pago seguro               │      │
 │  └───────────────────────────┘      │
 │                                     │
 ├─────────────────────────────────────┤
@@ -341,34 +341,34 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 ├─────────────────────────────────────┤
 │                                     │
 │   Orden #ORD-001                    │
-│   📦 Electrónica - China            │
+│   Electrónica - China               │
 │                                     │
 │  ── Estado Actual: En Tránsito ──    │
 │                                     │
-│  Cotización aceptada     ✅         │
-│  En producción             ✅       │
-│  En tránsito internacional  🔵      │
-│  En aduana / nacionalización   ⬜   │
-│  En bodega local               ⬜   │
-│  Entregado                     ⬜   │
+│  Cotización aceptada     [completado]│
+│  En producción             [completado]│
+│  En tránsito internacional  [actual] │
+│  En aduana / nacionalizacion   [pendiente]│
+│  En bodega local               [pendiente]│
+│  Entregado                     [pendiente]│
 │                                     │
 │  ── Información de la Orden ──       │
 │                                     │
 │  Importador: Importadora ABC        │
-│  Asesor: María López                │
+│  Asesor: Maria Lopez                │
 │  Precio acordado: $150.00 USD       │
 │  Tiempo estimado: 30 días           │
 │                                     │
 │  ── Historial de Estados ──         │
 │                                     │
-│  ✅ Cotización aceptada - 05/07     │
-│  ✅ En producción - 08/07           │
-│  🔵 En tránsito internacional - 12/07│
+│  [completado] Cotización aceptada - 05/07│
+│  [completado] En producción - 08/07   │
+│  [actual] En tránsito internacional - 12/07│
 │                                     │
 │  ── Documentos Adjuntos ──          │
 │                                     │
-│  📄 Factura Proforma                │
-│  📄 Packing List                    │
+│  Factura Proforma                   │
+│  Packing List                       │
 │                                     │
 ├─────────────────────────────────────┤
 │   [Chat con Asesor]  [Reportar      │
@@ -382,25 +382,25 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 
 ```
 ┌─────────────────────────────────────┐
-│  ← Volver    📦 Electrónica - China │
+│  ← Volver    Electrónica - China    │
 ├─────────────────────────────────────┤
 │                                     │
-│  ── Chat con María López            │
+│  ── Chat con Maria Lopez            │
 │     Importadora ABC · En línea      │
 │                                     │
 │  [05/07]                            │
 │                                     │
-│  María: Hola, tu pedido está en     │
+│  Maria: Hola, tu pedido está en     │
 │         tránsito internacional      │
 │  ──────────────────────────────     │
 │                                     │
 │  Tú: Perfecto, ¿cuándo llega?       │
 │  ──────────────────────────────     │
 │                                     │
-│  María: Estimado para el viernes    │
+│  Maria: Estimado para el viernes    │
 │         ─────────────────────────── │
 │                                     │
-│  [📎 Adjuntar]  [Escribe un mensaje]│
+│  [Adjuntar]  [Escribe un mensaje]   │
 ├─────────────────────────────────────┤
 │   [Enviar]                          │
 └─────────────────────────────────────┘
@@ -423,27 +423,27 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 │  ── Solicitudes Recibidas (8) ──     │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
-│  │ 🏷️ Dirigida              │      │
+│  │ Textiles - China          │      │
+│  │ Dirigida                  │      │
 │  │ Importadora ABC           │      │
 │  │ Cantidad: 500 unidades    │      │
 │  │ Precio objetivo: $120 USD │      │
-│  │ Hace 2 horas          🔵3 │      │
+│  │ Hace 2 horas          [3] │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Electrónica - China    │      │
-│  │ 🏷️ Abierta               │      │
+│  │ Electrónica - China       │      │
+│  │ Abierta                   │      │
 │  │ Importadora XYZ           │      │
 │  │ Cantidad: 200 unidades    │      │
 │  │ Precio objetivo: $85 USD  │      │
-│  │ Hace 1 día            ⬜0 │      │
+│  │ Hace 1 día            [0] │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Órdenes Activas (3) ──          │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
+│  │ Textiles - China          │      │
 │  │ Estado: En tránsito       │      │
 │  │ Solicitante: Empresa A    │      │
 │  │ [Ver detalle]             │      │
@@ -472,26 +472,26 @@ La plataforma tiene dos experiencias separadas que comparten el mismo motor: la 
 
 | Estado | Color | Icono |
 |--------|-------|-------|
-| Cotización creada | 🔵 Azul | Círculo azul |
-| Dirigida | 🟢 Verde | Check verde |
-| Abierta / Propuestas recibidas | 🟡 Amarillo | Reloj amarillo |
-| Cotización aceptada | 🟣 Morado | Check morado |
-| Orden activa | 🟠 Naranja | Flecha naranja |
+| Cotización creada | Azul | Circulo azul |
+| Dirigida | Verde | Check verde |
+| Abierta / Propuestas recibidas | Amarillo | Reloj amarillo |
+| Cotización aceptada | Morado | Check morado |
+| Orden activa | Naranja | Flecha naranja |
 
 ### Estados de órdenes
 
 | Estado | Icono | Color |
 |--------|-------|-------|
-| Cotización aceptada | ✅ | Verde |
-| En producción | ✅ | Verde |
-| En tránsito internacional | 🔵 | Azul |
-| En aduana / nacionalización | ⬜ | Gris |
-| En bodega local | ⬜ | Gris |
-| Entregado | ✅ | Verde |
+| Cotización aceptada | [completado] | Verde |
+| En producción | [completado] | Verde |
+| En tránsito internacional | [actual] | Azul |
+| En aduana / nacionalizacion | [pendiente] | Gris |
+| En bodega local | [pendiente] | Gris |
+| Entregado | [completado] | Verde |
 
 ### Etiquetas de modalidad
 
 | Modalidad | Color | Icono |
 |-----------|-------|-------|
-| Dirigida | 🟢 Verde | 🏷️ |
-| Abierta | 🟡 Amarillo | 🌐 |
+| Dirigida | Verde | Etiqueta |
+| Abierta | Amarillo | Red global |

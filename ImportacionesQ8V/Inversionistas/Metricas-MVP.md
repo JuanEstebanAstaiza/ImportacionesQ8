@@ -1,4 +1,4 @@
-# 📊 Métricas MVP — ImportacionesQ8
+# Metricas MVP — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Métricas de éxito para el MVP del proyecto ImportacionesQ8, diseñado para val
 
 ---
 
-## 🎯 Métricas Clave de Éxito del MVP
+## Metricas Clave de Exito del MVP
 
 ### 1. Número de Cotizaciones Creadas por Modalidad
 
@@ -76,7 +76,7 @@ Métricas de éxito para el MVP del proyecto ImportacionesQ8, diseñado para val
 
 ---
 
-## 📈 Métricas Secundarias del MVP
+## Metricas Secundarias del MVP
 
 ### Métricas de Adquisición
 
@@ -104,26 +104,26 @@ Métricas de éxito para el MVP del proyecto ImportacionesQ8, diseñado para val
 
 ---
 
-## 📊 Dashboard de Métricas — Vista para el Equipo
+## Dashboard de Metricas — Vista para el Equipo
 
 ```mermaid
 graph TD
-    subgraph Tráfico["🌐 Tráfico"]
+    subgraph Tráfico["Traffico"]
         T1[Compradores nuevos/mes]
         T2[Cotizaciones creadas/mes]
     end
     
-    subgraph Respuesta["⚡ Respuesta"]
+    subgraph Respuesta["Respuesta"]
         R1[Tasa respuesta importadores 48h]
         R2[Tiempo promedio primera oferta]
     end
     
-    subgraph Conversión["💰 Conversión"]
+    subgraph Conversion["Conversion"]
         C1[Tasa conversión cotización → orden]
         C2[Ingreso promedio por orden]
     end
     
-    subgraph Retención["🔄 Retención"]
+    subgraph Retencion["Retencion"]
         RET1[Tasa retención importadores]
         RET2[Tasa retención compradores]
     end
@@ -138,7 +138,7 @@ graph TD
 
 ---
 
-## 📋 Métricas por Fase de Desarrollo
+## Metricas por Fase de Desarrollo
 
 ### Semana 1 — Fundaciones y Cotizaciones
 
@@ -166,7 +166,7 @@ graph TD
 
 ---
 
-## 🎯 Criterios de Éxito del MVP — Go/No-Go Decision
+## Criterios de Exito del MVP — Go/No-Go Decision
 
 ### Go (Continuar con inversión Serie A):
 
@@ -184,9 +184,9 @@ graph TD
 
 ---
 
-## 📊 Métricas para Presentación a Inversionistas
+## Metricas para Presentacion a Inversionistas
 
-### Métrica de Tracción (MVP)
+### Metrica de Traccion (MVP)
 
 | Métrica | Valor Actual | Objetivo | Estado |
 |---------|-------------|----------|--------|
@@ -195,7 +195,7 @@ graph TD
 | Órdenes/mes | 0 | 15-30 | ⬜ Pendiente |
 | Ingresos/mes | $0 | $1,125-$2,250 | ⬜ Pendiente |
 
-### Métrica de Validación (MVP)
+### Metrica de Validacion (MVP)
 
 | Hipótesis | Criterio de Validación | Estado |
 |-----------|----------------------|--------|
@@ -206,7 +206,7 @@ graph TD
 
 ---
 
-## 📝 Notas sobre las Métricas
+## Notas sobre las Metricas
 
 - **Las métricas del MVP son intencionalmente conservadoras:** El objetivo es validar el diferenciador (flujo dual de cotización), no escalar a gran escala.
 - **Se recomienda usar Google Analytics para tracking web y logs de la API para tracking backend.**
