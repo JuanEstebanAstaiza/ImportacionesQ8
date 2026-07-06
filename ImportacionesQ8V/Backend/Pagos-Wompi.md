@@ -1,4 +1,4 @@
-# 💳 Pagos con Wompi — ImportacionesQ8
+# Pagos con Wompi — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Integración de **Wompi** como pasarela de pagos para el mercado colombiano. Del
 
 ---
 
-## 📋 Flujo de pago con Wompi
+## Flujo de pago con Wompi
 
 ```mermaid
 sequenceDiagram
@@ -44,7 +44,7 @@ sequenceDiagram
 
 ---
 
-## 📐 Endpoints de pagos
+## Endpoints de pagos
 
 ### Generar checkout de pago
 
@@ -128,7 +128,7 @@ sequenceDiagram
 
 ---
 
-## 🔄 Eventos de Wompi manejados
+## Eventos de Wompi manejados
 
 | Evento | Acción en la plataforma | Estado del pago |
 |--------|----------------------|-----------------|
@@ -138,7 +138,7 @@ sequenceDiagram
 
 ---
 
-## 📊 Estados del pago
+## Estados del pago
 
 ```mermaid
 stateDiagram-v2
@@ -151,7 +151,7 @@ stateDiagram-v2
 
 ---
 
-## 🔗 Integración con Wompi — Configuración
+## Integración con Wompi — Configuración
 
 ### Credenciales necesarias
 
@@ -170,7 +170,7 @@ stateDiagram-v2
 
 ---
 
-## 📝 Notas de implementación
+## Notas de implementación
 
 - **Moneda:** Los pagos se procesan en USD (moneda principal del proyecto). Wompi soporta múltiples monedas.
 - **Monto dinámico:** El monto del pago se obtiene de `precio_acordado_usd` de la cotización aceptada, no es un valor fijo.

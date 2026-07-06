@@ -1,4 +1,4 @@
-# 🎨 Guía de Diseño UX/UI — ImportacionesQ8
+# Guia de Diseno UX/UI — ImportacionesQ8
 
 ## Descripción general
 
@@ -43,29 +43,29 @@ El botón de acción principal (solicitar cotización, aceptar oferta, responder
 
 | Estado | Color | Icono |
 |--------|-------|-------|
-| Cotización creada | 🔵 Azul (#3B82F6) | Círculo azul |
-| Dirigida | 🟢 Verde (#10B981) | Check verde |
-| Abierta / Propuestas recibidas | 🟡 Amarillo (#F59E0B) | Reloj amarillo |
-| Cotización aceptada | 🟣 Morado (#8B5CF6) | Check morado |
-| Orden activa | 🟠 Naranja (#F97316) | Flecha naranja |
+| Cotización creada | Azul (#3B82F6) | Circulo azul |
+| Dirigida | Verde (#10B981) | Check verde |
+| Abierta / Propuestas recibidas | Amarillo (#F59E0B) | Reloj amarillo |
+| Cotización aceptada | Morado (#8B5CF6) | Check morado |
+| Orden activa | Naranja (#F97316) | Flecha naranja |
 
 ### Etiquetas de modalidad — Colores
 
 | Modalidad | Color | Icono |
 |-----------|-------|-------|
-| Dirigida | 🟢 Verde (#10B981) | 🏷️ |
-| Abierta | 🟡 Amarillo (#F59E0B) | 🌐 |
+| Dirigida | Verde (#10B981) | Etiqueta |
+| Abierta | Amarillo (#F59E0B) | Red global |
 
 ### Estados de órdenes — Colores
 
 | Estado | Icono | Color |
 |--------|-------|-------|
-| Cotización aceptada | ✅ | Verde (#10B981) |
-| En producción | ✅ | Verde (#10B981) |
-| En tránsito internacional | 🔵 | Azul (#3B82F6) |
-| En aduana / nacionalización | ⬜ | Gris (#9CA3AF) |
-| En bodega local | ⬜ | Gris (#9CA3AF) |
-| Entregado | ✅ | Verde (#10B981) |
+| Cotización aceptada | Completado | Verde (#10B981) |
+| En producción | Completado | Verde (#10B981) |
+| En tránsito internacional | En transito | Azul (#3B82F6) |
+| En aduana / nacionalizacion | Pendiente | Gris (#9CA3AF) |
+| En bodega local | Pendiente | Gris (#9CA3AF) |
+| Entregado | Completado | Verde (#10B981) |
 
 ### Tipografía
 

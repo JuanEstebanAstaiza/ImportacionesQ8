@@ -1,4 +1,4 @@
-# 🏢 Pantallas del Importador — ImportacionesQ8
+# Pantallas del Importador — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 
 ---
 
-## 📋 Inventario de pantallas del importador
+## Inventario de pantallas del importador
 
 | # | Pantalla | Módulo | Prioridad |
 |---|----------|--------|-----------|
@@ -36,27 +36,27 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 │  ── Solicitudes Recibidas (8) ──     │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
-│  │ 🏷️ Dirigida              │      │
+│  │ Textiles - China          │      │
+│  │ Dirigida                  │      │
 │  │ Importadora ABC           │      │
 │  │ Cantidad: 500 unidades    │      │
 │  │ Precio objetivo: $120 USD │      │
-│  │ Hace 2 horas          🔵3 │      │
+│  │ Hace 2 horas          [3] │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Electrónica - China    │      │
-│  │ 🏷️ Abierta               │      │
+│  │ Electrónica - China       │      │
+│  │ Abierta                   │      │
 │  │ Importadora XYZ           │      │
 │  │ Cantidad: 200 unidades    │      │
 │  │ Precio objetivo: $85 USD  │      │
-│  │ Hace 1 día            ⬜0 │      │
+│  │ Hace 1 día            [0] │      │
 │  └───────────────────────────┘      │
 │                                     │
 │  ── Órdenes Activas (3) ──          │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 📦 Textiles - China       │      │
+│  │ Textiles - China          │      │
 │  │ Estado: En tránsito       │      │
 │  │ Solicitante: Empresa A    │      │
 │  │ [Ver detalle]             │      │
@@ -71,15 +71,15 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 
 - **Tabs de navegación:** Solicitudes | Órdenes Activas (cambio de vista)
 - **Filtros desplegables:** Modalidad (Dirigida/Abierta/Todas), Estado (Pendiente/Respondido/Todos)
-- **Tarjeta de solicitud recibida:** Foto del producto, nombre, etiqueta de modalidad (Dirigida/Aberta), cantidad, precio objetivo, tiempo desde recepción, indicador de estado
+- **Tarjeta de solicitud recibida:** Foto del producto, nombre, etiqueta de modalidad (Dirigida/Abierta), cantidad, precio objetivo, tiempo desde recepción, indicador de estado
 - **Lista de órdenes activas:** Tarjetas con nombre del producto, estado actual y botón "Ver detalle"
 
 ### Etiquetas de modalidad (colores)
 
 | Modalidad | Color | Descripción |
 |-----------|-------|-------------|
-| Dirigida | 🟢 Verde | Solicitud exclusiva para este importador |
-| Abierta | 🟡 Amarillo | Solicitud compartida con la red de importadores |
+| Dirigida | Verde | Solicitud exclusiva para este importador |
+| Abierta | Amarillo | Solicitud compartida con la red de importadores |
 
 ### Datos de la tarjeta de solicitud
 
@@ -111,7 +111,7 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 ├─────────────────────────────────────┤
 │                                     │
 │   Responder Cotización              │
-│   📦 Textiles - China               │
+│   Textiles - China                  │
 │   Solicitante: Empresa A            │
 │   Modalidad: Dirigida               │
 │                                     │
@@ -200,10 +200,10 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 │                                     │
 │  Logo:                              │
 │  ┌───────────────────────────┐      │
-│  │  📷 Subir logo            │      │
+│  │  Subir logo               │      │
 │  └───────────────────────────┘      │
 │                                     │
-│  Países de origen:                  │
+│  Paises de origen:                  │
 │  [China] [+] [Vietnam] [+]         │
 │                                     │
 │  Categorías de producto:            │
@@ -218,9 +218,9 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 │  ── Asesores ──                     │
 │                                     │
 │  ┌───────────────────────────┐      │
-│  │ 👤 María López            │      │
-│  │ 📧 maria@importadoraabc.com│     │
-│  │ 📱 +57 300 123 4567       │      │
+│  │ Maria Lopez               │      │
+│  │ maria@importadoraabc.com  │      │
+│  │ +57 300 123 4567          │      │
 │  │ [Editar] [Eliminar]       │      │
 │  └───────────────────────────┘      │
 │                                     │
@@ -240,7 +240,7 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 
 ---
 
-## 📝 Criterios de diseño transversales para el importador
+## Criterios de diseno transversales para el importador
 
 - **Distinción visual clara entre "dirigida" y "abierta":** Usar etiquetas de color diferentes en la bandeja de solicitudes.
 - **Estado siempre visible:** En cualquier pantalla, el importador debe poder ver rápidamente cuántas solicitudes tiene pendientes vs respondidas.

@@ -1,4 +1,4 @@
-# 📅 Semana 2: Red de Importadores y Órdenes — ImportacionesQ8
+# Semana 2: Red de Importadores y Ordenes — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Semana 2 del MVP a 3 semanas. Entregables: Distribución automática de cotizaci
 
 ---
 
-## 📋 Resumen de entregables
+## Resumen de entregables
 
 | Entregable | Módulo | Prioridad |
 |------------|--------|-----------|
@@ -17,7 +17,7 @@ Semana 2 del MVP a 3 semanas. Entregables: Distribución automática de cotizaci
 
 ---
 
-## 🔧 Tareas Backend — Semana 2
+## Tareas Backend — Semana 2
 
 ### Tarea 2.1: Implementar modelo y CRUD de propuestas
 
@@ -513,7 +513,7 @@ Implementar los endpoints REST para que el importador pueda ver todas las solici
 
 ---
 
-## 🎨 Tareas Frontend — Semana 2
+## Tareas Frontend — Semana 2
 
 ### Tarea 2.6: Implementar panel de propuestas recibidas (solicitante)
 
@@ -833,7 +833,7 @@ Implementar la pantalla P11 — Formulario de Respuesta a Cotización donde el i
 
 ---
 
-## 📊 Criterios de aceptación — Semana 2 (Resumen)
+## Criterios de aceptacion — Semana 2 (Resumen)
 
 | Entregable | Criterio de aceptación |
 |------------|----------------------|
@@ -845,7 +845,7 @@ Implementar la pantalla P11 — Formulario de Respuesta a Cotización donde el i
 
 ---
 
-## 🔗 Dependencias entre tareas
+## Dependencias entre tareas
 
 ```mermaid
 graph TD
@@ -864,7 +864,7 @@ graph TD
 
 ---
 
-## 📝 Notas adicionales
+## Notas adicionales
 
 - **Prioridad:** Las tareas P0 deben completarse antes de las P1. No se puede avanzar a la Semana 3 sin tener el flujo completo de cotización → propuesta → pago → orden.
 - **Testing:** Cada tarea debe incluir al menos pruebas unitarias básicas para los endpoints y componentes principales.

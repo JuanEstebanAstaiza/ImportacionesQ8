@@ -1,4 +1,4 @@
-# 💬 Chat con WebSocket — ImportacionesQ8
+# Chat con WebSocket — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Chat en tiempo real dentro de la plataforma, construido sobre **WebSockets** con
 
 ---
 
-## 📋 Arquitectura del Chat
+## Arquitectura del Chat
 
 ```mermaid
 graph TD
@@ -23,7 +23,7 @@ graph TD
 
 ---
 
-## 📐 Endpoints de Chat
+## Endpoints de Chat
 
 ### REST API — Gestión de conversaciones
 
@@ -41,7 +41,7 @@ graph TD
 
 ---
 
-## 🔄 Flujo de conexión WebSocket
+## Flujo de conexión WebSocket
 
 ```mermaid
 sequenceDiagram
@@ -73,7 +73,7 @@ sequenceDiagram
 
 ---
 
-## 📐 Estructura de mensajes WebSocket
+## Estructura de mensajes WebSocket
 
 ### Mensaje enviado por el frontend
 
@@ -120,7 +120,7 @@ sequenceDiagram
 
 ---
 
-## 📊 Creación automática de conversaciones
+## Creación automática de conversaciones
 
 ### Flujo de creación de conversación
 
@@ -147,7 +147,7 @@ sequenceDiagram
 
 ---
 
-## 🛡️ Autorización de conversaciones
+## Autorización de conversaciones
 
 ### Reglas de acceso a conversaciones
 
@@ -192,7 +192,7 @@ async def websocket_chat_endpoint(
 
 ---
 
-## 📝 Notas de implementación
+## Notas de implementación
 
 - **Redis Pub/Sub para mensajería:** Cada conversación tiene su propio canal en Redis (`chat:{conversacion_id}`). Los clientes se suscriben al canal cuando abren la conversación.
 - **Fallback REST:** Si la conexión WebSocket falla, el frontend puede enviar mensajes vía `POST /chat/conversaciones/{id}/mensajes` como fallback.

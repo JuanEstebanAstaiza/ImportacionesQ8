@@ -1,10 +1,10 @@
-# 💰 Pitch — ImportacionesQ8
+# Pitch — ImportacionesQ8
 
 ## Presentación para Inversionistas
 
 ---
 
-## 📌 El Problema
+## El Problema
 
 ### Para los compradores de productos importados:
 
@@ -19,7 +19,7 @@
 
 ---
 
-## 🎯 Nuestra Solución: ImportacionesQ8
+## Nuestra Solucion: ImportacionesQ8
 
 **Una plataforma de networking que conecta a compradores con importadores de forma transparente y eficiente.**
 
@@ -32,7 +32,7 @@
 
 ---
 
-## 📊 Tamaño del Mercado (TAM/SAM/SOM)
+## Tamano del Mercado (TAM/SAM/SOM)
 
 | Métrica | Valor | Descripción |
 |---------|-------|-------------|
@@ -42,7 +42,7 @@
 
 ---
 
-## 💡 Modelo de Negocio
+## Modelo de Negocio
 
 ### Cómo generamos ingresos:
 
@@ -54,13 +54,13 @@
 
 ---
 
-## 🚀 Tracción y Validación
+## Traccion y Validacion
 
 ### Indicadores clave:
 
-- ✅ Formulario de solicitud de cotización ya validado por una empresa del sector (evidenciado en el pantallazo de referencia)
-- ✅ Modelo de negocio validado: los compradores están acostumbrados a llenar formularios de cotización
-- ✅ Importadores existentes necesitan un canal adicional de captación de demanda
+1. Formulario de solicitud de cotización ya validado por una empresa del sector (evidenciado en el pantallazo de referencia)
+2. Modelo de negocio validado: los compradores están acostumbrados a llenar formularios de cotización
+3. Importadores existentes necesitan un canal adicional de captación de demanda
 
 ### Métricas objetivo para el MVP (3 semanas):
 
@@ -74,7 +74,7 @@
 
 ---
 
-## 📈 Proyección Financiera (3 años)
+## Proyeccion Financiera (3 anos)
 
 | Año | Cotizaciones/Mes | Importadores Activos | Ingresos Anuales |
 |-----|------------------|---------------------|-----------------|
@@ -84,7 +84,7 @@
 
 ---
 
-## 🏆 Equipo
+## Equipo
 
 ### Equipo fundador:
 
@@ -96,7 +96,7 @@
 
 ---
 
-## 💵 Inversión Requerida
+## Inversion Requerida
 
 ### Ronda Seed: $100,000 - $200,000 USD
 
@@ -108,7 +108,7 @@
 
 ---
 
-## 🎯 Por qué Invertir en ImportacionesQ8
+## Por que Invertir en ImportacionesQ8
 
 1. **Problema real validado:** Los compradores no tienen transparencia de precios; los importadores necesitan más demanda.
 2. **Doble modalidad única:** Cotización dirigida + abierta = la mejor de ambos mundos.
@@ -118,7 +118,7 @@
 
 ---
 
-## 📞 Contacto
+## Contacto
 
 **¿Interesado en ser parte de esta historia?**
 

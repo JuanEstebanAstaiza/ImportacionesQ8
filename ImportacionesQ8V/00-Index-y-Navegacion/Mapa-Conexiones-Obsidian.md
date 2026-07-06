@@ -1,16 +1,16 @@
-# 🔗 Mapa de Conexiones del Proyecto ImportacionesQ8
+# Mapa de Conexiones del Proyecto ImportacionesQ8
 
 ## Diagrama principal de relaciones entre notas
 
 ```mermaid
 graph LR
-    subgraph Maestros["📋 Documentos Maestros"]
+    subgraph Maestros["Documentos Maestros"]
         A[Propuesta-Completa]
         B[Resumen-Ejecutivo]
         C[Arquitectura-Tecnologica]
     end
 
-    subgraph Backend["⚙️ Backend"]
+    subgraph Backend["Backend"]
         D[API-Rest]
         E[Base-Datos]
         F[Autenticacion]
@@ -19,7 +19,7 @@ graph LR
         I[Matching-Cotizaciones]
     end
 
-    subgraph Frontend["🎨 Frontend"]
+    subgraph Frontend["Frontend"]
         J[Pantallas-Solicitante]
         K[Pantallas-Importador]
         L[Pantallas-Admin]
@@ -27,13 +27,13 @@ graph LR
         N[UX-UI-Guia]
     end
 
-    subgraph Fases["📅 Fases de Desarrollo"]
+    subgraph Fases["Fases de Desarrollo"]
         O[Semana-1-Fundaciones-y-Cotizaciones]
         P[Semana-2-Red-y-Ordenes]
         Q[Semana-3-Chat-y-Pulido]
     end
 
-    subgraph Inversionistas["💰 Inversionistas"]
+    subgraph Inversionistas["Inversionistas"]
         R[Pitch-Inversionistas]
         S[Modelo-Negocio]
         T[Metricas-MVP]
@@ -276,11 +276,11 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph Acceso["🔐 Acceso"]
+    subgraph Acceso["Acceso"]
         A1[Pantalla 1: Login/Registro]
     end
 
-    subgraph Cotizaciones["💰 Cotizaciones"]
+    subgraph Cotizaciones["Cotizaciones"]
         B1[Pantalla 2: Dashboard Solicitante]
         B2[Pantalla 3: Selección de Modalidad]
         B3[Pantalla 4: Catálogo Importadores]
@@ -288,19 +288,19 @@ graph LR
         B5[Pantalla 6: Panel Propuestas Recibidas]
     end
 
-    subgraph Pagos["💳 Pagos"]
+    subgraph Pagos["Pagos"]
         C1[Pantalla 7: Checkout Wompi]
     end
 
-    subgraph Ordenes["📦 Órdenes"]
+    subgraph Ordenes["Ordenes"]
         D1[Pantalla 8: Detalle de Orden]
     end
 
-    subgraph Chat["💬 Chat"]
+    subgraph Chat["Chat"]
         E1[Pantalla 9: Chat con Asesor]
     end
 
-    subgraph Importador["🏢 Panel Importador"]
+    subgraph Importador["Panel Importador"]
         F1[Bandeja Solicitudes Importador]
         F2[Formulario Respuesta Cotización]
     end
@@ -353,7 +353,7 @@ gantt
 
 ```mermaid
 graph TD
-    subgraph Metricas["📊 Métricas de éxito del MVP"]
+    subgraph Metricas["Metricas de exito del MVP"]
         M1[Número de cotizaciones por modalidad]
         M2[Tasa de respuesta de importadores]
         M3[Tiempo promedio primera oferta]
@@ -361,7 +361,7 @@ graph TD
         M5[Importadores activos en la red]
     end
 
-    subgraph Fuentes["📡 Fuentes de datos"]
+    subgraph Fuentes["Fuentes de datos"]
         F1[Backend: API logs]
         F2[MySQL: Tablas cotizaciones]
         F3[MySQL: Tabla importadores]

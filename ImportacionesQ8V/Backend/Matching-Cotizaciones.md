@@ -1,4 +1,4 @@
-# 🎯 Motor de Matching — ImportacionesQ8
+# Motor de Matching — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Motor de **"matching" simple** para cotizaciones abiertas: reglas por país de i
 
 ---
 
-## 📋 Flujo de matching de cotizaciones abiertas
+## Flujo de matching de cotizaciones abiertas
 
 ```mermaid
 sequenceDiagram
@@ -55,7 +55,7 @@ sequenceDiagram
 
 ---
 
-## 📐 Lógica de matching (MVP)
+## Lógica de matching (MVP)
 
 ### Reglas de matching por importador
 
@@ -98,7 +98,7 @@ WHERE estado = 'activo'
 
 ---
 
-## 📊 Redis para gestión de cotizaciones abiertas
+## Redis para gestión de cotizaciones abiertas
 
 ### Estructura de datos en Redis
 
@@ -132,7 +132,7 @@ if redis.ttl(f"cotizacion_abierta:{cotizacion_id}") <= 0:
 
 ---
 
-## 🔄 Notificaciones a importadores
+## Notificaciones a importadores
 
 ### Flujo de notificación
 
@@ -163,7 +163,7 @@ sequenceDiagram
 
 ---
 
-## 📐 Endpoints para matching
+## Endpoints para matching
 
 ### Obtener importadores que aplican a una cotización abierta
 
@@ -219,7 +219,7 @@ sequenceDiagram
 
 ---
 
-## 📝 Notas de implementación
+## Notas de implementación
 
 - **Matching simple en MVP:** Solo dos criterios (país + categoría). Un modelo más sofisticado podría incluir: calificación del importador, tiempo de respuesta promedio, capacidad de volumen, historial de éxito.
 - **TTL de 72 horas en Redis:** La ventana de tiempo para respuestas se implementa con `SET key value EX 259200` (72h). Cuando la clave expira, el estado de la cotización cambia automáticamente a "propuestas_recibidas".

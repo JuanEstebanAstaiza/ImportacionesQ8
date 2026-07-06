@@ -1,4 +1,4 @@
-# 📦 ImportacionesQ8 — Plataforma de Conexión y Cotización de Importación
+# ImportacionesQ8 — Plataforma de Conexión y Cotización de Importación
 
 ## Fuente única de verdad del proyecto
 
@@ -6,7 +6,7 @@ Este vault de Obsidian contiene toda la documentación del proyecto **Importacio
 
 ---
 
-## 🗂️ Estructura del Vault
+## Estructura del Vault
 
 | Carpeta | Descripción |
 |---------|-------------|
@@ -18,7 +18,7 @@ Este vault de Obsidian contiene toda la documentación del proyecto **Importacio
 
 ---
 
-## 📋 Documentos Maestros
+## Documentos Maestros
 
 - [[Propuesta-Completa]] — Documento completo del proyecto (fuente original)
 - [[Resumen-Ejecutivo]] — Resumen ejecutivo del proyecto
@@ -26,7 +26,7 @@ Este vault de Obsidian contiene toda la documentación del proyecto **Importacio
 
 ---
 
-## 🔗 Mapa de conexiones del proyecto
+## Mapa de conexiones del proyecto
 
 ```mermaid
 graph TD
@@ -63,7 +63,7 @@ graph TD
 
 ---
 
-## 🚀 Inicio rápido para nuevos miembros del equipo
+## Inicio rápido para nuevos miembros del equipo
 
 ### Si eres desarrollador Backend:
 1. Lee [[Propuesta-Completa]] para entender el contexto del proyecto
@@ -84,7 +84,7 @@ graph TD
 
 ---
 
-## 📊 Estado actual del proyecto
+## Estado actual del proyecto
 
 | Fase | Estado | Descripción |
 |------|--------|-------------|
@@ -94,7 +94,7 @@ graph TD
 
 ---
 
-## 📝 Convenciones del vault
+## Convenciones del vault
 
 - Los archivos están organizados por dominio funcional (Backend/Frontend) y fase de desarrollo
 - Las notas internas se enlazan con `[[nombre-del-archivo]]`

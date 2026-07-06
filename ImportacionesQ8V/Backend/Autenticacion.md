@@ -1,4 +1,4 @@
-# 🔐 Autenticación — ImportacionesQ8
+# Autenticación — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@ Sistema de autenticación basado en **JWT (JSON Web Tokens)** gestionado por Fas
 
 ---
 
-## 📋 Flujo de autenticación
+## Flujo de autenticación
 
 ### Registro de nuevo usuario
 
@@ -68,7 +68,7 @@ sequenceDiagram
 
 ---
 
-## 📐 Estructura del JWT Token
+## Estructura del JWT Token
 
 ### Claims del token
 
@@ -100,7 +100,7 @@ sequenceDiagram
 
 ---
 
-## 🔑 Gestión de contraseñas
+## Gestión de contraseñas
 
 ### Flujo de hash de contraseña
 
@@ -142,7 +142,7 @@ sequenceDiagram
 
 ---
 
-## 🛡️ Protección de endpoints con dependencias FastAPI
+## Protección de endpoints con dependencias FastAPI
 
 ### Dependencia de autenticación
 
@@ -227,7 +227,7 @@ async def listar_cotizaciones_abiertas(
 
 ---
 
-## 📊 Roles y permisos del sistema
+## Roles y permisos del sistema
 
 | Rol | Descripción | Endpoints accesibles |
 |-----|-------------|---------------------|
@@ -237,7 +237,7 @@ async def listar_cotizaciones_abiertas(
 
 ---
 
-## 🔄 Flujo completo de registro e inicio de sesión
+## Flujo completo de registro e inicio de sesión
 
 ```mermaid
 sequenceDiagram
@@ -284,7 +284,7 @@ sequenceDiagram
 
 ---
 
-## 📝 Convenciones y seguridad
+## Convenciones y seguridad
 
 - **HTTPS obligatorio:** Todas las comunicaciones deben ser sobre HTTPS para proteger credenciales en tránsito
 - **Password hashing con bcrypt:** Nunca almacenar contraseñas en texto plano

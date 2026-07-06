@@ -1,4 +1,4 @@
-# 🗄️ Base de Datos — ImportacionesQ8
+# Base de Datos — ImportacionesQ8
 
 ## Descripción general
 
@@ -6,7 +6,7 @@
 
 ---
 
-## 📊 Esquema de la base de datos
+## Esquema de la base de datos
 
 ### Tabla: `usuarios`
 
@@ -154,7 +154,7 @@
 
 ---
 
-## 🔗 Relaciones entre tablas
+## Relaciones entre tablas
 
 ```mermaid
 erDiagram
@@ -180,7 +180,7 @@ erDiagram
 
 ---
 
-## 📐 Índices recomendados
+## Índices recomendados
 
 | Tabla | Columna(s) | Tipo de índice | Razón |
 |-------|-----------|---------------|-------|
@@ -199,7 +199,7 @@ erDiagram
 
 ---
 
-## 🔄 Migraciones y esquema inicial
+## Migraciones y esquema inicial
 
 ### Script de creación del esquema (pseudocódigo SQL)
 
@@ -370,7 +370,7 @@ CREATE INDEX idx_ordenes_solicitante_estado ON ordenes(solicitante_id, estado);
 
 ---
 
-## 📊 Notas de arquitectura de base de datos
+## Notas de arquitectura de base de datos
 
 - **Arquitectura multi-tenant desde el inicio:** cada importador vinculado es una entidad independiente con su propio equipo de asesores
 - **JSON para arrays de categorías:** `especialidad_producto` y `paises_origen` usan tipo JSON en lugar de tablas separadas para simplificar las consultas iniciales
