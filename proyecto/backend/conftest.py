@@ -1,12 +1,22 @@
 import sys
 import os
 
-# Crear directorio de base de datos si no existe (Windows)
-DB_DIR = r"C:\Users\akali\AppData\Local\Temp"
+# Crear directorio de base de datos si no existe (compatible con Windows y Linux/Docker)
+if os.name == 'nt':  # Windows
+    DB_DIR = r"C:\Users\akali\AppData\Local\Temp"
+else:  # Linux/Mac/Docker
+    DB_DIR = "/tmp"
+
 os.makedirs(DB_DIR, exist_ok=True)
 
 # Sobrescribir DATABASE_URL ANTES de importar cualquier módulo del proyecto
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_DIR}/test.db"
+
+# Secreto de eventos de Wompi usado en tests para firmar webhooks simulados
+os.environ.setdefault("WOMPI_EVENTS_SECRET", "test_events_secret_for_ci")
+# Límites de rate limiting altos en tests para no interferir con corridas repetidas de login/register
+os.environ.setdefault("RATE_LIMIT_LOGIN", "1000/minute")
+os.environ.setdefault("RATE_LIMIT_REGISTER", "1000/minute")
 
 import pytest
 from uuid import uuid4
@@ -47,8 +57,11 @@ deps.get_db = override_get_db
 # Importar modelos ANTES de crear las tablas
 from models.usuario import Usuario
 from models.importador import Importador
-from models.cotizacion import Cotizacion
+from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.asesor import Asesor
+from models.propuesta import Propuesta, EstadoPropuesta
+from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden
+from models.pago import Pago, EstadoPago
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -359,6 +372,11 @@ def cleanup_test_db(db_session):
     yield
     # Eliminar todos los registros creados en el test (en orden inverso para respetar FK)
     try:
+        db_session.query(Pago).delete()
+        db_session.query(DocumentoOrden).delete()
+        db_session.query(HistorialEstadosOrden).delete()
+        db_session.query(Orden).delete()
+        db_session.query(Propuesta).delete()
         db_session.query(Cotizacion).delete()
         db_session.query(Asesor).delete()
         db_session.query(Importador).delete()
@@ -374,4 +392,4 @@ def cleanup_test_db(db_session):
 # Importar modelos para usar en fixtures
 from models.usuario import Usuario
 from models.importador import Importador
-from models.cotizacion import Cotizacion
+from models.cotizacion import Cotizacion, EstadoCotizacion

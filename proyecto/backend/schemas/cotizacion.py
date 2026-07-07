@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class CotizacionCreate(BaseModel):
@@ -20,6 +20,7 @@ class CotizacionCreate(BaseModel):
         if v not in ("economica", "estandar", "premium"):
             raise ValueError(f"Tipo de calidad inválido: '{v}'. Debe ser 'economica', 'estandar' o 'premium'")
         return v
+    
     importador_id: Optional[str] = None  # Solo para modalidad dirigida
     foto_producto: Optional[str] = None
     pais_importacion: str = Field(..., min_length=1, description="País desde donde se importa")
@@ -58,3 +59,45 @@ class CotizacionResponse(BaseModel):
     fecha_actualizacion: datetime
 
     model_config = {"from_attributes": True}
+
+# ==================== Propuesta Schemas ====================
+
+class PropuestaCreate(BaseModel):
+    cotizacion_id: str  # ID de la cotización a la que responde
+    precio_ofrecido_usd: float = Field(..., gt=0, description="Precio ofrecido por el importador")
+    tiempo_estimado_entrega: str = Field(..., min_length=1, max_length=100, description="Tiempo estimado (ej: '45 días')")
+    incoterm: str = Field(..., min_length=1, max_length=50, description="Incoterm propuesto (FOB, CIF, EXW, DDP, etc.)")
+    condiciones_adicionales: Optional[str] = None  # Condiciones adicionales
+
+class PropuestaResponse(BaseModel):
+    id: str
+    cotizacion_id: str
+    importador_id: str
+    precio_ofrecido_usd: float
+    tiempo_estimado_entrega: str
+    incoterm: str
+    condiciones_adicionales: Optional[str]
+    estado: str  # "pendiente", "aceptada", "rechazada"
+
+    model_config = {"from_attributes": True}
+
+class PropuestaAceptadaRequest(BaseModel):
+    importador_id: str  # ID del importador cuya propuesta se acepta
+
+# ==================== Estado de matching de cotizaciones abiertas ====================
+
+class ImportadorPendienteResponse(BaseModel):
+    """Datos mínimos de un importador que aún no respondió a una cotización abierta,
+    usados en el panel de "Propuestas Recibidas" (wireframe Pantalla 6)."""
+    importador_id: str
+    nombre_empresa: str
+    logo_url: Optional[str] = None
+
+class MatchingStatusResponse(BaseModel):
+    """Estado de difusión de una cotización abierta a la red de importadores."""
+    total_matching: int
+    respondidos: int
+    pendientes: int
+    importadores_pendientes: List[ImportadorPendienteResponse]
+
+# ==================== Actualizar schemas/__init__.py exports ====================

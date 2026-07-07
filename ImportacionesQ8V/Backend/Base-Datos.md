@@ -78,9 +78,12 @@
 | importador_id | UUID FK → importadores.id | Importador que envía la propuesta |
 | precio_ofrecido_usd | DECIMAL(10,2) | Precio ofrecido por el importador |
 | tiempo_estimado_entrega | VARCHAR(50) | Tiempo estimado de entrega |
-| condiciones_adicionales | TEXT NULL | Condiciones adicionales (incoterm, garantías, etc.) |
+| incoterm | VARCHAR(50) | Incoterm propuesto por el importador (FOB, CIF, EXW, DDP...) |
+| condiciones_adicionales | TEXT NULL | Condiciones adicionales (garantías, forma de pago, etc.) |
 | estado | ENUM('pendiente', 'aceptada', 'rechazada') | Estado de la propuesta |
 | fecha_envio | TIMESTAMP | Fecha y hora de envío de la propuesta |
+
+> **Nota (revisión de congruencia con wireframes, 06/07):** se agregó la columna `incoterm`, ausente en la implementación original. Los wireframes "Panel de Propuestas Recibidas" (Pantalla 6) y "Formulario de Respuesta a Cotización" (Pantalla 11) muestran el incoterm como dato obligatorio de cada propuesta, y el PDF de referencia (`docs/Propuesta_Plataforma_Importacion.pdf`) lo confirma en el flujo de respuesta del importador (paso 15: "responde con propuesta de precio, tiempo estimado, condiciones **e incoterm**").
 
 ### Tabla: `ordenes`
 
@@ -123,13 +126,16 @@
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | id | UUID PK | Identificador único del pago |
-| orden_id | UUID FK → ordenes.id | Orden asociada al pago |
-| wompi_payment_id | VARCHAR(100) UNIQUE | ID del pago en Wompi |
+| orden_id | UUID FK → ordenes.id, **NULLABLE** | Orden asociada al pago. Nula al crear el checkout, porque la orden todavía no existe (se crea al confirmarse el pago) |
+| cotizacion_id | UUID FK → cotizaciones.id, NOT NULL | Cotización que se está pagando. Necesaria para poder crear la orden cuando llega la confirmación del webhook |
+| wompi_payment_id | VARCHAR(100) UNIQUE, NOT NULL | ID del pago en Wompi — la restricción UNIQUE es la garantía real (a nivel de base de datos) de que un mismo pago no se procesa dos veces |
 | monto_usd | DECIMAL(10,2) | Monto pagado en USD |
 | estado | ENUM('pendiente', 'confirmado', 'fallido', 'reembolsado') | Estado del pago según Wompi |
 | webhook_url | VARCHAR(500) | URL de webhook configurada para Wompi |
 | fecha_creacion | TIMESTAMP | Fecha de creación del pago |
 | fecha_confirmacion | TIMESTAMP NULL | Fecha de confirmación del pago (NULL si no confirmado) |
+
+> **Nota de implementación (2026-07-06):** el modelo ORM real (`models/pago.py`) agrega la columna `cotizacion_id` respecto al esquema originalmente documentado aquí, porque en el flujo real el pago se crea *antes* de que exista la orden. Ver [[Pagos-Wompi]] para el detalle de la implementación y su estado de cumplimiento.
 
 ### Tabla: `conversaciones_chat`
 
@@ -274,6 +280,7 @@ CREATE TABLE propuestas (
     importador_id UUID NOT NULL,
     precio_ofrecido_usd DECIMAL(10,2),
     tiempo_estimado_entrega VARCHAR(50),
+    incoterm VARCHAR(50) NOT NULL,
     condiciones_adicionales TEXT,
     estado ENUM('pendiente', 'aceptada', 'rechazada') DEFAULT 'pendiente',
     fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from schemas.auth import RegistroRequest, LoginRequest, TokenResponse, LoginResponse
 from services.auth_service import register_user, login_user
 from utils.dependencies import get_db, get_current_user
 from utils.security import create_access_token
-from config import ACCESS_TOKEN_EXPIRE
+from utils.limiter import limiter
+from config import ACCESS_TOKEN_EXPIRE, RATE_LIMIT_LOGIN, RATE_LIMIT_REGISTER
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def registrar_usuario(registro: RegistroRequest, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT_REGISTER)
+async def registrar_usuario(request: Request, registro: RegistroRequest, db: Session = Depends(get_db)):
     """
     Registra un nuevo usuario en el sistema.
     
@@ -23,7 +25,8 @@ async def registrar_usuario(registro: RegistroRequest, db: Session = Depends(get
     return register_user(registro, db)
 
 @router.post("/login", response_model=LoginResponse)
-async def iniciar_sesion(login: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT_LOGIN)
+async def iniciar_sesion(request: Request, login: LoginRequest, db: Session = Depends(get_db)):
     """
     Inicia sesión de un usuario existente.
     
@@ -31,6 +34,7 @@ async def iniciar_sesion(login: LoginRequest, db: Session = Depends(get_db)):
     - **password**: Contraseña
     
     Retorna un JWT token y los datos del usuario si las credenciales son válidas.
+    Limitado a intentos por IP para mitigar ataques de fuerza bruta.
     """
     return login_user(login, db)
 

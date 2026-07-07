@@ -18,6 +18,16 @@ ACCESS_TOKEN_EXPIRE = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 # Configuración de CORS
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 
+# Configuración de Wompi (pasarela de pagos)
+WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY")
+WOMPI_SECRET_KEY = os.getenv("WOMPI_SECRET_KEY")
+# Secreto usado para verificar la firma HMAC de los webhooks entrantes de Wompi
+WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET")
+
+# Rate limiting de endpoints sensibles (intentos por IP)
+RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "5/minute")
+RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "10/minute")
+
 # Configuración de Redis (opcional para tests con SQLite)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

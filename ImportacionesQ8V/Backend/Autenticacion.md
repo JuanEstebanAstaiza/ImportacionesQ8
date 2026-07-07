@@ -287,7 +287,19 @@ sequenceDiagram
 ## Convenciones y seguridad
 
 - **HTTPS obligatorio:** Todas las comunicaciones deben ser sobre HTTPS para proteger credenciales en tránsito
-- **Password hashing con bcrypt:** Nunca almacenar contraseñas en texto plano
+- **Password hashing con bcrypt:** Nunca almacenar contraseñas en texto plano (`passlib[bcrypt]`, ver `utils/security.py`)
 - **JWT sin refresh tokens (MVP):** El token expira a las 24 horas; el usuario debe volver a iniciar sesión
 - **Rate limiting en login:** Máximo 5 intentos de login por minuto por IP para prevenir fuerza bruta
 - **CORS configurado:** Solo permitir orígenes autorizados (dominios del frontend)
+
+### Estado de implementación (revisado 2026-07-06)
+
+| Convención | Estado | Detalle |
+|---|---|---|
+| Password hashing con bcrypt | ✅ Implementado | `passlib.hash.bcrypt` en `utils/security.py` |
+| JWT HS256 con `sub`/`rol`/`exp`/`iat` | ✅ Implementado | `utils/security.py::create_access_token` |
+| Rate limiting en `/auth/login` | ✅ Implementado (antes solo era una convención documentada, sin código) | `slowapi`, límite configurable vía `RATE_LIMIT_LOGIN` (por defecto `5/minute` por IP), ver `routers/auth.py` |
+| Rate limiting en `/auth/register` | ✅ Implementado | `RATE_LIMIT_REGISTER` (por defecto `10/minute` por IP) — previene registro masivo automatizado de cuentas |
+| CORS restringido a orígenes conocidos | ✅ Implementado | `config.CORS_ORIGINS`, configurable por entorno |
+| No filtrar detalles internos en errores 500 | ✅ Implementado | Manejador global de excepciones en `main.py`: cualquier excepción no controlada se registra en logs pero al cliente solo se le responde `{"error": "Error interno del servidor"}` |
+| HTTPS en producción | ⬜ Depende del despliegue | No aplica en local/Docker; se debe configurar en el proveedor de hosting/reverse proxy |

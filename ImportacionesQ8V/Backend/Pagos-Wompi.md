@@ -173,7 +173,21 @@ stateDiagram-v2
 ## Notas de implementación
 
 - **Moneda:** Los pagos se procesan en USD (moneda principal del proyecto). Wompi soporta múltiples monedas.
-- **Monto dinámico:** El monto del pago se obtiene de `precio_acordado_usd` de la cotización aceptada, no es un valor fijo.
+- **Monto dinámico:** El monto del pago se obtiene de `precio_acordado_usd`/`precio_ofrecido_usd` de la propuesta aceptada (10% de comisión), no es un valor fijo.
 - **Webhook seguro:** Verificar la firma del webhook de Wompi usando `WOMPI_SECRET_KEY` para evitar falsificaciones.
 - **Idempotencia:** El webhook puede recibir el mismo evento múltiples veces; verificar que el pago ya esté confirmado antes de procesar.
 - **No se almacenan datos de tarjetas:** La plataforma nunca maneja directamente los datos de la tarjeta o cuenta bancaria del solicitante — Wompi es responsable del cumplimiento PCI.
+
+### Estado de implementación (revisado 2026-07-06)
+
+| Elemento documentado | Estado | Detalle |
+|---|---|---|
+| Modelo/tabla `pagos` | ✅ Implementado | `models/pago.py` — antes solo existía en esta documentación, no en el código. Incluye `wompi_payment_id` **UNIQUE** para garantizar idempotencia a nivel de base de datos |
+| `POST /pagos/checkout` | ✅ Implementado | `routers/pagos.py`. Idempotente: si ya hay un pago pendiente para la cotización, se reutiliza en vez de duplicarlo. Valida que la cotización pertenezca al solicitante autenticado |
+| `GET /pagos/{id}` | ✅ Implementado | Estaba documentado pero no existía en el código; se agregó con verificación de propiedad (evita IDOR) |
+| `POST /pagos/webhook/wompi` | ✅ Implementado | Verificación real de firma HMAC-SHA256 (checksum de `properties` + `timestamp` + `WOMPI_EVENTS_SECRET`), **fail-closed**: sin firma válida se responde `403` y no se procesa el evento. Antes, la función `verificar_firma_wompi` era un stub que siempre devolvía `True` — cualquiera con la URL del webhook podía simular pagos confirmados y generar órdenes gratis |
+| Idempotencia del webhook | ✅ Implementado | Se verifica el estado del `Pago` antes de reprocesar; además `IntegrityError`/rollback protege contra dos webhooks concurrentes creando dos órdenes para la misma cotización |
+| Creación automática de conversación de chat al confirmar pago | ⬜ Pendiente | Depende del módulo de chat, planeado para Semana 3 |
+| Integración real con la API de Wompi (checkout/API keys reales) | ⬜ Pendiente | El MVP simula la generación del checkout (`wpm_...` + URL simulada); la integración real con el SDK/API de Wompi queda para antes de producción |
+
+**Variables de entorno usadas:** `WOMPI_PUBLIC_KEY`, `WOMPI_SECRET_KEY`, `WOMPI_EVENTS_SECRET` (ver `.env.example`). Sin `WOMPI_EVENTS_SECRET` configurado, el webhook rechaza todos los eventos por diseño (fail-closed).

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON
+from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON, ForeignKey
+from sqlalchemy.orm import relationship
 from uuid import uuid4
 from datetime import datetime
 import enum
@@ -54,6 +55,10 @@ class Cotizacion(Base):
     estado = Column(String(30), default=EstadoCotizacion.creada)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relaciones
+    propuestas = relationship("Propuesta", back_populates="cotizacion")
+    orden = relationship("Orden", back_populates="cotizacion", uselist=False)
 
     def __repr__(self):
         return f"<Cotizacion(id={self.id}, solicitante_id={self.solicitante_id}, estado={self.estado})>"

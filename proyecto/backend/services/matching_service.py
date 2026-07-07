@@ -100,6 +100,52 @@ def obtener_importadores_matching(cotizacion_id: str) -> dict:
         "respondidos": respondidos
     }
 
+def obtener_estado_matching_detallado(cotizacion_id: str) -> dict:
+    """
+    Similar a `obtener_importadores_matching`, pero además devuelve los IDs de los
+    importadores que aún no han respondido, para poder mostrar sus datos (nombre,
+    logo) en el panel de "Propuestas Recibidas" del solicitante (wireframe Pantalla 6).
+
+    Si Redis no está disponible se responde con valores en cero (best-effort: no se
+    bloquea la consulta de un listado, solo queda temporalmente sin datos).
+
+    Args:
+        cotizacion_id: ID de la cotización (como string)
+
+    Returns:
+        Diccionario con total_matching, pendientes, respondidos e ids_pendientes
+    """
+    vacio = {
+        "total_matching": 0,
+        "pendientes": 0,
+        "respondidos": 0,
+        "ids_pendientes": []
+    }
+
+    if not _redis_available():
+        return vacio
+
+    client = _get_redis_client()
+    clave = f"cotizacion_abierta:{cotizacion_id}"
+
+    try:
+        importadores_matching = client.hgetall(clave)
+    except Exception:
+        return vacio
+
+    ids_pendientes = [
+        importador_id for importador_id, estado in importadores_matching.items()
+        if estado == "pendiente"
+    ]
+    respondidos = sum(1 for estado in importadores_matching.values() if estado == "respondido")
+
+    return {
+        "total_matching": len(importadores_matching),
+        "pendientes": len(ids_pendientes),
+        "respondidos": respondidos,
+        "ids_pendientes": ids_pendientes
+    }
+
 def registrar_respuesta_importador(cotizacion_id: str, importador_id: str) -> bool:
     """
     Registra que un importador ha respondido a una cotización abierta.

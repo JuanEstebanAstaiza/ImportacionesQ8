@@ -1,6 +1,14 @@
 import pytest
 from fastapi.testclient import TestClient
 from fastapi import status
+from uuid import uuid4
+from datetime import datetime
+from unittest.mock import MagicMock
+
+from models.usuario import Usuario
+from models.cotizacion import Cotizacion, EstadoCotizacion
+from utils.security import hash_password, create_access_token
+
 
 class TestListarImportadores:
     """Tests para el endpoint GET /importadores"""
@@ -388,3 +396,161 @@ class TestMatchingService:
         result = obtener_propuestas_recibidas("cotizacion-test-id")
         
         assert result == 0
+
+
+class TestBandejaSolicitudesImportador:
+    """Tests para GET /importadores/{id}/solicitudes-dirigidas y /solicitudes-abiertas (Tarea 2.5)"""
+
+    @pytest.fixture()
+    def importador_user(self, db_session):
+        user = Usuario(
+            id=str(uuid4()),
+            email="importador_bandeja@example.com",
+            password_hash=hash_password("123456789"),
+            rol="importador",
+            perfil_completo=True,
+            fecha_creacion=datetime.utcnow()
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    @pytest.fixture()
+    def otro_importador_user(self, db_session):
+        user = Usuario(
+            id=str(uuid4()),
+            email="otro_importador_bandeja@example.com",
+            password_hash=hash_password("123456789"),
+            rol="importador",
+            perfil_completo=True,
+            fecha_creacion=datetime.utcnow()
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    @pytest.fixture()
+    def solicitante_user(self, db_session):
+        user = Usuario(
+            id=str(uuid4()),
+            email="solicitante_bandeja@example.com",
+            password_hash=hash_password("123456789"),
+            rol="solicitante",
+            perfil_completo=True,
+            fecha_creacion=datetime.utcnow()
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    def _auth_headers(self, user_id, rol):
+        token = create_access_token(str(user_id), rol)
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_solicitudes_dirigidas_solo_propias(self, client, db_session, importador_user, solicitante_user):
+        """GET /importadores/{id}/solicitudes-dirigidas retorna solo las cotizaciones dirigidas a ese importador"""
+        cotizacion = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante_user.id,
+            importador_id=importador_user.id,
+            modalidad="dirigida",
+            pais_importacion="China",
+            nombre_producto="Camisetas personalizadas",
+            descripcion_cliente="Necesito 500 camisetas con logo impreso en algodón",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=500,
+            precio_objetivo_usd=3.5,
+            incoterm="FOB",
+            estado=EstadoCotizacion.dirigida
+        )
+        db_session.add(cotizacion)
+        db_session.commit()
+
+        response = client.get(
+            f"/importadores/{importador_user.id}/solicitudes-dirigidas",
+            headers=self._auth_headers(importador_user.id, "importador")
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == str(cotizacion.id)
+
+    def test_solicitudes_dirigidas_idor_rechazado(self, client, db_session, importador_user, otro_importador_user):
+        """Un importador no puede consultar la bandeja de solicitudes de otro importador (IDOR)"""
+        response = client.get(
+            f"/importadores/{importador_user.id}/solicitudes-dirigidas",
+            headers=self._auth_headers(otro_importador_user.id, "importador")
+        )
+
+        assert response.status_code == 403
+
+    def test_solicitudes_abiertas_con_matching(self, client, db_session, importador_user, solicitante_user):
+        """GET /importadores/{id}/solicitudes-abiertas solo muestra cotizaciones donde el importador
+        aparece en la lista de matching de Redis (no todas las cotizaciones abiertas)."""
+        cotizacion_con_matching = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante_user.id,
+            importador_id=None,
+            modalidad="abierta",
+            pais_importacion="China",
+            nombre_producto="Camisetas personalizadas",
+            descripcion_cliente="Necesito 500 camisetas con logo impreso en algodón",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=500,
+            precio_objetivo_usd=3.5,
+            incoterm="FOB",
+            estado=EstadoCotizacion.abierta
+        )
+        cotizacion_sin_matching = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante_user.id,
+            importador_id=None,
+            modalidad="abierta",
+            pais_importacion="Vietnam",
+            nombre_producto="Zapatos deportivos",
+            descripcion_cliente="Necesito 300 pares de zapatos deportivos personalizados",
+            linea_producto="Calzado",
+            tipo_calidad="premium",
+            cantidad_minima=300,
+            precio_objetivo_usd=12.0,
+            incoterm="FOB",
+            estado=EstadoCotizacion.abierta
+        )
+        db_session.add_all([cotizacion_con_matching, cotizacion_sin_matching])
+        db_session.commit()
+
+        import config
+        redis_mock = MagicMock()
+        # Solo la primera cotización tiene a este importador en su lista de matching de Redis
+        redis_mock.keys.return_value = [f"cotizacion_abierta:{cotizacion_con_matching.id}"]
+        redis_mock.hgetall.return_value = {str(importador_user.id): "pendiente"}
+        original_redis = config.redis_client
+        config.redis_client = redis_mock
+
+        try:
+            response = client.get(
+                f"/importadores/{importador_user.id}/solicitudes-abiertas",
+                headers=self._auth_headers(importador_user.id, "importador")
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 1
+            assert data[0]["id"] == str(cotizacion_con_matching.id)
+        finally:
+            config.redis_client = original_redis
+
+    def test_solicitudes_abiertas_idor_rechazado(self, client, db_session, importador_user, otro_importador_user):
+        """Un importador no puede consultar la bandeja de solicitudes abiertas de otro importador (IDOR)"""
+        response = client.get(
+            f"/importadores/{importador_user.id}/solicitudes-abiertas",
+            headers=self._auth_headers(otro_importador_user.id, "importador")
+        )
+
+        assert response.status_code == 403

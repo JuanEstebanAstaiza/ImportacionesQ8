@@ -86,11 +86,13 @@ graph TD
 
 ## Estado actual del proyecto
 
-| Fase | Estado | Descripción |
-|------|--------|-------------|
-| **Semana 1** | Pendiente | Fundaciones y módulo de cotizaciones |
-| **Semana 2** | Pendiente | Red de importadores y órdenes |
-| **Semana 3** | Pendiente | Chat, documentos y pulido |
+| Fase | Backend | Frontend | Descripción |
+|------|---------|----------|-------------|
+| **Semana 1** | ✅ Completo | ⬜ Pendiente | Fundaciones y módulo de cotizaciones — ver [[Tareas-Semana-1]] |
+| **Semana 2** | ✅ Completo (revisado 2026-07-06) | ⬜ Pendiente | Red de importadores y órdenes — ver [[Tareas-Semana-2]] |
+| **Semana 3** | ⬜ Pendiente | ⬜ Pendiente | Chat, documentos y pulido |
+
+*Backend Semana 2 revisado el 2026-07-06: 101/101 tests pasando en local y Docker; se corrigieron IDOR, verificación de firma de webhooks, condiciones de carrera e idempotencia. El mismo día se verificó la congruencia del backend contra `docs/Propuesta_Plataforma_Importacion.pdf` y los wireframes del vault, corrigiendo 2 gaps (campo `incoterm` faltante en Propuesta, endpoint de estado de matching faltante). Ver el detalle en [[Tareas-Semana-2]].*
 
 ---
 
