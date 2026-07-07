@@ -75,16 +75,20 @@ sequenceDiagram
 | Claim | Tipo | Descripción |
 |-------|------|-------------|
 | `sub` (subject) | UUID | ID del usuario |
-| `rol` | string | Rol del usuario: "solicitante", "importador" o "admin" |
+| `rol` | string | Rol del usuario: "solicitante", "importador", "trabajador" o "admin" |
+| `importador_id` | UUID \| null | **(Semana 3)** Empresa a la que pertenece la cuenta (dueño o trabajador). `null` para solicitantes y admins |
 | `exp` | timestamp | Fecha de expiración del token |
 | `iat` | timestamp | Fecha de emisión del token |
+
+> **Por qué se agregó `importador_id` (Semana 3):** antes se asumía `Usuario.id == Importador.id` para el rol "importador", lo que hacía imposible tener varias cuentas (dueño + trabajadores) por empresa. Ahora todas las comprobaciones de propiedad entre empresas (IDOR) usan este claim en vez del `sub` de la cuenta. Ver `utils/security.py::create_access_token` y `utils/dependencies.py::get_current_user`.
 
 ### Ejemplo de payload JWT
 
 ```json
 {
     "sub": "550e8400-e29b-41d4-a716-446655440000",
-    "rol": "solicitante",
+    "rol": "trabajador",
+    "importador_id": "660f9500-f39c-52e5-b827-557766551111",
     "exp": 1751736000,
     "iat": 1751649600
 }
@@ -231,9 +235,12 @@ async def listar_cotizaciones_abiertas(
 
 | Rol | Descripción | Endpoints accesibles |
 |-----|-------------|---------------------|
-| **solicitante** | Cliente final que solicita cotizaciones | Cotizaciones propias, Órdenes propias, Chat propio, Pagos propios |
-| **importador** | Empresa importadora vinculada a la plataforma | Solicitudes recibidas, Propuestas, Órdenes asignadas, Chat asignado, Perfil empresa |
-| **admin** | Miembro del equipo de la plataforma | Todos los endpoints + administración de importadores y disputas |
+| **solicitante** | Cliente final que solicita cotizaciones | Cotizaciones propias, Órdenes propias, Chat propio, Pagos propios, reportar disputas |
+| **importador** | Cuenta **dueña** de la empresa importadora | Envío de propuestas, gestión de trabajadores, perfil de empresa, formulario personalizado, pool de la empresa, chat asignado |
+| **trabajador** | Cuenta de un empleado de la empresa importadora (Semana 3) | Solo: reclamar cotizaciones del pool de su empresa, ver sus cotizaciones asignadas, chat de las conversaciones asignadas, su propio perfil personal |
+| **admin** | Miembro del equipo de la plataforma | Todos los endpoints + alta de empresas importadoras, monitoreo/activación de cualquier cuenta, disputas y métricas |
+
+> **Cierre de auto-registro (Semana 3):** `POST /auth/register` **solo** acepta `rol="solicitante"`. Las cuentas `importador` (dueño) las crea un admin con `POST /admin/importadores` (junto con la empresa), las cuentas `trabajador` las crea el dueño con `POST /importadores/trabajadores`, y no existe ningún camino de auto-registro para `admin`. Esto cierra el hueco de seguridad donde cualquiera podía crearse una cuenta con rol elevado.
 
 ---
 
@@ -303,3 +310,13 @@ sequenceDiagram
 | CORS restringido a orígenes conocidos | ✅ Implementado | `config.CORS_ORIGINS`, configurable por entorno |
 | No filtrar detalles internos en errores 500 | ✅ Implementado | Manejador global de excepciones en `main.py`: cualquier excepción no controlada se registra en logs pero al cliente solo se le responde `{"error": "Error interno del servidor"}` |
 | HTTPS en producción | ⬜ Depende del despliegue | No aplica en local/Docker; se debe configurar en el proveedor de hosting/reverse proxy |
+
+### Estado de implementación (Semana 3, 2026-07-07)
+
+| Convención | Estado | Detalle |
+|---|---|---|
+| Claim `importador_id` en el JWT | ✅ Implementado | `utils/security.py::create_access_token`, propagado en login/refresh (`services/auth_service.py`) |
+| Cierre de auto-registro de `admin`/`importador` | ✅ Implementado | `services/auth_service.py::register_user` rechaza cualquier rol distinto de `solicitante` con `400 Bad Request` |
+| Cuentas desactivables (`Usuario.activo`) | ✅ Implementado | Login y refresh de token rechazan cuentas con `activo=False` (`401 Unauthorized`), gestionable desde `PUT /admin/usuarios/{id}/estado` |
+| Rol `trabajador` con permisos limitados | ✅ Implementado | `require_rol_in`/`require_rol` en `utils/dependencies.py`; ver `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` |
+| Suite de tests de autenticación | ✅ 26/26 pasando | `tests/test_auth.py`, incluye rechazo de auto-registro elevado y bloqueo de cuentas desactivadas |

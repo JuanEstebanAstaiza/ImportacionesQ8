@@ -55,7 +55,8 @@ async def renovar_token(
     access_token = create_access_token(
         current_user["user_id"], 
         current_user["rol"],
-        expires_delta=ACCESS_TOKEN_EXPIRE - timedelta(minutes=1)  # 1 minuto menos de expiración
+        expires_delta=ACCESS_TOKEN_EXPIRE - timedelta(minutes=1),  # 1 minuto menos de expiración
+        importador_id=current_user.get("importador_id")
     )
     
     return TokenResponse(

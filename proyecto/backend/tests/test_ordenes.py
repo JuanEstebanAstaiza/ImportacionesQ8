@@ -9,6 +9,7 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.usuario import Usuario
 from utils.security import hash_password, create_access_token
+from conftest import crear_empresa_importadora, auth_headers_for
 
 
 @pytest.fixture()
@@ -30,30 +31,22 @@ def test_solicitante(db_session):
 
 @pytest.fixture()
 def test_importador_user(db_session):
-    """Crear un usuario importador de prueba"""
-    user = Usuario(
-        id=str(uuid4()),
-        email="importador_ord@example.com",
-        password_hash=hash_password("123456789"),
-        rol="importador",
-        perfil_completo=True,
-        fecha_creacion=datetime.utcnow()
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
+    """Cuenta dueña (rol='importador') de una empresa de prueba, ya vinculada vía
+    importador_id (Fase 0: Usuario/Importador desacoplados)."""
+    importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Importadora Órdenes Test", email_dueño="importador_ord@example.com")
+    dueño.empresa = importador
+    return dueño
 
 
 @pytest.fixture()
 def test_cotizacion_aceptada(db_session, test_solicitante, test_importador_user):
     """Crear una cotización en estado aceptada de prueba, cuyos dueños son
-    `test_solicitante` y `test_importador_user` para que coincidan con los
-    tokens generados por `auth_headers_solicitante`/`auth_headers_importador`."""
+    `test_solicitante` y la empresa de `test_importador_user` para que coincidan
+    con los tokens generados por `auth_headers_solicitante`/`auth_headers_importador`."""
     cotizacion = Cotizacion(
         id=str(uuid4()),
         solicitante_id=test_solicitante.id,
-        importador_id=test_importador_user.id,
+        importador_id=test_importador_user.importador_id,
         modalidad="dirigida",
         pais_importacion="China",
         nombre_producto="Camisetas personalizadas",
@@ -70,7 +63,7 @@ def test_cotizacion_aceptada(db_session, test_solicitante, test_importador_user)
     propuesta = Propuesta(
         id=str(uuid4()),
         cotizacion_id=cotizacion.id,
-        importador_id=test_importador_user.id,
+        importador_id=test_importador_user.importador_id,
         precio_ofrecido_usd=3.20,
         tiempo_estimado_entrega="45 días",
         incoterm="FOB",
@@ -93,8 +86,7 @@ def auth_headers_solicitante(test_solicitante):
 @pytest.fixture()
 def auth_headers_importador(test_importador_user):
     """Headers de autenticación para el importador dueño de test_cotizacion_aceptada"""
-    token = create_access_token(str(test_importador_user.id), "importador")
-    return {"Authorization": f"Bearer {token}"}
+    return auth_headers_for(test_importador_user)
 
 
 class TestListarOrdenes:
@@ -399,7 +391,7 @@ class TestListarOrdenesActivasImportador:
         cotizacion2 = Cotizacion(
             id=str(uuid4()),
             solicitante_id=test_cotizacion_aceptada.solicitante_id,
-            importador_id=test_importador_user.id,
+            importador_id=test_importador_user.importador_id,
             modalidad="dirigida",
             pais_importacion="China",
             nombre_producto="Camisetas personalizadas 2",
@@ -418,7 +410,7 @@ class TestListarOrdenesActivasImportador:
         orden_entregada = Orden(
             id=str(uuid4()),
             cotizacion_id=cotizacion2.id,
-            importador_id=test_importador_user.id,
+            importador_id=test_importador_user.importador_id,
             solicitante_id=test_cotizacion_aceptada.solicitante_id,
             estado=EstadoOrden.entregado,  # Estado entregado
             precio_acordado_usd=3.20,

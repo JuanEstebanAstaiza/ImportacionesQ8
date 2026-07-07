@@ -46,9 +46,12 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
     Returns:
         Lista de importadores que aplican a la cotización
     """
-    # Buscar importadores activos que cumplan ambas condiciones (usar LIKE para compatibilidad)
+    # Buscar importadores activos que cumplan ambas condiciones (usar LIKE para compatibilidad).
+    # Las empresas con solo_cotizaciones_directas=True quedan fuera de la red abierta:
+    # a cambio de poder personalizar su formulario, solo reciben cotizaciones dirigidas.
     importadores = db.query(Importador).filter(
         Importador.estado == "activo",
+        Importador.solo_cotizaciones_directas == False,
         json_contains_column(Importador.paises_origen, pais_importacion),
         json_contains_column(Importador.especialidad_producto, linea_producto)
     ).all()

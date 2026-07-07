@@ -20,29 +20,28 @@ class TestRegisterUser:
         assert data["rol"] == "solicitante"
         assert len(data["user_id"]) > 0
     
-    def test_register_importador_success(self, client):
-        """Registro exitoso de usuario importador"""
+    def test_register_importador_rechazado(self, client):
+        """El auto-registro público NO permite crear cuentas 'importador' (hueco de
+        seguridad cerrado: solo un admin puede crear la empresa + su cuenta dueña)."""
         response = client.post("/auth/register", json={
             "email": "importador@example.com",
             "password": "123456789",
             "rol": "importador"
         })
         
-        assert response.status_code == status.HTTP_201_CREATED
-        data = response.json()
-        assert data["rol"] == "importador"
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "solicitante" in response.json()["detail"]
     
-    def test_register_admin_success(self, client):
-        """Registro exitoso de usuario admin"""
+    def test_register_admin_rechazado(self, client):
+        """El auto-registro público NO permite crear cuentas 'admin'."""
         response = client.post("/auth/register", json={
             "email": "admin@example.com",
             "password": "123456789",
             "rol": "admin"
         })
         
-        assert response.status_code == status.HTTP_201_CREATED
-        data = response.json()
-        assert data["rol"] == "admin"
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "solicitante" in response.json()["detail"]
     
     def test_register_duplicate_email(self, client):
         """Intento de registro con email duplicado"""
@@ -146,6 +145,27 @@ class TestLoginUser:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Credenciales inválidas" in response.json()["detail"]
+
+    def test_login_cuenta_desactivada(self, client, db_session):
+        """Una cuenta desactivada (activo=False) no puede iniciar sesión aunque la contraseña sea correcta"""
+        client.post("/auth/register", json={
+            "email": "desactivado@example.com",
+            "password": "123456789",
+            "rol": "solicitante"
+        })
+
+        from models.usuario import Usuario
+        usuario = db_session.query(Usuario).filter(Usuario.email == "desactivado@example.com").first()
+        usuario.activo = False
+        db_session.commit()
+
+        response = client.post("/auth/login", json={
+            "email": "desactivado@example.com",
+            "password": "123456789"
+        })
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "desactivada" in response.json()["detail"]
 
 class TestRefreshToken:
     """Tests para el endpoint POST /auth/refresh"""
@@ -339,14 +359,10 @@ class TestDependencies:
     
     def test_require_admin_role_success(self, client):
         """Verificar que admin puede crear importadores"""
-        # Registrar usuario admin y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "admin@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token = register_response.json()["access_token"]
+        # El auto-registro de "admin" está cerrado; se genera el token directamente
+        from utils.security import create_access_token
+        from uuid import uuid4
+        token = create_access_token(str(uuid4()), "admin")
         
         # Crear importador como admin - debería funcionar
         response = client.post("/importadores", json={

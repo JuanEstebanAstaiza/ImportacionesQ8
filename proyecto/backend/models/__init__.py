@@ -1,15 +1,15 @@
 from .usuario import Usuario
 from .importador import Importador
-from .asesor import Asesor
 from .cotizacion import Cotizacion, EstadoCotizacion
 from .propuesta import Propuesta, EstadoPropuesta
 from .orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
 from .pago import Pago, EstadoPago
+from .campo_personalizado import CampoPersonalizado
+from .chat import ConversacionChat, MensajeChat, TipoMensajeChat
 
 __all__ = [
     "Usuario",
     "Importador",
-    "Asesor",
     "Cotizacion",
     "EstadoCotizacion",
     "Propuesta",
@@ -20,5 +20,9 @@ __all__ = [
     "EstadoOrden",
     "TipoDocumentoOrden",
     "Pago",
-    "EstadoPago"
+    "EstadoPago",
+    "CampoPersonalizado",
+    "ConversacionChat",
+    "MensajeChat",
+    "TipoMensajeChat"
 ]

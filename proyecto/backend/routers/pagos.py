@@ -252,7 +252,7 @@ async def webhook_wompi(
             cotizacion_id=pago.cotizacion_id,
             importador_id=propuesta.importador_id,
             solicitante_id=cotizacion.solicitante_id,
-            asesor_asignado_id=None,
+            trabajador_asignado_id=cotizacion.trabajador_asignado_id,
             estado=EstadoOrden.cotizacion_aceptada,
             precio_acordado_usd=propuesta.precio_ofrecido_usd,
             tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,

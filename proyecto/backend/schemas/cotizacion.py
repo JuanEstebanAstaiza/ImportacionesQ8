@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class CotizacionCreate(BaseModel):
@@ -35,6 +35,9 @@ class CotizacionCreate(BaseModel):
     precio_objetivo_usd: Optional[float] = None
     incoterm: str = Field(..., min_length=1, max_length=50, description="Incoterm acordado (FOB, CIF, etc.)")
     notas_adicionales: Optional[str] = None
+    campos_personalizados_valores: Optional[Dict[str, Any]] = Field(
+        None, description="Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor}"
+    )
 
 class CotizacionResponse(BaseModel):
     id: str
@@ -54,6 +57,8 @@ class CotizacionResponse(BaseModel):
     precio_objetivo_usd: Optional[float]
     incoterm: str
     notas_adicionales: Optional[str]
+    campos_personalizados_valores: Optional[Dict[str, Any]] = None
+    trabajador_asignado_id: Optional[str] = None
     estado: str  # "creada", "dirigida", "abierta", etc.
     fecha_creacion: datetime
     fecha_actualizacion: datetime

@@ -17,6 +17,7 @@ graph LR
         G[Pagos-Wompi]
         H[Chat-WebSocket]
         I[Matching-Cotizaciones]
+        U[Seguridad]
     end
 
     subgraph Frontend["Frontend"]
@@ -52,6 +53,10 @@ graph LR
     C --> G
     C --> H
     C --> I
+    C --> U
+    D --> U
+    F --> U
+    G --> U
     C --> J
     C --> K
     C --> L

@@ -9,7 +9,10 @@ from uuid import UUID as PyUUID, uuid4
 from datetime import datetime
 
 import config
-from schemas.orden import OrdenCreate, OrdenResponse, EstadoOrdenUpdate, DocumentoOrdenItem, DocumentoOrdenCreate
+from schemas.orden import (
+    OrdenCreate, OrdenResponse, EstadoOrdenUpdate, DocumentoOrdenItem, DocumentoOrdenCreate,
+    ReportarProblemaRequest, ResolverDisputaRequest
+)
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
 from utils.dependencies import get_db, get_current_user, require_rol
 
@@ -55,11 +58,10 @@ async def listar_ordenes(
         ordenes = db.query(Orden).filter(
             Orden.solicitante_id == user_id_str
         ).order_by(Orden.fecha_creacion.desc()).all()
-    elif rol == "importador":
-        # El id de usuario del importador ES el importador_id usado en las órdenes
-        # (ver Propuesta.importador_id, que se asigna con current_user["user_id"]).
+    elif rol in ("importador", "trabajador"):
+        # El importador_id de la empresa viene del claim del JWT, no del user_id.
         ordenes = db.query(Orden).filter(
-            Orden.importador_id == user_id_str
+            Orden.importador_id == current_user.get("importador_id")
         ).order_by(Orden.fecha_creacion.desc()).all()
     else:
         # Admin ve todas las órdenes (limitado)
@@ -73,11 +75,13 @@ async def listar_ordenes(
             cotizacion_id=o.cotizacion_id,
             importador_id=o.importador_id,
             solicitante_id=o.solicitante_id,
-            asesor_asignado_id=o.asesor_asignado_id,
+            trabajador_asignado_id=o.trabajador_asignado_id,
             estado=o.estado.value if isinstance(o.estado, EstadoOrden) else o.estado,
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
             condiciones_adicionales=o.condiciones_adicionales,
+            en_disputa=o.en_disputa,
+            motivo_disputa=o.motivo_disputa,
             historial_estados=[
                 {
                     "id": str(h.id),
@@ -113,8 +117,6 @@ async def listar_ordenes_activas_importador(
     
     - **importador_id**: ID del importador (UUID)
     """
-    user_id_str = str(PyUUID(current_user["user_id"]))  # Convertir a string para SQLite
-    
     try:
         importador_id_str = str(PyUUID(importador_id))  # Validar UUID
     except ValueError:
@@ -123,8 +125,8 @@ async def listar_ordenes_activas_importador(
             detail="ID de importador inválido"
         )
     
-    # Verificar que el usuario es el importador indicado (evita IDOR entre importadores)
-    if importador_id_str != user_id_str:
+    # Verificar que el usuario pertenece a la empresa indicada (evita IDOR entre empresas)
+    if importador_id_str != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No autorizado - Solo puede ver sus propias órdenes"
@@ -143,11 +145,13 @@ async def listar_ordenes_activas_importador(
             cotizacion_id=o.cotizacion_id,
             importador_id=o.importador_id,
             solicitante_id=o.solicitante_id,
-            asesor_asignado_id=o.asesor_asignado_id,
+            trabajador_asignado_id=o.trabajador_asignado_id,
             estado=o.estado.value if isinstance(o.estado, EstadoOrden) else o.estado,
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
             condiciones_adicionales=o.condiciones_adicionales,
+            en_disputa=o.en_disputa,
+            motivo_disputa=o.motivo_disputa,
             historial_estados=[
                 {
                     "id": str(h.id),
@@ -210,8 +214,8 @@ async def obtener_orden(
             detail="No tienes acceso a esta orden"
         )
     
-    # Importador solo puede ver si es el asignado a la orden
-    if rol == "importador" and orden.importador_id != user_id_str:
+    # Importador/trabajador solo puede ver si la orden es de su empresa
+    if rol in ("importador", "trabajador") and orden.importador_id != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a esta orden"
@@ -222,11 +226,13 @@ async def obtener_orden(
         cotizacion_id=orden.cotizacion_id,
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
-        asesor_asignado_id=orden.asesor_asignado_id,
+        trabajador_asignado_id=orden.trabajador_asignado_id,
         estado=orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
+        en_disputa=orden.en_disputa,
+        motivo_disputa=orden.motivo_disputa,
         historial_estados=[
             {
                 "id": str(h.id),
@@ -266,8 +272,6 @@ async def actualizar_estado_orden(
     1. La orden debe existir y el importador debe ser el asignado
     2. El nuevo estado debe ser una transición válida según el ciclo de vida del pedido
     """
-    user_id_str = str(PyUUID(current_user["user_id"]))  # Convertir a string para SQLite
-    
     try:
         orden_id_str = str(PyUUID(orden_id))  # Validar UUID
     except ValueError:
@@ -276,10 +280,10 @@ async def actualizar_estado_orden(
             detail="ID de orden inválido"
         )
     
-    # Verificar que la orden existe y el importador es el asignado
+    # Verificar que la orden existe y pertenece a la empresa del usuario autenticado
     orden = db.query(Orden).filter(
         Orden.id == orden_id_str,
-        Orden.importador_id == user_id_str
+        Orden.importador_id == current_user.get("importador_id")
     ).first()
     
     if not orden:
@@ -347,8 +351,6 @@ async def agregar_documento_orden(
     - **orden_id**: ID de la orden (UUID)
     - **documento**: Datos del documento (nombre, url, tipo)
     """
-    user_id_str = str(PyUUID(current_user["user_id"]))  # Convertir a string para SQLite
-    
     try:
         orden_id_str = str(PyUUID(orden_id))  # Validar UUID
     except ValueError:
@@ -357,10 +359,10 @@ async def agregar_documento_orden(
             detail="ID de orden inválido"
         )
     
-    # Verificar que la orden existe y el importador es el asignado
+    # Verificar que la orden existe y pertenece a la empresa del usuario autenticado
     orden = db.query(Orden).filter(
         Orden.id == orden_id_str,
-        Orden.importador_id == user_id_str
+        Orden.importador_id == current_user.get("importador_id")
     ).first()
     
     if not orden:
@@ -483,7 +485,7 @@ async def crear_orden_desde_cotizacion(
         cotizacion_id=cotizacion_id_str,
         importador_id=importador_id_str,
         solicitante_id=solicitante_id_str,
-        asesor_asignado_id=orden_data.asesor_asignado_id,
+        trabajador_asignado_id=orden_data.trabajador_asignado_id or cotizacion.trabajador_asignado_id,
         estado=EstadoOrden.cotizacion_aceptada,
         precio_acordado_usd=propuesta.precio_ofrecido_usd,
         tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
@@ -522,11 +524,13 @@ async def crear_orden_desde_cotizacion(
         cotizacion_id=nueva_orden.cotizacion_id,
         importador_id=nueva_orden.importador_id,
         solicitante_id=nueva_orden.solicitante_id,
-        asesor_asignado_id=nueva_orden.asesor_asignado_id,
+        trabajador_asignado_id=nueva_orden.trabajador_asignado_id,
         estado=nueva_orden.estado.value if isinstance(nueva_orden.estado, EstadoOrden) else nueva_orden.estado,
         precio_acordado_usd=nueva_orden.precio_acordado_usd,
         tiempo_estimado_entrega=nueva_orden.tiempo_estimado_entrega,
         condiciones_adicionales=nueva_orden.condiciones_adicionales,
+        en_disputa=nueva_orden.en_disputa,
+        motivo_disputa=nueva_orden.motivo_disputa,
         historial_estados=[
             {
                 "id": str(h.id),
@@ -587,8 +591,8 @@ async def obtener_orden_por_cotizacion(
             detail="No tienes acceso a esta orden"
         )
     
-    # Importador solo puede ver si es el asignado a la orden
-    if rol == "importador" and orden.importador_id != user_id_str:
+    # Importador/trabajador solo puede ver si la orden es de su empresa
+    if rol in ("importador", "trabajador") and orden.importador_id != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a esta orden"
@@ -599,11 +603,13 @@ async def obtener_orden_por_cotizacion(
         cotizacion_id=orden.cotizacion_id,
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
-        asesor_asignado_id=orden.asesor_asignado_id,
+        trabajador_asignado_id=orden.trabajador_asignado_id,
         estado=orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
+        en_disputa=orden.en_disputa,
+        motivo_disputa=orden.motivo_disputa,
         historial_estados=[
             {
                 "id": str(h.id),
@@ -625,3 +631,36 @@ async def obtener_orden_por_cotizacion(
             for d in orden.documentos_adjuntos
         ]
     )
+
+# ==================== Disputas (Tarea 3.4, versión ligera) ====================
+
+@router.put("/{orden_id}/reportar-problema", response_model=dict)
+async def reportar_problema_orden(
+    orden_id: str,
+    datos: ReportarProblemaRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("solicitante"))
+):
+    """El solicitante reporta un problema con su orden, abriendo una disputa que
+    revisa el equipo de administración."""
+    user_id_str = str(PyUUID(current_user["user_id"]))
+
+    try:
+        orden_id_str = str(PyUUID(orden_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de orden inválido")
+
+    orden = db.query(Orden).filter(
+        Orden.id == orden_id_str,
+        Orden.solicitante_id == user_id_str
+    ).first()
+
+    if not orden:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+
+    orden.en_disputa = True
+    orden.motivo_disputa = datos.motivo
+    orden.fecha_actualizacion = get_db_now(db)
+    db.commit()
+
+    return {"success": True, "en_disputa": True}

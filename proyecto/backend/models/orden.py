@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 from datetime import datetime
@@ -31,11 +31,17 @@ class Orden(Base):
     cotizacion_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=False, unique=True)
     importador_id = Column(String(36), nullable=False)
     solicitante_id = Column(String(36), nullable=False)
-    asesor_asignado_id = Column(String(36), nullable=True)  # Se asignará cuando el importador acepte la orden
+    # Trabajador de la empresa que reclamó la cotización de origen (heredado al
+    # crear la orden). NULL si nadie la reclamó antes de aceptar la propuesta.
+    trabajador_asignado_id = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
     estado = Column(String(30), default=EstadoOrden.cotizacion_aceptada)
     precio_acordado_usd = Column(Float, nullable=False)
     tiempo_estimado_entrega = Column(String(100), nullable=True)
     condiciones_adicionales = Column(Text, nullable=True)
+    # Disputas (Tarea 3.4, versión ligera): el solicitante puede reportar un problema
+    # y el equipo de administración lo revisa/resuelve desde el panel admin.
+    en_disputa = Column(Boolean, default=False, nullable=False)
+    motivo_disputa = Column(Text, nullable=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

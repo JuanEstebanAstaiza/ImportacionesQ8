@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from utils.security import hash_password, create_access_token
+from conftest import crear_empresa_importadora, auth_headers_for
 
 
 class TestListarImportadores:
@@ -138,14 +139,9 @@ class TestCrearImportador:
     
     def test_crear_importador_con_role_admin(self, client):
         """Crear importador con rol de admin"""
-        # Registrar usuario admin y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "admin@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token = register_response.json()["access_token"]
+        # El auto-registro público de "admin" está cerrado por seguridad; en tests
+        # se genera el token directamente, igual que haría un admin ya existente.
+        token = create_access_token(str(uuid4()), "admin")
         
         # Crear importador - debería funcionar
         response = client.post("/importadores", json={
@@ -164,14 +160,7 @@ class TestCrearImportador:
     
     def test_crear_importador_campos_requeridos(self, client):
         """Crear importador con campos requeridos faltantes"""
-        # Registrar usuario admin y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "admin2@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token = register_response.json()["access_token"]
+        token = create_access_token(str(uuid4()), "admin")
         
         # Intentar crear sin campos requeridos - debería fallar
         response = client.post("/importadores", json={
@@ -403,33 +392,15 @@ class TestBandejaSolicitudesImportador:
 
     @pytest.fixture()
     def importador_user(self, db_session):
-        user = Usuario(
-            id=str(uuid4()),
-            email="importador_bandeja@example.com",
-            password_hash=hash_password("123456789"),
-            rol="importador",
-            perfil_completo=True,
-            fecha_creacion=datetime.utcnow()
-        )
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        return user
+        importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Importadora Bandeja Test", email_dueño="importador_bandeja@example.com")
+        dueño.empresa = importador
+        return dueño
 
     @pytest.fixture()
     def otro_importador_user(self, db_session):
-        user = Usuario(
-            id=str(uuid4()),
-            email="otro_importador_bandeja@example.com",
-            password_hash=hash_password("123456789"),
-            rol="importador",
-            perfil_completo=True,
-            fecha_creacion=datetime.utcnow()
-        )
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        return user
+        importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Otra Importadora Bandeja Test", email_dueño="otro_importador_bandeja@example.com")
+        dueño.empresa = importador
+        return dueño
 
     @pytest.fixture()
     def solicitante_user(self, db_session):
@@ -455,7 +426,7 @@ class TestBandejaSolicitudesImportador:
         cotizacion = Cotizacion(
             id=str(uuid4()),
             solicitante_id=solicitante_user.id,
-            importador_id=importador_user.id,
+            importador_id=importador_user.importador_id,
             modalidad="dirigida",
             pais_importacion="China",
             nombre_producto="Camisetas personalizadas",
@@ -471,8 +442,8 @@ class TestBandejaSolicitudesImportador:
         db_session.commit()
 
         response = client.get(
-            f"/importadores/{importador_user.id}/solicitudes-dirigidas",
-            headers=self._auth_headers(importador_user.id, "importador")
+            f"/importadores/{importador_user.importador_id}/solicitudes-dirigidas",
+            headers=auth_headers_for(importador_user)
         )
 
         assert response.status_code == 200
@@ -483,8 +454,8 @@ class TestBandejaSolicitudesImportador:
     def test_solicitudes_dirigidas_idor_rechazado(self, client, db_session, importador_user, otro_importador_user):
         """Un importador no puede consultar la bandeja de solicitudes de otro importador (IDOR)"""
         response = client.get(
-            f"/importadores/{importador_user.id}/solicitudes-dirigidas",
-            headers=self._auth_headers(otro_importador_user.id, "importador")
+            f"/importadores/{importador_user.importador_id}/solicitudes-dirigidas",
+            headers=auth_headers_for(otro_importador_user)
         )
 
         assert response.status_code == 403
@@ -529,14 +500,14 @@ class TestBandejaSolicitudesImportador:
         redis_mock = MagicMock()
         # Solo la primera cotización tiene a este importador en su lista de matching de Redis
         redis_mock.keys.return_value = [f"cotizacion_abierta:{cotizacion_con_matching.id}"]
-        redis_mock.hgetall.return_value = {str(importador_user.id): "pendiente"}
+        redis_mock.hgetall.return_value = {str(importador_user.importador_id): "pendiente"}
         original_redis = config.redis_client
         config.redis_client = redis_mock
 
         try:
             response = client.get(
-                f"/importadores/{importador_user.id}/solicitudes-abiertas",
-                headers=self._auth_headers(importador_user.id, "importador")
+                f"/importadores/{importador_user.importador_id}/solicitudes-abiertas",
+                headers=auth_headers_for(importador_user)
             )
 
             assert response.status_code == 200
@@ -549,8 +520,8 @@ class TestBandejaSolicitudesImportador:
     def test_solicitudes_abiertas_idor_rechazado(self, client, db_session, importador_user, otro_importador_user):
         """Un importador no puede consultar la bandeja de solicitudes abiertas de otro importador (IDOR)"""
         response = client.get(
-            f"/importadores/{importador_user.id}/solicitudes-abiertas",
-            headers=self._auth_headers(otro_importador_user.id, "importador")
+            f"/importadores/{importador_user.importador_id}/solicitudes-abiertas",
+            headers=auth_headers_for(otro_importador_user)
         )
 
         assert response.status_code == 403

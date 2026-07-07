@@ -8,6 +8,7 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.usuario import Usuario
 from utils.security import hash_password, create_access_token
+from conftest import crear_empresa_importadora, auth_headers_for
 
 
 @pytest.fixture()
@@ -29,19 +30,10 @@ def test_solicitante(db_session):
 
 @pytest.fixture()
 def test_importador_user(db_session):
-    """Crear un usuario importador de prueba"""
-    user = Usuario(
-        id=str(uuid4()),
-        email="importador_test@example.com",
-        password_hash=hash_password("123456789"),
-        rol="importador",
-        perfil_completo=True,
-        fecha_creacion=datetime.utcnow()
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
+    """Cuenta dueña (rol='importador') de una empresa de prueba, ya vinculada vía importador_id."""
+    importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Importadora Propuestas Test", email_dueño="importador_test@example.com")
+    dueño.empresa = importador
+    return dueño
 
 
 @pytest.fixture()
@@ -78,8 +70,7 @@ def auth_headers_solicitante(test_solicitante):
 @pytest.fixture()
 def auth_headers_importador(test_importador_user):
     """Headers de autenticación para el importador de prueba `test_importador_user`"""
-    token = create_access_token(str(test_importador_user.id), "importador")
-    return {"Authorization": f"Bearer {token}"}
+    return auth_headers_for(test_importador_user)
 
 
 class TestEnviarPropuesta:
@@ -89,7 +80,7 @@ class TestEnviarPropuesta:
         # Mock Redis para el matching: el importador autenticado SÍ está en la lista de matching
         import config
         redis_mock = MagicMock()
-        redis_mock.hgetall.return_value = {str(test_importador_user.id): "pendiente"}
+        redis_mock.hgetall.return_value = {str(test_importador_user.importador_id): "pendiente"}
         original_redis = config.redis_client
         config.redis_client = redis_mock
         
@@ -109,6 +100,7 @@ class TestEnviarPropuesta:
             assert response.status_code == 201
             data = response.json()
             assert data["cotizacion_id"] == str(test_cotizacion_abierta.id)
+            assert data["importador_id"] == str(test_importador_user.importador_id)
             assert data["precio_ofrecido_usd"] == 3.20
             assert data["tiempo_estimado_entrega"] == "45 días"
             assert data["incoterm"] == "FOB"
@@ -157,27 +149,17 @@ class TestEnviarPropuesta:
     def test_enviar_propuesta_duplicada(self, client, db_session, test_cotizacion_abierta, auth_headers_importador):
         """POST /propuestas - Debe rechazar si ya existe una propuesta del mismo importador"""
         # Crear primera propuesta
-        importador_user = Usuario(
-            id=str(uuid4()),
-            email="importador_dup@example.com",
-            password_hash=hash_password("123456789"),
-            rol="importador",
-            perfil_completo=True,
-            fecha_creacion=datetime.utcnow()
-        )
-        db_session.add(importador_user)
-        db_session.commit()
+        importador2, importador_user = crear_empresa_importadora(db_session, nombre_empresa="Importadora Duplicada Test", email_dueño="importador_dup@example.com")
         
         import config
         redis_mock = MagicMock()
-        redis_mock.hgetall.return_value = {str(importador_user.id): "respondido"}
+        redis_mock.hgetall.return_value = {str(importador2.id): "respondido"}
         original_redis = config.redis_client
         config.redis_client = redis_mock
         
         try:
             # Crear token con el importador real (el que está en la lista de matching de Redis)
-            token = create_access_token(str(importador_user.id), "importador")
-            auth_headers = {"Authorization": f"Bearer {token}"}
+            auth_headers = auth_headers_for(importador_user)
             
             response1 = client.post(
                 "/propuestas",

@@ -21,12 +21,15 @@ def register_user(registro: RegistroRequest, db: Session) -> TokenResponse:
     Raises:
         HTTPException 400: Si el email ya está registrado o el rol es inválido
     """
-    # Validar que el rol sea válido
-    roles_validos = ["solicitante", "importador", "admin"]
-    if registro.rol not in roles_validos:
+    # El auto-registro público solo permite el rol "solicitante". Las cuentas de
+    # "importador" (dueño de empresa) y "trabajador" las crea un admin o el dueño
+    # de la empresa respectivamente, y "admin" solo se crea por otro admin o por
+    # seed inicial: esto cierra el hueco de seguridad de auto-registro de cuentas
+    # privilegiadas.
+    if registro.rol != "solicitante":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Rol inválido. Roles permitidos: solicitante, importador, admin"
+            detail="Rol inválido. El auto-registro público solo permite el rol 'solicitante'"
         )
     
     # Verificar que el email no exista ya en la base de datos
@@ -86,8 +89,17 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Una cuenta desactivada (por un admin, o por el dueño de la empresa a un
+    # trabajador) no puede iniciar sesión, aunque la contraseña sea correcta.
+    if not usuario.activo:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cuenta desactivada. Contacta al administrador de tu cuenta",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     # Generar JWT token
-    access_token = create_access_token(str(usuario.id), usuario.rol)
+    access_token = create_access_token(str(usuario.id), usuario.rol, importador_id=usuario.importador_id)
     
     return LoginResponse(
         access_token=access_token,
@@ -138,9 +150,15 @@ def refresh_token(token: str, db: Session) -> TokenResponse:
             detail="Usuario no encontrado",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not usuario.activo:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cuenta desactivada",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     # Generar nuevo token JWT
-    access_token = create_access_token(str(usuario.id), usuario.rol)
+    access_token = create_access_token(str(usuario.id), usuario.rol, importador_id=usuario.importador_id)
     
     return TokenResponse(
         access_token=access_token,

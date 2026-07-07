@@ -52,6 +52,12 @@ class Cotizacion(Base):
     precio_objetivo_usd = Column(Float, nullable=True)
     incoterm = Column(String(50), nullable=False)
     notas_adicionales = Column(Text, nullable=True)
+    # Valores de los campos personalizados definidos por el importador (solo aplica
+    # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.
+    campos_personalizados_valores = Column(JSON, nullable=True)
+    # Trabajador de la empresa que reclamó esta cotización ("el primero que hace
+    # clic se la queda"). NULL mientras nadie de la empresa la ha tomado.
+    trabajador_asignado_id = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
     estado = Column(String(30), default=EstadoCotizacion.creada)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

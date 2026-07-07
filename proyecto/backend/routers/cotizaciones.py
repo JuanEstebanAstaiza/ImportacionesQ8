@@ -15,7 +15,7 @@ from schemas.cotizacion import (
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.importador import Importador
-from utils.dependencies import get_db, get_current_user, require_rol
+from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
 
 logger = logging.getLogger("importacionesq8")
 
@@ -50,11 +50,10 @@ async def listar_cotizaciones(
         cotizaciones = db.query(Cotizacion).filter(
             Cotizacion.solicitante_id == user_id_str
         ).order_by(Cotizacion.fecha_creacion.desc()).all()
-    elif rol == "importador":
-        # En este MVP el id de usuario del importador ES el importador_id usado en
-        # cotizaciones dirigidas, propuestas y órdenes (no existe una tabla de mapeo
-        # separada). Ver Propuesta.importador_id / Orden.importador_id para más contexto.
-        importador_id_str = user_id_str
+    elif rol in ("importador", "trabajador"):
+        # El importador_id de la empresa viene del claim del JWT (no del user_id de
+        # la cuenta), para soportar varias cuentas (dueño + trabajadores) por empresa.
+        importador_id_str = current_user.get("importador_id")
         
         # Importador ve cotizaciones dirigidas a él + abiertas disponibles para propuestas
         cotizaciones = db.query(Cotizacion).filter(
@@ -76,6 +75,120 @@ async def listar_cotizaciones(
         ).limit(50).all()
     
     return cotizaciones
+
+# ==================== Pool de cotizaciones de la empresa y reclamo (Fase 1) ====================
+# NOTA: "/pool-empresa" es un segmento literal y debe registrarse ANTES de
+# "/{cotizacion_id}" para que FastAPI no lo capture como un cotizacion_id.
+
+@router.get("/pool-empresa", response_model=List[CotizacionResponse])
+async def listar_pool_empresa(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "trabajador"))
+):
+    """
+    Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas donde aparece
+    en el matching) que todavía nadie ha reclamado. Tanto la cuenta dueña como los
+    trabajadores pueden verlo; el primero en reclamar ("POST /reclamar") se la queda.
+    """
+    importador_id_str = current_user.get("importador_id")
+    if not importador_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no está asociada a ninguna empresa importadora"
+        )
+
+    query = db.query(Cotizacion).filter(
+        Cotizacion.trabajador_asignado_id.is_(None),
+        or_(
+            Cotizacion.importador_id == importador_id_str,
+            and_(
+                Cotizacion.modalidad == "abierta",
+                Cotizacion.estado.in_([
+                    EstadoCotizacion.abierta.value,
+                    EstadoCotizacion.propuestas_recibidas.value
+                ])
+            )
+        )
+    )
+
+    cotizaciones_candidatas = query.order_by(Cotizacion.fecha_creacion.desc()).all()
+
+    # Para las abiertas, solo mostrar las que efectivamente hacen matching con esta
+    # empresa según Redis (evita listar toda la red abierta a cualquier trabajador).
+    matching_ids = set()
+    if config.redis_client:
+        try:
+            all_keys = config.redis_client.keys("cotizacion_abierta:*")
+            for key in all_keys:
+                partes = key.split(":")
+                if len(partes) != 2:
+                    continue
+                importadores_hash = config.redis_client.hgetall(key)
+                if importador_id_str in importadores_hash:
+                    matching_ids.add(partes[1])
+        except Exception:
+            logger.warning("Redis no disponible al listar pool-empresa para %s", importador_id_str)
+
+    resultado = [
+        c for c in cotizaciones_candidatas
+        if c.importador_id == importador_id_str or str(c.id) in matching_ids
+    ]
+
+    return resultado
+
+@router.post("/{cotizacion_id}/reclamar", response_model=CotizacionResponse)
+async def reclamar_cotizacion(
+    cotizacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("trabajador"))
+):
+    """
+    Reclamo atómico de una cotización del pool de la empresa: "el primero que hace
+    clic se la queda". La atomicidad real la da el UPDATE condicional (no un
+    check-then-set en Python), así que dos trabajadores reclamando a la vez no
+    pueden quedarse ambos con la misma cotización.
+    """
+    importador_id_str = current_user.get("importador_id")
+    if not importador_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no está asociada a ninguna empresa importadora"
+        )
+
+    try:
+        cotizacion_id_str = str(UUID(cotizacion_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de cotización inválido")
+
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).first()
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+
+    # La cotización debe pertenecer a la empresa del trabajador (dirigida) o ser
+    # abierta; en ambos casos debe seguir sin reclamar.
+    if cotizacion.importador_id and cotizacion.importador_id != importador_id_str:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado - Cotización de otra empresa")
+
+    user_id_str = str(UUID(current_user["user_id"]))
+
+    # UPDATE condicional: solo tiene efecto si trabajador_asignado_id sigue NULL.
+    # rowcount == 0 significa que otro trabajador la reclamó primero (o ya no existe).
+    resultado = db.query(Cotizacion).filter(
+        Cotizacion.id == cotizacion_id_str,
+        Cotizacion.trabajador_asignado_id.is_(None)
+    ).update({"trabajador_asignado_id": user_id_str}, synchronize_session=False)
+
+    if resultado == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta cotización ya fue reclamada por otro trabajador de la empresa"
+        )
+
+    db.commit()
+    db.refresh(cotizacion)
+
+    return cotizacion
 
 @router.get("/{cotizacion_id}", response_model=CotizacionResponse)
 async def obtener_cotizacion(
@@ -117,8 +230,8 @@ async def obtener_cotizacion(
             detail="No tienes acceso a esta cotización"
         )
     
-    # Importador solo puede ver si es dirigida a él o es abierta
-    if rol == "importador" and cotizacion.importador_id != user_id_str and cotizacion.modalidad != "abierta":
+    # Importador/trabajador solo puede ver si es dirigida a su empresa o es abierta
+    if rol in ("importador", "trabajador") and cotizacion.importador_id != current_user.get("importador_id") and cotizacion.modalidad != "abierta":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a esta cotización"
@@ -177,12 +290,29 @@ async def crear_cotizacion(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Importador no encontrado o inactivo"
             )
+
+        # Si la empresa es de "solo cotizaciones directas", validar que se hayan
+        # incluido los valores de sus campos personalizados obligatorios.
+        if importador.solo_cotizaciones_directas:
+            from models.campo_personalizado import CampoPersonalizado
+            campos_obligatorios = db.query(CampoPersonalizado).filter(
+                CampoPersonalizado.importador_id == importador_id_str,
+                CampoPersonalizado.obligatorio == True
+            ).all()
+            valores = cotizacion_data.campos_personalizados_valores or {}
+            faltantes = [c.etiqueta for c in campos_obligatorios if not valores.get(str(c.id))]
+            if faltantes:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Faltan campos obligatorios del formulario de la empresa: {', '.join(faltantes)}"
+                )
     
     # Crear nueva cotización - usar el importador_id como string directamente
     nuevo_cotizacion = Cotizacion(
         id=str(uuid4()),  # Convertir a string para SQLite
         solicitante_id=user_id_str,
         importador_id=cotizacion_data.importador_id if cotizacion_data.importador_id else None,
+        campos_personalizados_valores=cotizacion_data.campos_personalizados_valores,
         modalidad=cotizacion_data.modalidad,
         foto_producto=cotizacion_data.foto_producto,
         pais_importacion=cotizacion_data.pais_importacion,
@@ -241,6 +371,16 @@ async def enviar_propuesta(
     from uuid import UUID as PyUUID, uuid4
     
     user_id_str = str(PyUUID(current_user["user_id"]))  # Convertir a string para SQLite
+
+    # La propuesta se registra a nombre de la empresa (Importador.id), no de la
+    # cuenta de usuario que la envía, para que sea visible/consistente sin importar
+    # qué cuenta (siempre la dueña, según reglas de negocio) la haya enviado.
+    importador_id_str = current_user.get("importador_id")
+    if not importador_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no está asociada a ninguna empresa importadora"
+        )
     
     # 1. Verificar que la cotización existe y es abierta o tiene propuestas recibidas
     try:
@@ -274,7 +414,7 @@ async def enviar_propuesta(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
             )
-        if user_id_str not in importadores_matching:
+        if importador_id_str not in importadores_matching:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No autorizado para responder esta cotización (no está en la lista de matching)"
@@ -283,7 +423,7 @@ async def enviar_propuesta(
     # 3. Verificar que el importador no ha enviado ya una propuesta a esta cotización
     propuesta_existente = db.query(Propuesta).filter(
         Propuesta.cotizacion_id == cotizacion_id_str,
-        Propuesta.importador_id == user_id_str
+        Propuesta.importador_id == importador_id_str
     ).first()
     
     if propuesta_existente:
@@ -296,7 +436,7 @@ async def enviar_propuesta(
     nueva_propuesta = Propuesta(
         id=str(uuid4()),  # Convertir a string para SQLite
         cotizacion_id=cotizacion_id_str,
-        importador_id=user_id_str,
+        importador_id=importador_id_str,
         precio_ofrecido_usd=propuesta.precio_ofrecido_usd,
         tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
         incoterm=propuesta.incoterm,
@@ -326,7 +466,7 @@ async def enviar_propuesta(
     # Si Redis falla aquí ya no se debe revertir la propuesta, que ya quedó persistida en MySQL/SQLite.
     if config.redis_client:
         try:
-            config.redis_client.hset(f"cotizacion_abierta:{cotizacion_id_str}", user_id_str, "respondido")
+            config.redis_client.hset(f"cotizacion_abierta:{cotizacion_id_str}", importador_id_str, "respondido")
             config.redis_client.incr(f"cotizacion_abierta:{cotizacion_id_str}:respuestas")
         except Exception:
             logger.warning("No se pudo actualizar el estado de matching en Redis para %s", cotizacion_id_str)
@@ -334,7 +474,7 @@ async def enviar_propuesta(
     return PropuestaResponse(
         id=str(nueva_propuesta.id),
         cotizacion_id=propuesta.cotizacion_id,
-        importador_id=user_id_str,
+        importador_id=importador_id_str,
         precio_ofrecido_usd=nueva_propuesta.precio_ofrecido_usd,
         tiempo_estimado_entrega=nueva_propuesta.tiempo_estimado_entrega,
         incoterm=nueva_propuesta.incoterm,
@@ -557,5 +697,49 @@ async def aceptar_propuesta(
     
     db.commit()
     db.refresh(cotizacion)
-    
+
+    # Notificar (best-effort) al trabajador que reclamó la cotización de que su
+    # propuesta fue aceptada, para que empiece la negociación por chat. Si nadie la
+    # reclamó, no hay a quién notificar por este canal (la cuenta dueña ya lo sabe
+    # porque fue quien recibió la respuesta del solicitante).
+    if config.redis_client and cotizacion.trabajador_asignado_id:
+        try:
+            config.redis_client.publish(
+                f"trabajador:{cotizacion.trabajador_asignado_id}:notificaciones",
+                str({
+                    "tipo": "propuesta_aceptada",
+                    "cotizacion_id": cotizacion_id_str,
+                    "importador_id": importador_id_str
+                })
+            )
+        except Exception:
+            logger.warning("No se pudo notificar al trabajador asignado de la cotización %s", cotizacion_id_str)
+
+    # Crear la conversación de chat de negociación (Fase 4): el trabajador asignado
+    # negocia con el solicitante si reclamó la cotización; si no, la cuenta dueña.
+    from models.chat import ConversacionChat
+    from models.usuario import Usuario as UsuarioModel
+    conversacion_existente = db.query(ConversacionChat).filter(
+        ConversacionChat.cotizacion_id == cotizacion_id_str
+    ).first()
+    if not conversacion_existente:
+        importador_usuario_id = cotizacion.trabajador_asignado_id
+        if not importador_usuario_id:
+            dueño = db.query(UsuarioModel).filter(
+                UsuarioModel.importador_id == importador_id_str,
+                UsuarioModel.rol == "importador"
+            ).first()
+            importador_usuario_id = str(dueño.id) if dueño else None
+
+        if importador_usuario_id:
+            from uuid import uuid4 as gen_uuid
+            nueva_conversacion = ConversacionChat(
+                id=str(gen_uuid()),
+                cotizacion_id=cotizacion_id_str,
+                solicitante_id=user_id_str,
+                importador_usuario_id=importador_usuario_id
+            )
+            db.add(nueva_conversacion)
+            db.commit()
+
     return cotizacion

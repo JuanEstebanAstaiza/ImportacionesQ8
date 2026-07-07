@@ -58,14 +58,17 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     
     return bcrypt.checkpw(password_bytes, hashed_password_bytes)
 
-def create_access_token(user_id: str, rol: str, expires_delta: timedelta = None) -> str:
+def create_access_token(user_id: str, rol: str, expires_delta: timedelta = None, importador_id: str = None) -> str:
     """
     Genera un token JWT con los claims del usuario.
     
     Args:
         user_id: ID del usuario (UUID como string)
-        rol: Rol del usuario ("solicitante", "importador" o "admin")
+        rol: Rol del usuario ("solicitante", "importador", "trabajador" o "admin")
         expires_delta: Tiempo de expiración personalizado (opcional, usa el default si no se proporciona)
+        importador_id: ID de la empresa importadora a la que pertenece la cuenta
+            (solo para rol "importador"/"trabajador"; None para solicitante/admin).
+            Se incluye en el token para no depender de que Usuario.id == Importador.id.
         
     Returns:
         Token JWT codificado en base64
@@ -79,6 +82,7 @@ def create_access_token(user_id: str, rol: str, expires_delta: timedelta = None)
     to_encode = {
         "sub": user_id,      # Subject: ID del usuario
         "rol": rol,          # Rol del usuario
+        "importador_id": importador_id,  # Empresa importadora asociada (si aplica)
         "exp": expire,       # Fecha de expiración
         "iat": datetime.utcnow()  # Fecha de emisión
     }

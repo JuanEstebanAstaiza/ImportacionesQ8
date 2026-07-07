@@ -54,6 +54,7 @@ async def get_current_user(
         payload = decode_access_token(token)
         user_id = payload.get("sub")
         rol = payload.get("rol")
+        importador_id = payload.get("importador_id")
         
         if user_id is None or rol is None:
             raise HTTPException(
@@ -68,7 +69,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return {"user_id": user_id, "rol": rol}
+    return {"user_id": user_id, "rol": rol, "importador_id": importador_id}
 
 def require_rol(rol: str):
     """
@@ -82,6 +83,22 @@ def require_rol(rol: str):
     """
     async def verificar_rol(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user["rol"] != rol:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No autorizado - Rol insuficiente"
+            )
+        return current_user
+    
+    return verificar_rol
+
+def require_rol_in(*roles: str):
+    """
+    Dependencia que permite el acceso a cualquiera de varios roles (ej. la cuenta
+    dueña "importador" y sus "trabajador" comparten algunos endpoints del panel
+    de empresa).
+    """
+    async def verificar_rol(current_user: dict = Depends(get_current_user)) -> dict:
+        if current_user["rol"] not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No autorizado - Rol insuficiente"

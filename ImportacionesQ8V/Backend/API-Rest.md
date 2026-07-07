@@ -58,10 +58,54 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 | GET | `/chat/conversaciones` | Listar conversaciones del usuario autenticado |
 | GET | `/chat/conversaciones/{id}/mensajes` | Obtener mensajes de una conversación |
 | POST | `/chat/conversaciones/{id}/mensajes` | Enviar mensaje a una conversación |
+| WS | `/ws/chat/{conversacion_id}?token=...` | Conexión WebSocket para chat en tiempo real |
+
+### Usuarios y trabajadores (Semana 3)
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| GET | `/usuarios/me` | Cualquiera autenticado | Perfil personal de la cuenta |
+| PUT | `/usuarios/me` | Cualquiera autenticado | Personalizar perfil (nombre, teléfono, foto, WhatsApp) |
+| POST | `/importadores/trabajadores` | Dueño (importador) | Crear cuenta de trabajador de la empresa |
+| GET | `/importadores/trabajadores` | Dueño | Listar trabajadores de la empresa |
+| PUT | `/importadores/trabajadores/{id}/estado` | Dueño | Activar/desactivar un trabajador |
+| GET | `/cotizaciones/pool-empresa` | Dueño + trabajador | Cotizaciones de la empresa sin reclamar |
+| POST | `/cotizaciones/{id}/reclamar` | Trabajador | Reclamo atómico de una cotización del pool |
+| GET | `/trabajadores/me/cotizaciones` | Trabajador | Cotizaciones asignadas al trabajador autenticado |
+| PUT | `/importadores/{id}` | Dueño | Autoservicio del perfil de la empresa |
+
+### Formulario de cotización personalizable (Semana 3)
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| POST | `/importadores/campos-personalizados` | Dueño (`solo_cotizaciones_directas=true`) | Crear campo del formulario propio |
+| GET | `/importadores/campos-personalizados` | Dueño | Listar campos propios |
+| PUT | `/importadores/campos-personalizados/{id}` | Dueño | Actualizar un campo propio |
+| DELETE | `/importadores/campos-personalizados/{id}` | Dueño | Eliminar un campo propio |
+| GET | `/importadores/{id}/formulario` | Público | Formulario efectivo (estándar o personalizado) de una empresa |
+
+### Disputas y administración (Semana 3)
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| PUT | `/ordenes/{id}/reportar-problema` | Solicitante | Abrir una disputa sobre su orden |
+| POST | `/admin/importadores` | Admin | Crear empresa importadora + cuenta dueña en un solo paso |
+| POST | `/admin/importadores/{id}/verificar` | Admin | Verificar/activar una empresa |
+| PUT | `/admin/importadores/{id}/estado` | Admin | Activar/desactivar una empresa |
+| GET | `/admin/usuarios` | Admin | Monitoreo de cuentas (filtrable por rol/estado) |
+| PUT | `/admin/usuarios/{id}/estado` | Admin | Activar/desactivar cualquier cuenta |
+| GET | `/admin/cotizaciones-abiertas` | Admin | Vista de todas las cotizaciones abiertas |
+| GET | `/admin/disputas` | Admin | Listar órdenes con disputa abierta |
+| PUT | `/admin/disputas/{id}/resolver` | Admin | Resolver una disputa |
+| GET | `/admin/metricas` | Admin | Métricas de éxito de la plataforma (sección del PDF) |
+
+> **Nota:** `POST /auth/register` solo acepta `rol="solicitante"` desde la Semana 3 (ver [[Autenticacion]]); las cuentas `importador` y `trabajador` se crean desde los endpoints de arriba.
 
 ---
 
 ## Modelos de datos principales
+
+> Los modelos de esta sección reflejan el esquema real implementado (verificado con 159/159 tests). Ver [[Base-Datos]] para el detalle completo columna por columna, incluyendo las tablas nuevas de la Semana 3 (`campos_personalizados`, y los cambios en `usuarios`/`ordenes`/`conversaciones_chat`).
 
 ### Cotización
 
@@ -84,6 +128,8 @@ class Cotizacion(BaseModel):
     precio_objetivo_usd: float
     incoterm: str
     notas_adicionales: Optional[str]
+    campos_personalizados_valores: Optional[Dict[str, Any]]  # (Semana 3) {campo_id: valor} si la empresa dirigida es solo_cotizaciones_directas
+    trabajador_asignado_id: Optional[UUID]  # (Semana 3) quién reclamó la cotización del pool de la empresa
     estado: Literal[
         "creada",
         "dirigida",
@@ -104,7 +150,7 @@ class Orden(BaseModel):
     cotizacion_id: UUID
     importador_id: UUID
     solicitante_id: UUID
-    asesor_asignado_id: UUID
+    trabajador_asignado_id: Optional[UUID]  # (Semana 3) reemplaza a "asesor_asignado_id"; heredado de la cotización
     estado: Literal[
         "cotizacion_aceptada",
         "en_produccion",
@@ -116,6 +162,8 @@ class Orden(BaseModel):
     precio_acordado_usd: float
     tiempo_estimado_entrega: Optional[str]
     condiciones_adicionales: Optional[str]
+    en_disputa: bool  # (Semana 3)
+    motivo_disputa: Optional[str]  # (Semana 3)
     documentos_adjuntos: List[Dict[str, str]]  # [{nombre, url}]
     historial_estados: List[Dict[str, Union[str, datetime]]]
     fecha_creacion: datetime
@@ -134,10 +182,12 @@ class Importador(BaseModel):
     calificacion_promedio: float
     tiempo_respuesta_promedio: str  # "24h"
     capacidad_volumen: Optional[int]
-    asesores: List[Dict[str, str]]  # [{id, nombre, foto_url, whatsapp}]
     estado: Literal["activo", "inactivo"]
+    solo_cotizaciones_directas: bool  # (Semana 3) True = formulario propio, fuera del matching abierto
     fecha_registro: datetime
 ```
+
+> **Nota (Semana 3):** el campo `asesores` (lista embebida) se retiró de este modelo. Los "asesores" ahora son cuentas propias (`Usuario(rol="trabajador", importador_id=<esta empresa>)`) consultables vía `GET /importadores/trabajadores`, no un array dentro del importador.
 
 ### Usuario
 
@@ -146,9 +196,28 @@ class Usuario(BaseModel):
     id: UUID
     email: str
     password_hash: str
-    rol: Literal["solicitante", "importador", "admin"]
+    rol: Literal["solicitante", "importador", "trabajador", "admin"]  # (Semana 3) rol "trabajador" nuevo
+    importador_id: Optional[UUID]  # (Semana 3) empresa a la que pertenece (dueño o trabajador)
+    nombre: Optional[str]
+    telefono: Optional[str]
+    foto_url: Optional[str]
+    whatsapp: Optional[str]
+    activo: bool  # (Semana 3) cuentas desactivadas no pueden iniciar sesión
     perfil_completo: bool
     fecha_creacion: datetime
+```
+
+### CampoPersonalizado (nuevo — Semana 3)
+
+```python
+class CampoPersonalizado(BaseModel):
+    id: UUID
+    importador_id: UUID  # solo empresas con solo_cotizaciones_directas=True
+    etiqueta: str
+    tipo: Literal["texto", "numero", "select", "booleano"]
+    opciones: Optional[List[str]]  # si tipo="select"
+    obligatorio: bool
+    orden: int
 ```
 
 ---
@@ -158,19 +227,22 @@ class Usuario(BaseModel):
 ### Flujo de autenticación JWT
 
 1. El cliente envía credenciales (email + contraseña) al endpoint `/auth/login`
-2. FastAPI valida las credenciales contra la base de datos MySQL
-3. Se genera un token JWT con los claims: `user_id`, `rol`, `exp`
+2. FastAPI valida las credenciales contra la base de datos, **y rechaza la cuenta si `activo=False`** (Semana 3)
+3. Se genera un token JWT con los claims: `sub` (user_id), `rol`, `importador_id` (Semana 3), `exp`, `iat`
 4. El token se devuelve al cliente en el body de la respuesta
 5. El cliente incluye el token en el header `Authorization: Bearer <token>` para todas las peticiones posteriores
-6. FastAPI valida el token en cada endpoint protegido usando dependencias
+6. FastAPI valida el token en cada endpoint protegido usando dependencias; las comprobaciones de propiedad entre empresas (IDOR) usan el claim `importador_id`, no el `sub` de la cuenta — así una cuenta dueña y sus trabajadores comparten el mismo acceso a los datos de la empresa
+
+> Ver [[Autenticacion]] para el detalle completo del JWT y el cierre del auto-registro de `admin`/`importador`.
 
 ### Roles y permisos por endpoint
 
-| Rol | Cotizaciones | Importadores | Órdenes | Pagos | Chat | Admin |
-|-----|-------------|--------------|---------|-------|------|-------|
-| Solicitante | ✅ Propias | 🔍 Solo lectura | ✅ Propias | ✅ Pagar | ✅ Propio | ❌ |
-| Importador | ✅ Recibidas | ✅ Propia | ✅ Propias | ❌ | ✅ Asignado | ❌ |
-| Admin | ✅ Todas | ✅ CRUD | ✅ Todas | ✅ Todos | ✅ Todos | ✅ |
+| Rol | Cotizaciones | Importadores | Órdenes | Pagos | Chat | Trabajadores | Admin |
+|-----|-------------|--------------|---------|-------|------|--------------|-------|
+| Solicitante | ✅ Propias, reportar disputa | 🔍 Solo lectura | ✅ Propias | ✅ Pagar | ✅ Propio | ❌ | ❌ |
+| Importador (dueño) | ✅ Recibidas + enviar propuesta | ✅ Perfil propio + formulario personalizado | ✅ Propias | ❌ | ✅ Asignado | ✅ Crear/listar/activar los suyos | ❌ |
+| Trabajador (Semana 3) | ✅ Solo reclamar del pool de su empresa | ❌ | ❌ | ❌ | ✅ Solo el asignado | ❌ (no crea a otros) | ❌ |
+| Admin | ✅ Todas (solo lectura vía panel) | ✅ Crear empresa + dueño, verificar, activar | ✅ Todas (vía disputas) | ✅ Todos | ❌ (media por fuera del chat) | ❌ | ✅ Todo, incluido monitoreo/desactivación de cuentas y métricas |
 
 ---
 
@@ -210,14 +282,9 @@ sequenceDiagram
 
 ---
 
-## Endpoints de administracion (solo admin)
+## Endpoints de administración (solo admin)
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/admin/cotizaciones-abiertas` | Listar todas las cotizaciones abiertas activas |
-| GET | `/admin/disputas` | Listar órdenes en disputa |
-| POST | `/admin/importadores/{id}/verificar` | Verificar empresa importadora (badge de "socio verificado") |
-| PUT | `/admin/importadores/{id}/estado` | Activar/desactivar importador de la red |
+> Lista completa y actualizada en la sección **"Disputas y administración (Semana 3)"** más arriba (incluye `POST /admin/importadores`, `GET/PUT /admin/usuarios[/{id}/estado]` y `GET /admin/metricas`, agregados en la ampliación de seguridad y monitoreo de la Semana 3).
 
 ---
 

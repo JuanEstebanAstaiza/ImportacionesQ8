@@ -4,6 +4,19 @@
 
 **MySQL** como base de datos principal para almacenar usuarios, empresas importadoras, cotizaciones, órdenes y pagos. Volumen y complejidad moderados adecuados para esta etapa del negocio.
 
+> **Estado de implementación (Semana 3 — Fases 0 a 4, verificado con 159/159 tests):** el esquema real diverge del documentado más abajo en varios puntos importantes, resumidos aquí. El detalle columna por columna de cada tabla se actualiza en las secciones correspondientes.
+>
+> - **`usuarios`**: se agregó `importador_id` (FK nullable → `importadores.id`) para desacoplar la cuenta de la empresa (antes se asumía `Usuario.id == Importador.id`), además de `nombre`, `telefono`, `foto_url`, `whatsapp` y `activo`. El rol `trabajador` se sumó a la lista de roles válidos.
+> - **La tabla `asesores` fue retirada** y su función la absorbe `Usuario(rol="trabajador")`, ya que un asesor/trabajador ahora es una cuenta con login propio (con permisos limitados: reclamar cotizaciones y chatear), no solo un dato de contacto.
+> - **`importadores`**: se agregó `solo_cotizaciones_directas` (Boolean), que determina si la empresa participa en el matching de la red abierta (`False`, formulario estándar) o define su propio formulario de cotización (`True`, queda fuera del matching abierto).
+> - **`cotizaciones`**: se agregaron `trabajador_asignado_id` (FK → `usuarios.id`, quién reclamó la cotización del pool de la empresa) y `campos_personalizados_valores` (JSON, valores de los campos del formulario personalizado cuando aplica).
+> - **`ordenes`**: `asesor_asignado_id` se renombró a `trabajador_asignado_id` (FK → `usuarios.id`, heredado de la cotización). Se agregaron `en_disputa` (Boolean) y `motivo_disputa` (Text) para el flujo de disputas del panel admin.
+> - **Nueva tabla `campos_personalizados`**: define los campos del formulario de cotización personalizado de una empresa `solo_cotizaciones_directas=True`.
+> - **`conversaciones_chat`**: la columna `importador_id` se renombró conceptualmente a `importador_usuario_id` (FK → `usuarios.id`, no a `importadores.id`), ya que la conversación se vincula a la cuenta específica (dueño o trabajador asignado) que negocia con el solicitante, no a la empresa en abstracto. Además, la conversación se crea al **aceptar/rechazar la propuesta** (no solo al pagar), por lo que `orden_id` queda `NULL` hasta que se genera la orden.
+> - **`mensajes_chat`**: el campo `archivo_url` no se implementó en esta iteración (el tipo `"archivo"` existe en el enum pero sin campo dedicado; se puede enviar la URL dentro de `contenido` como solución temporal).
+>
+> Ver el plan de implementación y `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` para el detalle de las tareas que motivaron estos cambios.
+
 ---
 
 ## Esquema de la base de datos
@@ -15,9 +28,17 @@
 | id | UUID PK | Identificador único del usuario |
 | email | VARCHAR(255) UNIQUE | Email del usuario (login) |
 | password_hash | VARCHAR(255) | Hash de la contraseña (bcrypt) |
-| rol | ENUM('solicitante', 'importador', 'admin') | Rol del usuario en el sistema |
+| rol | ENUM('solicitante', 'importador', 'trabajador', 'admin') | Rol del usuario en el sistema |
+| importador_id | UUID FK → importadores.id, NULLABLE | Empresa a la que pertenece la cuenta (dueño o trabajador). NULL para solicitantes y admins |
+| nombre | VARCHAR(255) NULL | Nombre personal (cliente, dueño o trabajador) |
+| telefono | VARCHAR(30) NULL | Teléfono de contacto |
+| foto_url | VARCHAR(500) NULL | URL de foto de perfil (dueño/trabajador) |
+| whatsapp | VARCHAR(20) NULL | Número de WhatsApp (dueño/trabajador) |
+| activo | BOOLEAN DEFAULT TRUE | Si la cuenta puede iniciar sesión (se desactiva desde el panel admin) |
 | perfil_completo | BOOLEAN DEFAULT FALSE | Si el usuario completó su perfil |
 | fecha_creacion | TIMESTAMP | Fecha de registro |
+
+> **Nota (Semana 3):** `importador_id` desacopla la cuenta de usuario de la empresa importadora, para soportar varias cuentas (dueño + trabajadores) por empresa. Antes se asumía `Usuario.id == Importador.id` para el rol "importador".
 
 ### Tabla: `importadores`
 
@@ -32,17 +53,24 @@
 | tiempo_respuesta_promedio | VARCHAR(10) | Tiempo promedio de respuesta (ej: "24h") |
 | capacidad_volumen | INT NULL | Capacidad máxima de volumen por pedido |
 | estado | ENUM('activo', 'inactivo') DEFAULT 'activo' | Estado del importador en la red |
+| solo_cotizaciones_directas | BOOLEAN DEFAULT FALSE | Si `TRUE`, la empresa define su propio formulario de cotización (tabla `campos_personalizados`) y queda fuera del motor de matching de la red abierta. Si `FALSE`, usa el formulario estándar del PDF y participa en el matching |
 | fecha_registro | TIMESTAMP | Fecha de registro en la plataforma |
 
-### Tabla: `asesores`
+### Tabla: `asesores` (retirada — ver `usuarios.rol='trabajador'`)
+
+> **Nota (Semana 3):** esta tabla se retiró. Un "asesor" ahora es una cuenta con login propio: `Usuario(rol="trabajador", importador_id=<empresa>)`. Ver la sección de tareas de trabajadores en `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md`.
+
+### Tabla: `campos_personalizados` (nueva — Semana 3)
 
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
-| id | UUID PK | Identificador único del asesor |
-| importador_id | UUID FK → importadores.id | Importador al que pertenece el asesor |
-| nombre | VARCHAR(255) | Nombre completo del asesor |
-| foto_url | VARCHAR(500) NULL | URL de la foto del asesor |
-| whatsapp | VARCHAR(20) | Número de WhatsApp del asesor |
+| id | UUID PK | Identificador único del campo |
+| importador_id | UUID FK → importadores.id | Empresa dueña del campo (solo si `solo_cotizaciones_directas=TRUE`) |
+| etiqueta | VARCHAR(255) | Texto visible del campo en el formulario |
+| tipo | ENUM('texto', 'numero', 'select', 'booleano') | Tipo de campo a renderizar |
+| opciones | JSON NULL | Opciones disponibles si `tipo='select'` |
+| obligatorio | BOOLEAN DEFAULT FALSE | Si el campo es obligatorio al crear la cotización |
+| orden | INT DEFAULT 0 | Orden de aparición en el formulario |
 
 ### Tabla: `cotizaciones`
 
@@ -65,6 +93,8 @@
 | precio_objetivo_usd | DECIMAL(10,2) | Precio objetivo en USD |
 | incoterm | VARCHAR(50) | Incoterm acordado (FOB, CIF, etc.) |
 | notas_adicionales | TEXT NULL | Notas adicionales del solicitante |
+| campos_personalizados_valores | JSON NULL | Valores del formulario personalizado (`{campo_id: valor}`) cuando la empresa dirigida es `solo_cotizaciones_directas=TRUE` |
+| trabajador_asignado_id | UUID FK → usuarios.id, NULLABLE | Trabajador de la empresa que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
 | estado | ENUM('creada', 'dirigida', 'abierta', 'propuestas_recibidas', 'cotizacion_aceptada', 'orden_activa') | Estado actual de la cotización |
 | fecha_creacion | TIMESTAMP | Fecha de creación |
 | fecha_actualizacion | TIMESTAMP | Última actualización |
@@ -93,11 +123,13 @@
 | cotizacion_id | UUID FK → cotizaciones.id | Cotización origen de la orden |
 | importador_id | UUID FK → importadores.id | Importador asignado a la orden |
 | solicitante_id | UUID FK → usuarios.id | Solicitante de la orden |
-| asesor_asignado_id | UUID FK → asesores.id | Asesor asignado por el importador |
+| trabajador_asignado_id | UUID FK → usuarios.id, NULLABLE | Trabajador de la empresa que reclamó la cotización de origen (heredado al crear la orden); NULL si nadie la reclamó. Reemplaza a `asesor_asignado_id` |
 | estado | ENUM('cotizacion_aceptada', 'en_produccion', 'transito_internacional', 'aduana_nacionalizacion', 'bodega_local', 'entregado') | Estado actual de la orden |
 | precio_acordado_usd | DECIMAL(10,2) | Precio acordado en la cotización aceptada |
 | tiempo_estimado_entrega | VARCHAR(50) NULL | Tiempo estimado de entrega acordado |
 | condiciones_adicionales | TEXT NULL | Condiciones adicionales acordadas |
+| en_disputa | BOOLEAN DEFAULT FALSE | Si el solicitante reportó un problema pendiente de revisión por el equipo admin |
+| motivo_disputa | TEXT NULL | Motivo reportado por el solicitante / notas de resolución del admin |
 | fecha_creacion | TIMESTAMP | Fecha de creación de la orden |
 | fecha_actualizacion | TIMESTAMP | Última actualización del estado |
 
@@ -142,9 +174,11 @@
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | id | UUID PK | Identificador único de la conversación |
-| orden_id | UUID FK → ordenes.id | Orden asociada a la conversación (NULL si es antes de crear la orden) |
+| cotizacion_id | UUID FK → cotizaciones.id, UNIQUE | Cotización que originó la conversación (se crea al aceptar/rechazar la propuesta) |
+| orden_id | UUID FK → ordenes.id, NULLABLE, UNIQUE | Orden asociada a la conversación; NULL hasta que se crea la orden (el pago es posterior a la negociación) |
 | solicitante_id | UUID FK → usuarios.id | Solicitante en la conversación |
-| importador_id | UUID FK → importadores.id | Importador en la conversación |
+| importador_usuario_id | UUID FK → usuarios.id | Cuenta de la empresa en la conversación: el trabajador que reclamó la cotización, o la cuenta dueña si nadie la reclamó. **No** es `importadores.id` |
+| fecha_creacion | TIMESTAMP | Fecha de creación de la conversación |
 
 ### Tabla: `mensajes_chat`
 
@@ -154,9 +188,10 @@
 | conversacion_id | UUID FK → conversaciones_chat.id | Conversación a la que pertenece el mensaje |
 | remitente_id | UUID FK → usuarios.id | Usuario que envió el mensaje |
 | contenido | TEXT | Contenido del mensaje |
-| tipo | ENUM('texto', 'archivo') | Tipo de mensaje |
-| archivo_url | VARCHAR(500) NULL | URL del archivo adjunto (NULL si es texto) |
+| tipo | ENUM('texto', 'archivo') DEFAULT 'texto' | Tipo de mensaje |
 | fecha_envio | TIMESTAMP | Fecha y hora de envío |
+
+> **Nota (Semana 3):** el campo `archivo_url` planeado originalmente no se implementó en esta iteración; para mensajes tipo `"archivo"` la URL puede enviarse dentro de `contenido` como solución temporal.
 
 ---
 

@@ -13,6 +13,9 @@ from routers.importadores import router as importadores_router
 from routers.cotizaciones import router as cotizaciones_router, propuestas_router
 from routers.ordenes import router as ordenes_router
 from routers.pagos import router as pagos_router
+from routers.usuarios import router as usuarios_router, trabajadores_router
+from routers.chat import router as chat_router, ws_router as chat_ws_router
+from routers.admin import router as admin_router
 from utils.limiter import limiter
 
 logger = logging.getLogger("importacionesq8")
@@ -83,6 +86,11 @@ app.include_router(cotizaciones_router)
 app.include_router(propuestas_router)
 app.include_router(ordenes_router)
 app.include_router(pagos_router)
+app.include_router(usuarios_router)
+app.include_router(trabajadores_router)
+app.include_router(chat_router)
+app.include_router(chat_ws_router)
+app.include_router(admin_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
