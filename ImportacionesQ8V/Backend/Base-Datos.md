@@ -6,16 +6,30 @@
 
 > **Estado de implementación (Semana 3 — Fases 0 a 4, verificado con 159/159 tests):** el esquema real diverge del documentado más abajo en varios puntos importantes, resumidos aquí. El detalle columna por columna de cada tabla se actualiza en las secciones correspondientes.
 >
-> - **`usuarios`**: se agregó `importador_id` (FK nullable → `importadores.id`) para desacoplar la cuenta de la empresa (antes se asumía `Usuario.id == Importador.id`), además de `nombre`, `telefono`, `foto_url`, `whatsapp` y `activo`. El rol `trabajador` se sumó a la lista de roles válidos.
-> - **La tabla `asesores` fue retirada** y su función la absorbe `Usuario(rol="trabajador")`, ya que un asesor/trabajador ahora es una cuenta con login propio (con permisos limitados: reclamar cotizaciones y chatear), no solo un dato de contacto.
+> - **`usuarios`**: se agregó `importador_id` (FK nullable → `importadores.id`) para desacoplar la cuenta de la empresa (antes se asumía `Usuario.id == Importador.id`), además de `nombre`, `telefono`, `foto_url`, `whatsapp` y `activo`. El rol `asesor` se sumó a la lista de roles válidos.
+> - **La tabla `asesores` fue retirada** y su función la absorbe `Usuario(rol="asesor")`, ya que un asesor ahora es una cuenta con login propio (con permisos de reclamar cotizaciones, redactar borradores de propuestas y chatear), no solo un dato de contacto.
 > - **`importadores`**: se agregó `solo_cotizaciones_directas` (Boolean), que determina si la empresa participa en el matching de la red abierta (`False`, formulario estándar) o define su propio formulario de cotización (`True`, queda fuera del matching abierto).
-> - **`cotizaciones`**: se agregaron `trabajador_asignado_id` (FK → `usuarios.id`, quién reclamó la cotización del pool de la empresa) y `campos_personalizados_valores` (JSON, valores de los campos del formulario personalizado cuando aplica).
-> - **`ordenes`**: `asesor_asignado_id` se renombró a `trabajador_asignado_id` (FK → `usuarios.id`, heredado de la cotización). Se agregaron `en_disputa` (Boolean) y `motivo_disputa` (Text) para el flujo de disputas del panel admin.
+> - **`cotizaciones`**: se agregaron `asesor_asignado_id` (FK → `usuarios.id`, quién reclamó la cotización del pool de la empresa) y `campos_personalizados_valores` (JSON, valores de los campos del formulario personalizado cuando aplica).
+> - **`ordenes`**: `asesor_asignado_id` se renombró a `asesor_asignado_id` (FK → `usuarios.id`, heredado de la cotización). Se agregaron `en_disputa` (Boolean) y `motivo_disputa` (Text) para el flujo de disputas del panel admin.
 > - **Nueva tabla `campos_personalizados`**: define los campos del formulario de cotización personalizado de una empresa `solo_cotizaciones_directas=True`.
-> - **`conversaciones_chat`**: la columna `importador_id` se renombró conceptualmente a `importador_usuario_id` (FK → `usuarios.id`, no a `importadores.id`), ya que la conversación se vincula a la cuenta específica (dueño o trabajador asignado) que negocia con el solicitante, no a la empresa en abstracto. Además, la conversación se crea al **aceptar/rechazar la propuesta** (no solo al pagar), por lo que `orden_id` queda `NULL` hasta que se genera la orden.
+> - **`conversaciones_chat`**: la columna `importador_id` se renombró conceptualmente a `importador_usuario_id` (FK → `usuarios.id`, no a `importadores.id`), ya que la conversación se vincula a la cuenta específica (dueño o asesor asignado) que negocia con el solicitante, no a la empresa en abstracto. Además, la conversación se crea al **aceptar/rechazar la propuesta** (no solo al pagar), por lo que `orden_id` queda `NULL` hasta que se genera la orden.
 > - **`mensajes_chat`**: el campo `archivo_url` no se implementó en esta iteración (el tipo `"archivo"` existe en el enum pero sin campo dedicado; se puede enviar la URL dentro de `contenido` como solución temporal).
 >
 > Ver el plan de implementación y `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` para el detalle de las tareas que motivaron estos cambios.
+
+> **Estado de implementación (Semana 4 — Asesores, créditos, registro y blindaje adicional):**
+>
+> - **Rol `asesor`:** el rol `trabajador` se **renombró a `asesor`** en `usuarios.rol`, y la columna `cotizaciones.trabajador_asignado_id`/`ordenes.trabajador_asignado_id` se renombró a **`asesor_asignado_id`**.
+> - **`usuarios`**: se agregaron los campos de registro diferenciado (`tipo_persona`, `tipo_documento`, `numero_documento`, `nit`, `razon_social`, `apellido`, `indicativo_pais_telefono`, `acepto_politica_datos`, `fecha_aceptacion_politica`) y **`creditos_balance`** (saldo de créditos consumibles al crear cotizaciones).
+> - **`importadores`**: se agregó **`verificado`** (Boolean), badge real de "socio verificado" del catálogo, independiente de `estado`.
+> - **`cotizaciones`**: se agregaron `costo_creditos`, `cotizacion_origen_id` (FK a sí misma, trazabilidad de recreaciones), `cancelada_por_error` y `motivo_cancelacion`; el enum `estado` ganó el valor `cancelada`.
+> - **`propuestas`**: se agregaron `creado_por_usuario_id` (quién redactó/editó por última vez: asesor o dueño), `preaceptada_por_solicitante` y `preaceptada_por_empresa` (doble aceptación mutua); el enum `estado` ganó el valor `borrador`.
+> - **`pagos`**: ya no se vincula a `orden_id`/`cotizacion_id`; ahora se vincula a `usuario_id` y agrega `creditos_comprados` — el pago compra créditos, no paga una orden directamente (ver `Backend/Pagos-Wompi.md`).
+> - **`mensajes_chat`**: el enum `tipo` ganó el valor `sistema` (mensajes automáticos, ej. el aviso de traspaso de chat al dueño tras la doble aceptación).
+> - **Nuevas tablas:** `password_reset_tokens`, `movimientos_credito`, `solicitudes_recreacion` (detalladas más abajo).
+> - **`POST /ordenes/crear-orden` fue eliminado.** La orden ahora se crea automáticamente cuando ambas partes pre-aceptan la misma propuesta (`POST /propuestas/{id}/pre-aceptar`), sin pago de por medio.
+>
+> Ver `Fases-Desarrollo/Semana-4-Asesores-Creditos-Registro/Tareas-Semana-4.md` para el detalle completo.
 
 ---
 
@@ -28,17 +42,26 @@
 | id | UUID PK | Identificador único del usuario |
 | email | VARCHAR(255) UNIQUE | Email del usuario (login) |
 | password_hash | VARCHAR(255) | Hash de la contraseña (bcrypt) |
-| rol | ENUM('solicitante', 'importador', 'trabajador', 'admin') | Rol del usuario en el sistema |
-| importador_id | UUID FK → importadores.id, NULLABLE | Empresa a la que pertenece la cuenta (dueño o trabajador). NULL para solicitantes y admins |
-| nombre | VARCHAR(255) NULL | Nombre personal (cliente, dueño o trabajador) |
+| rol | ENUM('solicitante', 'importador', 'asesor', 'admin') | Rol del usuario en el sistema |
+| importador_id | UUID FK → importadores.id, NULLABLE | Empresa a la que pertenece la cuenta (dueño o asesor). NULL para solicitantes y admins |
+| nombre | VARCHAR(255) NULL | Nombre personal (cliente, dueño o asesor) |
 | telefono | VARCHAR(30) NULL | Teléfono de contacto |
-| foto_url | VARCHAR(500) NULL | URL de foto de perfil (dueño/trabajador) |
-| whatsapp | VARCHAR(20) NULL | Número de WhatsApp (dueño/trabajador) |
+| foto_url | VARCHAR(500) NULL | URL de foto de perfil (dueño/asesor) |
+| whatsapp | VARCHAR(20) NULL | Número de WhatsApp (dueño/asesor) |
 | activo | BOOLEAN DEFAULT TRUE | Si la cuenta puede iniciar sesión (se desactiva desde el panel admin) |
 | perfil_completo | BOOLEAN DEFAULT FALSE | Si el usuario completó su perfil |
+| tipo_persona | ENUM('natural', 'juridica') NULL | (Semana 4) Solo `solicitante`; distingue el formulario de registro usado |
+| tipo_documento | VARCHAR(30) NULL | (Semana 4) Cédula, pasaporte, cédula de extranjería... (persona natural) |
+| numero_documento | VARCHAR(50) NULL | (Semana 4) Persona natural |
+| nit | VARCHAR(50) NULL | (Semana 4) Persona jurídica |
+| razon_social | VARCHAR(255) NULL | (Semana 4) Nombre de la empresa (persona jurídica) |
+| indicativo_pais_telefono | VARCHAR(6) NULL | (Semana 4) Ej. "+57" |
+| acepto_politica_datos | BOOLEAN DEFAULT FALSE | (Semana 4) Debe ser `TRUE` para completar el registro |
+| fecha_aceptacion_politica | TIMESTAMP NULL | (Semana 4) Trazabilidad legal de la aceptación |
+| creditos_balance | DECIMAL(10,2) DEFAULT 0.00 | (Semana 4) Saldo de créditos consumibles al crear cotizaciones; solo aplica a `solicitante` |
 | fecha_creacion | TIMESTAMP | Fecha de registro |
 
-> **Nota (Semana 3):** `importador_id` desacopla la cuenta de usuario de la empresa importadora, para soportar varias cuentas (dueño + trabajadores) por empresa. Antes se asumía `Usuario.id == Importador.id` para el rol "importador".
+> **Nota (Semana 3):** `importador_id` desacopla la cuenta de usuario de la empresa importadora, para soportar varias cuentas (dueño + asesores) por empresa. Antes se asumía `Usuario.id == Importador.id` para el rol "importador".
 
 ### Tabla: `importadores`
 
@@ -54,11 +77,12 @@
 | capacidad_volumen | INT NULL | Capacidad máxima de volumen por pedido |
 | estado | ENUM('activo', 'inactivo') DEFAULT 'activo' | Estado del importador en la red |
 | solo_cotizaciones_directas | BOOLEAN DEFAULT FALSE | Si `TRUE`, la empresa define su propio formulario de cotización (tabla `campos_personalizados`) y queda fuera del motor de matching de la red abierta. Si `FALSE`, usa el formulario estándar del PDF y participa en el matching |
+| verificado | BOOLEAN DEFAULT FALSE | (Semana 4) Badge de "socio verificado", independiente de `estado`. Solo el admin lo fija (`POST /admin/importadores/{id}/verificar`) |
 | fecha_registro | TIMESTAMP | Fecha de registro en la plataforma |
 
-### Tabla: `asesores` (retirada — ver `usuarios.rol='trabajador'`)
+### Tabla: `asesores` (retirada — ver `usuarios.rol='asesor'`)
 
-> **Nota (Semana 3):** esta tabla se retiró. Un "asesor" ahora es una cuenta con login propio: `Usuario(rol="trabajador", importador_id=<empresa>)`. Ver la sección de tareas de trabajadores en `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md`.
+> **Nota (Semana 3):** esta tabla se retiró. Un "asesor" ahora es una cuenta con login propio: `Usuario(rol="asesor", importador_id=<empresa>)`. Ver la sección de tareas de asesores en `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md`.
 
 ### Tabla: `campos_personalizados` (nueva — Semana 3)
 
@@ -94,8 +118,12 @@
 | incoterm | VARCHAR(50) | Incoterm acordado (FOB, CIF, etc.) |
 | notas_adicionales | TEXT NULL | Notas adicionales del solicitante |
 | campos_personalizados_valores | JSON NULL | Valores del formulario personalizado (`{campo_id: valor}`) cuando la empresa dirigida es `solo_cotizaciones_directas=TRUE` |
-| trabajador_asignado_id | UUID FK → usuarios.id, NULLABLE | Trabajador de la empresa que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
-| estado | ENUM('creada', 'dirigida', 'abierta', 'propuestas_recibidas', 'cotizacion_aceptada', 'orden_activa') | Estado actual de la cotización |
+| asesor_asignado_id | UUID FK → usuarios.id, NULLABLE | Asesor de la empresa que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
+| costo_creditos | DECIMAL(10,2) NULL | (Semana 4) Créditos descontados al crear esta cotización (trazabilidad) |
+| cotizacion_origen_id | UUID FK → cotizaciones.id, NULLABLE | (Semana 4) Si esta cotización nace como reemplazo de una cancelada por error, referencia a la original |
+| cancelada_por_error | VARCHAR(20) NULL | (Semana 4) `NULL`, o quién fue responsable: `"solicitante"`/`"importador"` |
+| motivo_cancelacion | TEXT NULL | (Semana 4) Motivo de la cancelación por error |
+| estado | ENUM('creada', 'dirigida', 'abierta', 'propuestas_recibidas', 'cotizacion_aceptada', 'orden_activa', 'cancelada') | Estado actual de la cotización (Semana 4: se agregó `cancelada`) |
 | fecha_creacion | TIMESTAMP | Fecha de creación |
 | fecha_actualizacion | TIMESTAMP | Última actualización |
 
@@ -110,7 +138,10 @@
 | tiempo_estimado_entrega | VARCHAR(50) | Tiempo estimado de entrega |
 | incoterm | VARCHAR(50) | Incoterm propuesto por el importador (FOB, CIF, EXW, DDP...) |
 | condiciones_adicionales | TEXT NULL | Condiciones adicionales (garantías, forma de pago, etc.) |
-| estado | ENUM('pendiente', 'aceptada', 'rechazada') | Estado de la propuesta |
+| creado_por_usuario_id | UUID FK → usuarios.id, NULLABLE | (Semana 4) Cuenta (asesor o dueño) que redactó/editó por última vez esta propuesta |
+| preaceptada_por_solicitante | BOOLEAN DEFAULT FALSE | (Semana 4) El solicitante marcó su lado de la doble aceptación mutua |
+| preaceptada_por_empresa | BOOLEAN DEFAULT FALSE | (Semana 4) El asesor asignado o el dueño marcó el lado empresa |
+| estado | ENUM('borrador', 'pendiente', 'aceptada', 'rechazada') | Estado de la propuesta (Semana 4: se agregó `borrador`, redactado por un asesor y aún no visible para el solicitante) |
 | fecha_envio | TIMESTAMP | Fecha y hora de envío de la propuesta |
 
 > **Nota (revisión de congruencia con wireframes, 06/07):** se agregó la columna `incoterm`, ausente en la implementación original. Los wireframes "Panel de Propuestas Recibidas" (Pantalla 6) y "Formulario de Respuesta a Cotización" (Pantalla 11) muestran el incoterm como dato obligatorio de cada propuesta, y el PDF de referencia (`docs/Propuesta_Plataforma_Importacion.pdf`) lo confirma en el flujo de respuesta del importador (paso 15: "responde con propuesta de precio, tiempo estimado, condiciones **e incoterm**").
@@ -123,7 +154,7 @@
 | cotizacion_id | UUID FK → cotizaciones.id | Cotización origen de la orden |
 | importador_id | UUID FK → importadores.id | Importador asignado a la orden |
 | solicitante_id | UUID FK → usuarios.id | Solicitante de la orden |
-| trabajador_asignado_id | UUID FK → usuarios.id, NULLABLE | Trabajador de la empresa que reclamó la cotización de origen (heredado al crear la orden); NULL si nadie la reclamó. Reemplaza a `asesor_asignado_id` |
+| asesor_asignado_id | UUID FK → usuarios.id, NULLABLE | asesor de la empresa que reclamó la cotización de origen (heredado al crear la orden); NULL si nadie la reclamó. Reemplaza a `asesor_asignado_id` |
 | estado | ENUM('cotizacion_aceptada', 'en_produccion', 'transito_internacional', 'aduana_nacionalizacion', 'bodega_local', 'entregado') | Estado actual de la orden |
 | precio_acordado_usd | DECIMAL(10,2) | Precio acordado en la cotización aceptada |
 | tiempo_estimado_entrega | VARCHAR(50) NULL | Tiempo estimado de entrega acordado |
@@ -155,19 +186,58 @@
 
 ### Tabla: `pagos`
 
+> **Cambio de modelo (Semana 4):** el pago ya no está ligado a una orden ni a una cotización específica — ahora es una **compra de créditos** del usuario, consumibles luego al crear cotizaciones. Ver [[Pagos-Wompi]].
+
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | id | UUID PK | Identificador único del pago |
-| orden_id | UUID FK → ordenes.id, **NULLABLE** | Orden asociada al pago. Nula al crear el checkout, porque la orden todavía no existe (se crea al confirmarse el pago) |
-| cotizacion_id | UUID FK → cotizaciones.id, NOT NULL | Cotización que se está pagando. Necesaria para poder crear la orden cuando llega la confirmación del webhook |
+| usuario_id | UUID FK → usuarios.id, NOT NULL | (Semana 4) Usuario que compra los créditos |
 | wompi_payment_id | VARCHAR(100) UNIQUE, NOT NULL | ID del pago en Wompi — la restricción UNIQUE es la garantía real (a nivel de base de datos) de que un mismo pago no se procesa dos veces |
 | monto_usd | DECIMAL(10,2) | Monto pagado en USD |
+| creditos_comprados | DECIMAL(10,2) | (Semana 4) Créditos a acreditar cuando el pago se confirme |
 | estado | ENUM('pendiente', 'confirmado', 'fallido', 'reembolsado') | Estado del pago según Wompi |
-| webhook_url | VARCHAR(500) | URL de webhook configurada para Wompi |
 | fecha_creacion | TIMESTAMP | Fecha de creación del pago |
 | fecha_confirmacion | TIMESTAMP NULL | Fecha de confirmación del pago (NULL si no confirmado) |
 
-> **Nota de implementación (2026-07-06):** el modelo ORM real (`models/pago.py`) agrega la columna `cotizacion_id` respecto al esquema originalmente documentado aquí, porque en el flujo real el pago se crea *antes* de que exista la orden. Ver [[Pagos-Wompi]] para el detalle de la implementación y su estado de cumplimiento.
+### Tabla: `movimientos_credito` (nueva — Semana 4)
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| id | UUID PK | Identificador único del movimiento |
+| usuario_id | UUID FK → usuarios.id | Usuario dueño del movimiento |
+| tipo | ENUM('compra', 'consumo', 'reembolso') | Tipo de movimiento |
+| monto | DECIMAL(10,2) | Créditos sumados (positivo) o restados (negativo) |
+| cotizacion_id | UUID FK → cotizaciones.id, NULLABLE | Cotización asociada, si aplica (consumo/reembolso) |
+| pago_id | UUID FK → pagos.id, NULLABLE | Pago asociado, si aplica (compra) |
+| descripcion | VARCHAR(255) NULL | Detalle legible del movimiento |
+| fecha | TIMESTAMP | Fecha del movimiento |
+
+### Tabla: `solicitudes_recreacion` (nueva — Semana 4)
+
+Gestiona el flujo de "cotización one-time": si hubo un error de alguna de las partes durante la negociación, se solicita anular la cotización aceptada y crear una nueva, con el admin mediando quién asume el costo.
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| id | UUID PK | Identificador único de la solicitud |
+| cotizacion_origen_id | UUID FK → cotizaciones.id | Cotización que se solicita cancelar/recrear |
+| solicitado_por_usuario_id | UUID FK → usuarios.id | Quién solicitó la recreación (solicitante o asesor/dueño asignado) |
+| motivo | TEXT | Motivo reportado |
+| parte_atribuida | ENUM('solicitante', 'importador') | Parte que el solicitante cree responsable (sugerencia, no definitiva) |
+| estado | ENUM('pendiente', 'aprobada', 'rechazada') | Estado de la solicitud |
+| resuelto_por_admin_id | UUID FK → usuarios.id, NULLABLE | Admin que resolvió la solicitud |
+| fecha | TIMESTAMP | Fecha de la solicitud |
+
+### Tabla: `password_reset_tokens` (nueva — Semana 4)
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| id | UUID PK | Identificador único del token |
+| usuario_id | UUID FK → usuarios.id | Usuario que solicitó la recuperación |
+| token_hash | VARCHAR(255) | Hash del token enviado por enlace (nunca en texto plano) |
+| otp_hash | VARCHAR(255) | Hash del OTP de 6 dígitos enviado por correo |
+| expira_en | TIMESTAMP | Expiración corta (default 15 minutos, `PASSWORD_RESET_EXPIRE_MINUTES`) |
+| usado | BOOLEAN DEFAULT FALSE | Un token/OTP es de un solo uso |
+| fecha_creacion | TIMESTAMP | Fecha de creación del token |
 
 ### Tabla: `conversaciones_chat`
 
@@ -177,7 +247,7 @@
 | cotizacion_id | UUID FK → cotizaciones.id, UNIQUE | Cotización que originó la conversación (se crea al aceptar/rechazar la propuesta) |
 | orden_id | UUID FK → ordenes.id, NULLABLE, UNIQUE | Orden asociada a la conversación; NULL hasta que se crea la orden (el pago es posterior a la negociación) |
 | solicitante_id | UUID FK → usuarios.id | Solicitante en la conversación |
-| importador_usuario_id | UUID FK → usuarios.id | Cuenta de la empresa en la conversación: el trabajador que reclamó la cotización, o la cuenta dueña si nadie la reclamó. **No** es `importadores.id` |
+| importador_usuario_id | UUID FK → usuarios.id | Cuenta de la empresa en la conversación: el asesor que reclamó la cotización, o la cuenta dueña si nadie la reclamó. **No** es `importadores.id` |
 | fecha_creacion | TIMESTAMP | Fecha de creación de la conversación |
 
 ### Tabla: `mensajes_chat`
@@ -188,7 +258,7 @@
 | conversacion_id | UUID FK → conversaciones_chat.id | Conversación a la que pertenece el mensaje |
 | remitente_id | UUID FK → usuarios.id | Usuario que envió el mensaje |
 | contenido | TEXT | Contenido del mensaje |
-| tipo | ENUM('texto', 'archivo') DEFAULT 'texto' | Tipo de mensaje |
+| tipo | ENUM('texto', 'archivo', 'sistema') DEFAULT 'texto' | Tipo de mensaje. (Semana 4) `sistema`: mensajes automáticos, ej. el aviso de traspaso de chat al dueño tras la doble aceptación |
 | fecha_envio | TIMESTAMP | Fecha y hora de envío |
 
 > **Nota (Semana 3):** el campo `archivo_url` planeado originalmente no se implementó en esta iteración; para mensajes tipo `"archivo"` la URL puede enviarse dentro de `contenido` como solución temporal.

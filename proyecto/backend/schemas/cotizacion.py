@@ -2,6 +2,16 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+class ContactoAsignadoResponse(BaseModel):
+    """Contacto de la empresa importadora a cargo de negociar una cotización
+    (Semana 4 - Fase 7: navegación cruzada / contacto del asesor asignado)."""
+    usuario_id: str
+    nombre: Optional[str] = None
+    foto_url: Optional[str] = None
+    whatsapp: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
 class CotizacionCreate(BaseModel):
     modalidad: str = Field(..., description="Modalidad de cotización: 'dirigida' o 'abierta'")
     
@@ -58,8 +68,15 @@ class CotizacionResponse(BaseModel):
     incoterm: str
     notas_adicionales: Optional[str]
     campos_personalizados_valores: Optional[Dict[str, Any]] = None
-    trabajador_asignado_id: Optional[str] = None
+    asesor_asignado_id: Optional[str] = None
     estado: str  # "creada", "dirigida", "abierta", etc.
+    costo_creditos: Optional[float] = None
+    cotizacion_origen_id: Optional[str] = None
+    cancelada_por_error: Optional[str] = None
+    motivo_cancelacion: Optional[str] = None
+    # --- Navegación cruzada (Fase 7): saltar de la cotización al chat/contacto ---
+    conversacion_id: Optional[str] = None
+    contacto_asignado: Optional[ContactoAsignadoResponse] = None
     fecha_creacion: datetime
     fecha_actualizacion: datetime
 
@@ -82,12 +99,26 @@ class PropuestaResponse(BaseModel):
     tiempo_estimado_entrega: str
     incoterm: str
     condiciones_adicionales: Optional[str]
-    estado: str  # "pendiente", "aceptada", "rechazada"
+    estado: str  # "borrador", "pendiente", "aceptada", "rechazada"
+    creado_por_usuario_id: Optional[str] = None
+    preaceptada_por_solicitante: bool = False
+    preaceptada_por_empresa: bool = False
+    # --- Navegación cruzada (Fase 7): contacto de quien redactó/envió la propuesta ---
+    contacto_asesor: Optional[ContactoAsignadoResponse] = None
 
     model_config = {"from_attributes": True}
 
 class PropuestaAceptadaRequest(BaseModel):
     importador_id: str  # ID del importador cuya propuesta se acepta
+
+class PreaceptarPropuestaRequest(BaseModel):
+    """Marca (o revierte) la pre-aceptación de tu lado sobre una propuesta.
+
+    Cuando ambos lados (solicitante y empresa) quedan en `aceptar=True`, la
+    propuesta se finaliza automáticamente: se crea la Orden y el chat se
+    traspasa al dueño de la empresa (ver `pre_aceptar_propuesta`).
+    """
+    aceptar: bool = True
 
 # ==================== Estado de matching de cotizaciones abiertas ====================
 

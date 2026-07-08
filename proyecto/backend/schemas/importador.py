@@ -22,6 +22,7 @@ class ImportadorResponse(BaseModel):
     capacidad_volumen: Optional[int]
     estado: str  # "activo" o "inactivo"
     solo_cotizaciones_directas: bool = False
+    verificado: bool = False
     fecha_registro: datetime
 
     model_config = {"from_attributes": True}

@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from schemas.auth import RegistroRequest, LoginRequest, TokenResponse, LoginResponse
-from services.auth_service import register_user, login_user
+from schemas.auth import (
+    RegistroRequest, LoginRequest, TokenResponse, LoginResponse,
+    ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest
+)
+from services.auth_service import register_user, login_user, forgot_password, reset_password
 from utils.dependencies import get_db, get_current_user
 from utils.security import create_access_token
 from utils.limiter import limiter
-from config import ACCESS_TOKEN_EXPIRE, RATE_LIMIT_LOGIN, RATE_LIMIT_REGISTER
+from config import ACCESS_TOKEN_EXPIRE, RATE_LIMIT_LOGIN, RATE_LIMIT_REGISTER, RATE_LIMIT_FORGOT_PASSWORD
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
@@ -64,6 +67,28 @@ async def renovar_token(
         user_id=current_user["user_id"],
         rol=current_user["rol"]
     )
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+@limiter.limit(RATE_LIMIT_FORGOT_PASSWORD)
+async def olvido_password(request: Request, solicitud: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Inicia la recuperación de contraseña: si el correo está registrado, envía un
+    enlace + un código OTP de 6 dígitos (vencen en unos minutos).
+
+    Siempre responde 200 con el mismo mensaje genérico, exista o no la cuenta,
+    para no permitir enumeración de usuarios registrados.
+    """
+    return forgot_password(solicitud, db)
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(RATE_LIMIT_FORGOT_PASSWORD)
+async def restablecer_password(request: Request, solicitud: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Completa la recuperación de contraseña con el token del enlace + el OTP
+    recibidos por correo. El token es de un solo uso y expira a los pocos minutos.
+    """
+    reset_password(solicitud, db)
+    return None
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def cerrar_sesion(current_user: dict = Depends(get_current_user)):

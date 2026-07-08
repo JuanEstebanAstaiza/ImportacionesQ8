@@ -1,19 +1,22 @@
-from .auth import RegistroRequest, LoginRequest, TokenResponse, LoginResponse
+from .auth import (
+    RegistroRequest, LoginRequest, TokenResponse, LoginResponse,
+    ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest
+)
 from .importador import (
     ImportadorCreate, ImportadorResponse, ImportadorUpdate,
     AdminCrearImportadorRequest, AdminCrearImportadorResponse
 )
 from .cotizacion import (
     CotizacionCreate, CotizacionResponse, PropuestaCreate, PropuestaResponse,
-    PropuestaAceptadaRequest, ImportadorPendienteResponse, MatchingStatusResponse
+    PropuestaAceptadaRequest, PreaceptarPropuestaRequest, ImportadorPendienteResponse, MatchingStatusResponse
 )
 from .orden import (
     OrdenCreate, OrdenResponse, EstadoOrdenUpdate, DocumentoOrdenCreate,
     ReportarProblemaRequest, ResolverDisputaRequest
 )
 from .usuario import (
-    UsuarioMeResponse, UsuarioMeUpdate, TrabajadorCreate, TrabajadorResponse,
-    TrabajadorEstadoUpdate, CotizacionPoolItem, CotizacionAsignadaItem
+    UsuarioMeResponse, UsuarioMeUpdate, AsesorCreate, AsesorResponse,
+    AsesorEstadoUpdate, CotizacionPoolItem, CotizacionAsignadaItem
 )
 from .campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
@@ -21,12 +24,20 @@ from .campo_personalizado import (
 )
 from .chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse
 from .admin import UsuarioAdminResponse, UsuarioEstadoUpdate, DisputaOrdenResponse, MetricasResponse
+from .pago import (
+    ComprarCreditosRequest, ComprarCreditosResponse, PagoResponse,
+    SaldoCreditosResponse, MovimientoCreditoResponse, WompiWebhookEvent
+)
+from .credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse, ResolverRecreacionRequest
 
 __all__ = [
     "RegistroRequest",
     "LoginRequest",
     "TokenResponse",
     "LoginResponse",
+    "ForgotPasswordRequest",
+    "ForgotPasswordResponse",
+    "ResetPasswordRequest",
     "ImportadorCreate",
     "ImportadorResponse",
     "ImportadorUpdate",
@@ -37,6 +48,7 @@ __all__ = [
     "PropuestaCreate",
     "PropuestaResponse",
     "PropuestaAceptadaRequest",
+    "PreaceptarPropuestaRequest",
     "ImportadorPendienteResponse",
     "MatchingStatusResponse",
     "OrdenCreate",
@@ -47,9 +59,9 @@ __all__ = [
     "ResolverDisputaRequest",
     "UsuarioMeResponse",
     "UsuarioMeUpdate",
-    "TrabajadorCreate",
-    "TrabajadorResponse",
-    "TrabajadorEstadoUpdate",
+    "AsesorCreate",
+    "AsesorResponse",
+    "AsesorEstadoUpdate",
     "CotizacionPoolItem",
     "CotizacionAsignadaItem",
     "CampoPersonalizadoCreate",
@@ -62,5 +74,14 @@ __all__ = [
     "UsuarioAdminResponse",
     "UsuarioEstadoUpdate",
     "DisputaOrdenResponse",
-    "MetricasResponse"
+    "MetricasResponse",
+    "ComprarCreditosRequest",
+    "ComprarCreditosResponse",
+    "PagoResponse",
+    "SaldoCreditosResponse",
+    "MovimientoCreditoResponse",
+    "WompiWebhookEvent",
+    "SolicitarRecreacionRequest",
+    "SolicitudRecreacionResponse",
+    "ResolverRecreacionRequest"
 ]

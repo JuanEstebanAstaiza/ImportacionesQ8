@@ -9,12 +9,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import config
-from models.orden import Orden, HistorialEstadosOrden, EstadoOrden
 from models.pago import Pago, EstadoPago
-from schemas.pago import CheckoutRequest, CheckoutResponse, PagoResponse, WompiWebhookEvent
+from models.usuario import Usuario
+from models.credito import MovimientoCredito, TipoMovimientoCredito
+from schemas.pago import (
+    ComprarCreditosRequest, ComprarCreditosResponse, PagoResponse,
+    SaldoCreditosResponse, MovimientoCreditoResponse, WompiWebhookEvent
+)
 from utils.dependencies import get_db, get_current_user, require_rol
 
 router = APIRouter(prefix="/pagos", tags=["Pagos"])
+creditos_router = APIRouter(prefix="/creditos", tags=["Créditos"])
 
 
 def get_db_now(db: Session) -> datetime:
@@ -44,7 +49,7 @@ def verificar_firma_wompi(evento: WompiWebhookEvent) -> bool:
 
     Si no hay `WOMPI_EVENTS_SECRET` configurado, o el evento no trae firma/timestamp,
     el webhook se considera NO verificable y se rechaza (fail-closed) para evitar que
-    cualquiera pueda inyectar pagos falsos y crear órdenes gratis.
+    cualquiera pueda inyectar pagos falsos y acreditar créditos gratis.
     """
     if not config.WOMPI_EVENTS_SECRET:
         return False
@@ -58,70 +63,21 @@ def verificar_firma_wompi(evento: WompiWebhookEvent) -> bool:
     return hmac.compare_digest(checksum_calculado.lower(), evento.signature.checksum.lower())
 
 
-@router.post("/checkout", response_model=CheckoutResponse)
-async def generar_checkout(
-    checkout_data: CheckoutRequest,
+@creditos_router.post("/comprar", response_model=ComprarCreditosResponse)
+async def comprar_creditos(
+    solicitud: ComprarCreditosRequest,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("solicitante"))
 ):
     """
-    Generar enlace de pago con Wompi para una cotización aceptada.
+    Genera un enlace de pago con Wompi para recargar créditos.
 
-    Idempotente: si ya existe un pago pendiente para la misma cotización, se
-    reutiliza en lugar de crear un registro duplicado.
+    Los créditos se acreditan cuando Wompi confirma el pago vía webhook
+    (`POST /pagos/webhook/wompi`), no en este endpoint.
     """
-    from models.cotizacion import Cotizacion, EstadoCotizacion
-    from models.propuesta import Propuesta, EstadoPropuesta
-
     user_id_str = str(PyUUID(current_user["user_id"]))
 
-    try:
-        cotizacion_id_str = str(PyUUID(checkout_data.cotizacion_id))
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID de cotización inválido"
-        )
-
-    # Verificar que la cotización existe, pertenece al usuario y está lista para pago
-    cotizacion = db.query(Cotizacion).filter(
-        Cotizacion.id == cotizacion_id_str,
-        Cotizacion.solicitante_id == user_id_str,
-        Cotizacion.estado == EstadoCotizacion.cotizacion_aceptada.value
-    ).first()
-
-    if not cotizacion:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cotización no encontrada o no está en estado de pago"
-        )
-
-    propuesta = db.query(Propuesta).filter(
-        Propuesta.cotizacion_id == cotizacion_id_str,
-        Propuesta.estado == EstadoPropuesta.aceptada.value
-    ).first()
-
-    if not propuesta:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Propuesta aceptada no encontrada"
-        )
-
-    # Idempotencia: reutilizar un pago pendiente existente en lugar de duplicarlo
-    pago_existente = db.query(Pago).filter(
-        Pago.cotizacion_id == cotizacion_id_str,
-        Pago.estado == EstadoPago.pendiente.value
-    ).first()
-
-    if pago_existente:
-        return CheckoutResponse(
-            checkout_url=f"https://pay.wompi.co/pay/{pago_existente.wompi_payment_id}",
-            wompi_payment_id=pago_existente.wompi_payment_id,
-            monto_comision_usd=pago_existente.monto_usd,
-            cotizacion_id=cotizacion_id_str
-        )
-
-    monto_comision = round(propuesta.precio_ofrecido_usd * 0.10, 2)
+    creditos_a_acreditar = round(solicitud.monto_usd / config.CREDITO_USD_POR_UNIDAD, 2)
 
     # Identificador de pago simulado (en producción vendría de la respuesta de la API de Wompi)
     wompi_payment_id = f"wpm_{secrets.token_hex(12)}"
@@ -129,12 +85,11 @@ async def generar_checkout(
 
     nuevo_pago = Pago(
         id=str(uuid4()),
-        orden_id=None,
-        cotizacion_id=cotizacion_id_str,
+        usuario_id=user_id_str,
         wompi_payment_id=wompi_payment_id,
-        monto_usd=monto_comision,
-        estado=EstadoPago.pendiente.value,
-        webhook_url=f"/pagos/webhook/wompi"
+        monto_usd=solicitud.monto_usd,
+        creditos_comprados=creditos_a_acreditar,
+        estado=EstadoPago.pendiente.value
     )
     db.add(nuevo_pago)
     try:
@@ -143,15 +98,39 @@ async def generar_checkout(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un pago registrado para esta cotización"
+            detail="Ya existe un pago registrado con ese identificador"
         )
 
-    return CheckoutResponse(
+    return ComprarCreditosResponse(
         checkout_url=wompi_checkout_url,
         wompi_payment_id=wompi_payment_id,
-        monto_comision_usd=monto_comision,
-        cotizacion_id=cotizacion_id_str
+        monto_usd=solicitud.monto_usd,
+        creditos_a_acreditar=creditos_a_acreditar
     )
+
+
+@creditos_router.get("/saldo", response_model=SaldoCreditosResponse)
+async def obtener_saldo(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("solicitante"))
+):
+    """Saldo de créditos actual del solicitante autenticado."""
+    usuario = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    return SaldoCreditosResponse(creditos_balance=usuario.creditos_balance)
+
+
+@creditos_router.get("/movimientos", response_model=list[MovimientoCreditoResponse])
+async def listar_movimientos(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("solicitante"))
+):
+    """Historial de movimientos de créditos (compras, consumos, reembolsos) del solicitante autenticado."""
+    movimientos = db.query(MovimientoCredito).filter(
+        MovimientoCredito.usuario_id == current_user["user_id"]
+    ).order_by(MovimientoCredito.fecha.desc()).all()
+    return movimientos
 
 
 @router.get("/{pago_id}", response_model=PagoResponse)
@@ -160,9 +139,7 @@ async def obtener_pago(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Obtiene el estado de un pago. Solo el solicitante dueño de la cotización puede verlo."""
-    from models.cotizacion import Cotizacion
-
+    """Obtiene el estado de un pago. Solo el solicitante que lo generó puede verlo (evita IDOR)."""
     try:
         pago_id_str = str(PyUUID(pago_id))
     except ValueError:
@@ -173,10 +150,7 @@ async def obtener_pago(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pago no encontrado")
 
     user_id_str = str(PyUUID(current_user["user_id"]))
-    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == pago.cotizacion_id).first()
-
-    # Evitar IDOR: solo el dueño de la cotización asociada puede consultar el pago
-    if not cotizacion or cotizacion.solicitante_id != user_id_str:
+    if pago.usuario_id != user_id_str:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No autorizado para ver este pago"
@@ -191,16 +165,13 @@ async def webhook_wompi(
     db: Session = Depends(get_db)
 ):
     """
-    Webhook de Wompi que recibe notificaciones sobre el estado del pago.
+    Webhook de Wompi que recibe notificaciones sobre el estado del pago de compra de créditos.
 
     Seguridad:
     - Se verifica la firma HMAC-SHA256 del evento antes de procesarlo (fail-closed).
     - El procesamiento es idempotente: si el pago ya está confirmado, se responde
-      200 OK sin duplicar la creación de la orden (Wompi puede reenviar el mismo evento).
+      200 OK sin duplicar la acreditación de créditos (Wompi puede reenviar el mismo evento).
     """
-    from models.cotizacion import Cotizacion, EstadoCotizacion
-    from models.propuesta import Propuesta, EstadoPropuesta
-
     if not verificar_firma_wompi(evento):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Firma de webhook inválida")
 
@@ -224,62 +195,28 @@ async def webhook_wompi(
         return {"success": True}
 
     if evento_tipo == "payment.confirmed" or estado_wompi == "confirmed":
-        cotizacion = db.query(Cotizacion).filter(
-            Cotizacion.id == pago.cotizacion_id,
-            Cotizacion.estado == EstadoCotizacion.cotizacion_aceptada.value
-        ).first()
+        usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
+        if usuario:
+            usuario.creditos_balance = (usuario.creditos_balance or 0) + pago.creditos_comprados
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=usuario.id,
+                tipo=TipoMovimientoCredito.compra.value,
+                monto=pago.creditos_comprados,
+                pago_id=pago.id,
+                descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})"
+            ))
 
-        if not cotizacion:
-            # Ya se creó la orden previamente (idempotencia) o la cotización cambió de estado
-            pago.estado = EstadoPago.confirmado.value
-            pago.fecha_confirmacion = get_db_now(db)
-            db.commit()
-            return {"success": True}
-
-        propuesta = db.query(Propuesta).filter(
-            Propuesta.cotizacion_id == pago.cotizacion_id,
-            Propuesta.estado == EstadoPropuesta.aceptada.value
-        ).first()
-
-        if not propuesta:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Propuesta aceptada no encontrada"
-            )
-
-        nueva_orden = Orden(
-            id=str(uuid4()),
-            cotizacion_id=pago.cotizacion_id,
-            importador_id=propuesta.importador_id,
-            solicitante_id=cotizacion.solicitante_id,
-            trabajador_asignado_id=cotizacion.trabajador_asignado_id,
-            estado=EstadoOrden.cotizacion_aceptada,
-            precio_acordado_usd=propuesta.precio_ofrecido_usd,
-            tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
-            condiciones_adicionales=propuesta.condiciones_adicionales
-        )
-        db.add(nueva_orden)
-
-        nuevo_historial = HistorialEstadosOrden(
-            orden_id=nueva_orden.id,
-            estado_anterior=None,
-            estado_nuevo=EstadoOrden.cotizacion_aceptada.value,
-            fecha_cambio=get_db_now(db)
-        )
-        db.add(nuevo_historial)
-
-        cotizacion.estado = EstadoCotizacion.orden_activa
         pago.estado = EstadoPago.confirmado.value
         pago.fecha_confirmacion = get_db_now(db)
-        pago.orden_id = nueva_orden.id
 
         try:
             db.commit()
         except IntegrityError:
-            # Otro webhook concurrente ya creó la orden para esta cotización (unique constraint)
+            # Otro webhook concurrente ya procesó este mismo pago
             db.rollback()
             pago_actual = db.query(Pago).filter(Pago.wompi_payment_id == wompi_payment_id).first()
-            if pago_actual:
+            if pago_actual and pago_actual.estado != EstadoPago.confirmado.value:
                 pago_actual.estado = EstadoPago.confirmado.value
                 pago_actual.fecha_confirmacion = get_db_now(db)
                 db.commit()
@@ -289,8 +226,19 @@ async def webhook_wompi(
         db.commit()
 
     elif evento_tipo == "payment.refunded" or estado_wompi == "refunded":
+        # Revertir los créditos acreditados si el pago se reembolsa
+        usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
+        if usuario and pago.estado == EstadoPago.confirmado.value:
+            usuario.creditos_balance = max(0, (usuario.creditos_balance or 0) - pago.creditos_comprados)
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=usuario.id,
+                tipo=TipoMovimientoCredito.consumo.value,
+                monto=-pago.creditos_comprados,
+                pago_id=pago.id,
+                descripcion=f"Reversión por reembolso de pago Wompi ({pago.wompi_payment_id})"
+            ))
         pago.estado = EstadoPago.reembolsado.value
-        # TODO: Implementar lógica de reembolso de la orden y notificación (Semana 3)
         db.commit()
 
     return {"success": True}

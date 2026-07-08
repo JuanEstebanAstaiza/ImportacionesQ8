@@ -32,6 +32,7 @@ graph LR
         O[Semana-1-Fundaciones-y-Cotizaciones]
         P[Semana-2-Red-y-Ordenes]
         Q[Semana-3-Chat-y-Pulido]
+        V[Semana-4-Asesores-Creditos-Registro]
     end
 
     subgraph Inversionistas["Inversionistas"]
@@ -64,13 +65,17 @@ graph LR
     D --> O
     D --> P
     D --> Q
+    D --> V
 
     E --> O
     E --> P
+    E --> V
 
     F --> O
+    F --> V
 
     G --> P
+    G --> V
 
     H --> Q
 
@@ -79,6 +84,7 @@ graph LR
     J --> O
     J --> P
     J --> Q
+    J --> V
 
     K --> P
     K --> Q
@@ -92,6 +98,8 @@ graph LR
     N --> O
     N --> P
     N --> Q
+
+    U --> V
 
     R --> S
     R --> T
@@ -123,10 +131,14 @@ graph TD
     D --> P[Tokens JWT importador]
     D --> Q[Tokens JWT admin]
 
-    E --> R[Checkout Wompi]
-    E --> S[Webhooks de confirmación]
+    E --> R[Checkout Wompi - compra de créditos]
+    E --> S[Webhooks de confirmación - acredita créditos]
 
     F --> T[Chat 1 a 1 por orden]
+
+    B --> U[Movimientos de crédito]
+    B --> V[Solicitudes de recreación]
+    B --> W[Tokens de recuperación de contraseña]
 ```
 
 ---
@@ -171,71 +183,78 @@ graph TD
 
 ---
 
-## Mapa de flujo de datos del negocio
+## Mapa de flujo de datos del negocio (actualizado — Semana 4: créditos y doble aceptación)
 
 ```mermaid
 graph LR
-    A[Solicitante] --> B[Nueva Cotización]
+    Z[Solicitante compra créditos vía Wompi] --> A[Solicitante]
+    A --> B[Nueva Cotización - descuenta créditos según modalidad]
     B --> C{Modalidad}
     C -->|Dirigida| D[Importador específico]
     C -->|Abierta| E[Todos los importadores de la red]
-    D --> F[Cotización formal del importador]
-    E --> G[Propuestas múltiples]
-    F --> H[Solicitante acepta/rechaza]
-    G --> I[Solicitante elige mejor propuesta]
-    H -->|Acepta| J[Checkout Wompi]
-    I --> J
-    J --> K[Pago confirmado]
-    K --> L[Cotización → Orden]
-    L --> M[Seguimiento de orden]
-    M --> N[Chat con asesor]
+    D --> F1[Asesor redacta borrador]
+    E --> F1
+    F1 --> F2[Dueño valida categoría y envía propuesta]
+    F2 --> H[Solicitante puede chatear y aceptar]
+    H --> DA{Doble aceptación<br/>solicitante + empresa}
+    DA -->|Falta un lado| H
+    DA -->|Ambos aceptan| L[Orden creada automáticamente<br/>sin pago de por medio]
+    L --> M[Chat traspasado al dueño/supervisor]
+    M --> N[Seguimiento de orden a discreción de las partes]
 ```
+
+> La plataforma **no cobra por la orden**: el único costo para el solicitante es el crédito consumido al crear la cotización. La plataforma solo conecta; el cumplimiento de la orden es responsabilidad de las partes.
 
 ---
 
-## Mapa de flujo de datos del negocio (Importador)
+## Mapa de flujo de datos del negocio (Importador, actualizado — Semana 4)
 
 ```mermaid
 graph TD
-    A[Empresa Importadora] --> B[Registro en plataforma]
+    A[Empresa Importadora] --> B[Registro por admin de la plataforma]
     B --> C[Definir perfil: países, categorías, capacidad]
+    B --> C2[Crear cuentas de asesor]
     C --> D[Recibe notificaciones]
+    C2 --> D
     D --> E{Tipo de solicitud}
     E -->|Dirigida| F[Solicitud exclusiva del importador]
-    E -->|Abierta| G[Solicitud compartida con la red]
-    F --> H[Responder cotización: precio, tiempo, condiciones]
-    G --> H
-    H --> I[Solicitante acepta oferta]
-    I --> J[Pago confirmado por plataforma]
-    J --> K[Cotización → Orden]
-    K --> L[Gestión de orden desde panel importador]
-    L --> M[Chat con solicitante]
+    E -->|Abierta| G[Solicitud compartida con la red - solo si categoría congruente]
+    F --> H1[Asesor reclama y redacta borrador]
+    G --> H1
+    H1 --> H2[Dueño valida y envía propuesta]
+    H2 --> I[Solicitante pre-acepta / asesor o dueño pre-acepta]
+    I --> J{Ambos lados aceptaron?}
+    J -->|No| I
+    J -->|Sí| K[Cotización → Orden automática]
+    K --> L[Chat traspasado al dueño - ahora supervisor]
+    L --> M[Gestión de orden desde panel importador]
 ```
 
 ---
 
-## Mapa de estados de una cotización/orden
+## Mapa de estados de una cotización/orden (actualizado — Semana 4)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Cotizacion_Creada: Solicitante envía formulario
+    [*] --> Cotizacion_Creada: Solicitante envía formulario (descuenta créditos)
     Cotizacion_Creada --> Cotizacion_Dirigida: Modalidad dirigida
     Cotizacion_Creada --> Cotizacion_Abierta: Modalidad abierta
 
-    Cotizacion_Dirigida --> Importador_Respondiendo: Importador recibe solicitud
-    Cotizacion_Abierta --> Importadores_Recibiendo: Todos los importadores de la red reciben
+    Cotizacion_Dirigida --> Asesor_Redactando: Asesor de la empresa (categoría congruente) reclama y redacta borrador
+    Cotizacion_Abierta --> Asesores_Redactando: Asesores de empresas de la red (categoría congruente) redactan borradores
 
-    Importador_Respondiendo --> Propuesta_Pendiente: Esperando respuesta del solicitante
-    Importadores_Recibiendo --> Varios_Importadores_Responden: Múltiples importadores responden
+    Asesor_Redactando --> Propuesta_Enviada: Dueño valida y envía
+    Asesores_Redactando --> Propuestas_Enviadas: Dueños validan y envían
 
-    Propuesta_Pendiente --> Solicitante_Evalua: Solicitante evalúa propuesta
-    Varios_Importadores_Responden --> Solicitante_Evalua: Solicitante compara propuestas
+    Propuesta_Enviada --> Negociacion_Chat: Solicitante y asesor negocian por chat
+    Propuestas_Enviadas --> Negociacion_Chat: Solicitante elige con quién negociar
 
-    Solicitante_Evalua --> Checkout_Pago: Solicitante acepta oferta
-    Solicitante_Evalua --> Cotizacion_Cerrada: Solicitante rechaza
+    Negociacion_Chat --> Preaceptada_Parcial: Un lado (solicitante o empresa) pre-acepta
+    Preaceptada_Parcial --> Negociacion_Chat: El otro lado revierte o aún no acepta
+    Preaceptada_Parcial --> Cotizacion_Aceptada: El otro lado también pre-acepta (doble aceptación)
+    Negociacion_Chat --> Cotizacion_Cerrada: Alguna parte rechaza definitivamente
 
-    Checkout_Pago --> Pago_Confirmado: Wompi confirma pago (webhook)
-    Pago_Confirmado --> Orden_Activa: Cotización se convierte en orden
+    Cotizacion_Aceptada --> Orden_Activa: Orden creada automáticamente, chat traspasado al dueño/supervisor
 
     Orden_Activa --> En_Produccion: Importador confirma fabricación
     En_Produccion --> Transito_Internacional: Salida de fábrica/puerto origen
@@ -243,36 +262,48 @@ stateDiagram-v2
     Aduana_Nacionalizacion --> Bodega_Local: Producto recibido en bodega del importador
     Bodega_Local --> Entregado: Cierre de la orden
 
+    Cotizacion_Aceptada --> Cancelada_Por_Error: Solicitud de recreación aprobada por admin
+    Cancelada_Por_Error --> [*]
+
     Entregado --> [*]
 ```
 
 ---
 
-## Mapa de roles y permisos
+## Mapa de roles y permisos (actualizado — Semana 4)
 
 ```mermaid
 graph TD
     A[Roles del Sistema] --> B[Solicitante]
-    A --> C[Importador]
+    A --> C[Importador - dueño]
+    A --> C2[Asesor - renombrado de trabajador]
     A --> D[Admin Plataforma]
 
-    B --> B1[Crear cotizaciones]
+    B --> B1[Crear cotizaciones - consume créditos]
     B --> B2[Ver órdenes propias]
-    B --> B3[Chat con asesores]
-    B --> B4[Pagar ofertas aceptadas]
-    B --> B5[Ver panel de propuestas (modalidad abierta)]
+    B --> B3[Chat con asesor/dueño asignado]
+    B --> B4[Comprar créditos vía Wompi]
+    B --> B5[Ver panel de propuestas - modalidad abierta]
+    B --> B6[Pre-aceptar propuesta - doble aceptación]
+    B --> B7[Solicitar recreación por error]
 
     C --> C1[Recibir solicitudes dirigidas]
-    C --> C2[Recibir solicitudes abiertas (según perfil)]
-    C --> C3[Responder cotizaciones con propuesta]
-    C --> C4[Gestionar órdenes propias]
-    C --> C5[Chat con solicitantes asignados]
+    C --> C3[Enviar propuesta tras validar categoría]
+    C --> C4[Gestionar órdenes propias - vía chat traspasado]
+    C --> C5[Pre-aceptar propuesta como dueño]
     C --> C6[Editar perfil de empresa]
+    C --> C7[Crear/gestionar cuentas de asesor]
+
+    C2 --> C2a[Reclamar cotizaciones del pool de su empresa]
+    C2 --> C2b[Redactar/editar borradores de propuesta]
+    C2 --> C2c[Chat con el solicitante hasta el traspaso]
+    C2 --> C2d[Pre-aceptar en nombre de la empresa]
 
     D --> D1[Ver todas las cotizaciones abiertas]
     D --> D2[Mediar en disputas]
-    D --> D3[Gestionar importadores vinculados]
+    D --> D3[Gestionar importadores vinculados - crear, verificar]
     D --> D4[Monitorear métricas del sistema]
+    D --> D5[Resolver solicitudes de recreación de cotización]
 ```
 
 ---

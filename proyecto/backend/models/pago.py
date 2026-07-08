@@ -14,22 +14,24 @@ class Pago(Base):
     """
     Registro persistente de cada intento de pago con Wompi.
 
-    Esta tabla es la pieza clave de idempotencia y trazabilidad (ACID) del flujo de
-    pagos: `wompi_payment_id` es UNIQUE, así que un mismo evento de webhook
-    reenviado por Wompi nunca puede procesarse dos veces (la segunda vez la
-    búsqueda encuentra el pago ya "confirmado" y el webhook responde 200 OK sin
-    duplicar efectos).
+    Desde la Semana 4, el único propósito de un pago es la **compra de créditos**
+    (el solicitante recarga saldo que luego consume al crear cotizaciones). Ya no
+    existe una "comisión sobre la orden": la plataforma solo conecta a las partes
+    y la Orden se crea automáticamente cuando ambas aceptan mutuamente una
+    propuesta (ver `routers/cotizaciones.py::pre_aceptar_propuesta`), sin pago de
+    por medio.
+
+    `wompi_payment_id` es UNIQUE, así que un mismo evento de webhook reenviado por
+    Wompi nunca puede procesarse dos veces (idempotencia/ACID).
     """
     __tablename__ = "pagos"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    # La orden todavía no existe cuando se genera el checkout; se completa al confirmar el pago.
-    orden_id = Column(String(36), ForeignKey("ordenes.id"), nullable=True)
-    cotizacion_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=False)
+    usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
     wompi_payment_id = Column(String(100), unique=True, nullable=False, index=True)
     monto_usd = Column(Float, nullable=False)
+    creditos_comprados = Column(Float, nullable=False)
     estado = Column(String(20), default=EstadoPago.pendiente, nullable=False)
-    webhook_url = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_confirmacion = Column(DateTime, nullable=True)
 

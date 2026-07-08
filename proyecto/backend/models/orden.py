@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, object_session
 from uuid import uuid4
 from datetime import datetime
 import enum
@@ -31,9 +31,9 @@ class Orden(Base):
     cotizacion_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=False, unique=True)
     importador_id = Column(String(36), nullable=False)
     solicitante_id = Column(String(36), nullable=False)
-    # Trabajador de la empresa que reclamó la cotización de origen (heredado al
+    # Asesor de la empresa que reclamó la cotización de origen (heredado al
     # crear la orden). NULL si nadie la reclamó antes de aceptar la propuesta.
-    trabajador_asignado_id = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
+    asesor_asignado_id = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
     estado = Column(String(30), default=EstadoOrden.cotizacion_aceptada)
     precio_acordado_usd = Column(Float, nullable=False)
     tiempo_estimado_entrega = Column(String(100), nullable=True)
@@ -49,6 +49,15 @@ class Orden(Base):
     cotizacion = relationship("Cotizacion", back_populates="orden")
     historial_estados = relationship("HistorialEstadosOrden", back_populates="orden", cascade="all, delete-orphan")
     documentos_adjuntos = relationship("DocumentoOrden", back_populates="orden", cascade="all, delete-orphan")
+
+    # --- Navegación cruzada (Semana 4 - Fase 7) ---
+    @property
+    def conversacion_id(self):
+        if object_session(self) is None:
+            return None
+        if self.cotizacion and self.cotizacion.conversacion:
+            return str(self.cotizacion.conversacion.id)
+        return None
 
     def __repr__(self):
         return f"<Orden(id={self.id}, estado={self.estado})>"

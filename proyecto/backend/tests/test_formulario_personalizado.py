@@ -35,6 +35,7 @@ def solicitante(db_session):
         email="solicitante_form@example.com",
         password_hash=hash_password("123456789"),
         rol="solicitante",
+        creditos_balance=1000.0,
         perfil_completo=True,
         fecha_creacion=datetime.utcnow()
     )

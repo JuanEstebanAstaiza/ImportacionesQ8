@@ -51,15 +51,15 @@ def empresa(db_session):
 
 
 @pytest.fixture()
-def cotizacion_aceptada_con_trabajador(db_session, solicitante, empresa):
-    """Cotización dirigida, reclamada por un trabajador y con propuesta aceptada:
-    dispara la creación automática de la conversación de chat con ESE trabajador."""
+def cotizacion_aceptada_con_asesor(db_session, solicitante, empresa):
+    """Cotización dirigida, reclamada por un asesor y con propuesta aceptada:
+    dispara la creación automática de la conversación de chat con ESE asesor."""
     importador, dueño = empresa
-    trabajador = Usuario(
+    asesor = Usuario(
         id=str(uuid4()), email="trab_chat@example.com", password_hash=hash_password("123456789"),
-        rol="trabajador", importador_id=importador.id, activo=True, fecha_creacion=datetime.utcnow()
+        rol="asesor", importador_id=importador.id, activo=True, fecha_creacion=datetime.utcnow()
     )
-    db_session.add(trabajador)
+    db_session.add(asesor)
 
     cotizacion = Cotizacion(
         id=str(uuid4()), solicitante_id=solicitante.id, importador_id=importador.id,
@@ -67,7 +67,7 @@ def cotizacion_aceptada_con_trabajador(db_session, solicitante, empresa):
         descripcion_cliente="Descripción de prueba para el flujo de chat de negociación",
         linea_producto="Textiles", tipo_calidad="estandar", cantidad_minima=100,
         precio_objetivo_usd=1.0, incoterm="FOB", estado=EstadoCotizacion.propuestas_recibidas,
-        trabajador_asignado_id=trabajador.id
+        asesor_asignado_id=asesor.id
     )
     db_session.add(cotizacion)
 
@@ -79,15 +79,15 @@ def cotizacion_aceptada_con_trabajador(db_session, solicitante, empresa):
     db_session.add(propuesta)
     db_session.commit()
 
-    return cotizacion, trabajador
+    return cotizacion, asesor
 
 
 class TestCreacionConversacionAlAceptar:
-    def test_aceptar_propuesta_crea_conversacion_con_trabajador_asignado(
-        self, client, db_session, solicitante, empresa, cotizacion_aceptada_con_trabajador
+    def test_aceptar_propuesta_crea_conversacion_con_asesor_asignado(
+        self, client, db_session, solicitante, empresa, cotizacion_aceptada_con_asesor
     ):
         importador, dueño = empresa
-        cotizacion, trabajador = cotizacion_aceptada_con_trabajador
+        cotizacion, asesor = cotizacion_aceptada_con_asesor
         token = create_access_token(str(solicitante.id), "solicitante")
 
         response = client.put(
@@ -101,15 +101,15 @@ class TestCreacionConversacionAlAceptar:
             ConversacionChat.cotizacion_id == str(cotizacion.id)
         ).first()
         assert conversacion is not None
-        assert conversacion.importador_usuario_id == str(trabajador.id)
+        assert conversacion.importador_usuario_id == str(asesor.id)
         assert conversacion.solicitante_id == str(solicitante.id)
 
-    def test_aceptar_propuesta_sin_trabajador_asigna_al_dueño(self, client, db_session, solicitante, empresa):
+    def test_aceptar_propuesta_sin_asesor_asigna_al_dueño(self, client, db_session, solicitante, empresa):
         importador, dueño = empresa
         cotizacion = Cotizacion(
             id=str(uuid4()), solicitante_id=solicitante.id, importador_id=importador.id,
-            modalidad="dirigida", pais_importacion="China", nombre_producto="Producto Sin Trabajador",
-            descripcion_cliente="Descripción de prueba sin trabajador asignado a la cotización",
+            modalidad="dirigida", pais_importacion="China", nombre_producto="Producto Sin Asesor",
+            descripcion_cliente="Descripción de prueba sin asesor asignado a la cotización",
             linea_producto="Textiles", tipo_calidad="estandar", cantidad_minima=100,
             precio_objetivo_usd=1.0, incoterm="FOB", estado=EstadoCotizacion.propuestas_recibidas
         )

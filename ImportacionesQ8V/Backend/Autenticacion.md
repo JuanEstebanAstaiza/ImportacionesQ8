@@ -8,7 +8,23 @@ Sistema de autenticación basado en **JWT (JSON Web Tokens)** gestionado por Fas
 
 ## Flujo de autenticación
 
-### Registro de nuevo usuario
+### Registro de nuevo usuario (persona natural / jurídica — Semana 4)
+
+`POST /auth/register` **solo** acepta `rol="solicitante"` (ver "Cierre de auto-registro" más abajo), y ahora distingue entre **persona natural** y **persona jurídica**, con campos condicionales validados por un `model_validator` de Pydantic:
+
+| Campo | Persona natural | Persona jurídica |
+|-------|:---:|:---:|
+| `email` | ✅ | ✅ (correo del representante) |
+| `tipo_persona` | `"natural"` | `"juridica"` |
+| `nombre`, `apellido` | ✅ requeridos | — |
+| `tipo_documento`, `numero_documento` (cédula, pasaporte, cédula de extranjería...) | ✅ requeridos | — |
+| `nit`, `razon_social` | — | ✅ requeridos |
+| `indicativo_pais_telefono` + `telefono` | ✅ requeridos | ✅ requeridos |
+| `acepto_politica_datos` | ✅ debe ser `true` | ✅ debe ser `true` |
+
+Si `acepto_politica_datos` no es `true`, o faltan los campos condicionales según `tipo_persona`, la API responde `422 Unprocessable Entity` con el detalle del campo faltante (nunca se llega a crear el usuario). Al aceptar, se guarda `fecha_aceptacion_politica` para trazabilidad legal.
+
+Al registrarse, el usuario recibe además un **bono de créditos de bienvenida** (`CREDITO_BONO_REGISTRO`, ver `Backend/Pagos-Wompi.md`) para poder crear su primera cotización sin comprar créditos primero.
 
 ```mermaid
 sequenceDiagram
@@ -16,15 +32,20 @@ sequenceDiagram
     participant API as FastAPI
     participant DB as MySQL
 
-    Cliente->>API: POST /auth/register {email, password, rol}
+    Cliente->>API: POST /auth/register {tipo_persona, email, password, ...campos condicionales, acepto_politica_datos}
+    API->>API: Validar campos condicionales según tipo_persona (Pydantic)
     API->>DB: Verificar email único
     DB-->>API: Email disponible
     API->>API: Generar password_hash (bcrypt)
-    API->>DB: INSERT INTO usuarios
+    API->>DB: INSERT INTO usuarios (..., creditos_balance=CREDITO_BONO_REGISTRO)
     DB-->>API: Usuario creado con ID
     API->>API: Generar JWT token
     API-->>Cliente: {token, user_id, rol}
 ```
+
+### Registro de importador (placeholder)
+
+No existe auto-registro de empresas importadoras: `POST /auth/register` con `rol="importador"` responde `400 Bad Request` con el mensaje *"Contáctese con el equipo administrativo para registrar tu empresa importadora"*. El frontend debe mostrar este mensaje como placeholder en la pantalla de registro de importador (ver `Frontend/Pantallas-Registro-y-Login.md`). El alta real la hace un admin vía `POST /admin/importadores`.
 
 ### Inicio de sesión
 
@@ -66,6 +87,61 @@ sequenceDiagram
     end
 ```
 
+### Recuperación de contraseña (OTP + email real — Semana 4)
+
+Flujo de dos pasos: el usuario pide un código y enlace por correo, y luego confirma con ambos para poner una nueva contraseña. Nunca se revela si un email existe (mismo mensaje siempre, previene enumeración de usuarios).
+
+```mermaid
+sequenceDiagram
+    participant Cliente as Frontend React/Next.js
+    participant API as FastAPI
+    participant SMTP as Servidor SMTP real
+    participant DB as MySQL
+
+    Cliente->>API: POST /auth/forgot-password {email}
+    API->>DB: Buscar usuario por email
+    alt Usuario existe
+        API->>API: Generar OTP (6 dígitos) + token seguro, hashear ambos
+        API->>DB: INSERT INTO password_reset_tokens {token_hash, otp_hash, expira_en, usado=false}
+        API->>DB: Invalidar tokens pendientes anteriores del usuario
+        API->>SMTP: Enviar correo con enlace (?token=...) y OTP
+    else Usuario no existe
+        Note over API: No se hace nada, pero la respuesta es idéntica
+    end
+    API-->>Cliente: 200 OK {mensaje genérico}
+
+    Cliente->>API: POST /auth/reset-password {token, otp, nueva_password}
+    API->>DB: Buscar PasswordResetToken por hash(token)
+    API->>API: Verificar OTP, expiración (15 min) y que no esté usado
+    alt Todo válido
+        API->>DB: UPDATE usuarios SET password_hash = hash(nueva_password)
+        API->>DB: UPDATE password_reset_tokens SET usado = true
+        API-->>Cliente: 200 OK
+    else Inválido/expirado/reusado
+        API-->>Cliente: 400 Bad Request
+    end
+```
+
+**Seguridad del flujo:**
+- El **token y el OTP se guardan hasheados** en `password_reset_tokens` (nunca en texto plano), igual que las contraseñas.
+- Expiración corta configurable (`PASSWORD_RESET_EXPIRE_MINUTES`, default 15 minutos) y **de un solo uso** (`usado=true` tras consumirse).
+- Al solicitar un nuevo OTP, se invalidan los tokens pendientes anteriores del mismo usuario (evita acumular tokens válidos).
+- `POST /auth/forgot-password` está bajo el mismo rate limiting que login/registro (`RATE_LIMIT_FORGOT_PASSWORD`).
+- El correo se envía por **SMTP real** (`utils/email.py::enviar_correo_recuperacion_password`), configurable vía `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM`/`SMTP_USE_TLS`; si SMTP no está configurado (ej. en desarrollo), se degrada a un log en vez de fallar la petición.
+
+**Tests:** `tests/test_password_reset.py` (flujo feliz, OTP incorrecto, token expirado, token reusado, enumeración de usuarios, invalidación de tokens previos).
+
+---
+
+## Endpoints de páginas legales (placeholder)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/legal/politica-tratamiento-datos` | Contenido "En construcción..." (placeholder hasta tener el texto legal definitivo) |
+| GET | `/legal/terminos-condiciones` | Ídem, términos y condiciones |
+
+El frontend debe enlazar la casilla de aceptación del registro y el footer de la landing a estas dos páginas (ver `Frontend/Pantallas-Registro-y-Login.md`).
+
 ---
 
 ## Estructura del JWT Token
@@ -75,19 +151,19 @@ sequenceDiagram
 | Claim | Tipo | Descripción |
 |-------|------|-------------|
 | `sub` (subject) | UUID | ID del usuario |
-| `rol` | string | Rol del usuario: "solicitante", "importador", "trabajador" o "admin" |
-| `importador_id` | UUID \| null | **(Semana 3)** Empresa a la que pertenece la cuenta (dueño o trabajador). `null` para solicitantes y admins |
+| `rol` | string | Rol del usuario: "solicitante", "importador", "asesor" o "admin" |
+| `importador_id` | UUID \| null | **(Semana 3)** Empresa a la que pertenece la cuenta (dueño o asesor). `null` para solicitantes y admins |
 | `exp` | timestamp | Fecha de expiración del token |
 | `iat` | timestamp | Fecha de emisión del token |
 
-> **Por qué se agregó `importador_id` (Semana 3):** antes se asumía `Usuario.id == Importador.id` para el rol "importador", lo que hacía imposible tener varias cuentas (dueño + trabajadores) por empresa. Ahora todas las comprobaciones de propiedad entre empresas (IDOR) usan este claim en vez del `sub` de la cuenta. Ver `utils/security.py::create_access_token` y `utils/dependencies.py::get_current_user`.
+> **Por qué se agregó `importador_id` (Semana 3):** antes se asumía `Usuario.id == Importador.id` para el rol "importador", lo que hacía imposible tener varias cuentas (dueño + asesores) por empresa. Ahora todas las comprobaciones de propiedad entre empresas (IDOR) usan este claim en vez del `sub` de la cuenta. Ver `utils/security.py::create_access_token` y `utils/dependencies.py::get_current_user`.
 
 ### Ejemplo de payload JWT
 
 ```json
 {
     "sub": "550e8400-e29b-41d4-a716-446655440000",
-    "rol": "trabajador",
+    "rol": "asesor",
     "importador_id": "660f9500-f39c-52e5-b827-557766551111",
     "exp": 1751736000,
     "iat": 1751649600
@@ -236,11 +312,11 @@ async def listar_cotizaciones_abiertas(
 | Rol | Descripción | Endpoints accesibles |
 |-----|-------------|---------------------|
 | **solicitante** | Cliente final que solicita cotizaciones | Cotizaciones propias, Órdenes propias, Chat propio, Pagos propios, reportar disputas |
-| **importador** | Cuenta **dueña** de la empresa importadora | Envío de propuestas, gestión de trabajadores, perfil de empresa, formulario personalizado, pool de la empresa, chat asignado |
-| **trabajador** | Cuenta de un empleado de la empresa importadora (Semana 3) | Solo: reclamar cotizaciones del pool de su empresa, ver sus cotizaciones asignadas, chat de las conversaciones asignadas, su propio perfil personal |
+| **importador** | Cuenta **dueña** de la empresa importadora | Envío de propuestas, gestión de asesores, perfil de empresa, formulario personalizado, pool de la empresa, chat asignado |
+| **asesor** | Cuenta de un empleado de la empresa importadora (Semana 3; renombrado de "trabajador" en Semana 4) | Reclamar cotizaciones del pool de su empresa, redactar borradores de propuestas, negociar por chat, ver sus cotizaciones asignadas, su propio perfil personal |
 | **admin** | Miembro del equipo de la plataforma | Todos los endpoints + alta de empresas importadoras, monitoreo/activación de cualquier cuenta, disputas y métricas |
 
-> **Cierre de auto-registro (Semana 3):** `POST /auth/register` **solo** acepta `rol="solicitante"`. Las cuentas `importador` (dueño) las crea un admin con `POST /admin/importadores` (junto con la empresa), las cuentas `trabajador` las crea el dueño con `POST /importadores/trabajadores`, y no existe ningún camino de auto-registro para `admin`. Esto cierra el hueco de seguridad donde cualquiera podía crearse una cuenta con rol elevado.
+> **Cierre de auto-registro (Semana 3):** `POST /auth/register` **solo** acepta `rol="solicitante"`. Las cuentas `importador` (dueño) las crea un admin con `POST /admin/importadores` (junto con la empresa), las cuentas `asesor` las crea el dueño con `POST /importadores/asesores`, y no existe ningún camino de auto-registro para `admin`. Esto cierra el hueco de seguridad donde cualquiera podía crearse una cuenta con rol elevado.
 
 ---
 
@@ -318,5 +394,18 @@ sequenceDiagram
 | Claim `importador_id` en el JWT | ✅ Implementado | `utils/security.py::create_access_token`, propagado en login/refresh (`services/auth_service.py`) |
 | Cierre de auto-registro de `admin`/`importador` | ✅ Implementado | `services/auth_service.py::register_user` rechaza cualquier rol distinto de `solicitante` con `400 Bad Request` |
 | Cuentas desactivables (`Usuario.activo`) | ✅ Implementado | Login y refresh de token rechazan cuentas con `activo=False` (`401 Unauthorized`), gestionable desde `PUT /admin/usuarios/{id}/estado` |
-| Rol `trabajador` con permisos limitados | ✅ Implementado | `require_rol_in`/`require_rol` en `utils/dependencies.py`; ver `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` |
+| Rol `asesor` con permisos limitados | ✅ Implementado | `require_rol_in`/`require_rol` en `utils/dependencies.py`; ver `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` |
 | Suite de tests de autenticación | ✅ 26/26 pasando | `tests/test_auth.py`, incluye rechazo de auto-registro elevado y bloqueo de cuentas desactivadas |
+
+### Estado de implementación (Semana 4, 2026-07-08)
+
+| Convención | Estado | Detalle |
+|---|---|---|
+| Registro diferenciado natural/jurídica con validación condicional | ✅ Implementado | `schemas/auth.py::RegistroRequest` (`model_validator`), `services/auth_service.py::register_user` |
+| Aceptación obligatoria de política de datos | ✅ Implementado | `acepto_politica_datos` + `fecha_aceptacion_politica` en `models/usuario.py` |
+| Placeholder de registro de importador | ✅ Implementado | Mensaje exacto "Contáctese con el equipo administrativo para registrar tu empresa importadora" |
+| Páginas legales placeholder | ✅ Implementado | `routers/legal.py` |
+| Recuperación de contraseña con OTP + SMTP real | ✅ Implementado | `models/password_reset.py`, `utils/email.py`, `routers/auth.py::forgot_password/reset_password` |
+| Rename `trabajador` → `asesor` | ✅ Implementado | En modelos, endpoints, roles y tests (`tests/test_asesores.py`) |
+| Roadmap: autenticación con Google (OAuth 2.0) | ⬜ Futuro | Ver `Backend/Seguridad.md` — no implementado en esta iteración |
+| Roadmap: migración de hashing a Argon2 | ⬜ Futuro | Ver `Backend/Seguridad.md` — actualmente `bcrypt` vía `passlib`, suficiente para el MVP |

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from fastapi import status
 
 from utils.security import create_access_token
+from conftest import registro_payload
 
 class TestListarCotizaciones:
     """Tests para el endpoint GET /cotizaciones"""
@@ -63,11 +64,7 @@ class TestCrearCotizacion:
     def test_crear_cotizacion_dirigida_sin_importador_id(self, client):
         """Intentar crear cotización dirigida sin importador_id"""
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -91,11 +88,7 @@ class TestCrearCotizacion:
         from uuid import uuid4
         
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante2@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante2@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -128,11 +121,7 @@ class TestCrearCotizacion:
         importador_id = importador_response.json()["id"]
         
         # Registrar usuario solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json={
-            "email": "solicitante3@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante3@example.com"))
         
         token_solicitante = register_solicitante.json()["access_token"]
         
@@ -166,11 +155,7 @@ class TestCrearCotizacion:
         }, headers={"Authorization": f"Bearer {token_admin}"})
         
         # Registrar usuario solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json={
-            "email": "solicitante4@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante4@example.com"))
         
         token_solicitante = register_solicitante.json()["access_token"]
         
@@ -312,11 +297,7 @@ class TestCotizacionEndpointsIntegration:
         importador_id = importador_response.json()["id"]
         
         # 2. Registrar solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json={
-            "email": "solicitante5@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante5@example.com"))
         
         token_solicitante = register_solicitante.json()["access_token"]
         

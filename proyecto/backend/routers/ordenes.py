@@ -10,7 +10,7 @@ from datetime import datetime
 
 import config
 from schemas.orden import (
-    OrdenCreate, OrdenResponse, EstadoOrdenUpdate, DocumentoOrdenItem, DocumentoOrdenCreate,
+    OrdenResponse, EstadoOrdenUpdate, DocumentoOrdenItem, DocumentoOrdenCreate,
     ReportarProblemaRequest, ResolverDisputaRequest
 )
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
@@ -58,7 +58,7 @@ async def listar_ordenes(
         ordenes = db.query(Orden).filter(
             Orden.solicitante_id == user_id_str
         ).order_by(Orden.fecha_creacion.desc()).all()
-    elif rol in ("importador", "trabajador"):
+    elif rol in ("importador", "asesor"):
         # El importador_id de la empresa viene del claim del JWT, no del user_id.
         ordenes = db.query(Orden).filter(
             Orden.importador_id == current_user.get("importador_id")
@@ -75,13 +75,14 @@ async def listar_ordenes(
             cotizacion_id=o.cotizacion_id,
             importador_id=o.importador_id,
             solicitante_id=o.solicitante_id,
-            trabajador_asignado_id=o.trabajador_asignado_id,
+            asesor_asignado_id=o.asesor_asignado_id,
             estado=o.estado.value if isinstance(o.estado, EstadoOrden) else o.estado,
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
             condiciones_adicionales=o.condiciones_adicionales,
             en_disputa=o.en_disputa,
             motivo_disputa=o.motivo_disputa,
+            conversacion_id=o.conversacion_id,
             historial_estados=[
                 {
                     "id": str(h.id),
@@ -145,13 +146,14 @@ async def listar_ordenes_activas_importador(
             cotizacion_id=o.cotizacion_id,
             importador_id=o.importador_id,
             solicitante_id=o.solicitante_id,
-            trabajador_asignado_id=o.trabajador_asignado_id,
+            asesor_asignado_id=o.asesor_asignado_id,
             estado=o.estado.value if isinstance(o.estado, EstadoOrden) else o.estado,
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
             condiciones_adicionales=o.condiciones_adicionales,
             en_disputa=o.en_disputa,
             motivo_disputa=o.motivo_disputa,
+            conversacion_id=o.conversacion_id,
             historial_estados=[
                 {
                     "id": str(h.id),
@@ -214,8 +216,8 @@ async def obtener_orden(
             detail="No tienes acceso a esta orden"
         )
     
-    # Importador/trabajador solo puede ver si la orden es de su empresa
-    if rol in ("importador", "trabajador") and orden.importador_id != current_user.get("importador_id"):
+    # Importador/asesor solo puede ver si la orden es de su empresa
+    if rol in ("importador", "asesor") and orden.importador_id != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a esta orden"
@@ -226,13 +228,14 @@ async def obtener_orden(
         cotizacion_id=orden.cotizacion_id,
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
-        trabajador_asignado_id=orden.trabajador_asignado_id,
+        asesor_asignado_id=orden.asesor_asignado_id,
         estado=orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
         en_disputa=orden.en_disputa,
         motivo_disputa=orden.motivo_disputa,
+        conversacion_id=orden.conversacion_id,
         historial_estados=[
             {
                 "id": str(h.id),
@@ -391,167 +394,12 @@ async def agregar_documento_orden(
         tipo=nuevo_documento.tipo.value if isinstance(nuevo_documento.tipo, TipoDocumentoOrden) else nuevo_documento.tipo
     )
 
-@router.post("/crear-orden", response_model=OrdenResponse, status_code=status.HTTP_201_CREATED)
-async def crear_orden_desde_cotizacion(
-    orden_data: OrdenCreate,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("solicitante"))
-):
-    """
-    Crear una orden a partir de una cotización aceptada. Se llama cuando se confirma el pago con Wompi.
-    
-    - **cotizacion_id**: ID de la cotización aceptada
-    - **importador_id**: ID del importador cuya propuesta fue aceptada
-    - **solicitante_id**: ID del solicitante
-    
-    Al crear la orden, también se actualiza el estado de la cotización a "orden_activa".
-    """
-    from uuid import uuid4 as gen_uuid
-    
-    user_id_str = str(PyUUID(current_user["user_id"]))  # Convertir a string para SQLite
-    
-    try:
-        cotizacion_id_str = str(PyUUID(orden_data.cotizacion_id))  # Validar UUID
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID de cotización inválido"
-        )
-    
-    try:
-        importador_id_str = str(PyUUID(orden_data.importador_id))  # Validar UUID
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID de importador inválido"
-        )
-    
-    try:
-        solicitante_id_str = str(PyUUID(orden_data.solicitante_id))  # Validar UUID
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID de solicitante inválido"
-        )
-    
-    # El solicitante autenticado debe coincidir con el solicitante de la orden a crear
-    # (evita que un usuario cree órdenes en nombre de otro - IDOR)
-    if solicitante_id_str != user_id_str:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No autorizado - El solicitante_id no coincide con el usuario autenticado"
-        )
-    
-    # Verificar que la cotización existe, pertenece al usuario autenticado y está
-    # en estado "cotizacion_aceptada"
-    from models.cotizacion import Cotizacion, EstadoCotizacion
-    cotizacion = db.query(Cotizacion).filter(
-        Cotizacion.id == cotizacion_id_str,
-        Cotizacion.solicitante_id == user_id_str,
-        Cotizacion.estado == EstadoCotizacion.cotizacion_aceptada.value
-    ).first()
-    
-    if not cotizacion:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cotización no encontrada o no está en estado de orden activa"
-        )
-    
-    # Verificar que la propuesta del importador fue aceptada
-    from models.propuesta import Propuesta, EstadoPropuesta
-    propuesta = db.query(Propuesta).filter(
-        Propuesta.cotizacion_id == cotizacion_id_str,
-        Propuesta.importador_id == importador_id_str,
-        Propuesta.estado == EstadoPropuesta.aceptada.value
-    ).first()
-    
-    if not propuesta:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Propuesta no encontrada o no fue aceptada"
-        )
-    
-    # Verificar que no existe ya una orden para esta cotización (idempotencia)
-    orden_existente = db.query(Orden).filter(Orden.cotizacion_id == cotizacion_id_str).first()
-    if orden_existente:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe una orden para esta cotización"
-        )
-    
-    # Crear nueva orden
-    nueva_orden = Orden(
-        id=str(gen_uuid()),  # Convertir a string para SQLite
-        cotizacion_id=cotizacion_id_str,
-        importador_id=importador_id_str,
-        solicitante_id=solicitante_id_str,
-        trabajador_asignado_id=orden_data.trabajador_asignado_id or cotizacion.trabajador_asignado_id,
-        estado=EstadoOrden.cotizacion_aceptada,
-        precio_acordado_usd=propuesta.precio_ofrecido_usd,
-        tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
-        condiciones_adicionales=propuesta.condiciones_adicionales
-    )
-    db.add(nueva_orden)
-    
-    # Registrar cambio de estado en historial
-    nuevo_historial = HistorialEstadosOrden(
-        orden_id=nueva_orden.id,
-        estado_anterior=None,
-        estado_nuevo=EstadoOrden.cotizacion_aceptada.value,
-        fecha_cambio=get_db_now(db)
-    )
-    db.add(nuevo_historial)
-    
-    # Actualizar estado de la cotización a "orden_activa"
-    cotizacion.estado = EstadoCotizacion.orden_activa
-    
-    # Confirmar en una única transacción atómica. La restricción única en
-    # Orden.cotizacion_id es la garantía real (a nivel de base de datos) contra
-    # condiciones de carrera cuando dos solicitudes concurrentes pasan el check
-    # de "orden_existente" antes de que ninguna haga commit.
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe una orden para esta cotización"
-        )
-    db.refresh(nueva_orden)
-    
-    return OrdenResponse(
-        id=str(nueva_orden.id),
-        cotizacion_id=nueva_orden.cotizacion_id,
-        importador_id=nueva_orden.importador_id,
-        solicitante_id=nueva_orden.solicitante_id,
-        trabajador_asignado_id=nueva_orden.trabajador_asignado_id,
-        estado=nueva_orden.estado.value if isinstance(nueva_orden.estado, EstadoOrden) else nueva_orden.estado,
-        precio_acordado_usd=nueva_orden.precio_acordado_usd,
-        tiempo_estimado_entrega=nueva_orden.tiempo_estimado_entrega,
-        condiciones_adicionales=nueva_orden.condiciones_adicionales,
-        en_disputa=nueva_orden.en_disputa,
-        motivo_disputa=nueva_orden.motivo_disputa,
-        historial_estados=[
-            {
-                "id": str(h.id),
-                "orden_id": h.orden_id,
-                "estado_anterior": h.estado_anterior,
-                "estado_nuevo": h.estado_nuevo.value if isinstance(h.estado_nuevo, EstadoOrden) else h.estado_nuevo,
-                "fecha_cambio": h.fecha_cambio
-            }
-            for h in nueva_orden.historial_estados
-        ],
-        documentos_adjuntos=[
-            {
-                "id": str(d.id),
-                "orden_id": d.orden_id,
-                "nombre": d.nombre,
-                "url": d.url,
-                "tipo": d.tipo.value if isinstance(d.tipo, TipoDocumentoOrden) else d.tipo
-            }
-            for d in nueva_orden.documentos_adjuntos
-        ]
-    )
+# NOTA (Semana 4 - Fase 5): `POST /ordenes/crear-orden` fue eliminado. La orden
+# ahora se crea automáticamente cuando ambas partes (solicitante y empresa)
+# pre-aceptan la misma propuesta - ver
+# `routers/cotizaciones.py::pre_aceptar_propuesta` (`POST /propuestas/{id}/pre-aceptar`).
+# La plataforma no depende de un pago para crear la orden: solo conecta a las
+# partes y no se responsabiliza por el cumplimiento del negocio concretado.
 
 @router.get("/cotizacion/{cotizacion_id}", response_model=OrdenResponse)
 async def obtener_orden_por_cotizacion(
@@ -591,8 +439,8 @@ async def obtener_orden_por_cotizacion(
             detail="No tienes acceso a esta orden"
         )
     
-    # Importador/trabajador solo puede ver si la orden es de su empresa
-    if rol in ("importador", "trabajador") and orden.importador_id != current_user.get("importador_id"):
+    # Importador/asesor solo puede ver si la orden es de su empresa
+    if rol in ("importador", "asesor") and orden.importador_id != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a esta orden"
@@ -603,13 +451,14 @@ async def obtener_orden_por_cotizacion(
         cotizacion_id=orden.cotizacion_id,
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
-        trabajador_asignado_id=orden.trabajador_asignado_id,
+        asesor_asignado_id=orden.asesor_asignado_id,
         estado=orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
         en_disputa=orden.en_disputa,
         motivo_disputa=orden.motivo_disputa,
+        conversacion_id=orden.conversacion_id,
         historial_estados=[
             {
                 "id": str(h.id),

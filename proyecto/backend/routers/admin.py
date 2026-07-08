@@ -11,9 +11,12 @@ from models.importador import Importador
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.orden import Orden
+from models.solicitud_recreacion import SolicitudRecreacion, EstadoSolicitudRecreacion
+from models.credito import MovimientoCredito, TipoMovimientoCredito
 from schemas.importador import AdminCrearImportadorRequest, AdminCrearImportadorResponse, ImportadorResponse
 from schemas.admin import UsuarioAdminResponse, UsuarioEstadoUpdate, DisputaOrdenResponse, MetricasResponse
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
+from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
 from utils.dependencies import get_db, require_rol
 from utils.security import hash_password
 
@@ -33,7 +36,7 @@ async def crear_importador_con_dueño(
     """
     Crea una empresa importadora Y su cuenta dueña (rol="importador") en un solo
     paso, ya que el auto-registro público de cuentas "importador" está cerrado por
-    seguridad. La cuenta dueña luego puede crear trabajadores y personalizar el perfil.
+    seguridad. La cuenta dueña luego puede crear asesores y personalizar el perfil.
     """
     usuario_existente = db.query(Usuario).filter(Usuario.email == datos.email_dueño).first()
     if usuario_existente:
@@ -84,7 +87,8 @@ async def verificar_importador(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("admin"))
 ):
-    """Marca una empresa importadora como verificada/activa por el equipo de la plataforma."""
+    """Marca una empresa importadora como verificada (badge de "socio verificado",
+    visible en el catálogo del dashboard del solicitante) y la activa."""
     try:
         importador_id_str = str(PyUUID(importador_id))
     except ValueError:
@@ -95,6 +99,7 @@ async def verificar_importador(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
 
     importador.estado = "activo"
+    importador.verificado = True
     db.commit()
     db.refresh(importador)
 
@@ -246,7 +251,7 @@ async def resolver_disputa(
         cotizacion_id=orden.cotizacion_id,
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
-        trabajador_asignado_id=orden.trabajador_asignado_id,
+        asesor_asignado_id=orden.asesor_asignado_id,
         estado=orden.estado.value if hasattr(orden.estado, "value") else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
@@ -256,6 +261,95 @@ async def resolver_disputa(
         historial_estados=[],
         documentos_adjuntos=[]
     )
+
+
+# ==================== Recreación de cotizaciones por error (créditos) ====================
+
+@router.get("/recreaciones", response_model=List[SolicitudRecreacionResponse])
+async def listar_recreaciones(
+    estado: Optional[str] = Query(None, description="Filtrar por estado: 'pendiente', 'aprobada', 'rechazada'"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin"))
+):
+    """Lista las solicitudes de recreación de cotización pendientes de mediación por el admin."""
+    query = db.query(SolicitudRecreacion)
+    if estado:
+        query = query.filter(SolicitudRecreacion.estado == estado)
+    return query.order_by(SolicitudRecreacion.fecha_creacion.desc()).all()
+
+
+@router.put("/recreaciones/{solicitud_id}/resolver", response_model=SolicitudRecreacionResponse)
+async def resolver_recreacion(
+    solicitud_id: str,
+    datos: ResolverRecreacionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin"))
+):
+    """
+    El admin decide qué parte fue realmente responsable del error en la
+    negociación. Si aprueba y atribuye la responsabilidad a la empresa
+    importadora, se reembolsa al solicitante el costo en créditos equivalente a
+    una nueva cotización (queda exento de pagar por la recreación). La
+    cotización original queda marcada como `cancelada` para trazabilidad; el
+    solicitante debe crear una nueva cotización (posiblemente gratuita, gracias
+    al reembolso) para continuar el proceso.
+    """
+    try:
+        solicitud_id_str = str(PyUUID(solicitud_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de solicitud inválido")
+
+    solicitud = db.query(SolicitudRecreacion).filter(SolicitudRecreacion.id == solicitud_id_str).first()
+    if not solicitud:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitud de recreación no encontrada")
+
+    if solicitud.estado != EstadoSolicitudRecreacion.pendiente.value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta solicitud ya fue resuelta")
+
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == solicitud.cotizacion_origen_id).first()
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización original no encontrada")
+
+    if not datos.aprobado:
+        solicitud.estado = EstadoSolicitudRecreacion.rechazada.value
+        solicitud.parte_atribuida_final = datos.parte_atribuida_final
+        solicitud.resuelto_por_admin_id = current_user["user_id"]
+        solicitud.fecha_resolucion = datetime.utcnow()
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    solicitud.estado = EstadoSolicitudRecreacion.aprobada.value
+    solicitud.parte_atribuida_final = datos.parte_atribuida_final
+    solicitud.resuelto_por_admin_id = current_user["user_id"]
+    solicitud.fecha_resolucion = datetime.utcnow()
+
+    cotizacion.estado = EstadoCotizacion.cancelada.value
+    cotizacion.cancelada_por_error = datos.parte_atribuida_final
+    cotizacion.motivo_cancelacion = solicitud.motivo
+
+    # Si la responsable fue la empresa importadora, se exime al solicitante:
+    # se le reembolsa el costo equivalente a la cotización cancelada.
+    if datos.parte_atribuida_final == "importador" and cotizacion.costo_creditos:
+        solicitante = db.query(Usuario).filter(Usuario.id == cotizacion.solicitante_id).first()
+        if solicitante:
+            solicitante.creditos_balance = (solicitante.creditos_balance or 0) + cotizacion.costo_creditos
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=solicitante.id,
+                tipo=TipoMovimientoCredito.reembolso.value,
+                monto=cotizacion.costo_creditos,
+                cotizacion_id=cotizacion.id,
+                descripcion=(
+                    f"Reembolso por recreación de cotización {cotizacion.id} "
+                    f"(error atribuido a la empresa importadora)"
+                )
+            ))
+
+    db.commit()
+    db.refresh(solicitud)
+
+    return solicitud
 
 
 # ==================== Métricas de éxito (sección del PDF) ====================

@@ -2,16 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import status
 
+from conftest import registro_payload
+
 class TestRegisterUser:
     """Tests para el endpoint POST /auth/register"""
     
     def test_register_solicitante_success(self, client):
-        """Registro exitoso de usuario solicitante"""
-        response = client.post("/auth/register", json={
-            "email": "nuevo@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        """Registro exitoso de usuario solicitante (persona natural)"""
+        response = client.post("/auth/register", json=registro_payload("nuevo@example.com"))
         
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
@@ -19,26 +17,53 @@ class TestRegisterUser:
         assert data["token_type"] == "bearer"
         assert data["rol"] == "solicitante"
         assert len(data["user_id"]) > 0
-    
+
+    def test_register_solicitante_persona_juridica_success(self, client):
+        """Registro exitoso de solicitante persona jurídica (NIT, razón social)"""
+        response = client.post("/auth/register", json=registro_payload(
+            "empresa@example.com", tipo_persona="juridica"
+        ))
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_register_persona_natural_sin_documento_falla(self, client):
+        """Persona natural sin número de documento debe fallar la validación condicional"""
+        payload = registro_payload("sindoc@example.com")
+        payload["numero_documento"] = None
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_register_persona_juridica_sin_nit_falla(self, client):
+        """Persona jurídica sin NIT debe fallar la validación condicional"""
+        payload = registro_payload("sinnit@example.com", tipo_persona="juridica")
+        payload["nit"] = None
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_register_sin_aceptar_politica_falla(self, client):
+        """No se puede registrar sin aceptar la política de tratamiento de datos"""
+        payload = registro_payload("sinpolitica@example.com", acepto_politica_datos=False)
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
     def test_register_importador_rechazado(self, client):
         """El auto-registro público NO permite crear cuentas 'importador' (hueco de
-        seguridad cerrado: solo un admin puede crear la empresa + su cuenta dueña)."""
-        response = client.post("/auth/register", json={
-            "email": "importador@example.com",
-            "password": "123456789",
-            "rol": "importador"
-        })
+        seguridad cerrado): se devuelve el placeholder de contacto administrativo."""
+        response = client.post("/auth/register", json=registro_payload(
+            "importador@example.com", rol="importador"
+        ))
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "solicitante" in response.json()["detail"]
+        assert "equipo administrativo" in response.json()["detail"]
     
     def test_register_admin_rechazado(self, client):
         """El auto-registro público NO permite crear cuentas 'admin'."""
-        response = client.post("/auth/register", json={
-            "email": "admin@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
+        response = client.post("/auth/register", json=registro_payload(
+            "admin@example.com", rol="admin"
+        ))
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "solicitante" in response.json()["detail"]
@@ -46,50 +71,34 @@ class TestRegisterUser:
     def test_register_duplicate_email(self, client):
         """Intento de registro con email duplicado"""
         # Primer registro
-        response1 = client.post("/auth/register", json={
-            "email": "duplicado@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        response1 = client.post("/auth/register", json=registro_payload("duplicado@example.com"))
         assert response1.status_code == status.HTTP_201_CREATED
         
         # Intento de registro con mismo email
-        response2 = client.post("/auth/register", json={
-            "email": "duplicado@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        response2 = client.post("/auth/register", json=registro_payload("duplicado@example.com"))
         
         assert response2.status_code == status.HTTP_400_BAD_REQUEST
         assert "email ya está registrado" in response2.json()["detail"]
     
     def test_register_password_too_short(self, client):
         """Intento de registro con contraseña menor a 8 caracteres"""
-        response = client.post("/auth/register", json={
-            "email": "corto@example.com",
-            "password": "12345678",  # Solo 8 caracteres - debería fallar
-            "rol": "solicitante"
-        })
+        response = client.post("/auth/register", json=registro_payload(
+            "corto@example.com", password="12345678"  # Solo 8 caracteres - debería fallar
+        ))
         
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     
     def test_register_invalid_email(self, client):
         """Intento de registro con email inválido"""
-        response = client.post("/auth/register", json={
-            "email": "no-es-email",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        response = client.post("/auth/register", json=registro_payload("no-es-email"))
         
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     
     def test_register_invalid_role(self, client):
         """Intento de registro con rol inválido"""
-        response = client.post("/auth/register", json={
-            "email": "rolinvalido@example.com",
-            "password": "123456789",
-            "rol": "superadmin"  # Rol no válido
-        })
+        response = client.post("/auth/register", json=registro_payload(
+            "rolinvalido@example.com", rol="superadmin"  # Rol no válido
+        ))
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Rol inválido" in response.json()["detail"]
@@ -100,11 +109,7 @@ class TestLoginUser:
     def test_login_success(self, client):
         """Inicio de sesión exitoso"""
         # Primero registrar un usuario
-        register_response = client.post("/auth/register", json={
-            "email": "login@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("login@example.com"))
         
         # Luego intentar login
         response = client.post("/auth/login", json={
@@ -116,16 +121,13 @@ class TestLoginUser:
         data = response.json()
         assert "access_token" in data
         assert data["rol"] == "solicitante"
-        assert data["perfil_completo"] is False
+        # El registro ahora captura el perfil completo (nombre/documento/teléfono) de una vez
+        assert data["perfil_completo"] is True
     
     def test_login_wrong_password(self, client):
         """Intento de login con contraseña incorrecta"""
         # Registrar usuario
-        client.post("/auth/register", json={
-            "email": "wrongpass@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        client.post("/auth/register", json=registro_payload("wrongpass@example.com"))
         
         # Intentar login con contraseña incorrecta
         response = client.post("/auth/login", json={
@@ -148,11 +150,7 @@ class TestLoginUser:
 
     def test_login_cuenta_desactivada(self, client, db_session):
         """Una cuenta desactivada (activo=False) no puede iniciar sesión aunque la contraseña sea correcta"""
-        client.post("/auth/register", json={
-            "email": "desactivado@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        client.post("/auth/register", json=registro_payload("desactivado@example.com"))
 
         from models.usuario import Usuario
         usuario = db_session.query(Usuario).filter(Usuario.email == "desactivado@example.com").first()
@@ -173,11 +171,7 @@ class TestRefreshToken:
     def test_refresh_token_success(self, client):
         """Renovación exitosa de token JWT"""
         # Registrar usuario y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "refresh@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("refresh@example.com"))
         
         old_token = register_response.json()["access_token"]
         
@@ -205,11 +199,7 @@ class TestLogout:
     def test_logout_success(self, client):
         """Cierre de sesión exitoso"""
         # Registrar usuario y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "logout@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("logout@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -219,6 +209,26 @@ class TestLogout:
         })
         
         assert response.status_code == status.HTTP_204_NO_CONTENT
+
+class TestLegalPlaceholders:
+    """Tests para los endpoints placeholder de política de datos y términos"""
+
+    def test_politica_tratamiento_datos(self, client):
+        response = client.get("/legal/politica-tratamiento-datos")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "titulo" in data
+        assert "contenido" in data
+        assert "version" in data
+
+    def test_terminos_condiciones(self, client):
+        response = client.get("/legal/terminos-condiciones")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "titulo" in data
+        assert "contenido" in data
 
 class TestHealthCheck:
     """Tests para los endpoints de salud"""
@@ -313,11 +323,7 @@ class TestDependencies:
     def test_get_current_user_valid_token(self, client):
         """Obtener usuario actual con token válido"""
         # Registrar usuario y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "dep@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("dep@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -339,11 +345,7 @@ class TestDependencies:
     def test_require_admin_role(self, client):
         """Verificar que solo admin puede acceder a endpoints de admin"""
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
         
         token = register_response.json()["access_token"]
         

@@ -1,4 +1,6 @@
 import bcrypt
+import hashlib
+import secrets
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE
@@ -64,10 +66,10 @@ def create_access_token(user_id: str, rol: str, expires_delta: timedelta = None,
     
     Args:
         user_id: ID del usuario (UUID como string)
-        rol: Rol del usuario ("solicitante", "importador", "trabajador" o "admin")
+        rol: Rol del usuario ("solicitante", "importador", "asesor" o "admin")
         expires_delta: Tiempo de expiración personalizado (opcional, usa el default si no se proporciona)
         importador_id: ID de la empresa importadora a la que pertenece la cuenta
-            (solo para rol "importador"/"trabajador"; None para solicitante/admin).
+            (solo para rol "importador"/"asesor"; None para solicitante/admin).
             Se incluye en el token para no depender de que Usuario.id == Importador.id.
         
     Returns:
@@ -105,3 +107,25 @@ def decode_access_token(token: str) -> dict:
         JWTError: Si el token es inválido o está expirado
     """
     return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+
+def generar_otp(digitos: int = 6) -> str:
+    """Genera un código OTP numérico criptográficamente seguro (ej. '048213')."""
+    return "".join(str(secrets.randbelow(10)) for _ in range(digitos))
+
+
+def generar_token_seguro() -> str:
+    """Genera un token opaco de un solo uso (ej. para el enlace de recuperación de contraseña)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(valor: str) -> str:
+    """
+    Hashea un token/OTP de un solo uso con SHA-256 para guardarlo en base de
+    datos. A diferencia de las contraseñas (bcrypt, con salt costoso a propósito),
+    estos valores son de un solo uso y de corta vida (minutos), generados con
+    alta entropía (`secrets`), por lo que un hash rápido y determinista es
+    suficiente y permite buscarlos en la base de datos por su hash sin
+    almacenar el valor en texto plano.
+    """
+    return hashlib.sha256(valor.encode("utf-8")).hexdigest()

@@ -17,6 +17,7 @@ os.environ.setdefault("WOMPI_EVENTS_SECRET", "test_events_secret_for_ci")
 # Límites de rate limiting altos en tests para no interferir con corridas repetidas de login/register
 os.environ.setdefault("RATE_LIMIT_LOGIN", "1000/minute")
 os.environ.setdefault("RATE_LIMIT_REGISTER", "1000/minute")
+os.environ.setdefault("RATE_LIMIT_FORGOT_PASSWORD", "1000/minute")
 
 import pytest
 from uuid import uuid4
@@ -63,6 +64,9 @@ from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrd
 from models.pago import Pago, EstadoPago
 from models.campo_personalizado import CampoPersonalizado
 from models.chat import ConversacionChat, MensajeChat
+from models.password_reset import PasswordResetToken
+from models.credito import MovimientoCredito
+from models.solicitud_recreacion import SolicitudRecreacion
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -178,6 +182,7 @@ def crear_empresa_importadora(db_session, nombre_empresa="Empresa Importadora Te
         capacidad_volumen=kwargs.get("capacidad_volumen", 10000),
         solo_cotizaciones_directas=kwargs.get("solo_cotizaciones_directas", False),
         estado=kwargs.get("estado", "activo"),
+        verificado=kwargs.get("verificado", False),
         fecha_registro=datetime.utcnow()
     )
     db_session.add(importador)
@@ -199,6 +204,37 @@ def crear_empresa_importadora(db_session, nombre_empresa="Empresa Importadora Te
     db_session.refresh(importador)
     db_session.refresh(dueño)
     return importador, dueño
+
+def registro_payload(email, password="123456789", rol="solicitante", tipo_persona="natural", **overrides):
+    """
+    Devuelve un payload válido para POST /auth/register (Semana 4: distingue
+    persona natural/jurídica y exige aceptación de política de datos). Los tests
+    que solo necesitan una cuenta "solicitante" genérica pueden llamarlo sin
+    argumentos extra; `overrides` permite sobrescribir cualquier campo puntual.
+    """
+    payload = {
+        "email": email,
+        "password": password,
+        "rol": rol,
+        "tipo_persona": tipo_persona,
+        "indicativo_pais_telefono": "+57",
+        "telefono": "3001234567",
+        "acepto_politica_datos": True,
+    }
+    if tipo_persona == "natural":
+        payload.update({
+            "tipo_documento": "cedula",
+            "numero_documento": "1234567890",
+            "nombre": "Nombre",
+            "apellido": "Apellido",
+        })
+    else:  # juridica
+        payload.update({
+            "nit": "900123456-7",
+            "razon_social": "Empresa de Prueba S.A.S.",
+        })
+    payload.update(overrides)
+    return payload
 
 def auth_headers_for(usuario):
     """Genera headers de autenticación válidos para un Usuario de prueba, incluyendo
@@ -419,8 +455,11 @@ def cleanup_test_db(db_session):
     yield
     # Eliminar todos los registros creados en el test (en orden inverso para respetar FK)
     try:
+        db_session.query(PasswordResetToken).delete()
         db_session.query(MensajeChat).delete()
         db_session.query(ConversacionChat).delete()
+        db_session.query(MovimientoCredito).delete()
+        db_session.query(SolicitudRecreacion).delete()
         db_session.query(Pago).delete()
         db_session.query(DocumentoOrden).delete()
         db_session.query(HistorialEstadosOrden).delete()

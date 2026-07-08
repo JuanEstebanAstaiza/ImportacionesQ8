@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,10 +13,11 @@ from routers.auth import router as auth_router
 from routers.importadores import router as importadores_router
 from routers.cotizaciones import router as cotizaciones_router, propuestas_router
 from routers.ordenes import router as ordenes_router
-from routers.pagos import router as pagos_router
-from routers.usuarios import router as usuarios_router, trabajadores_router
+from routers.pagos import router as pagos_router, creditos_router
+from routers.usuarios import router as usuarios_router, asesores_router
 from routers.chat import router as chat_router, ws_router as chat_ws_router
 from routers.admin import router as admin_router
+from routers.legal import router as legal_router
 from utils.limiter import limiter
 
 logger = logging.getLogger("importacionesq8")
@@ -60,10 +62,17 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # Los errores de validación de Pydantic son seguros de exponer (no filtran internals)
+    # Los errores de validación de Pydantic son seguros de exponer (no filtran internals).
+    # Pydantic v2 incluye en `ctx` la excepción original (ej. ValueError de un
+    # `model_validator`), que no es serializable a JSON directamente: se sanea con
+    # `jsonable_encoder(..., exclude={"ctx"})` para quedarnos solo con el mensaje.
+    errores_serializables = [
+        {k: v for k, v in error.items() if k != "ctx"}
+        for error in exc.errors()
+    ]
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"success": False, "error": "Datos de solicitud inválidos", "detail": exc.errors()}
+        content=jsonable_encoder({"success": False, "error": "Datos de solicitud inválidos", "detail": errores_serializables})
     )
 
 @app.exception_handler(Exception)
@@ -86,11 +95,13 @@ app.include_router(cotizaciones_router)
 app.include_router(propuestas_router)
 app.include_router(ordenes_router)
 app.include_router(pagos_router)
+app.include_router(creditos_router)
 app.include_router(usuarios_router)
-app.include_router(trabajadores_router)
+app.include_router(asesores_router)
 app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.include_router(admin_router)
+app.include_router(legal_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

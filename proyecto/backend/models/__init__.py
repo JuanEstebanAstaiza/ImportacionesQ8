@@ -6,6 +6,9 @@ from .orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, Ti
 from .pago import Pago, EstadoPago
 from .campo_personalizado import CampoPersonalizado
 from .chat import ConversacionChat, MensajeChat, TipoMensajeChat
+from .password_reset import PasswordResetToken
+from .credito import MovimientoCredito, TipoMovimientoCredito
+from .solicitud_recreacion import SolicitudRecreacion, ParteAtribuida, EstadoSolicitudRecreacion
 
 __all__ = [
     "Usuario",
@@ -24,5 +27,11 @@ __all__ = [
     "CampoPersonalizado",
     "ConversacionChat",
     "MensajeChat",
-    "TipoMensajeChat"
+    "TipoMensajeChat",
+    "PasswordResetToken",
+    "MovimientoCredito",
+    "TipoMovimientoCredito",
+    "SolicitudRecreacion",
+    "ParteAtribuida",
+    "EstadoSolicitudRecreacion"
 ]

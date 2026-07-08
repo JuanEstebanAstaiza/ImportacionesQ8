@@ -26,6 +26,10 @@ class Importador(Base):
     # cotizaciones dirigidas, ya que el formulario estándar es lo único compatible con
     # la difusión simultánea a varios importadores.
     solo_cotizaciones_directas = Column(Boolean, default=False, nullable=False)
+    # Badge real de "socio verificado" (Semana 4 - Fase 6), independiente de
+    # `estado`: una empresa puede estar activa sin estar verificada. Solo el
+    # admin puede fijarlo (`POST /admin/importadores/{id}/verificar`).
+    verificado = Column(Boolean, default=False, nullable=False)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

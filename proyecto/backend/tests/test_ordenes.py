@@ -317,57 +317,116 @@ class TestAgregarDocumentoOrden:
         assert response.status_code == 403
 
 
-class TestCrearOrdenDesdeCotizacion:
-    
-    def test_crear_orden_exitoso(self, client, db_session, test_cotizacion_aceptada, auth_headers_solicitante):
-        """POST /ordenes/crear-orden - Crear orden desde cotización aceptada"""
+class TestOrdenAutomaticaPorDobleAceptacion:
+    """Semana 4 - Fase 5: la orden ya no se crea manualmente vía
+    `POST /ordenes/crear-orden` (eliminado); nace automáticamente cuando ambas
+    partes pre-aceptan la misma propuesta (`POST /propuestas/{id}/pre-aceptar`)."""
+
+    def test_endpoint_crear_orden_ya_no_existe(self, client, auth_headers_solicitante):
+        """POST /ordenes/crear-orden - El endpoint fue eliminado. "crear-orden" ahora
+        solo coincide con la ruta GET /ordenes/{orden_id}, que no admite POST (405)."""
         response = client.post(
             "/ordenes/crear-orden",
-            json={
-                "cotizacion_id": str(test_cotizacion_aceptada.id),
-                "importador_id": test_cotizacion_aceptada.importador_id,
-                "solicitante_id": test_cotizacion_aceptada.solicitante_id
-            },
+            json={"cotizacion_id": str(uuid4()), "importador_id": str(uuid4()), "solicitante_id": str(uuid4())},
             headers=auth_headers_solicitante
         )
-        
-        assert response.status_code == 201
-        
-        # Verificar que la orden se creó
-        orden = db_session.query(Orden).filter(
-            Orden.cotizacion_id == test_cotizacion_aceptada.id
-        ).first()
-        
-        assert orden is not None
-        assert orden.estado == EstadoOrden.cotizacion_aceptada
-    
-    def test_crear_orden_duplicada(self, client, db_session, test_cotizacion_aceptada, auth_headers_solicitante):
-        """POST /ordenes/crear-orden - Error si ya existe una orden para la cotización"""
-        # Crear primera orden
-        orden = Orden(
+        assert response.status_code == 405
+
+    def test_doble_aceptacion_crea_orden_automaticamente(
+        self, client, db_session, test_solicitante, test_importador_user, auth_headers_solicitante, auth_headers_importador
+    ):
+        """Doble pre-aceptación (solicitante + dueño) finaliza la propuesta y crea la Orden sin pago"""
+        cotizacion = Cotizacion(
             id=str(uuid4()),
-            cotizacion_id=test_cotizacion_aceptada.id,
-            importador_id=test_cotizacion_aceptada.importador_id,
-            solicitante_id=test_cotizacion_aceptada.solicitante_id,
-            estado=EstadoOrden.cotizacion_aceptada,
-            precio_acordado_usd=3.20,
-            tiempo_estimado_entrega="45 días"
+            solicitante_id=test_solicitante.id,
+            importador_id=test_importador_user.importador_id,
+            modalidad="dirigida",
+            pais_importacion="China",
+            nombre_producto="Camisetas personalizadas",
+            descripcion_cliente="Necesito 500 camisetas con mi logo impreso en algodón premium",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=500,
+            precio_objetivo_usd=3.50,
+            incoterm="FOB",
+            estado=EstadoCotizacion.propuestas_recibidas
         )
-        db_session.add(orden)
+        db_session.add(cotizacion)
+
+        propuesta = Propuesta(
+            id=str(uuid4()),
+            cotizacion_id=cotizacion.id,
+            importador_id=test_importador_user.importador_id,
+            precio_ofrecido_usd=3.20,
+            tiempo_estimado_entrega="45 días",
+            incoterm="FOB",
+            estado=EstadoPropuesta.pendiente
+        )
+        db_session.add(propuesta)
         db_session.commit()
-        
-        # Intentar crear segunda orden para la misma cotización
-        response = client.post(
-            "/ordenes/crear-orden",
-            json={
-                "cotizacion_id": str(test_cotizacion_aceptada.id),
-                "importador_id": test_cotizacion_aceptada.importador_id,
-                "solicitante_id": test_cotizacion_aceptada.solicitante_id
-            },
-            headers=auth_headers_solicitante
+        db_session.refresh(propuesta)
+
+        # Solo el solicitante pre-acepta: nada se finaliza aún
+        r1 = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_solicitante)
+        assert r1.status_code == 200
+        assert r1.json()["estado"] == "pendiente"
+
+        orden_previa = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        assert orden_previa is None
+
+        # El dueño de la empresa también pre-acepta: se finaliza
+        r2 = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_importador)
+        assert r2.status_code == 200
+        assert r2.json()["estado"] == "aceptada"
+
+        db_session.refresh(cotizacion)
+        assert cotizacion.estado == EstadoCotizacion.cotizacion_aceptada.value
+
+        orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        assert orden is not None
+        assert orden.precio_acordado_usd == 3.20
+
+    def test_pre_aceptar_no_finaliza_con_un_solo_lado(
+        self, client, db_session, test_solicitante, test_importador_user, auth_headers_solicitante
+    ):
+        """Un solo lado pre-aceptando no crea la orden ni finaliza la propuesta"""
+        cotizacion = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=test_solicitante.id,
+            importador_id=test_importador_user.importador_id,
+            modalidad="dirigida",
+            pais_importacion="China",
+            nombre_producto="Camisetas personalizadas",
+            descripcion_cliente="Necesito 500 camisetas con mi logo impreso en algodón premium",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=500,
+            precio_objetivo_usd=3.50,
+            incoterm="FOB",
+            estado=EstadoCotizacion.propuestas_recibidas
         )
-        
-        assert response.status_code == 400
+        db_session.add(cotizacion)
+
+        propuesta = Propuesta(
+            id=str(uuid4()),
+            cotizacion_id=cotizacion.id,
+            importador_id=test_importador_user.importador_id,
+            precio_ofrecido_usd=3.20,
+            tiempo_estimado_entrega="45 días",
+            incoterm="FOB",
+            estado=EstadoPropuesta.pendiente
+        )
+        db_session.add(propuesta)
+        db_session.commit()
+        db_session.refresh(propuesta)
+
+        response = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_solicitante)
+        assert response.status_code == 200
+        assert response.json()["estado"] == "pendiente"
+        assert response.json()["preaceptada_por_solicitante"] is True
+        assert response.json()["preaceptada_por_empresa"] is False
+
+        assert db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first() is None
 
 
 class TestListarOrdenesActivasImportador:

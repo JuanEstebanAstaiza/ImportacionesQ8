@@ -24,20 +24,22 @@ class OrdenCreate(BaseModel):
     cotizacion_id: str
     importador_id: str
     solicitante_id: str
-    trabajador_asignado_id: Optional[str] = None
+    asesor_asignado_id: Optional[str] = None
 
 class OrdenResponse(BaseModel):
     id: str
     cotizacion_id: str
     importador_id: str
     solicitante_id: str
-    trabajador_asignado_id: Optional[str]
+    asesor_asignado_id: Optional[str]
     estado: str  # "cotizacion_aceptada", "en_produccion", etc.
     precio_acordado_usd: float
     tiempo_estimado_entrega: Optional[str]
     condiciones_adicionales: Optional[str]
     en_disputa: bool = False
     motivo_disputa: Optional[str] = None
+    # Navegación cruzada (Fase 7): enlace directo al chat de esta orden, si existe
+    conversacion_id: Optional[str] = None
     historial_estados: List[EstadoOrdenItem]
     documentos_adjuntos: List[DocumentoOrdenItem]
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey
 from uuid import uuid4
 from datetime import datetime
 from database import Base
@@ -6,9 +6,13 @@ from database import Base
 # Roles válidos del sistema:
 # - "solicitante": cliente final que pide cotizaciones (único rol auto-registrable vía /auth/register)
 # - "importador": cuenta "dueña" de una empresa importadora (creada solo por un admin, junto con su Importador)
-# - "trabajador": empleado de una empresa importadora, creado por la cuenta dueña (Usuario.importador_id la vincula)
+# - "asesor": empleado/asesor de una empresa importadora, creado por la cuenta dueña (Usuario.importador_id la
+#   vincula). Antes llamado "asesor" (Semana 3); renombrado en la Semana 4 para reflejar su rol real:
+#   reclama cotizaciones del pool de su empresa, redacta y negocia propuestas por chat.
 # - "admin": equipo de la plataforma (creado solo por otro admin o por script de seed)
-ROLES_VALIDOS = ("solicitante", "importador", "trabajador", "admin")
+ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin")
+
+TIPOS_PERSONA_VALIDOS = ("natural", "juridica")
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -17,16 +21,34 @@ class Usuario(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
-    rol = Column(String(20), nullable=False)  # "solicitante", "importador", "trabajador" o "admin"
-    # Vincula la cuenta a una empresa importadora (dueño o trabajador). NULL para
+    rol = Column(String(20), nullable=False)  # "solicitante", "importador", "asesor" o "admin"
+    # Vincula la cuenta a una empresa importadora (dueño o asesor). NULL para
     # solicitante/admin. Se usa para toda la lógica de autorización de la empresa,
     # en lugar de asumir que Usuario.id == Importador.id.
     importador_id = Column(String(36), ForeignKey("importadores.id"), nullable=True)
     nombre = Column(String(255), nullable=True)
+    apellido = Column(String(255), nullable=True)  # Solo persona natural
     telefono = Column(String(30), nullable=True)
+    indicativo_pais_telefono = Column(String(6), nullable=True)  # Ej. "+57"
     foto_url = Column(String(500), nullable=True)
     whatsapp = Column(String(20), nullable=True)
-    # Permite desactivar una cuenta (por el dueño de la empresa a un trabajador, o
+
+    # --- Datos de registro (Semana 4): distinción persona natural / jurídica ---
+    # Solo aplica al rol "solicitante"; las cuentas "importador"/"asesor"/"admin" se
+    # crean por vías administrativas y no pasan por este formulario.
+    tipo_persona = Column(String(10), nullable=True)  # "natural" | "juridica"
+    tipo_documento = Column(String(30), nullable=True)  # cédula, pasaporte, cédula de extranjería, etc.
+    numero_documento = Column(String(50), nullable=True)  # persona natural
+    nit = Column(String(50), nullable=True)  # persona jurídica
+    razon_social = Column(String(255), nullable=True)  # persona jurídica (nombre de la empresa)
+    acepto_politica_datos = Column(Boolean, default=False, nullable=False)
+    fecha_aceptacion_politica = Column(DateTime, nullable=True)
+
+    # Saldo de créditos consumibles al crear cotizaciones (Semana 4). Solo tiene
+    # sentido para "solicitante"; el resto de roles queda en 0.
+    creditos_balance = Column(Float, default=0.0, nullable=False)
+
+    # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva
     # no puede iniciar sesión.
     activo = Column(Boolean, default=True, nullable=False)

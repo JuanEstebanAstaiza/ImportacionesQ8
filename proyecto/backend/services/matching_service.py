@@ -56,8 +56,10 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
         json_contains_column(Importador.especialidad_producto, linea_producto)
     ).all()
     
-    # Guardar en Redis con TTL de 72 horas (259200 segundos) solo si Redis está disponible
-    if _redis_available():
+    # Guardar en Redis con TTL de 72 horas (259200 segundos) solo si Redis está disponible.
+    # `hset` con un mapping vacío lanza `DataError`, así que si no hay ningún
+    # importador candidato simplemente no se escribe el hash (nada que trackear).
+    if _redis_available() and importadores:
         client = _get_redis_client()
         client.hset(f"cotizacion_abierta:{cotizacion_id}", mapping={
             str(importador.id): "pendiente" for importador in importadores

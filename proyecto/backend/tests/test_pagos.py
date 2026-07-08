@@ -1,5 +1,5 @@
+"""Tests de compra de créditos vía Wompi (Semana 4: reemplaza la comisión sobre la orden)."""
 import hashlib
-import hmac
 from uuid import uuid4
 from datetime import datetime
 
@@ -7,10 +7,8 @@ import pytest
 
 import config
 from models.usuario import Usuario
-from models.cotizacion import Cotizacion, EstadoCotizacion
-from models.propuesta import Propuesta, EstadoPropuesta
 from models.pago import Pago, EstadoPago
-from models.orden import Orden
+from models.credito import MovimientoCredito
 from utils.security import hash_password, create_access_token
 
 
@@ -34,6 +32,7 @@ def test_solicitante(db_session):
         email="solicitante_pago@example.com",
         password_hash=hash_password("123456789"),
         rol="solicitante",
+        creditos_balance=0.0,
         perfil_completo=True,
         fecha_creacion=datetime.utcnow()
     )
@@ -41,57 +40,6 @@ def test_solicitante(db_session):
     db_session.commit()
     db_session.refresh(user)
     return user
-
-
-@pytest.fixture()
-def test_importador_user(db_session):
-    user = Usuario(
-        id=str(uuid4()),
-        email="importador_pago@example.com",
-        password_hash=hash_password("123456789"),
-        rol="importador",
-        perfil_completo=True,
-        fecha_creacion=datetime.utcnow()
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
-
-
-@pytest.fixture()
-def test_cotizacion_aceptada(db_session, test_solicitante, test_importador_user):
-    cotizacion = Cotizacion(
-        id=str(uuid4()),
-        solicitante_id=test_solicitante.id,
-        importador_id=test_importador_user.id,
-        modalidad="dirigida",
-        pais_importacion="China",
-        nombre_producto="Camisetas personalizadas",
-        descripcion_cliente="500 camisetas con logo impreso en algodón premium",
-        linea_producto="Textiles",
-        tipo_calidad="estandar",
-        cantidad_minima=500,
-        precio_objetivo_usd=3.50,
-        incoterm="FOB",
-        estado=EstadoCotizacion.cotizacion_aceptada
-    )
-    db_session.add(cotizacion)
-
-    propuesta = Propuesta(
-        id=str(uuid4()),
-        cotizacion_id=cotizacion.id,
-        importador_id=test_importador_user.id,
-        precio_ofrecido_usd=1500.0,
-        tiempo_estimado_entrega="45 días",
-        incoterm="FOB",
-        estado=EstadoPropuesta.aceptada
-    )
-    db_session.add(propuesta)
-
-    db_session.commit()
-    db_session.refresh(cotizacion)
-    return cotizacion
 
 
 @pytest.fixture()
@@ -100,97 +48,66 @@ def auth_headers_solicitante(test_solicitante):
     return {"Authorization": f"Bearer {token}"}
 
 
-class TestGenerarCheckout:
+class TestComprarCreditos:
 
-    def test_checkout_exitoso(self, client, db_session, test_cotizacion_aceptada, auth_headers_solicitante):
-        """POST /pagos/checkout - Genera un pago pendiente para una cotización aceptada"""
+    def test_comprar_creditos_exitoso(self, client, db_session, test_solicitante, auth_headers_solicitante):
         response = client.post(
-            "/pagos/checkout",
-            json={"cotizacion_id": str(test_cotizacion_aceptada.id)},
+            "/creditos/comprar",
+            json={"monto_usd": 10.0},
             headers=auth_headers_solicitante
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["cotizacion_id"] == str(test_cotizacion_aceptada.id)
-        assert data["monto_comision_usd"] == 150.0  # 10% de 1500
+        assert data["monto_usd"] == 10.0
+        assert data["creditos_a_acreditar"] == round(10.0 / config.CREDITO_USD_POR_UNIDAD, 2)
         assert data["wompi_payment_id"].startswith("wpm_")
 
-        pago = db_session.query(Pago).filter(Pago.cotizacion_id == test_cotizacion_aceptada.id).first()
+        pago = db_session.query(Pago).filter(Pago.wompi_payment_id == data["wompi_payment_id"]).first()
         assert pago is not None
         assert pago.estado == EstadoPago.pendiente.value
+        assert pago.usuario_id == test_solicitante.id
 
-    def test_checkout_es_idempotente(self, client, db_session, test_cotizacion_aceptada, auth_headers_solicitante):
-        """POST /pagos/checkout - Llamadas repetidas reutilizan el mismo pago pendiente"""
-        response1 = client.post(
-            "/pagos/checkout",
-            json={"cotizacion_id": str(test_cotizacion_aceptada.id)},
-            headers=auth_headers_solicitante
-        )
-        response2 = client.post(
-            "/pagos/checkout",
-            json={"cotizacion_id": str(test_cotizacion_aceptada.id)},
-            headers=auth_headers_solicitante
-        )
-
-        assert response1.status_code == 200
-        assert response2.status_code == 200
-        assert response1.json()["wompi_payment_id"] == response2.json()["wompi_payment_id"]
-
-        pagos = db_session.query(Pago).filter(Pago.cotizacion_id == test_cotizacion_aceptada.id).all()
-        assert len(pagos) == 1
-
-    def test_checkout_cotizacion_no_aceptada(self, client, db_session, auth_headers_solicitante, test_solicitante):
-        """POST /pagos/checkout - Rechaza cotizaciones que no están en estado 'cotizacion_aceptada'"""
-        cotizacion = Cotizacion(
-            id=str(uuid4()),
-            solicitante_id=test_solicitante.id,
-            importador_id=None,
-            modalidad="abierta",
-            pais_importacion="China",
-            nombre_producto="Camisetas",
-            descripcion_cliente="Descripción de prueba con más de veinte caracteres",
-            linea_producto="Textiles",
-            tipo_calidad="estandar",
-            cantidad_minima=100,
-            precio_objetivo_usd=1.0,
-            incoterm="FOB",
-            estado="abierta"
-        )
-        db_session.add(cotizacion)
-        db_session.commit()
-
+    def test_comprar_creditos_requiere_rol_solicitante(self, client):
+        token = create_access_token(str(uuid4()), "admin")
         response = client.post(
-            "/pagos/checkout",
-            json={"cotizacion_id": str(cotizacion.id)},
+            "/creditos/comprar",
+            json={"monto_usd": 10.0},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 403
+
+    def test_comprar_creditos_monto_invalido(self, client, auth_headers_solicitante):
+        response = client.post(
+            "/creditos/comprar",
+            json={"monto_usd": -5.0},
             headers=auth_headers_solicitante
         )
+        assert response.status_code == 422
 
-        assert response.status_code == 400
 
-    def test_checkout_de_otro_usuario_es_rechazado(self, client, db_session, test_cotizacion_aceptada):
-        """POST /pagos/checkout - Un solicitante no puede pagar la cotización de otro (IDOR)"""
-        otro_token = create_access_token(str(uuid4()), "solicitante")
-        headers = {"Authorization": f"Bearer {otro_token}"}
+class TestSaldoYMovimientos:
 
-        response = client.post(
-            "/pagos/checkout",
-            json={"cotizacion_id": str(test_cotizacion_aceptada.id)},
-            headers=headers
-        )
+    def test_obtener_saldo(self, client, test_solicitante, auth_headers_solicitante):
+        response = client.get("/creditos/saldo", headers=auth_headers_solicitante)
+        assert response.status_code == 200
+        assert response.json()["creditos_balance"] == test_solicitante.creditos_balance
 
-        assert response.status_code == 400
+    def test_listar_movimientos_vacio(self, client, auth_headers_solicitante):
+        response = client.get("/creditos/movimientos", headers=auth_headers_solicitante)
+        assert response.status_code == 200
+        assert response.json() == []
 
 
 class TestWebhookWompi:
 
-    def _crear_pago_pendiente(self, db_session, cotizacion_id, wompi_payment_id="wpm_test123", monto=150.0):
+    def _crear_pago_pendiente(self, db_session, usuario_id, wompi_payment_id="wpm_test123", monto=10.0, creditos=100.0):
         pago = Pago(
             id=str(uuid4()),
-            orden_id=None,
-            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
             wompi_payment_id=wompi_payment_id,
             monto_usd=monto,
+            creditos_comprados=creditos,
             estado=EstadoPago.pendiente.value
         )
         db_session.add(pago)
@@ -198,9 +115,9 @@ class TestWebhookWompi:
         db_session.refresh(pago)
         return pago
 
-    def test_webhook_sin_firma_es_rechazado(self, client, db_session, test_cotizacion_aceptada):
+    def test_webhook_sin_firma_es_rechazado(self, client, db_session, test_solicitante):
         """El webhook debe rechazar (403) eventos sin firma válida (fail-closed)"""
-        self._crear_pago_pendiente(db_session, test_cotizacion_aceptada.id)
+        self._crear_pago_pendiente(db_session, test_solicitante.id)
 
         response = client.post(
             "/pagos/webhook/wompi",
@@ -212,9 +129,9 @@ class TestWebhookWompi:
 
         assert response.status_code == 403
 
-    def test_webhook_con_firma_invalida_es_rechazado(self, client, db_session, test_cotizacion_aceptada):
+    def test_webhook_con_firma_invalida_es_rechazado(self, client, db_session, test_solicitante):
         """El webhook debe rechazar eventos con checksum incorrecto"""
-        self._crear_pago_pendiente(db_session, test_cotizacion_aceptada.id)
+        self._crear_pago_pendiente(db_session, test_solicitante.id)
 
         response = client.post(
             "/pagos/webhook/wompi",
@@ -228,9 +145,10 @@ class TestWebhookWompi:
 
         assert response.status_code == 403
 
-    def test_webhook_confirmado_crea_orden(self, client, db_session, test_cotizacion_aceptada):
-        """El webhook con firma válida confirma el pago y crea la orden correspondiente"""
-        pago = self._crear_pago_pendiente(db_session, test_cotizacion_aceptada.id)
+    def test_webhook_confirmado_acredita_creditos(self, client, db_session, test_solicitante):
+        """El webhook con firma válida confirma el pago y acredita los créditos al usuario"""
+        saldo_inicial = test_solicitante.creditos_balance
+        pago = self._crear_pago_pendiente(db_session, test_solicitante.id, creditos=100.0)
 
         data = {"id": pago.wompi_payment_id, "status": "confirmed"}
         timestamp = 1234567890
@@ -251,17 +169,19 @@ class TestWebhookWompi:
 
         db_session.refresh(pago)
         assert pago.estado == EstadoPago.confirmado.value
-        assert pago.orden_id is not None
 
-        orden = db_session.query(Orden).filter(Orden.cotizacion_id == test_cotizacion_aceptada.id).first()
-        assert orden is not None
+        db_session.refresh(test_solicitante)
+        assert test_solicitante.creditos_balance == saldo_inicial + 100.0
 
-        db_session.refresh(test_cotizacion_aceptada)
-        assert test_cotizacion_aceptada.estado == EstadoCotizacion.orden_activa.value
+        movimiento = db_session.query(MovimientoCredito).filter(MovimientoCredito.pago_id == pago.id).first()
+        assert movimiento is not None
+        assert movimiento.tipo == "compra"
+        assert movimiento.monto == 100.0
 
-    def test_webhook_es_idempotente(self, client, db_session, test_cotizacion_aceptada):
-        """Reenviar el mismo evento confirmado no debe crear una segunda orden"""
-        pago = self._crear_pago_pendiente(db_session, test_cotizacion_aceptada.id)
+    def test_webhook_es_idempotente(self, client, db_session, test_solicitante):
+        """Reenviar el mismo evento confirmado no debe acreditar créditos dos veces"""
+        saldo_inicial = test_solicitante.creditos_balance
+        pago = self._crear_pago_pendiente(db_session, test_solicitante.id, creditos=100.0)
 
         data = {"id": pago.wompi_payment_id, "status": "confirmed"}
         timestamp = 1234567890
@@ -280,12 +200,13 @@ class TestWebhookWompi:
         assert response1.status_code == 200
         assert response2.status_code == 200
 
-        ordenes = db_session.query(Orden).filter(Orden.cotizacion_id == test_cotizacion_aceptada.id).all()
-        assert len(ordenes) == 1
+        db_session.refresh(test_solicitante)
+        assert test_solicitante.creditos_balance == saldo_inicial + 100.0
 
-    def test_webhook_pago_fallido(self, client, db_session, test_cotizacion_aceptada):
-        """El webhook de pago fallido marca el pago como fallido sin crear orden"""
-        pago = self._crear_pago_pendiente(db_session, test_cotizacion_aceptada.id)
+    def test_webhook_pago_fallido(self, client, db_session, test_solicitante):
+        """El webhook de pago fallido marca el pago como fallido sin acreditar créditos"""
+        saldo_inicial = test_solicitante.creditos_balance
+        pago = self._crear_pago_pendiente(db_session, test_solicitante.id)
 
         data = {"id": pago.wompi_payment_id, "status": "failed"}
         timestamp = 1234567890
@@ -306,5 +227,5 @@ class TestWebhookWompi:
         db_session.refresh(pago)
         assert pago.estado == EstadoPago.fallido.value
 
-        orden = db_session.query(Orden).filter(Orden.cotizacion_id == test_cotizacion_aceptada.id).first()
-        assert orden is None
+        db_session.refresh(test_solicitante)
+        assert test_solicitante.creditos_balance == saldo_inicial

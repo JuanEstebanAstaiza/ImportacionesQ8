@@ -9,7 +9,7 @@ import json
 
 import config
 from schemas.importador import ImportadorCreate, ImportadorResponse, ImportadorUpdate
-from schemas.usuario import TrabajadorCreate, TrabajadorResponse, TrabajadorEstadoUpdate
+from schemas.usuario import AsesorCreate, AsesorResponse, AsesorEstadoUpdate
 from schemas.campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
     FormularioImportadorResponse
@@ -38,6 +38,8 @@ def json_contains_column(column, value):
 async def listar_importadores(
     especialidad: Optional[str] = Query(None, description="Filtrar por especialidad de producto"),
     pais: Optional[str] = Query(None, description="Filtrar por país de origen"),
+    orden: Optional[str] = Query(None, description="'calificacion' o 'reciente'"),
+    certificado: Optional[bool] = Query(None, description="Filtrar por empresas verificadas (true/false)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -45,6 +47,8 @@ async def listar_importadores(
     
     - **especialidad**: Filtrar por especialidad de producto (ej: "Textiles")
     - **pais**: Filtrar por país de origen (ej: "China")
+    - **orden**: 'calificacion' (mejor calificados primero) o 'reciente' (más nuevos primero)
+    - **certificado**: `true` para solo empresas verificadas, `false` para no verificadas
     """
     query = db.query(Importador).filter(Importador.estado == "activo")
     
@@ -54,24 +58,32 @@ async def listar_importadores(
     
     if pais:
         query = query.filter(json_contains_column(Importador.paises_origen, pais))
-    
+
+    if certificado is not None:
+        query = query.filter(Importador.verificado == certificado)
+
+    if orden == "calificacion":
+        query = query.order_by(Importador.calificacion_promedio.desc())
+    elif orden == "reciente":
+        query = query.order_by(Importador.fecha_registro.desc())
+
     importadores = query.all()
     return importadores
 
-# ==================== Panel de empresa: trabajadores (Fase 1) ====================
-# NOTA: estas rutas de un solo segmento literal ("/trabajadores", "/campos-personalizados")
+# ==================== Panel de empresa: asesores (Fase 1) ====================
+# NOTA: estas rutas de un solo segmento literal ("/asesores", "/campos-personalizados")
 # deben registrarse ANTES de "/{importador_id}" para que FastAPI no las capture como
-# si "trabajadores"/"campos-personalizados" fueran un importador_id.
+# si "asesores"/"campos-personalizados" fueran un importador_id.
 
-@router.post("/trabajadores", response_model=TrabajadorResponse, status_code=status.HTTP_201_CREATED)
-async def crear_trabajador(
-    datos: TrabajadorCreate,
+@router.post("/asesores", response_model=AsesorResponse, status_code=status.HTTP_201_CREATED)
+async def crear_asesor(
+    datos: AsesorCreate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("importador"))
 ):
     """
-    Crea una cuenta de trabajador para la empresa del usuario autenticado (solo la
-    cuenta dueña puede crear trabajadores). El trabajador solo podrá ver cuántas
+    Crea una cuenta de asesor para la empresa del usuario autenticado (solo la
+    cuenta dueña puede crear asesores). El asesor solo podrá ver cuántas
     cotizaciones tiene asignadas y negociar por chat.
     """
     importador_id_str = current_user.get("importador_id")
@@ -86,65 +98,65 @@ async def crear_trabajador(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email ya está registrado")
 
     from uuid import uuid4
-    nuevo_trabajador = Usuario(
+    nuevo_asesor = Usuario(
         id=str(uuid4()),
         email=datos.email,
         password_hash=hash_password(datos.password),
-        rol="trabajador",
+        rol="asesor",
         importador_id=importador_id_str,
         nombre=datos.nombre,
         telefono=datos.telefono,
         activo=True,
         perfil_completo=bool(datos.nombre)
     )
-    db.add(nuevo_trabajador)
+    db.add(nuevo_asesor)
     db.commit()
-    db.refresh(nuevo_trabajador)
+    db.refresh(nuevo_asesor)
 
-    return nuevo_trabajador
+    return nuevo_asesor
 
-@router.get("/trabajadores", response_model=List[TrabajadorResponse])
-async def listar_trabajadores(
+@router.get("/asesores", response_model=List[AsesorResponse])
+async def listar_asesores(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("importador"))
 ):
-    """Lista los trabajadores de la empresa del usuario autenticado (solo la cuenta dueña)."""
+    """Lista los asesores de la empresa del usuario autenticado (solo la cuenta dueña)."""
     importador_id_str = current_user.get("importador_id")
-    trabajadores = db.query(Usuario).filter(
+    asesores = db.query(Usuario).filter(
         Usuario.importador_id == importador_id_str,
-        Usuario.rol == "trabajador"
+        Usuario.rol == "asesor"
     ).order_by(Usuario.fecha_creacion.desc()).all()
 
-    return trabajadores
+    return asesores
 
-@router.put("/trabajadores/{trabajador_id}/estado", response_model=TrabajadorResponse)
-async def actualizar_estado_trabajador(
-    trabajador_id: str,
-    datos: TrabajadorEstadoUpdate,
+@router.put("/asesores/{asesor_id}/estado", response_model=AsesorResponse)
+async def actualizar_estado_asesor(
+    asesor_id: str,
+    datos: AsesorEstadoUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("importador"))
 ):
-    """Activa o desactiva un trabajador de la empresa (solo la cuenta dueña, y solo de su propia empresa)."""
+    """Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa)."""
     try:
-        trabajador_id_str = str(UUID(trabajador_id))
+        asesor_id_str = str(UUID(asesor_id))
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de trabajador inválido")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de asesor inválido")
 
     importador_id_str = current_user.get("importador_id")
-    trabajador = db.query(Usuario).filter(
-        Usuario.id == trabajador_id_str,
+    asesor = db.query(Usuario).filter(
+        Usuario.id == asesor_id_str,
         Usuario.importador_id == importador_id_str,
-        Usuario.rol == "trabajador"
+        Usuario.rol == "asesor"
     ).first()
 
-    if not trabajador:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trabajador no encontrado")
+    if not asesor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asesor no encontrado")
 
-    trabajador.activo = datos.activo
+    asesor.activo = datos.activo
     db.commit()
-    db.refresh(trabajador)
+    db.refresh(asesor)
 
-    return trabajador
+    return asesor
 
 # ==================== Formulario de cotización personalizable (Fase 3) ====================
 
@@ -249,6 +261,55 @@ async def eliminar_campo_personalizado(
     db.commit()
 
     return None
+
+# ==================== Catálogo enriquecido del dashboard del solicitante (Fase 6) ====================
+# NOTA: rutas de un solo segmento literal, deben registrarse ANTES de "/{importador_id}".
+
+@router.get("/destacados", response_model=List[ImportadorResponse])
+async def listar_importadores_destacados(
+    limite: int = Query(10, ge=1, le=50, description="Cantidad máxima de empresas a devolver"),
+    db: Session = Depends(get_db)
+):
+    """
+    Top empresas importadoras activas por calificación promedio, para la sección
+    "Mejor calificados" del dashboard del solicitante.
+    """
+    return db.query(Importador).filter(
+        Importador.estado == "activo"
+    ).order_by(Importador.calificacion_promedio.desc()).limit(limite).all()
+
+@router.get("/por-categoria", response_model=dict)
+async def listar_importadores_por_categoria(
+    db: Session = Depends(get_db)
+):
+    """
+    Empresas importadoras activas agrupadas por categoría/especialidad de
+    producto, para la sección "Por categoría" del dashboard del solicitante.
+    Una empresa con varias especialidades aparece en cada una de sus categorías.
+    """
+    importadores = db.query(Importador).filter(Importador.estado == "activo").all()
+
+    agrupado: dict[str, list] = {}
+    for imp in importadores:
+        categorias = imp.especialidad_producto or []
+        for categoria in categorias:
+            agrupado.setdefault(categoria, []).append(ImportadorResponse.model_validate(imp).model_dump(mode="json"))
+
+    return agrupado
+
+@router.get("/certificados", response_model=List[ImportadorResponse])
+async def listar_importadores_certificados(
+    db: Session = Depends(get_db)
+):
+    """
+    Empresas importadoras activas y verificadas ("socio verificado" por el
+    equipo de la plataforma), para la sección "Empresas certificadas" del
+    dashboard del solicitante.
+    """
+    return db.query(Importador).filter(
+        Importador.estado == "activo",
+        Importador.verificado == True  # noqa: E712 - comparación explícita requerida por SQLAlchemy
+    ).order_by(Importador.calificacion_promedio.desc()).all()
 
 @router.get("/{importador_id}", response_model=ImportadorResponse)
 async def obtener_importador(

@@ -59,19 +59,19 @@ class TestPerfilUsuario:
         assert data["telefono"] == "555-1234"
         assert data["perfil_completo"] is True
 
-    def test_perfil_de_trabajador_incluye_foto_y_whatsapp(self, client, db_session, empresa_a):
+    def test_perfil_de_asesor_incluye_foto_y_whatsapp(self, client, db_session, empresa_a):
         importador, dueño = empresa_a
-        trabajador = Usuario(
+        asesor = Usuario(
             id=str(uuid4()), email="trab_perfil@example.com", password_hash=hash_password("123456789"),
-            rol="trabajador", importador_id=importador.id, activo=True, fecha_creacion=datetime.utcnow()
+            rol="asesor", importador_id=importador.id, activo=True, fecha_creacion=datetime.utcnow()
         )
-        db_session.add(trabajador)
+        db_session.add(asesor)
         db_session.commit()
 
         response = client.put(
             "/usuarios/me",
-            json={"nombre": "Trabajador Uno", "foto_url": "https://example.com/foto.jpg", "whatsapp": "+50412345678"},
-            headers=auth_headers_for(trabajador)
+            json={"nombre": "Asesor Uno", "foto_url": "https://example.com/foto.jpg", "whatsapp": "+50412345678"},
+            headers=auth_headers_for(asesor)
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -108,19 +108,19 @@ class TestPerfilEmpresa:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_trabajador_no_puede_editar_perfil_de_la_empresa(self, client, db_session, empresa_a):
+    def test_asesor_no_puede_editar_perfil_de_la_empresa(self, client, db_session, empresa_a):
         importador, dueño = empresa_a
-        trabajador = Usuario(
+        asesor = Usuario(
             id=str(uuid4()), email="trab_no_edita@example.com", password_hash=hash_password("123456789"),
-            rol="trabajador", importador_id=importador.id, activo=True, fecha_creacion=datetime.utcnow()
+            rol="asesor", importador_id=importador.id, activo=True, fecha_creacion=datetime.utcnow()
         )
-        db_session.add(trabajador)
+        db_session.add(asesor)
         db_session.commit()
 
         response = client.put(
             f"/importadores/{importador.id}",
-            json={"nombre_empresa": "Intento desde trabajador"},
-            headers=auth_headers_for(trabajador)
+            json={"nombre_empresa": "Intento desde asesor"},
+            headers=auth_headers_for(asesor)
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 

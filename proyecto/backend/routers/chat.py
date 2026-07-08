@@ -20,13 +20,13 @@ ws_router = APIRouter(tags=["Chat"])
 
 
 def _verificar_acceso_conversacion(conversacion: ConversacionChat, current_user: dict) -> bool:
-    """Solo el solicitante y el usuario de la empresa (dueño o trabajador asignado)
+    """Solo el solicitante y el usuario de la empresa (dueño o asesor asignado)
     de esa conversación pueden leer/escribir mensajes en ella (evita IDOR entre
     conversaciones de otros clientes/empresas)."""
     user_id = current_user["user_id"]
     if current_user["rol"] == "solicitante":
         return conversacion.solicitante_id == user_id
-    if current_user["rol"] in ("importador", "trabajador"):
+    if current_user["rol"] in ("importador", "asesor"):
         return conversacion.importador_usuario_id == user_id
     return current_user["rol"] == "admin"
 
@@ -43,7 +43,7 @@ async def listar_mis_conversaciones(
     query = db.query(ConversacionChat)
     if rol == "solicitante":
         query = query.filter(ConversacionChat.solicitante_id == user_id_str)
-    elif rol in ("importador", "trabajador"):
+    elif rol in ("importador", "asesor"):
         query = query.filter(ConversacionChat.importador_usuario_id == user_id_str)
     else:
         query = query.limit(50)

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from utils.security import hash_password, create_access_token
-from conftest import crear_empresa_importadora, auth_headers_for
+from conftest import crear_empresa_importadora, auth_headers_for, registro_payload
 
 
 class TestListarImportadores:
@@ -119,11 +119,7 @@ class TestCrearImportador:
     def test_crear_importador_sin_role_admin(self, client):
         """Intentar crear importador sin rol de admin"""
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -525,3 +521,94 @@ class TestBandejaSolicitudesImportador:
         )
 
         assert response.status_code == 403
+
+
+class TestCatalogoEnriquecido:
+    """Semana 4 - Fase 6: catálogo enriquecido del dashboard del solicitante
+    (destacados, por categoría, certificados)."""
+
+    def _crear(self, db_session, **kwargs):
+        importador, _dueño = crear_empresa_importadora(db_session, **kwargs)
+        return importador
+
+    def test_destacados_ordena_por_calificacion_desc(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Baja Calificación", email_dueño="baja@example.com", calificacion_promedio=2.0)
+        self._crear(db_session, nombre_empresa="Alta Calificación", email_dueño="alta@example.com", calificacion_promedio=4.9)
+
+        response = client.get("/importadores/destacados")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 2
+        nombres = [i["nombre_empresa"] for i in data]
+        assert nombres.index("Alta Calificación") < nombres.index("Baja Calificación")
+
+    def test_destacados_respeta_limite(self, client, db_session):
+        for i in range(5):
+            self._crear(db_session, nombre_empresa=f"Empresa Destacada {i}", email_dueño=f"destacada{i}@example.com")
+
+        response = client.get("/importadores/destacados?limite=2")
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+    def test_por_categoria_agrupa_correctamente(self, client, db_session):
+        self._crear(
+            db_session, nombre_empresa="Empresa Textil", email_dueño="textil_cat@example.com",
+            especialidad_producto=["Textiles"]
+        )
+        self._crear(
+            db_session, nombre_empresa="Empresa Multi", email_dueño="multi_cat@example.com",
+            especialidad_producto=["Textiles", "Electrónica"]
+        )
+
+        response = client.get("/importadores/por-categoria")
+        assert response.status_code == 200
+        data = response.json()
+        assert "Textiles" in data
+        assert "Electrónica" in data
+        nombres_textiles = [i["nombre_empresa"] for i in data["Textiles"]]
+        assert "Empresa Textil" in nombres_textiles
+        assert "Empresa Multi" in nombres_textiles
+        nombres_electronica = [i["nombre_empresa"] for i in data["Electrónica"]]
+        assert "Empresa Textil" not in nombres_electronica
+
+    def test_certificados_solo_incluye_verificados(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Empresa Sin Certificar", email_dueño="sincert@example.com", verificado=False)
+        self._crear(db_session, nombre_empresa="Empresa Certificada", email_dueño="cert@example.com", verificado=True)
+
+        response = client.get("/importadores/certificados")
+        assert response.status_code == 200
+        data = response.json()
+        nombres = [i["nombre_empresa"] for i in data]
+        assert "Empresa Certificada" in nombres
+        assert "Empresa Sin Certificar" not in nombres
+
+    def test_listar_importadores_filtro_certificado(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Empresa Sin Certificar 2", email_dueño="sincert2@example.com", verificado=False)
+        self._crear(db_session, nombre_empresa="Empresa Certificada 2", email_dueño="cert2@example.com", verificado=True)
+
+        response = client.get("/importadores?certificado=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert all(i["verificado"] is True for i in data)
+        nombres = [i["nombre_empresa"] for i in data]
+        assert "Empresa Certificada 2" in nombres
+
+    def test_listar_importadores_orden_calificacion(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Baja Orden", email_dueño="bajaorden@example.com", calificacion_promedio=1.5)
+        self._crear(db_session, nombre_empresa="Alta Orden", email_dueño="altaorden@example.com", calificacion_promedio=5.0)
+
+        response = client.get("/importadores?orden=calificacion")
+        assert response.status_code == 200
+        data = response.json()
+        nombres = [i["nombre_empresa"] for i in data]
+        assert nombres.index("Alta Orden") < nombres.index("Baja Orden")
+
+    def test_admin_verificar_marca_verificado_true(self, client, db_session, admin_user):
+        importador = self._crear(db_session, nombre_empresa="Empresa A Verificar", email_dueño="averificar@example.com")
+
+        response = client.post(
+            f"/admin/importadores/{importador.id}/verificar",
+            headers=auth_headers_for(admin_user)
+        )
+        assert response.status_code == 200
+        assert response.json()["verificado"] is True

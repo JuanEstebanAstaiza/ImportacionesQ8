@@ -18,19 +18,19 @@ class UsuarioMeResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 class UsuarioMeUpdate(BaseModel):
-    """Personalización del perfil personal (cliente solicitante, dueño o trabajador)."""
+    """Personalización del perfil personal (cliente solicitante, dueño o asesor)."""
     nombre: Optional[str] = None
     telefono: Optional[str] = None
     foto_url: Optional[str] = None
     whatsapp: Optional[str] = None
 
-class TrabajadorCreate(BaseModel):
+class AsesorCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=9)
     nombre: Optional[str] = None
     telefono: Optional[str] = None
 
-class TrabajadorResponse(BaseModel):
+class AsesorResponse(BaseModel):
     id: str
     email: str
     nombre: Optional[str] = None
@@ -40,7 +40,7 @@ class TrabajadorResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-class TrabajadorEstadoUpdate(BaseModel):
+class AsesorEstadoUpdate(BaseModel):
     activo: bool
 
 class CotizacionPoolItem(BaseModel):
@@ -57,4 +57,4 @@ class CotizacionPoolItem(BaseModel):
     fecha_creacion: str
 
 class CotizacionAsignadaItem(CotizacionPoolItem):
-    trabajador_asignado_id: Optional[str] = None
+    asesor_asignado_id: Optional[str] = None

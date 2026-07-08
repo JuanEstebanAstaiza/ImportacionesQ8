@@ -94,7 +94,7 @@ def require_rol(rol: str):
 def require_rol_in(*roles: str):
     """
     Dependencia que permite el acceso a cualquiera de varios roles (ej. la cuenta
-    dueña "importador" y sus "trabajador" comparten algunos endpoints del panel
+    dueña "importador" y sus "asesor" comparten algunos endpoints del panel
     de empresa).
     """
     async def verificar_rol(current_user: dict = Depends(get_current_user)) -> dict:

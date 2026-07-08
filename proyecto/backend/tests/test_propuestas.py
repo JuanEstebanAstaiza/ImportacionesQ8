@@ -239,10 +239,12 @@ class TestListarPropuestas:
 
 
 class TestAceptarPropuesta:
-    
-    def test_aceptar_propuesta_exitoso(self, client, db_session, test_cotizacion_abierta, auth_headers_solicitante):
-        """PUT /cotizaciones/{id}/propuestas/aceptar - Aceptar propuesta exitosamente"""
-        # Crear una propuesta de prueba
+    """Semana 4 - Fase 5: `PUT /cotizaciones/{id}/propuestas/aceptar` ya NO finaliza
+    la propuesta de forma unilateral; solo abre el chat de negociación. La
+    finalización real requiere doble aceptación mutua (ver `TestPreaceptarPropuesta`)."""
+
+    def test_aceptar_propuesta_abre_chat_sin_finalizar(self, client, db_session, test_cotizacion_abierta, auth_headers_solicitante):
+        """PUT /cotizaciones/{id}/propuestas/aceptar - Abre negociación sin aceptar definitivamente"""
         importador_user = Usuario(
             id=str(uuid4()),
             email="importador_acepta@example.com",
@@ -253,8 +255,7 @@ class TestAceptarPropuesta:
         )
         db_session.add(importador_user)
         db_session.commit()
-        
-        # Crear primera propuesta
+
         propuesta = Propuesta(
             id=str(uuid4()),
             cotizacion_id=test_cotizacion_abierta.id,
@@ -265,8 +266,7 @@ class TestAceptarPropuesta:
             estado=EstadoPropuesta.pendiente
         )
         db_session.add(propuesta)
-        
-        # Crear segunda propuesta de otro importador
+
         importador_user2 = Usuario(
             id=str(uuid4()),
             email="importador_acepta2@example.com",
@@ -276,7 +276,7 @@ class TestAceptarPropuesta:
             fecha_creacion=datetime.utcnow()
         )
         db_session.add(importador_user2)
-        
+
         propuesta2 = Propuesta(
             id=str(uuid4()),
             cotizacion_id=test_cotizacion_abierta.id,
@@ -287,32 +287,31 @@ class TestAceptarPropuesta:
             estado=EstadoPropuesta.pendiente
         )
         db_session.add(propuesta2)
-        
-        # Actualizar cotización a "propuestas_recibidas"
+
         test_cotizacion_abierta.estado = EstadoCotizacion.propuestas_recibidas
-        
+
         db_session.commit()
-        
+
         response = client.put(
             f"/cotizaciones/{test_cotizacion_abierta.id}/propuestas/aceptar",
             json={"importador_id": str(importador_user.id)},
             headers=auth_headers_solicitante
         )
-        
+
         assert response.status_code == 200
-        
-        # Verificar que la propuesta aceptada está en estado "aceptada"
+
+        # La propuesta sigue pendiente: aceptar aquí solo abre el chat de negociación
         db_session.refresh(propuesta)
-        assert propuesta.estado == EstadoPropuesta.aceptada
-        
-        # Verificar que las demás propuestas están rechazadas
+        assert propuesta.estado == EstadoPropuesta.pendiente
+
+        # Las demás propuestas siguen intactas (no se rechazan hasta la doble aceptación)
         db_session.refresh(propuesta2)
-        assert propuesta2.estado == EstadoPropuesta.rechazada
-        
-        # Verificar que la cotización cambió a "cotizacion_aceptada"
+        assert propuesta2.estado == EstadoPropuesta.pendiente
+
+        # La cotización sigue en "propuestas_recibidas" hasta la doble aceptación
         db_session.refresh(test_cotizacion_abierta)
-        assert test_cotizacion_abierta.estado == EstadoCotizacion.cotizacion_aceptada
-    
+        assert test_cotizacion_abierta.estado == EstadoCotizacion.propuestas_recibidas
+
     def test_aceptar_propuesta_sin_autorizacion(self, client, db_session, test_cotizacion_abierta, auth_headers_importador):
         """PUT /cotizaciones/{id}/propuestas/aceptar - Importador no puede aceptar propuestas"""
         response = client.put(
@@ -332,6 +331,95 @@ class TestAceptarPropuesta:
         )
         
         assert response.status_code == 400
+
+
+class TestPreaceptarPropuesta:
+    """Semana 4 - Fase 5: doble aceptación mutua vía `POST /propuestas/{id}/pre-aceptar`."""
+
+    def _crear_propuesta_pendiente(self, db_session, cotizacion, importador_id, precio=3.20):
+        propuesta = Propuesta(
+            id=str(uuid4()),
+            cotizacion_id=cotizacion.id,
+            importador_id=importador_id,
+            precio_ofrecido_usd=precio,
+            tiempo_estimado_entrega="45 días",
+            incoterm="FOB",
+            estado=EstadoPropuesta.pendiente
+        )
+        db_session.add(propuesta)
+        db_session.commit()
+        db_session.refresh(propuesta)
+        return propuesta
+
+    def test_solo_solicitante_no_finaliza(self, client, db_session, test_cotizacion_abierta, auth_headers_solicitante):
+        propuesta = self._crear_propuesta_pendiente(db_session, test_cotizacion_abierta, str(uuid4()))
+
+        response = client.post(
+            f"/propuestas/{propuesta.id}/pre-aceptar",
+            json={"aceptar": True},
+            headers=auth_headers_solicitante
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["estado"] == "pendiente"
+        assert data["preaceptada_por_solicitante"] is True
+        assert data["preaceptada_por_empresa"] is False
+
+    def test_revertir_preaceptacion(self, client, db_session, test_cotizacion_abierta, auth_headers_solicitante):
+        propuesta = self._crear_propuesta_pendiente(db_session, test_cotizacion_abierta, str(uuid4()))
+
+        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_solicitante)
+        response = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": False}, headers=auth_headers_solicitante)
+
+        assert response.status_code == 200
+        assert response.json()["preaceptada_por_solicitante"] is False
+
+    def test_ambos_lados_finalizan_y_bloquean_cambios_posteriores(
+        self, client, db_session, test_cotizacion_abierta, auth_headers_solicitante
+    ):
+        from utils.security import create_access_token
+
+        importador_user = Usuario(
+            id=str(uuid4()), email="importador_preaceptar@example.com", password_hash=hash_password("123456789"),
+            rol="importador", perfil_completo=True, importador_id=str(uuid4()), fecha_creacion=datetime.utcnow()
+        )
+        db_session.add(importador_user)
+        db_session.commit()
+
+        propuesta = self._crear_propuesta_pendiente(db_session, test_cotizacion_abierta, importador_user.importador_id)
+
+        token_importador = create_access_token(str(importador_user.id), "importador", importador_id=importador_user.importador_id)
+        headers_importador = {"Authorization": f"Bearer {token_importador}"}
+
+        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_solicitante)
+        response = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=headers_importador)
+
+        assert response.status_code == 200
+        assert response.json()["estado"] == "aceptada"
+
+        # Ya no se puede modificar una propuesta finalizada
+        response_bloqueada = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": False}, headers=auth_headers_solicitante)
+        assert response_bloqueada.status_code == 400
+
+    def test_empresa_ajena_no_puede_preaceptar(self, client, db_session, test_cotizacion_abierta):
+        from utils.security import create_access_token
+
+        propuesta = self._crear_propuesta_pendiente(db_session, test_cotizacion_abierta, str(uuid4()))
+
+        otro_importador = Usuario(
+            id=str(uuid4()), email="otro_importador_preaceptar@example.com", password_hash=hash_password("123456789"),
+            rol="importador", perfil_completo=True, importador_id=str(uuid4()), fecha_creacion=datetime.utcnow()
+        )
+        db_session.add(otro_importador)
+        db_session.commit()
+
+        token = create_access_token(str(otro_importador.id), "importador", importador_id=otro_importador.importador_id)
+        response = client.post(
+            f"/propuestas/{propuesta.id}/pre-aceptar",
+            json={"aceptar": True},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 403
 
 
 class TestMatchingStatus:

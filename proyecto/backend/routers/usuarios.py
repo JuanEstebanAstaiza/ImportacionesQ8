@@ -13,8 +13,8 @@ from utils.dependencies import get_db, get_current_user, require_rol
 logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
-# Router separado para el panel del trabajador ("cuántas cotizaciones tengo asignadas")
-trabajadores_router = APIRouter(prefix="/trabajadores", tags=["Trabajadores"])
+# Router separado para el panel del asesor ("cuántas cotizaciones tengo asignadas")
+asesores_router = APIRouter(prefix="/asesores", tags=["Asesores"])
 
 
 @router.get("/me", response_model=UsuarioMeResponse)
@@ -41,7 +41,7 @@ async def actualizar_mi_perfil(
     """
     Personaliza el perfil personal de la cuenta autenticada: nombre, teléfono,
     foto y WhatsApp (aplica tanto al cliente solicitante como a las cuentas de la
-    empresa importadora: dueño y trabajadores).
+    empresa importadora: dueño y asesores).
     """
     user_id_str = str(PyUUID(current_user["user_id"]))
     usuario = db.query(Usuario).filter(Usuario.id == user_id_str).first()
@@ -62,19 +62,19 @@ async def actualizar_mi_perfil(
     return usuario
 
 
-@trabajadores_router.get("/me/cotizaciones", response_model=List[CotizacionAsignadaItem])
+@asesores_router.get("/me/cotizaciones", response_model=List[CotizacionAsignadaItem])
 async def listar_mis_cotizaciones_asignadas(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("trabajador"))
+    current_user: dict = Depends(require_rol("asesor"))
 ):
     """
-    Cotizaciones que el trabajador autenticado ha reclamado (pantalla "cuántas
+    Cotizaciones que el asesor autenticado ha reclamado (pantalla "cuántas
     tengo asignadas" del panel de empresa).
     """
     user_id_str = str(PyUUID(current_user["user_id"]))
 
     cotizaciones = db.query(Cotizacion).filter(
-        Cotizacion.trabajador_asignado_id == user_id_str
+        Cotizacion.asesor_asignado_id == user_id_str
     ).order_by(Cotizacion.fecha_creacion.desc()).all()
 
     return [
@@ -89,7 +89,7 @@ async def listar_mis_cotizaciones_asignadas(
             incoterm=c.incoterm,
             estado=c.estado.value if isinstance(c.estado, EstadoCotizacion) else c.estado,
             fecha_creacion=c.fecha_creacion.isoformat() if hasattr(c.fecha_creacion, "isoformat") else str(c.fecha_creacion),
-            trabajador_asignado_id=c.trabajador_asignado_id
+            asesor_asignado_id=c.asesor_asignado_id
         )
         for c in cotizaciones
     ]
