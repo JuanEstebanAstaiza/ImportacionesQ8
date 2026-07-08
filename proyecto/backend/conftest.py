@@ -1,12 +1,23 @@
 import sys
 import os
 
-# Crear directorio de base de datos si no existe (Windows)
-DB_DIR = r"C:\Users\akali\AppData\Local\Temp"
+# Crear directorio de base de datos si no existe (compatible con Windows y Linux/Docker)
+if os.name == 'nt':  # Windows
+    DB_DIR = r"C:\Users\akali\AppData\Local\Temp"
+else:  # Linux/Mac/Docker
+    DB_DIR = "/tmp"
+
 os.makedirs(DB_DIR, exist_ok=True)
 
 # Sobrescribir DATABASE_URL ANTES de importar cualquier módulo del proyecto
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_DIR}/test.db"
+
+# Secreto de eventos de Wompi usado en tests para firmar webhooks simulados
+os.environ.setdefault("WOMPI_EVENTS_SECRET", "test_events_secret_for_ci")
+# Límites de rate limiting altos en tests para no interferir con corridas repetidas de login/register
+os.environ.setdefault("RATE_LIMIT_LOGIN", "1000/minute")
+os.environ.setdefault("RATE_LIMIT_REGISTER", "1000/minute")
+os.environ.setdefault("RATE_LIMIT_FORGOT_PASSWORD", "1000/minute")
 
 import pytest
 from uuid import uuid4
@@ -47,8 +58,15 @@ deps.get_db = override_get_db
 # Importar modelos ANTES de crear las tablas
 from models.usuario import Usuario
 from models.importador import Importador
-from models.cotizacion import Cotizacion
-from models.asesor import Asesor
+from models.cotizacion import Cotizacion, EstadoCotizacion
+from models.propuesta import Propuesta, EstadoPropuesta
+from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden
+from models.pago import Pago, EstadoPago
+from models.campo_personalizado import CampoPersonalizado
+from models.chat import ConversacionChat, MensajeChat
+from models.password_reset import PasswordResetToken
+from models.credito import MovimientoCredito
+from models.solicitud_recreacion import SolicitudRecreacion
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -146,21 +164,99 @@ def admin_user(db_session):
     db_session.refresh(user)
     return user
 
-@pytest.fixture()
-def importador_user(db_session):
-    """Crear un usuario importador de prueba en la base de datos"""
-    user = Usuario(
-        id=str(uuid4()),  # Convertir UUID a string para SQLite
-        email="importador@example.com",
+def crear_empresa_importadora(db_session, nombre_empresa="Empresa Importadora Test", **kwargs):
+    """
+    Helper (no es un fixture) para crear en un solo paso una empresa importadora Y
+    su cuenta dueña (rol="importador"), reflejando que ambas cuentas están
+    desacopladas vía Usuario.importador_id (Fase 0). Úsalo en los tests que antes
+    asumían que Usuario.id == Importador.id.
+    """
+    importador = Importador(
+        id=str(uuid4()),
+        nombre_empresa=nombre_empresa,
+        logo_url=kwargs.get("logo_url"),
+        especialidad_producto=kwargs.get("especialidad_producto", ["Textiles"]),
+        paises_origen=kwargs.get("paises_origen", ["China"]),
+        calificacion_promedio=kwargs.get("calificacion_promedio", 4.5),
+        tiempo_respuesta_promedio=kwargs.get("tiempo_respuesta_promedio", "24h"),
+        capacidad_volumen=kwargs.get("capacidad_volumen", 10000),
+        solo_cotizaciones_directas=kwargs.get("solo_cotizaciones_directas", False),
+        estado=kwargs.get("estado", "activo"),
+        verificado=kwargs.get("verificado", False),
+        fecha_registro=datetime.utcnow()
+    )
+    db_session.add(importador)
+    db_session.commit()
+
+    dueño = Usuario(
+        id=str(uuid4()),
+        email=kwargs.get("email_dueño", f"dueño_{importador.id}@example.com"),
         password_hash=hash_password("123456789"),
         rol="importador",
-        perfil_completo=False,
+        importador_id=importador.id,
+        nombre=kwargs.get("nombre_dueño"),
+        activo=True,
+        perfil_completo=True,
         fecha_creacion=datetime.utcnow()
     )
-    db_session.add(user)
+    db_session.add(dueño)
     db_session.commit()
-    db_session.refresh(user)
-    return user
+    db_session.refresh(importador)
+    db_session.refresh(dueño)
+    return importador, dueño
+
+def registro_payload(email, password="123456789", rol="solicitante", tipo_persona="natural", **overrides):
+    """
+    Devuelve un payload válido para POST /auth/register (Semana 4: distingue
+    persona natural/jurídica y exige aceptación de política de datos). Los tests
+    que solo necesitan una cuenta "solicitante" genérica pueden llamarlo sin
+    argumentos extra; `overrides` permite sobrescribir cualquier campo puntual.
+    """
+    payload = {
+        "email": email,
+        "password": password,
+        "rol": rol,
+        "tipo_persona": tipo_persona,
+        "indicativo_pais_telefono": "+57",
+        "telefono": "3001234567",
+        "acepto_politica_datos": True,
+    }
+    if tipo_persona == "natural":
+        payload.update({
+            "tipo_documento": "cedula",
+            "numero_documento": "1234567890",
+            "nombre": "Nombre",
+            "apellido": "Apellido",
+        })
+    else:  # juridica
+        payload.update({
+            "nit": "900123456-7",
+            "razon_social": "Empresa de Prueba S.A.S.",
+        })
+    payload.update(overrides)
+    return payload
+
+def auth_headers_for(usuario):
+    """Genera headers de autenticación válidos para un Usuario de prueba, incluyendo
+    el claim importador_id si la cuenta pertenece a una empresa."""
+    token = create_access_token(str(usuario.id), usuario.rol, importador_id=usuario.importador_id)
+    return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture()
+def empresa_con_dueño(db_session):
+    """Empresa importadora + cuenta dueña de prueba, ya vinculadas."""
+    importador, dueño = crear_empresa_importadora(db_session)
+    return importador, dueño
+
+@pytest.fixture()
+def importador_user(db_session):
+    """
+    Cuenta "dueña" (rol="importador") de una empresa de prueba, ya vinculada vía
+    importador_id. Se expone también `.empresa` con el Importador asociado.
+    """
+    importador, dueño = crear_empresa_importadora(db_session, email_dueño="importador@example.com")
+    dueño.empresa = importador
+    return dueño
 
 @pytest.fixture()
 def test_importador(db_session):
@@ -359,8 +455,18 @@ def cleanup_test_db(db_session):
     yield
     # Eliminar todos los registros creados en el test (en orden inverso para respetar FK)
     try:
+        db_session.query(PasswordResetToken).delete()
+        db_session.query(MensajeChat).delete()
+        db_session.query(ConversacionChat).delete()
+        db_session.query(MovimientoCredito).delete()
+        db_session.query(SolicitudRecreacion).delete()
+        db_session.query(Pago).delete()
+        db_session.query(DocumentoOrden).delete()
+        db_session.query(HistorialEstadosOrden).delete()
+        db_session.query(Orden).delete()
+        db_session.query(Propuesta).delete()
+        db_session.query(CampoPersonalizado).delete()
         db_session.query(Cotizacion).delete()
-        db_session.query(Asesor).delete()
         db_session.query(Importador).delete()
         db_session.query(Usuario).delete()
         db_session.commit()
@@ -374,4 +480,4 @@ def cleanup_test_db(db_session):
 # Importar modelos para usar en fixtures
 from models.usuario import Usuario
 from models.importador import Importador
-from models.cotizacion import Cotizacion
+from models.cotizacion import Cotizacion, EstadoCotizacion

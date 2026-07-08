@@ -22,28 +22,48 @@ def get_db():
     finally:
         db.close()
 
+import re
+
+# Un nombre de base de datos MySQL válido: solo letras, números y guion bajo.
+# Esto es una defensa en profundidad: DATABASE_URL viene de una variable de entorno
+# de confianza (no de input de usuarios finales), pero igual no se interpola libremente
+# en SQL sin validar, para descartar por completo la clase de vulnerabilidad de inyección SQL.
+_DB_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+
 def create_database_if_not_exists():
     """Crea la base de datos si no existe (solo para MySQL)"""
-    # Conectar a MySQL sin seleccionar base de datos
+    # No aplica a SQLite (usado en tests) - SQLite crea el archivo automáticamente
+    if DATABASE_URL.startswith("sqlite"):
+        return
+
     from sqlalchemy import text
-    
+
     # Extraer la URL sin el nombre de la base de datos
     parts = DATABASE_URL.split("/")
     mysql_url = parts[0] + "://" + "/".join(parts[1:-1])
-    
+
+    # Extraer nombre de la base de datos y separar posibles query params (?charset=...)
+    db_name_raw = parts[-1] if len(parts) > 2 else "importacionesq8"
+    db_name = db_name_raw.split("?")[0]
+
+    if not _DB_NAME_PATTERN.match(db_name):
+        raise ValueError(
+            f"Nombre de base de datos inválido en DATABASE_URL: '{db_name}'. "
+            "Solo se permiten letras, números y guion bajo."
+        )
+
     temp_engine = create_engine(mysql_url)
     with temp_engine.connect() as conn:
-        # Extraer nombre de la base de datos
-        db_name = parts[-1] if len(parts) > 2 else "importacionesq8"
-        
-        # Crear base de datos si no existe
+        # Crear base de datos si no existe. db_name ya fue validado contra un
+        # allowlist estricto arriba, por lo que es seguro interpolarlo aquí:
+        # MySQL no soporta parámetros ligados para nombres de identificadores (CREATE DATABASE).
         try:
-            conn.execute(text(f"CREATE DATABASE {db_name}"))
+            conn.execute(text(f"CREATE DATABASE `{db_name}`"))
             print(f"Base de datos '{db_name}' creada exitosamente")
         except Exception as e:
             if "already exists" in str(e).lower() or "exists" in str(e).lower():
                 print(f"La base de datos '{db_name}' ya existe")
-    
+
     temp_engine.dispose()
 
 def create_tables():

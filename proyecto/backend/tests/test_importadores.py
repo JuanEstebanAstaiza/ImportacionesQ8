@@ -1,6 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
 from fastapi import status
+from uuid import uuid4
+from datetime import datetime
+from unittest.mock import MagicMock
+
+from models.usuario import Usuario
+from models.cotizacion import Cotizacion, EstadoCotizacion
+from utils.security import hash_password, create_access_token
+from conftest import crear_empresa_importadora, auth_headers_for, registro_payload
+
 
 class TestListarImportadores:
     """Tests para el endpoint GET /importadores"""
@@ -110,11 +119,7 @@ class TestCrearImportador:
     def test_crear_importador_sin_role_admin(self, client):
         """Intentar crear importador sin rol de admin"""
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -130,14 +135,9 @@ class TestCrearImportador:
     
     def test_crear_importador_con_role_admin(self, client):
         """Crear importador con rol de admin"""
-        # Registrar usuario admin y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "admin@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token = register_response.json()["access_token"]
+        # El auto-registro público de "admin" está cerrado por seguridad; en tests
+        # se genera el token directamente, igual que haría un admin ya existente.
+        token = create_access_token(str(uuid4()), "admin")
         
         # Crear importador - debería funcionar
         response = client.post("/importadores", json={
@@ -156,14 +156,7 @@ class TestCrearImportador:
     
     def test_crear_importador_campos_requeridos(self, client):
         """Crear importador con campos requeridos faltantes"""
-        # Registrar usuario admin y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "admin2@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token = register_response.json()["access_token"]
+        token = create_access_token(str(uuid4()), "admin")
         
         # Intentar crear sin campos requeridos - debería fallar
         response = client.post("/importadores", json={
@@ -388,3 +381,234 @@ class TestMatchingService:
         result = obtener_propuestas_recibidas("cotizacion-test-id")
         
         assert result == 0
+
+
+class TestBandejaSolicitudesImportador:
+    """Tests para GET /importadores/{id}/solicitudes-dirigidas y /solicitudes-abiertas (Tarea 2.5)"""
+
+    @pytest.fixture()
+    def importador_user(self, db_session):
+        importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Importadora Bandeja Test", email_dueño="importador_bandeja@example.com")
+        dueño.empresa = importador
+        return dueño
+
+    @pytest.fixture()
+    def otro_importador_user(self, db_session):
+        importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Otra Importadora Bandeja Test", email_dueño="otro_importador_bandeja@example.com")
+        dueño.empresa = importador
+        return dueño
+
+    @pytest.fixture()
+    def solicitante_user(self, db_session):
+        user = Usuario(
+            id=str(uuid4()),
+            email="solicitante_bandeja@example.com",
+            password_hash=hash_password("123456789"),
+            rol="solicitante",
+            perfil_completo=True,
+            fecha_creacion=datetime.utcnow()
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    def _auth_headers(self, user_id, rol):
+        token = create_access_token(str(user_id), rol)
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_solicitudes_dirigidas_solo_propias(self, client, db_session, importador_user, solicitante_user):
+        """GET /importadores/{id}/solicitudes-dirigidas retorna solo las cotizaciones dirigidas a ese importador"""
+        cotizacion = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante_user.id,
+            importador_id=importador_user.importador_id,
+            modalidad="dirigida",
+            pais_importacion="China",
+            nombre_producto="Camisetas personalizadas",
+            descripcion_cliente="Necesito 500 camisetas con logo impreso en algodón",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=500,
+            precio_objetivo_usd=3.5,
+            incoterm="FOB",
+            estado=EstadoCotizacion.dirigida
+        )
+        db_session.add(cotizacion)
+        db_session.commit()
+
+        response = client.get(
+            f"/importadores/{importador_user.importador_id}/solicitudes-dirigidas",
+            headers=auth_headers_for(importador_user)
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == str(cotizacion.id)
+
+    def test_solicitudes_dirigidas_idor_rechazado(self, client, db_session, importador_user, otro_importador_user):
+        """Un importador no puede consultar la bandeja de solicitudes de otro importador (IDOR)"""
+        response = client.get(
+            f"/importadores/{importador_user.importador_id}/solicitudes-dirigidas",
+            headers=auth_headers_for(otro_importador_user)
+        )
+
+        assert response.status_code == 403
+
+    def test_solicitudes_abiertas_con_matching(self, client, db_session, importador_user, solicitante_user):
+        """GET /importadores/{id}/solicitudes-abiertas solo muestra cotizaciones donde el importador
+        aparece en la lista de matching de Redis (no todas las cotizaciones abiertas)."""
+        cotizacion_con_matching = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante_user.id,
+            importador_id=None,
+            modalidad="abierta",
+            pais_importacion="China",
+            nombre_producto="Camisetas personalizadas",
+            descripcion_cliente="Necesito 500 camisetas con logo impreso en algodón",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=500,
+            precio_objetivo_usd=3.5,
+            incoterm="FOB",
+            estado=EstadoCotizacion.abierta
+        )
+        cotizacion_sin_matching = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante_user.id,
+            importador_id=None,
+            modalidad="abierta",
+            pais_importacion="Vietnam",
+            nombre_producto="Zapatos deportivos",
+            descripcion_cliente="Necesito 300 pares de zapatos deportivos personalizados",
+            linea_producto="Calzado",
+            tipo_calidad="premium",
+            cantidad_minima=300,
+            precio_objetivo_usd=12.0,
+            incoterm="FOB",
+            estado=EstadoCotizacion.abierta
+        )
+        db_session.add_all([cotizacion_con_matching, cotizacion_sin_matching])
+        db_session.commit()
+
+        import config
+        redis_mock = MagicMock()
+        # Solo la primera cotización tiene a este importador en su lista de matching de Redis
+        redis_mock.keys.return_value = [f"cotizacion_abierta:{cotizacion_con_matching.id}"]
+        redis_mock.hgetall.return_value = {str(importador_user.importador_id): "pendiente"}
+        original_redis = config.redis_client
+        config.redis_client = redis_mock
+
+        try:
+            response = client.get(
+                f"/importadores/{importador_user.importador_id}/solicitudes-abiertas",
+                headers=auth_headers_for(importador_user)
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 1
+            assert data[0]["id"] == str(cotizacion_con_matching.id)
+        finally:
+            config.redis_client = original_redis
+
+    def test_solicitudes_abiertas_idor_rechazado(self, client, db_session, importador_user, otro_importador_user):
+        """Un importador no puede consultar la bandeja de solicitudes abiertas de otro importador (IDOR)"""
+        response = client.get(
+            f"/importadores/{importador_user.importador_id}/solicitudes-abiertas",
+            headers=auth_headers_for(otro_importador_user)
+        )
+
+        assert response.status_code == 403
+
+
+class TestCatalogoEnriquecido:
+    """Semana 4 - Fase 6: catálogo enriquecido del dashboard del solicitante
+    (destacados, por categoría, certificados)."""
+
+    def _crear(self, db_session, **kwargs):
+        importador, _dueño = crear_empresa_importadora(db_session, **kwargs)
+        return importador
+
+    def test_destacados_ordena_por_calificacion_desc(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Baja Calificación", email_dueño="baja@example.com", calificacion_promedio=2.0)
+        self._crear(db_session, nombre_empresa="Alta Calificación", email_dueño="alta@example.com", calificacion_promedio=4.9)
+
+        response = client.get("/importadores/destacados")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 2
+        nombres = [i["nombre_empresa"] for i in data]
+        assert nombres.index("Alta Calificación") < nombres.index("Baja Calificación")
+
+    def test_destacados_respeta_limite(self, client, db_session):
+        for i in range(5):
+            self._crear(db_session, nombre_empresa=f"Empresa Destacada {i}", email_dueño=f"destacada{i}@example.com")
+
+        response = client.get("/importadores/destacados?limite=2")
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+    def test_por_categoria_agrupa_correctamente(self, client, db_session):
+        self._crear(
+            db_session, nombre_empresa="Empresa Textil", email_dueño="textil_cat@example.com",
+            especialidad_producto=["Textiles"]
+        )
+        self._crear(
+            db_session, nombre_empresa="Empresa Multi", email_dueño="multi_cat@example.com",
+            especialidad_producto=["Textiles", "Electrónica"]
+        )
+
+        response = client.get("/importadores/por-categoria")
+        assert response.status_code == 200
+        data = response.json()
+        assert "Textiles" in data
+        assert "Electrónica" in data
+        nombres_textiles = [i["nombre_empresa"] for i in data["Textiles"]]
+        assert "Empresa Textil" in nombres_textiles
+        assert "Empresa Multi" in nombres_textiles
+        nombres_electronica = [i["nombre_empresa"] for i in data["Electrónica"]]
+        assert "Empresa Textil" not in nombres_electronica
+
+    def test_certificados_solo_incluye_verificados(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Empresa Sin Certificar", email_dueño="sincert@example.com", verificado=False)
+        self._crear(db_session, nombre_empresa="Empresa Certificada", email_dueño="cert@example.com", verificado=True)
+
+        response = client.get("/importadores/certificados")
+        assert response.status_code == 200
+        data = response.json()
+        nombres = [i["nombre_empresa"] for i in data]
+        assert "Empresa Certificada" in nombres
+        assert "Empresa Sin Certificar" not in nombres
+
+    def test_listar_importadores_filtro_certificado(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Empresa Sin Certificar 2", email_dueño="sincert2@example.com", verificado=False)
+        self._crear(db_session, nombre_empresa="Empresa Certificada 2", email_dueño="cert2@example.com", verificado=True)
+
+        response = client.get("/importadores?certificado=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert all(i["verificado"] is True for i in data)
+        nombres = [i["nombre_empresa"] for i in data]
+        assert "Empresa Certificada 2" in nombres
+
+    def test_listar_importadores_orden_calificacion(self, client, db_session):
+        self._crear(db_session, nombre_empresa="Baja Orden", email_dueño="bajaorden@example.com", calificacion_promedio=1.5)
+        self._crear(db_session, nombre_empresa="Alta Orden", email_dueño="altaorden@example.com", calificacion_promedio=5.0)
+
+        response = client.get("/importadores?orden=calificacion")
+        assert response.status_code == 200
+        data = response.json()
+        nombres = [i["nombre_empresa"] for i in data]
+        assert nombres.index("Alta Orden") < nombres.index("Baja Orden")
+
+    def test_admin_verificar_marca_verificado_true(self, client, db_session, admin_user):
+        importador = self._crear(db_session, nombre_empresa="Empresa A Verificar", email_dueño="averificar@example.com")
+
+        response = client.post(
+            f"/admin/importadores/{importador.id}/verificar",
+            headers=auth_headers_for(admin_user)
+        )
+        assert response.status_code == 200
+        assert response.json()["verificado"] is True

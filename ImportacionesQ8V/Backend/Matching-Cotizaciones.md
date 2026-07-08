@@ -4,6 +4,8 @@
 
 Motor de **"matching" simple** para cotizaciones abiertas: reglas por país de importación y categoría de producto son suficientes para el MVP. Un modelo de recomendación más sofisticado puede quedar para fases posteriores. Redis también permite implementar de forma económica la ventana de tiempo de las cotizaciones abiertas (ej. expirar automáticamente una cotización abierta tras 48-72 horas).
 
+> **Estado de implementación (Semana 3):** `services/matching_service.py::matching_cotizacion_abierta` excluye del pool de matching a los importadores con `solo_cotizaciones_directas=True` — estas empresas eligieron no adaptarse al formulario estandarizado (usan un formulario propio vía `CampoPersonalizado`), por lo que solo pueden recibir cotizaciones **dirigidas** directamente a ellas, nunca abiertas. Además, el endpoint real de estado de matching es `GET /cotizaciones/{id}/matching-status` (agregado en la revisión de congruencia de Semana 2), que reemplaza al `GET /cotizaciones/{id}/estado-abierta` descrito más abajo como diseño original.
+
 ---
 
 ## Flujo de matching de cotizaciones abiertas

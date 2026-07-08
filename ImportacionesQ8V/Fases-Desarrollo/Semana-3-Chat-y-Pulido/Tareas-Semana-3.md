@@ -4,6 +4,8 @@
 
 Semana 3 del MVP a 3 semanas. Entregables: Chat 1 a 1 en tiempo real ligado a orden, repositorio de documentos básico (sin facturación electrónica), pruebas con importadores piloto, ajustes de UI/UX.
 
+> **Estado de implementación (backend, verificado con 159/159 tests pasando local y en Docker):** todas las tareas de backend de esta semana (3.1, 3.2, 3.3, 3.4) están **implementadas y probadas**, junto con un alcance ampliado solicitado durante el desarrollo: panel de empresa (trabajadores), personalización de perfiles, formulario de cotización personalizable y endpoints de administración para el alta de empresas importadoras. Ver la nueva sección **"Tareas Backend adicionales — Panel de empresa, perfiles y formulario dinámico"** más abajo. El alcance de esta ampliación fue exclusivamente backend (modelos, endpoints, tests); `proyecto/frontend` sigue sin existir, por lo que las tareas de Frontend (3.5–3.10) permanecen pendientes. El refuerzo de seguridad transversal (cierre de auto-registro, IDOR, rate limiting, etc.) está consolidado en [[Seguridad]].
+
 ---
 
 ## Resumen de entregables
@@ -144,17 +146,20 @@ Implementar el sistema de chat en tiempo real usando WebSocket para la comunicac
 
 #### Criterios de aceptación
 
-- [ ] El WebSocket se conecta correctamente y valida el JWT token del cliente
-- [ ] Los mensajes enviados por un cliente se guardan en MySQL y se reenvían a otros clientes vía Redis Pub/Sub
-- [ ] Cuando un cliente se desconecta, la conexión se remueve correctamente del almacén de conexiones activas
-- [ ] El chat funciona entre el solicitante y el importador asignado a una orden
+- [x] El WebSocket se conecta correctamente y valida el JWT token del cliente (`decode_access_token`, cierre con `WS_1008_POLICY_VIOLATION` si falta o es inválido)
+- [x] Los mensajes enviados por un cliente se guardan en MySQL/SQLite y se reenvían a otros clientes vía Redis Pub/Sub (con degradación a eco directo si Redis no está disponible)
+- [x] Cuando un cliente se desconecta (`WebSocketDisconnect`), se cancela la tarea de escucha de Redis y se cierra el `pubsub` correctamente
+- [x] El chat funciona entre el solicitante y la cuenta de la empresa (trabajador asignado o, si nadie reclamó la cotización, la cuenta dueña)
+
+> **Nota de implementación:** la conversación **no** se crea solo al confirmar el pago (como decía el plan original), sino al **aceptar o rechazar la propuesta** — antes de que exista una orden — para permitir la negociación previa al pago. `ConversacionChat.orden_id` queda `NULL` hasta que se crea la orden. Ver `Backend/Chat-WebSocket.md` para el detalle actualizado.
 
 #### Entregables
 
-1. Endpoint WebSocket `/ws/chat/{conversation_id}` funcional con validación JWT
-2. Servicio de reenvío de mensajes desde Redis Pub/Sub
-3. Modelos ORM para ConversacionChat y MensajeChat
-4. Integración del chat con el flujo de confirmación de pago
+1. ✅ Endpoint WebSocket `/ws/chat/{conversacion_id}` funcional con validación JWT (`routers/chat.py`)
+2. ✅ Reenvío de mensajes vía Redis Pub/Sub con fallback a eco directo sin Redis
+3. ✅ Modelos ORM `ConversacionChat` y `MensajeChat` (`models/chat.py`)
+4. ✅ Creación automática de la conversación al aceptar/rechazar la propuesta (`routers/cotizaciones.py::aceptar_propuesta`)
+5. ✅ 10 tests automatizados (`tests/test_chat.py`): creación de conversación, mensajes REST, IDOR entre conversaciones/empresas, WebSocket autorizado/no autorizado
 
 ---
 
@@ -271,15 +276,15 @@ Implementar los endpoints REST para cargar el historial de mensajes y enviar men
 
 #### Criterios de aceptación
 
-- [ ] GET /chat/conversaciones retorna conversaciones del usuario autenticado (200 OK)
-- [ ] GET /chat/conversaciones/{id}/mensajes retorna mensajes paginados (últimos 50) o 403 si no está autorizado
-- [ ] POST /chat/conversaciones/{id}/mensajes envía mensaje vía REST como fallback
+- [x] GET /chat/conversaciones retorna conversaciones del usuario autenticado (200 OK), filtradas por rol (solicitante, importador/trabajador o todas para admin)
+- [x] GET /chat/conversaciones/{id}/mensajes retorna el historial completo o 403 si no está autorizado (paginación no implementada, dado el volumen bajo esperado en el MVP)
+- [x] POST /chat/conversaciones/{id}/mensajes envía mensaje vía REST como fallback, publicándolo también en Redis para quien esté conectado por WebSocket
 
 #### Entregables
 
-1. Endpoint GET /chat/conversaciones funcional
-2. Endpoint GET /chat/conversaciones/{id}/mensajes funcional con paginación
-3. Endpoint POST /chat/conversaciones/{id}/mensajes funcional como fallback
+1. ✅ Endpoint GET /chat/conversaciones funcional
+2. ✅ Endpoint GET /chat/conversaciones/{id}/mensajes funcional (sin paginación en esta iteración)
+3. ✅ Endpoint POST /chat/conversaciones/{id}/mensajes funcional como fallback
 
 ---
 
@@ -379,13 +384,15 @@ Implementar el modelo y endpoints REST para que las órdenes tengan documentos a
 
 #### Criterios de aceptación
 
-- [ ] GET /ordenes/{id}/documentos retorna documentos de una orden (200 OK) o 403 si no está autorizado
-- [ ] POST /ordenes/{id}/documentos sube un documento a la orden (solo importador/admin)
+- [x] GET /ordenes/{id}/documentos retorna documentos de una orden (200 OK) o 403 si no está autorizado
+- [x] POST /ordenes/{id}/documentos sube un documento a la orden (solo importador/admin)
+
+> **Nota:** esta tarea ya se implementó y probó durante la Semana 2 (`routers/ordenes.py`), por lo que no requirió trabajo adicional en la Semana 3 — solo se deja constancia aquí.
 
 #### Entregables
 
-1. Endpoint GET /ordenes/{id}/documentos funcional con verificación de autorización
-2. Endpoint POST /ordenes/{id}/documentos funcional para subir documentos
+1. ✅ Endpoint GET /ordenes/{id}/documentos funcional con verificación de autorización
+2. ✅ Endpoint POST /ordenes/{id}/documentos funcional para subir documentos
 
 ---
 
@@ -429,17 +436,143 @@ Implementar los endpoints REST para el panel de administración interno donde el
 
 #### Criterios de aceptación
 
-- [ ] GET /admin/cotizaciones-abiertas retorna cotizaciones abiertas activas con importadores matching y ventana restante
-- [ ] GET /admin/disputas retorna órdenes en disputa
-- [ ] POST /admin/importadores/{id}/verificar verifica empresa importadora (solo admin)
-- [ ] PUT /admin/importadores/{id}/estado activa/desactiva importador de la red (solo admin)
+- [x] GET /admin/cotizaciones-abiertas retorna cotizaciones abiertas activas (versión simplificada: sin el detalle en vivo de Redis del ejemplo original, que se puede añadir después con `GET /cotizaciones/{id}/matching-status`)
+- [x] GET /admin/disputas retorna órdenes en disputa
+- [x] POST /admin/importadores/{id}/verificar verifica empresa importadora (solo admin)
+- [x] PUT /admin/importadores/{id}/estado activa/desactiva importador de la red (solo admin)
+- [x] PUT /ordenes/{id}/reportar-problema permite al solicitante abrir una disputa (`en_disputa`, `motivo_disputa`)
+- [x] PUT /admin/disputas/{orden_id}/resolver permite al admin cerrar la disputa
+
+> **Ampliación de seguridad y monitoreo** (a pedido explícito, ver sección siguiente): se cerró el auto-registro público de `admin`/`importador`, y se agregaron `GET /admin/usuarios`, `PUT /admin/usuarios/{id}/estado` y `GET /admin/metricas` (métricas de éxito del PDF).
 
 #### Entregables
 
-1. Endpoint GET /admin/cotizaciones-abiertas funcional con datos de Redis
-2. Endpoint GET /admin/disputas funcional
-3. Endpoint POST /admin/importadores/{id}/verificar funcional
-4. Endpoint PUT /admin/importadores/{id}/estado funcional
+1. ✅ Endpoint GET /admin/cotizaciones-abiertas funcional
+2. ✅ Endpoint GET /admin/disputas funcional
+3. ✅ Endpoint POST /admin/importadores/{id}/verificar funcional
+4. ✅ Endpoint PUT /admin/importadores/{id}/estado funcional
+5. ✅ Endpoints de disputa: `PUT /ordenes/{id}/reportar-problema` y `PUT /admin/disputas/{id}/resolver`
+
+---
+
+## Tareas Backend adicionales — Panel de empresa, perfiles y formulario dinámico
+
+Ampliación de alcance solicitada durante el desarrollo de la Semana 3: las empresas importadoras del MVP dejan de modelarse como una sola cuenta (`Usuario.rol="importador"` == `Importador`) y pasan a ser una **empresa con varios usuarios** (una cuenta dueña + trabajadores), con perfiles personalizables y la posibilidad de definir su propio formulario de cotización. Todo el trabajo fue exclusivamente backend, con 159/159 tests pasando en local y Docker.
+
+### Tarea 3.13: Desacoplar identidad Usuario/Importador y cerrar auto-registro de admin/importador
+
+**Módulo:** Backend/Autenticacion, todos los routers  
+**Estado:** ✅ Completado
+
+#### Descripción
+El backend original asumía `Usuario.id == Importador.id` para el rol "importador", lo que hacía imposible tener varios trabajadores logueados bajo la misma empresa y abría un hueco de seguridad (cualquiera podía auto-registrarse como `admin` o `importador` vía `POST /auth/register`).
+
+#### Cambios implementados
+- `Usuario.importador_id` (FK nullable a `importadores.id`) desacopla la cuenta de la empresa. Nuevos campos de perfil: `nombre`, `telefono`, `foto_url`, `whatsapp`, `activo`.
+- Rol nuevo `trabajador`, además de `solicitante`, `importador` (cuenta dueña) y `admin`.
+- El JWT incluye el claim `importador_id`; todas las comprobaciones de propiedad (IDOR) en `routers/importadores.py`, `routers/cotizaciones.py`, `routers/ordenes.py` y `routers/pagos.py` se refactorizaron para usar `current_user["importador_id"]` en vez de `current_user["user_id"]`.
+- `POST /auth/register` **solo** acepta `rol="solicitante"`; crear cuentas `admin` o `importador` ahora requiere que un admin ya autenticado use `POST /admin/importadores` (importador) — no existe un camino de auto-registro para `admin`.
+- `Usuario.activo`: el login y el refresh de token rechazan cuentas desactivadas (`401 Unauthorized`).
+
+#### Criterios de aceptación
+- [x] El auto-registro público rechaza `rol="admin"` y `rol="importador"` con `400 Bad Request`
+- [x] El JWT incluye `importador_id` y se usa consistentemente para las comprobaciones de propiedad entre empresas (IDOR)
+- [x] Una cuenta con `activo=False` no puede iniciar sesión ni renovar su token
+- [x] Toda la suite de tests existente se migró al nuevo modelo desacoplado (helpers `crear_empresa_importadora` y `auth_headers_for` en `conftest.py`)
+
+> Ver [[Seguridad]] para el resumen consolidado de este y todo el resto del blindaje de seguridad de la app (SQL injection, IDOR, rate limiting, ACID, webhooks).
+
+---
+
+### Tarea 3.14: Panel de empresa — trabajadores y reclamo de cotizaciones
+
+**Módulo:** Backend/API-Rest (`routers/importadores.py`, `routers/cotizaciones.py`, `routers/usuarios.py`)  
+**Estado:** ✅ Completado
+
+#### Descripción
+Las empresas importadoras pueden crear cuentas de trabajador con permisos limitados: solo pueden reclamar cotizaciones de un pool compartido ("el primero que hace clic se la queda"), ver cuántas tienen asignadas y negociar por chat. La cuenta dueña sigue siendo la única que envía la propuesta formal (`POST /propuestas`).
+
+#### Endpoints implementados
+| Método | Endpoint | Rol |
+|--------|----------|-----|
+| POST | `/importadores/trabajadores` | Dueño |
+| GET | `/importadores/trabajadores` | Dueño |
+| PUT | `/importadores/trabajadores/{id}/estado` | Dueño |
+| GET | `/cotizaciones/pool-empresa` | Dueño + trabajador |
+| POST | `/cotizaciones/{id}/reclamar` | Trabajador |
+| GET | `/trabajadores/me/cotizaciones` | Trabajador |
+
+#### Criterios de aceptación
+- [x] Solo la cuenta dueña puede crear/listar/activar-desactivar trabajadores de su propia empresa (403 si es de otra empresa)
+- [x] El reclamo de cotizaciones es atómico (`UPDATE ... WHERE trabajador_asignado_id IS NULL`): dos trabajadores reclamando a la vez no pueden quedarse ambos con la misma cotización (`409 Conflict` para el segundo)
+- [x] Un trabajador no puede reclamar cotizaciones de otra empresa
+- [x] Al aceptar/rechazar la propuesta, se notifica (best-effort, Redis) al trabajador asignado
+- [x] 14 tests automatizados en `tests/test_trabajadores.py`, incluyendo la condición de carrera del reclamo
+
+---
+
+### Tarea 3.15: Personalización de perfiles (empresa y usuario)
+
+**Módulo:** Backend/API-Rest (`routers/importadores.py`, `routers/usuarios.py`)  
+**Estado:** ✅ Completado
+
+#### Endpoints implementados
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| PUT | `/importadores/{id}` | Autoservicio del perfil de la empresa (nombre, logo, países, especialidades, capacidad, tiempo de respuesta, `solo_cotizaciones_directas`) — solo el dueño de esa empresa |
+| GET | `/usuarios/me` | Perfil personal de la cuenta autenticada (cualquier rol) |
+| PUT | `/usuarios/me` | Actualiza nombre, teléfono, foto y WhatsApp (aplica a solicitante, dueño y trabajador) |
+
+#### Criterios de aceptación
+- [x] Un dueño no puede editar el perfil de otra empresa (403)
+- [x] Un trabajador no puede editar el perfil de la empresa (solo la cuenta dueña)
+- [x] 8 tests automatizados en `tests/test_perfiles.py`
+
+---
+
+### Tarea 3.16: Formulario de cotización personalizable
+
+**Módulo:** Backend/API-Rest (`routers/importadores.py`, `routers/cotizaciones.py`, `services/matching_service.py`)  
+**Estado:** ✅ Completado
+
+#### Descripción
+Las empresas eligen: si quieren aparecer en la red de matching abierto, usan el formulario estándar del PDF sin personalización; si prefieren definir su propio formulario (agregar/modificar campos), se marcan como `solo_cotizaciones_directas=True` y quedan fuera del motor de matching de cotizaciones abiertas.
+
+#### Endpoints implementados
+| Método | Endpoint | Rol |
+|--------|----------|-----|
+| POST/GET/PUT/DELETE | `/importadores/campos-personalizados[/{id}]` | Dueño, solo si `solo_cotizaciones_directas=True` |
+| GET | `/importadores/{id}/formulario` | Público (indica al frontend qué formulario renderizar) |
+
+#### Criterios de aceptación
+- [x] Solo empresas `solo_cotizaciones_directas=True` pueden crear campos personalizados (400 para las demás)
+- [x] `POST /cotizaciones` valida los campos obligatorios personalizados cuando la modalidad es dirigida a una empresa personalizada
+- [x] Las empresas `solo_cotizaciones_directas=True` se excluyen del motor de matching de cotizaciones abiertas (`services/matching_service.py`)
+- [x] 11 tests automatizados en `tests/test_formulario_personalizado.py`
+
+---
+
+### Tarea 3.17: Endpoints de administración para el alta de empresas importadoras
+
+**Módulo:** Backend/API-Rest (`routers/admin.py`)  
+**Estado:** ✅ Completado
+
+#### Descripción
+Dado que se cerró el auto-registro público de cuentas `importador`, la plataforma (como administrador) crea la empresa y su cuenta dueña en un solo paso transaccional.
+
+#### Endpoints implementados
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/admin/importadores` | Crea el `Importador` + su cuenta dueña (`rol="importador"`) atómicamente |
+| GET | `/admin/usuarios` | Monitoreo de cuentas de la plataforma, filtrable por rol/estado |
+| PUT | `/admin/usuarios/{id}/estado` | Activa/desactiva cualquier cuenta (control crítico de seguridad) |
+| GET | `/admin/metricas` | Métricas de éxito del PDF: volumen de cotizaciones, tasa de respuesta, tiempo a primera propuesta, tasa de conversión, salud de la red |
+
+#### Criterios de aceptación
+- [x] Solo un admin puede crear empresas importadoras; la cuenta dueña puede iniciar sesión inmediatamente después
+- [x] Email duplicado para la cuenta dueña es rechazado (400)
+- [x] Desactivar una cuenta desde `/admin/usuarios/{id}/estado` le bloquea el login de inmediato
+- [x] 14 tests automatizados en `tests/test_admin.py` (incluye disputas y métricas)
 
 ---
 
@@ -890,13 +1023,18 @@ Implementar pruebas unitarias para endpoints de autenticación, CRUD de cotizaci
 
 ## Criterios de aceptacion — Semana 3 (Resumen)
 
-| Entregable | Criterio de aceptación |
-|------------|----------------------|
-| Chat en tiempo real | Los usuarios pueden chatear en tiempo real con WebSocket. El historial se guarda en MySQL y se carga paginado. |
-| Repositorio de documentos | Las órdenes tienen documentos adjuntos accesibles desde el detalle de la orden. |
-| Panel admin | El equipo de administración puede ver cotizaciones abiertas, disputas e importadores vinculados. |
-| Ajustes UI/UX | Todas las pantallas son consistentes visualmente y funcionales en móvil. |
-| Pruebas con importadores piloto | Al menos 2-3 importadores han probado el flujo completo sin bloqueos críticos. |
+| Entregable | Criterio de aceptación | Estado real |
+|------------|----------------------|--------------|
+| Chat en tiempo real | Los usuarios pueden chatear en tiempo real con WebSocket. El historial se guarda en MySQL/SQLite (sin paginación en esta iteración). | ✅ Cumplido — `routers/chat.py`, 10 tests |
+| Repositorio de documentos | Las órdenes tienen documentos adjuntos accesibles desde el detalle de la orden. | ✅ Cumplido (implementado en Semana 2) |
+| Panel admin | El equipo de administración puede ver cotizaciones abiertas, disputas e importadores vinculados, además de crear empresas y monitorear cuentas. | ✅ Cumplido — `routers/admin.py`, 14 tests |
+| Panel de empresa (trabajadores) | Las empresas pueden crear trabajadores con permisos limitados que reclaman cotizaciones y negocian por chat. | ✅ Cumplido — 14 tests |
+| Perfiles personalizables | Empresa y usuario pueden personalizar su perfil vía autoservicio. | ✅ Cumplido — 8 tests |
+| Formulario de cotización personalizable | Empresas `solo_cotizaciones_directas` definen sus propios campos. | ✅ Cumplido — 11 tests |
+| Ajustes UI/UX | Todas las pantallas son consistentes visualmente y funcionales en móvil. | ⏳ Pendiente (no hay frontend en el repositorio) |
+| Pruebas con importadores piloto | Al menos 2-3 importadores han probado el flujo completo sin bloqueos críticos. | ⏳ Pendiente (requiere staging + usuarios reales) |
+
+> Suite de backend: **159/159 tests pasando** en local y en Docker (`docker compose run --rm --build tests`).
 
 ---
 
