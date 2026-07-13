@@ -1,19 +1,15 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from jose import jwt, JWTError
-from typing import Optional
+from jose import JWTError
 
-# Importación condicional para evitar conectar a MySQL en tests
+# Importacion condicional para evitar conectar a MySQL en tests
 try:
     from database import get_db as _get_db
 except Exception:
-    # En modo test con SQLite, usar una función alternativa
     def _get_db():
-        """Fallback para cuando no hay conexión a MySQL"""
+        """Fallback para cuando no hay conexion a MySQL"""
         return None
 
-from config import SECRET_KEY, ALGORITHM
 from utils.security import decode_access_token
 
 # Esquema de seguridad para extraer el token del header Authorization
@@ -21,12 +17,19 @@ from utils.security import decode_access_token
 security = HTTPBearer(auto_error=False)
 
 def get_db():
-    """Dependencia FastAPI para obtener una sesión de base de datos"""
-    try:
-        return _get_db()
-    except Exception:
-        # Fallback si no hay conexión a MySQL
-        return None
+    """
+    Dependencia FastAPI para obtener una sesion de base de datos.
+
+    Debe *yield*-ear la sesion. Un `return _get_db()` devolveria el objeto
+    generator y en produccion falla con
+    `AttributeError: 'generator' object has no attribute 'query'`
+    (los tests enmascaraban el bug al overridear esta dependencia).
+    """
+    gen = _get_db()
+    if gen is None:
+        yield None
+        return
+    yield from gen
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -35,12 +38,12 @@ async def get_current_user(
     Dependencia que extrae y valida el JWT token del header Authorization.
     
     Returns:
-        Diccionario con {user_id, rol} si el token es válido
+        Diccionario con {user_id, rol} si el token es valido
         
     Raises:
-        HTTPException 401: Si el token es inválido o está expirado
+        HTTPException 401: Si el token es invalido o esta expirado
     """
-    # Si no hay credentials (no se proporcionó token), retornar 401
+    # Si no hay credentials (no se proporciono token), retornar 401
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -59,13 +62,13 @@ async def get_current_user(
         if user_id is None or rol is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token inválido",
+                detail="Token invalido",
                 headers={"WWW-Authenticate": "Bearer"},
             )
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token inválido o expirado: {str(e)}",
+            detail=f"Token invalido o expirado: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -79,7 +82,7 @@ def require_rol(rol: str):
         rol: Rol requerido para acceder al endpoint
         
     Returns:
-        Función de dependencia que valida el rol del usuario
+        Funcion de dependencia que valida el rol del usuario
     """
     async def verificar_rol(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user["rol"] != rol:
@@ -94,7 +97,7 @@ def require_rol(rol: str):
 def require_rol_in(*roles: str):
     """
     Dependencia que permite el acceso a cualquiera de varios roles (ej. la cuenta
-    dueña "importador" y sus "asesor" comparten algunos endpoints del panel
+    duena "importador" y sus "asesor" comparten algunos endpoints del panel
     de empresa).
     """
     async def verificar_rol(current_user: dict = Depends(get_current_user)) -> dict:

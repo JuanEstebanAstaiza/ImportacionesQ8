@@ -8,7 +8,8 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: importacionesq8
       MYSQL_USER: usuario_q8
-      MYSQL_PASSWORD: contraseña_q8
+      # ASCII-only password: non-ASCII chars (e.g. ñ) break SQLAlchemy/PyMySQL URL parsing and auth.
+      MYSQL_PASSWORD: password_q8
     ports:
       - "3306:3306"
     volumes:
@@ -40,7 +41,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+pymysql://usuario_q8:contraseña_q8@mysql/importacionesq8
+      DATABASE_URL: mysql+pymysql://usuario_q8:password_q8@mysql/importacionesq8
       SECRET_KEY: clave-secreta-para-desarrollo-cambiar-en-produccion-2024
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 1440
@@ -51,6 +52,7 @@ services:
       WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:-cambiar-por-el-secreto-de-eventos-de-wompi}
       RATE_LIMIT_LOGIN: 5/minute
       RATE_LIMIT_REGISTER: 10/minute
+      RATE_LIMIT_FORGOT_PASSWORD: 5/minute
     depends_on:
       mysql:
         condition: service_healthy

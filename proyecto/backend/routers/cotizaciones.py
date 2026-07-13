@@ -516,8 +516,9 @@ async def enviar_propuesta(
     )
     db.add(nueva_propuesta)
     
-    # 5. Actualizar estado de la cotización a "propuestas_recibidas" si es la primera propuesta
-    if cotizacion.estado == "abierta":
+    # 5. Actualizar estado de la cotización a "propuestas_recibidas" al recibir la primera propuesta
+    # (aplica a abierta Y dirigida; sin esto, negociar/aceptar falla en dirigidas).
+    if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
     
     # 6. Confirmar en una única transacción atómica (ACID). La restricción única
@@ -699,7 +700,7 @@ async def enviar_borrador_propuesta(
     _validar_congruencia_categoria(cotizacion, propuesta_db.importador_id, db)
 
     propuesta_db.estado = EstadoPropuesta.pendiente
-    if cotizacion.estado == "abierta":
+    if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
 
     db.commit()

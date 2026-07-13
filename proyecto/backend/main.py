@@ -25,13 +25,16 @@ logger = logging.getLogger("importacionesq8")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestiona el inicio y parada de la aplicación"""
-    # Inicio - inicializar recursos (ej. conectar a Redis)
-    print("🚀 Iniciando servidor ImportacionesQ8...")
+    print("Iniciando servidor ImportacionesQ8...")
+    try:
+        from database import init_db
+        init_db()
+    except Exception as e:
+        logger.exception("No se pudo inicializar la base de datos: %s", e)
     
     yield
     
-    # Parada - limpiar recursos
-    print("🛑 Apagando servidor ImportacionesQ8...")
+    print("Apagando servidor ImportacionesQ8...")
 
 # Crear la aplicación FastAPI
 app = FastAPI(

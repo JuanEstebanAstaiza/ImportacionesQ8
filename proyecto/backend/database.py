@@ -38,13 +38,10 @@ def create_database_if_not_exists():
 
     from sqlalchemy import text
 
-    # Extraer la URL sin el nombre de la base de datos
-    parts = DATABASE_URL.split("/")
-    mysql_url = parts[0] + "://" + "/".join(parts[1:-1])
-
-    # Extraer nombre de la base de datos y separar posibles query params (?charset=...)
-    db_name_raw = parts[-1] if len(parts) > 2 else "importacionesq8"
-    db_name = db_name_raw.split("?")[0]
+    # URL sin el nombre de la DB: mysql+pymysql://user:pass@host/dbname -> ...@host
+    # (NO usar split("/") + reensamblar: produce 'mysql+pymysql::///user:pass@host')
+    mysql_url, db_name_raw = DATABASE_URL.rsplit("/", 1)
+    db_name = db_name_raw.split("?")[0] or "importacionesq8"
 
     if not _DB_NAME_PATTERN.match(db_name):
         raise ValueError(
@@ -71,10 +68,17 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     print("Tablas creadas exitosamente")
 
-# Inicializar la base de datos al importar el módulo
-try:
+def init_db():
+    """
+    Crea la base (si aplica) y las tablas.
+
+    Debe llamarse DESPUÉS de importar los modelos ORM; de lo contrario
+    `Base.metadata` está vacío y `create_all` no crea ninguna tabla.
+    """
     create_database_if_not_exists()
+    import models  # noqa: F401
     create_tables()
-except Exception as e:
-    # Si falla (ej. no hay conexión a MySQL), se manejará en main.py
-    print(f"Nota: No se pudo inicializar la base de datos: {e}")
+
+# No inicializar al importar: en ese momento los modelos aún no están
+# registrados y create_all dejaría MySQL sin tablas (bug enmascarado por tests
+# con SQLite que importan modelos antes de create_all en conftest).
