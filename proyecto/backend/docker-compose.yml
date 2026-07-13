@@ -10,6 +10,8 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-importacionesq8}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    # Capacidad para alto flujo: workers × (pool_size + max_overflow) < max-connections
+    command: ["--max-connections=500", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     ports:
       - "3306:3306"
     volumes:
@@ -49,6 +51,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_ENV: ${APP_ENV:-development}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
       WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-pub_test_placeholder}
       WOMPI_SECRET_KEY: ${WOMPI_SECRET_KEY:-prv_test_placeholder}
       WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:?WOMPI_EVENTS_SECRET must be set in .env}

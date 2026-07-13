@@ -102,6 +102,8 @@ WHERE estado = 'activo'
 
 ## Redis para gestión de cotizaciones abiertas
 
+> **Actualización 2026-07-13:** el pool/inbox **ya no usa** `KEYS cotizacion_abierta:*` (O(N) bloqueante). Se mantiene un índice SET por importador. Ver [[Remediaciones-Backend-Jul-2026]].
+
 ### Estructura de datos en Redis
 
 | Clave | Tipo | Valor | TTL | Descripción |
@@ -109,11 +111,13 @@ WHERE estado = 'activo'
 | `cotizacion_abierta:{id}` | Hash | `{importador_id_1: "pendiente", importador_id_2: "respondido"}` | 72h | Estado de respuestas por importador |
 | `cotizacion_abierta:{id}:respuestas` | Counter | Número entero | 72h | Contador de propuestas recibidas |
 | `cotizacion_abierta:{id}:expiracion` | String | Timestamp de expiración | 72h | Fecha límite para respuestas |
+| `indice:importador:{id}:abiertas` | Set | IDs de cotizaciones abiertas del importador | — | Índice para pool/inbox (`SMEMBERS`, no `KEYS`) |
+| `indice:abiertas:global` | Set | IDs de cotizaciones abiertas | — | Índice global auxiliar |
 
 ### Operaciones Redis
 
 ```python
-# Al crear cotización abierta
+# Al crear cotización abierta (matching_cotizacion_abierta)
 redis.hset(f"cotizacion_abierta:{cotizacion_id}", mapping={
     importador_id: "pendiente" for importador_id in matching_importadores
 })
@@ -122,14 +126,22 @@ redis.setex(
     259200,  # 72 horas en segundos
     datetime.now() + timedelta(hours=72)
 )
+# Indexar por importador (evita KEYS)
+for importador_id in matching_importadores:
+    redis.sadd(f"indice:importador:{importador_id}:abiertas", cotizacion_id)
+redis.sadd("indice:abiertas:global", cotizacion_id)
 
 # Al recibir una propuesta
 redis.hset(f"cotizacion_abierta:{cotizacion_id}", importador_id, "respondido")
 redis.incr(f"cotizacion_abierta:{cotizacion_id}:respuestas")
 
+# Pool / inbox de la empresa: SMEMBERS del índice, no KEYS
+ids = redis.smembers(f"indice:importador:{importador_id}:abiertas")
+
+# Al expirar: desindexar (expirar_cotizacion_abierta)
 # Verificar si cotización abierta está expirada
 if redis.ttl(f"cotizacion_abierta:{cotizacion_id}") <= 0:
-    # Cotización expirada - actualizar estado en MySQL
+    # Cotización expirada - actualizar estado en MySQL y quitar del índice
 ```
 
 ---
@@ -225,5 +237,6 @@ sequenceDiagram
 
 - **Matching simple en MVP:** Solo dos criterios (país + categoría). Un modelo más sofisticado podría incluir: calificación del importador, tiempo de respuesta promedio, capacidad de volumen, historial de éxito.
 - **TTL de 72 horas en Redis:** La ventana de tiempo para respuestas se implementa con `SET key value EX 259200` (72h). Cuando la clave expira, el estado de la cotización cambia automáticamente a "propuestas_recibidas".
+- **Índice SET por importador (2026-07-13):** pool e inbox usan `SMEMBERS` sobre `indice:importador:{id}:abiertas`. **Prohibido** `KEYS` en hot path.
 - **Notificaciones push:** Para MVP, las notificaciones se envían vía WebSocket/SSE cuando el importador tiene la aplicación abierta. WhatsApp Business API puede evaluarse en fase 2.
 - **Escalabilidad futura:** Si el número de importadores crece significativamente, el matching puede migrar a un motor basado en Elasticsearch para búsquedas más eficientes sobre campos JSON.

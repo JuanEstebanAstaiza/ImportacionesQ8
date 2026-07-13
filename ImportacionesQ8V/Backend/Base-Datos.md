@@ -312,7 +312,27 @@ erDiagram
 
 ## Migraciones y esquema inicial
 
-### Script de creación del esquema (pseudocódigo SQL)
+### Alembic (estado actual — 2026-07-13)
+
+El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`:
+
+| Pieza | Rol |
+|-------|-----|
+| `alembic.ini` + `alembic/env.py` | Configuración y URL desde settings |
+| Revisión inicial `20260713_0001` | Baseline del esquema |
+| Arranque (`main.py` lifespan) | `alembic upgrade head`; si hace falta, fallback `init_db()` (`create_all`) + stamp |
+
+Comandos típicos:
+
+```bash
+cd proyecto/backend
+alembic upgrade head
+alembic revision --autogenerate -m "descripcion"
+```
+
+> **Importante:** no usar solo `create_all` al importar módulos: la metadata debe estar cargada (modelos importados) antes de crear tablas. Detalle en [[Remediaciones-Backend-Jul-2026]] y [[Auditoria-Backend-2026-07-13]].
+
+### Script de creación del esquema (pseudocódigo SQL de referencia)
 
 ```sql
 -- Crear base de datos
@@ -488,3 +508,5 @@ CREATE INDEX idx_ordenes_solicitante_estado ON ordenes(solicitante_id, estado);
 - **JSON para arrays de categorías:** `especialidad_producto` y `paises_origen` usan tipo JSON en lugar de tablas separadas para simplificar las consultas iniciales
 - **UUIDs como primary keys:** mejor seguridad (no exponer IDs secuenciales) y facilidad para generar IDs distribuidos sin conflictos
 - **Timestamps automáticos:** uso de `DEFAULT CURRENT_TIMESTAMP` y `ON UPDATE CURRENT_TIMESTAMP` para mantener trazabilidad sin lógica adicional en el backend
+- **Migraciones versionadas:** cambios de esquema vía Alembic (no depender de `create_all` en producción)
+- **Pool de conexiones:** `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` + `pool_pre_ping`; MySQL Compose con `--max-connections=500` para carga alta (ver [[Pruebas-Carga-1000-Concurrentes]])

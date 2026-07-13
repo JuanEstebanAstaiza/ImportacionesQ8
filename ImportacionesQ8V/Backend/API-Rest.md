@@ -8,6 +8,15 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 
 ## Endpoints principales
 
+### Salud / readiness (ops — 2026-07-13)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/health` | Liveness: el proceso responde (no comprueba dependencias) |
+| GET | `/health/ready` | Readiness: MySQL `SELECT 1` + Redis `PING`; **503** si alguna falla |
+
+Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backend-Jul-2026]].
+
 ### Autenticación
 
 | Método | Endpoint | Descripción |
@@ -388,5 +397,6 @@ graph LR
 - **Formato de respuesta:** JSON con estructura uniforme: `{"success": true/false, "data": {...}, "error": null}`
 - **Paginación:** Todos los endpoints que retornan listas soportan `?page=1&limit=20`
 - **Filtros:** Los endpoints GET soportan filtros query params (ej. `/importadores?especialidad=textiles&pais=china`)
-- **Errores HTTP:** 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), 500 (Internal Server Error)
+- **Errores HTTP:** 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), 402 (créditos insuficientes), 409 (conflicto/carrera), 500 (Internal Server Error), 503 (no ready)
 - **Documentación automática:** Swagger UI en `/docs` y OpenAPI spec en `/openapi.json`
+- **Carga / capacidad:** resultados de 1000 usuarios concurrentes en [[Pruebas-Carga-1000-Concurrentes]]; workers vía `WEB_CONCURRENCY`

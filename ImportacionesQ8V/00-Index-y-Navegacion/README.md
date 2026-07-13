@@ -14,6 +14,7 @@ Este vault de Obsidian contiene toda la documentación del proyecto **Importacio
 | [Backend](../Backend/) | Documentación técnica del backend (API, base de datos, autenticación, pagos, chat) |
 | [Frontend](../Frontend/) | Documentación técnica del frontend (pantallas, componentes, wireframes, UX/UI) |
 | [Fases-Desarrollo](../Fases-Desarrollo/) | Tareas y entregables organizados por semana de desarrollo |
+| [Auditoria](../Auditoria/) | Auditorías técnicas, remediaciones y pruebas de carga (carpeta independiente) |
 | [Inversionistas](../Inversionistas/) | Material para presentación a inversionistas y stakeholders |
 
 ---
@@ -42,6 +43,13 @@ graph TD
     B --> B5[Chat-WebSocket]
     B --> B6[Matching-Cotizaciones]
     B --> B7[Seguridad]
+
+    AUD[Auditoria] --> AUD1[Auditoria-Backend-2026-07-13]
+    AUD --> AUD2[Remediaciones-Backend-Jul-2026]
+    AUD --> AUD3[Pruebas-Carga-1000-Concurrentes]
+    AUD1 --> B
+    AUD2 --> B7
+    AUD3 --> B1
 
     C --> C1[Pantallas-Solicitante]
     C --> C2[Pantallas-Importador]
@@ -73,6 +81,7 @@ graph TD
 2. Revisa [[Arquitectura-Tecnologica]] para conocer las decisiones técnicas
 3. Explora la carpeta [Backend](../Backend/) para documentación detallada de cada módulo, y revisa [[Seguridad]] para el blindaje ya implementado antes de tocar autenticación, IDOR o pagos
 4. Consulta las tareas en [Fases-Desarrollo](../Fases-Desarrollo/) según tu semana asignada
+5. Revisa [Auditoria](../Auditoria/) para hallazgos, remediaciones (2026-07-13) y resultados de carga a 1000 usuarios concurrentes
 
 ### Si eres desarrollador Frontend:
 1. Lee [[Propuesta-Completa]] para entender el contexto del proyecto
@@ -95,12 +104,15 @@ graph TD
 | **Semana 2** | ✅ Completo (revisado 2026-07-06) | ⬜ Pendiente | Red de importadores y órdenes — ver [[Tareas-Semana-2]] |
 | **Semana 3** | ✅ Completo (2026-07-07) | ⬜ Pendiente | Chat, documentos, panel admin + ampliación (trabajadores, perfiles, formulario dinámico) — ver [[Tareas-Semana-3]] |
 | **Semana 4** | ✅ Completo (2026-07-08) | ⬜ Pendiente | Asesores (renombrado de trabajador), créditos, registro extendido y blindaje adicional — ver [[Tareas-Semana-4]] |
+| **Auditoría** | ✅ Completo (2026-07-13) | — | Full-code + Docker + remediaciones + carga 1000 concurrentes — ver [Auditoria](../Auditoria/) |
 
 *Backend Semana 2 revisado el 2026-07-06: 101/101 tests pasando en local y Docker; se corrigieron IDOR, verificación de firma de webhooks, condiciones de carrera e idempotencia. El mismo día se verificó la congruencia del backend contra `docs/Propuesta_Plataforma_Importacion.pdf` y los wireframes del vault, corrigiendo 2 gaps (campo `incoterm` faltante en Propuesta, endpoint de estado de matching faltante). Ver el detalle en [[Tareas-Semana-2]].*
 
 *Backend Semana 3 completado el 2026-07-07: 159/159 tests pasando en local y Docker. Incluye las 4 tareas backend originales de la Semana 3 (chat WebSocket + Redis Pub/Sub, endpoints REST de chat, repositorio de documentos ya verificado, panel admin con disputas) y una ampliación de alcance pedida explícitamente: desacople de identidad `Usuario`/`Importador` (soporte multi-usuario por empresa vía `importador_id`), panel de empresa con cuentas de trabajador y reclamo atómico de cotizaciones, personalización de perfiles (empresa y usuario), formulario de cotización personalizable para empresas `solo_cotizaciones_directas`, y endpoints de administración para el alta de empresas importadoras. Se cerró además el auto-registro público de cuentas `admin`/`importador` como refuerzo de seguridad. Ver el detalle en [[Tareas-Semana-3]] y [[Base-Datos]].*
 
 *Backend Semana 4 completado el 2026-07-08: **221/221 tests pasando en local y Docker**. Registro diferenciado natural/jurídica con páginas legales placeholder, recuperación de contraseña con OTP + SMTP real, sistema de créditos que reemplaza la comisión por orden (con recreación de cotizaciones mediada por admin), renombrado de "trabajador" a "asesor" con redacción/envío de propuestas separados y validación de congruencia de categoría, doble aceptación mutua que crea la orden automáticamente y traspasa el chat al dueño de la empresa (supervisor), catálogo enriquecido de importadores (destacados, por categoría, certificados), y navegación cruzada entre cotización/propuesta/orden/chat. Ver el detalle en [[Tareas-Semana-4]], y el resumen consolidado de todo el blindaje de seguridad de la app (SQL injection, IDOR, rate limiting, ACID, webhooks, OTP, créditos) en [[Seguridad]].*
+
+*Auditoría + remediaciones + carga (2026-07-13): campaña documentada en la carpeta independiente [[Auditoria]] ([[Auditoria-Backend-2026-07-13]], [[Remediaciones-Backend-Jul-2026]], [[Pruebas-Carga-1000-Concurrentes]]). Se corrigieron bugs críticos de arranque Docker (`get_db`, init DB/Alembic, cotización dirigida → `propuestas_recibidas`), se reforzó capacidad (workers, pool DB, índice Redis sin `KEYS`, débito atómico de créditos, `/health/ready`, CI). Suite post-fix: **225/225** tests. Carga: **1000/1000** usuarios concurrentes OK.*
 
 ---
 

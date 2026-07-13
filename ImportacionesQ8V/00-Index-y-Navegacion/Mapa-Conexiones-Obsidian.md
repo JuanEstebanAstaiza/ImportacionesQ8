@@ -41,6 +41,12 @@ graph LR
         T[Metricas-MVP]
     end
 
+    subgraph Auditoria["Auditoria"]
+        AUD[Auditoria-Backend-2026-07-13]
+        REM[Remediaciones-Backend-Jul-2026]
+        LOAD[Pruebas-Carga-1000-Concurrentes]
+    end
+
     A --> B
     A --> C
     A --> D
@@ -100,6 +106,14 @@ graph LR
     N --> Q
 
     U --> V
+
+    AUD --> REM
+    AUD --> LOAD
+    AUD --> U
+    AUD --> D
+    REM --> E
+    REM --> I
+    LOAD --> D
 
     R --> S
     R --> T
