@@ -17,6 +17,10 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 
+import { Quote } from "../types/quote";
+import { Importer } from "../types/importer";
+import { SidebarCtrl } from "../types/portal";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,13 +220,6 @@ function NotifIcon({icon,count=0}:{icon:React.ReactNode;count?:number}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────────────────────
-type QuoteStatus="created"|"directed"|"open"|"accepted"|"active-order";
-type QuoteMode="Dirigida"|"Abierta";
-type ResponseStatus="resp-nueva"|"resp-vista"|"resp-aceptada"|"resp-rechazada";
-type ResponseFrom="responses"|"quote-detail";
-
-interface Quote {id:string;code:string;date:string;product:string;importer:string;mode:QuoteMode;status:QuoteStatus;updatedAt:string;country:string;productLine:string;quality:string;minQuantity:string;targetPrice:string;incoterm:string;}
-
 const QUOTES:Quote[]=[
   {id:"q001",code:"COT-2025-0089",date:"12 Mar 2025",product:"Café Verde Colombiano Premium",importer:"FoodTrade SRL",       mode:"Abierta", status:"open",        updatedAt:"Hace 2 horas", country:"Colombia",       productLine:"Alimentos",    quality:"Premium",  minQuantity:"500",  targetPrice:"8.50 USD/kg",  incoterm:"FOB"},
   {id:"q002",code:"COT-2025-0081",date:"05 Mar 2025",product:"Telas Sintéticas 400 GSM",    importer:"TextilMax Corp.",      mode:"Dirigida",status:"directed",    updatedAt:"Hace 1 día",   country:"China",          productLine:"Textil",       quality:"Estándar", minQuantity:"1000", targetPrice:"3.20 USD/m",   incoterm:"CIF"},
@@ -233,13 +230,6 @@ const QUOTES:Quote[]=[
   {id:"q007",code:"COT-2025-0031",date:"20 Ene 2025",product:"Fertilizantes NPK 20-20-20", importer:"AgroSur Trading",      mode:"Abierta", status:"directed",    updatedAt:"Hace 18 días", country:"India",          productLine:"Agroindustria",quality:"Estándar", minQuantity:"5000", targetPrice:"0.45 USD/kg",  incoterm:"CFR"},
   {id:"q008",code:"COT-2025-0017",date:"08 Ene 2025",product:"Cámaras CCTV IP 4K Dahua",   importer:"SecureVision Corp",    mode:"Dirigida",status:"active-order",updatedAt:"Hace 26 días", country:"China",          productLine:"Tecnología",   quality:"Premium",  minQuantity:"30",   targetPrice:"180 USD/u",    incoterm:"CIF"},
 ];
-
-interface Importer {
-  id:string;name:string;specialty:string;rating:number;responseTime:string;
-  initials:string;color:string;memberSince:string;projects:number;verified:boolean;
-  country:string;categories:string[];
-  advisor:{name:string;role:string;initials:string;color:string;email:string};
-}
 
 const IMPORTERS:Importer[]=[
   {id:"nexus",     name:"Grupo Nexus S.A.",  specialty:"Tecnología & Electrónica",rating:4.8,responseTime:"~24h",initials:"GN",color:"bg-blue-600",   memberSince:"Ene 2020",projects:147,verified:true, country:"Colombia",      categories:["Tecnología","Electrónica"],  advisor:{name:"Carlos Mendoza", role:"Asesor Senior",     initials:"CM",color:"bg-blue-600",   email:"c.mendoza@nexus.co"}},
@@ -456,7 +446,6 @@ const INIT_AVAILABLE:AvailableQuote[]=[
 ];
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
-interface SidebarCtrl {active:string;onNav:(k:string)=>void;pinned:boolean;onToggle:()=>void;navItems:NavItem[];onNotif?:()=>void;notifCount?:number;}
 
 function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
   const [hovered,setHovered]=useState(false);
