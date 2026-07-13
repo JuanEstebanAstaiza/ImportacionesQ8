@@ -1,0 +1,474 @@
+{
+  "users_total": 20,
+  "users_ok": 20,
+  "users_fail": 0,
+  "success_rate_pct": 100.0,
+  "wall_time_ms": 5655.88,
+  "throughput_users_per_sec": 3.54,
+  "request_count": 220,
+  "request_ok": 220,
+  "latency_avg_ms": 255.4,
+  "latency_p50_ms": 102.41,
+  "latency_p95_ms": 1010.35,
+  "latency_p99_ms": 1532.07,
+  "latency_max_ms": 1993.29,
+  "fail_stages": {},
+  "endpoint_stats": [
+    {
+      "endpoint": "GET /chat/conversaciones",
+      "count": 20,
+      "avg_ms": 67.63,
+      "p95_ms": 103.02,
+      "max_ms": 103.42
+    },
+    {
+      "endpoint": "GET /ordenes/",
+      "count": 20,
+      "avg_ms": 222.1,
+      "p95_ms": 656.86,
+      "max_ms": 799.29
+    },
+    {
+      "endpoint": "POST /auth/register",
+      "count": 20,
+      "avg_ms": 978.25,
+      "p95_ms": 1762.14,
+      "max_ms": 1993.29
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/03fb0049-b837-4c29-86da-65d9810c8d8e/mensajes",
+      "count": 3,
+      "avg_ms": 68.81,
+      "p95_ms": 102.89,
+      "max_ms": 108.39
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/15d8a75d-2838-48e6-8bb5-7f31e0e2fd25/mensajes",
+      "count": 3,
+      "avg_ms": 91.77,
+      "p95_ms": 123.55,
+      "max_ms": 127.54
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/2778bf33-ab72-4ced-97dc-8ab0fbe722ac/mensajes",
+      "count": 3,
+      "avg_ms": 101.18,
+      "p95_ms": 124.49,
+      "max_ms": 127.06
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/2ae65422-4b71-4d3e-92f1-677bf90e9fb6/mensajes",
+      "count": 3,
+      "avg_ms": 88.28,
+      "p95_ms": 121.04,
+      "max_ms": 125.93
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/2c60176d-dad5-4ef0-9385-ea37ac6cdd13/mensajes",
+      "count": 3,
+      "avg_ms": 95.47,
+      "p95_ms": 124.09,
+      "max_ms": 128.41
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/32dfc1ae-27a0-4b74-9a40-549e1ec168d1/mensajes",
+      "count": 3,
+      "avg_ms": 83.5,
+      "p95_ms": 121.93,
+      "max_ms": 127.15
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/78c8dd6e-6872-4bd8-86c3-9974622405ba/mensajes",
+      "count": 3,
+      "avg_ms": 91.65,
+      "p95_ms": 122.69,
+      "max_ms": 126.53
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/7b7663e6-2b89-4d03-9134-b074e3ad9ea0/mensajes",
+      "count": 3,
+      "avg_ms": 75.14,
+      "p95_ms": 87.26,
+      "max_ms": 87.68
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/90c246da-b146-4752-8773-3e40fd44912e/mensajes",
+      "count": 3,
+      "avg_ms": 98.58,
+      "p95_ms": 123.69,
+      "max_ms": 127.19
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/997e60a0-1845-4bd0-b0de-8a03f697ea6c/mensajes",
+      "count": 3,
+      "avg_ms": 88.25,
+      "p95_ms": 121.18,
+      "max_ms": 125.94
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/99f310e1-aeff-4d4e-af42-1f3665cca297/mensajes",
+      "count": 3,
+      "avg_ms": 75.93,
+      "p95_ms": 89.5,
+      "max_ms": 91.84
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/c84bedf1-1d18-41ca-8027-6fd44484e595/mensajes",
+      "count": 3,
+      "avg_ms": 79.25,
+      "p95_ms": 98.61,
+      "max_ms": 100.34
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/cafb504c-66ea-46f8-8ebe-b8409756f81f/mensajes",
+      "count": 3,
+      "avg_ms": 81.02,
+      "p95_ms": 91.99,
+      "max_ms": 92.94
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/dd2aa7b6-4059-4444-aa49-55b043251412/mensajes",
+      "count": 3,
+      "avg_ms": 74.76,
+      "p95_ms": 83.61,
+      "max_ms": 85.1
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/e2e18142-bfd8-4406-bf64-eb6b80ed3f33/mensajes",
+      "count": 3,
+      "avg_ms": 86.69,
+      "p95_ms": 117.45,
+      "max_ms": 121.17
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/e9342f07-b349-46e6-9471-5d4767b0bd64/mensajes",
+      "count": 3,
+      "avg_ms": 85.89,
+      "p95_ms": 118.05,
+      "max_ms": 121.98
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/eb2ef64d-d4b8-4880-a9db-8852cb4ad7fc/mensajes",
+      "count": 3,
+      "avg_ms": 77.05,
+      "p95_ms": 117.21,
+      "max_ms": 122.02
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/ed5c7b36-b2cb-442c-8e44-2f64b8bb97a7/mensajes",
+      "count": 3,
+      "avg_ms": 76.59,
+      "p95_ms": 101.4,
+      "max_ms": 104.82
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/f8a76dc1-9567-4012-a9d8-9d28b21f42a5/mensajes",
+      "count": 3,
+      "avg_ms": 77.51,
+      "p95_ms": 85.58,
+      "max_ms": 86.73
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/fef8df1a-ce79-4a90-bf90-9aa00d0b8db1/mensajes",
+      "count": 3,
+      "avg_ms": 91.83,
+      "p95_ms": 123.41,
+      "max_ms": 127.36
+    },
+    {
+      "endpoint": "POST /cotizaciones/",
+      "count": 20,
+      "avg_ms": 627.5,
+      "p95_ms": 1216.69,
+      "max_ms": 1217.67
+    },
+    {
+      "endpoint": "POST /propuestas/",
+      "count": 20,
+      "avg_ms": 362.82,
+      "p95_ms": 1029.19,
+      "max_ms": 1216.63
+    },
+    {
+      "endpoint": "POST /propuestas/0355f67e-2d9c-484d-8818-1d45a617a7c4/pre-aceptar",
+      "count": 2,
+      "avg_ms": 112.74,
+      "p95_ms": 119.88,
+      "max_ms": 120.67
+    },
+    {
+      "endpoint": "POST /propuestas/0cd3dc57-df8a-4383-876b-7f3eb285ca14/pre-aceptar",
+      "count": 2,
+      "avg_ms": 100.43,
+      "p95_ms": 114.94,
+      "max_ms": 116.55
+    },
+    {
+      "endpoint": "POST /propuestas/20aacf0b-d04d-4bf0-8b7e-81dd0335e947/pre-aceptar",
+      "count": 2,
+      "avg_ms": 122.0,
+      "p95_ms": 124.29,
+      "max_ms": 124.54
+    },
+    {
+      "endpoint": "POST /propuestas/2339c299-3561-4bd0-a861-b1231e4dd5f9/pre-aceptar",
+      "count": 2,
+      "avg_ms": 92.06,
+      "p95_ms": 95.42,
+      "max_ms": 95.79
+    },
+    {
+      "endpoint": "POST /propuestas/27791aa3-5acd-4692-8274-53d348686dbe/pre-aceptar",
+      "count": 2,
+      "avg_ms": 85.41,
+      "p95_ms": 92.06,
+      "max_ms": 92.8
+    },
+    {
+      "endpoint": "POST /propuestas/300f7205-1fa0-4c74-a869-f4a2b9ab3366/pre-aceptar",
+      "count": 2,
+      "avg_ms": 100.09,
+      "p95_ms": 114.38,
+      "max_ms": 115.97
+    },
+    {
+      "endpoint": "POST /propuestas/336c68e8-16e1-44dc-b205-720ef4e31ab5/pre-aceptar",
+      "count": 2,
+      "avg_ms": 106.33,
+      "p95_ms": 110.1,
+      "max_ms": 110.52
+    },
+    {
+      "endpoint": "POST /propuestas/4f7bd4df-1ecf-432f-a9f0-464604ed9d9f/pre-aceptar",
+      "count": 2,
+      "avg_ms": 99.94,
+      "p95_ms": 114.05,
+      "max_ms": 115.62
+    },
+    {
+      "endpoint": "POST /propuestas/58f3b1c0-660a-4fd3-acff-743c4620c69c/pre-aceptar",
+      "count": 2,
+      "avg_ms": 78.08,
+      "p95_ms": 86.78,
+      "max_ms": 87.75
+    },
+    {
+      "endpoint": "POST /propuestas/68f75f32-4dfe-4f8d-9ab7-fe876dfac0cf/pre-aceptar",
+      "count": 2,
+      "avg_ms": 86.39,
+      "p95_ms": 102.48,
+      "max_ms": 104.27
+    },
+    {
+      "endpoint": "POST /propuestas/8298bb08-a187-4f9c-a1b0-801f8febac01/pre-aceptar",
+      "count": 2,
+      "avg_ms": 102.28,
+      "p95_ms": 108.28,
+      "max_ms": 108.95
+    },
+    {
+      "endpoint": "POST /propuestas/9b0ea916-697c-4b8c-887e-9ee8fa776033/pre-aceptar",
+      "count": 2,
+      "avg_ms": 100.57,
+      "p95_ms": 114.27,
+      "max_ms": 115.79
+    },
+    {
+      "endpoint": "POST /propuestas/9b2030a6-d3fa-49cd-9347-763a725a2123/pre-aceptar",
+      "count": 2,
+      "avg_ms": 102.7,
+      "p95_ms": 117.84,
+      "max_ms": 119.52
+    },
+    {
+      "endpoint": "POST /propuestas/9eaf1d9f-5998-4305-960b-34d06b3be0ef/pre-aceptar",
+      "count": 2,
+      "avg_ms": 102.57,
+      "p95_ms": 109.36,
+      "max_ms": 110.11
+    },
+    {
+      "endpoint": "POST /propuestas/be35f766-d776-48f2-9dfe-edf6ca1f45d2/pre-aceptar",
+      "count": 2,
+      "avg_ms": 102.57,
+      "p95_ms": 107.71,
+      "max_ms": 108.29
+    },
+    {
+      "endpoint": "POST /propuestas/c3eb6c90-dacc-4c37-9624-6d6aa9c38378/pre-aceptar",
+      "count": 2,
+      "avg_ms": 89.72,
+      "p95_ms": 138.59,
+      "max_ms": 144.02
+    },
+    {
+      "endpoint": "POST /propuestas/ce487f4d-d354-434a-8bca-652c78d7496f/pre-aceptar",
+      "count": 2,
+      "avg_ms": 98.98,
+      "p95_ms": 113.27,
+      "max_ms": 114.85
+    },
+    {
+      "endpoint": "POST /propuestas/e607f8f0-53af-4d20-ba7c-c25dae4cc918/pre-aceptar",
+      "count": 2,
+      "avg_ms": 100.29,
+      "p95_ms": 116.54,
+      "max_ms": 118.34
+    },
+    {
+      "endpoint": "POST /propuestas/f3d489a8-ab4d-4e38-8b4f-cbb72203bb82/pre-aceptar",
+      "count": 2,
+      "avg_ms": 96.26,
+      "p95_ms": 107.32,
+      "max_ms": 108.55
+    },
+    {
+      "endpoint": "POST /propuestas/ff748a70-c390-4a8c-8fa5-63a71a353ac7/pre-aceptar",
+      "count": 2,
+      "avg_ms": 102.96,
+      "p95_ms": 108.95,
+      "max_ms": 109.61
+    },
+    {
+      "endpoint": "PUT /cotizaciones/06047375-b734-4dc2-9e48-30cef27e0b4d/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 82.76,
+      "p95_ms": 82.76,
+      "max_ms": 82.76
+    },
+    {
+      "endpoint": "PUT /cotizaciones/082e550c-5640-47b5-9f6c-3c8e54e1d046/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 127.21,
+      "p95_ms": 127.21,
+      "max_ms": 127.21
+    },
+    {
+      "endpoint": "PUT /cotizaciones/0d7cb08d-faa5-4c38-b169-9a99cb924743/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 117.66,
+      "p95_ms": 117.66,
+      "max_ms": 117.66
+    },
+    {
+      "endpoint": "PUT /cotizaciones/17ef0359-0f0c-4b3d-9826-f71d50120bce/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 88.86,
+      "p95_ms": 88.86,
+      "max_ms": 88.86
+    },
+    {
+      "endpoint": "PUT /cotizaciones/198fe684-4549-4b1e-899f-14fd868fd85b/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 98.89,
+      "p95_ms": 98.89,
+      "max_ms": 98.89
+    },
+    {
+      "endpoint": "PUT /cotizaciones/1ed1a758-5208-450d-a317-0d9c258d897d/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 79.37,
+      "p95_ms": 79.37,
+      "max_ms": 79.37
+    },
+    {
+      "endpoint": "PUT /cotizaciones/559f076d-db37-4794-b1d1-1a979cdc0db4/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 103.61,
+      "p95_ms": 103.61,
+      "max_ms": 103.61
+    },
+    {
+      "endpoint": "PUT /cotizaciones/5fd8c72c-006d-48e7-99b0-24024e5e1b71/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 104.65,
+      "p95_ms": 104.65,
+      "max_ms": 104.65
+    },
+    {
+      "endpoint": "PUT /cotizaciones/68ddea32-ed9f-4356-a202-26fa655d5815/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 103.51,
+      "p95_ms": 103.51,
+      "max_ms": 103.51
+    },
+    {
+      "endpoint": "PUT /cotizaciones/94f8dbdd-7c72-457c-adfb-2f7d9ca84517/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 66.99,
+      "p95_ms": 66.99,
+      "max_ms": 66.99
+    },
+    {
+      "endpoint": "PUT /cotizaciones/973a74c0-b406-4e19-a62b-2863fe505000/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 98.06,
+      "p95_ms": 98.06,
+      "max_ms": 98.06
+    },
+    {
+      "endpoint": "PUT /cotizaciones/a1da4867-6b46-4b48-940a-972a277e9db7/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 95.83,
+      "p95_ms": 95.83,
+      "max_ms": 95.83
+    },
+    {
+      "endpoint": "PUT /cotizaciones/a2c54173-a08c-4bdf-85fd-40363d2f0e17/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 97.27,
+      "p95_ms": 97.27,
+      "max_ms": 97.27
+    },
+    {
+      "endpoint": "PUT /cotizaciones/b3feef50-2b2a-4624-af5d-988334fbc5ad/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 124.51,
+      "p95_ms": 124.51,
+      "max_ms": 124.51
+    },
+    {
+      "endpoint": "PUT /cotizaciones/c1afd356-d1ce-4851-9150-459cc6ea5f6c/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 84.87,
+      "p95_ms": 84.87,
+      "max_ms": 84.87
+    },
+    {
+      "endpoint": "PUT /cotizaciones/ccb3887a-af24-4b91-b02a-de1a4dfbe462/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 125.35,
+      "p95_ms": 125.35,
+      "max_ms": 125.35
+    },
+    {
+      "endpoint": "PUT /cotizaciones/e13af239-daf8-414e-9d60-8799300a9fe7/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 101.05,
+      "p95_ms": 101.05,
+      "max_ms": 101.05
+    },
+    {
+      "endpoint": "PUT /cotizaciones/e4465faa-89b8-41cb-acec-45f2a58e11d3/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 96.32,
+      "p95_ms": 96.32,
+      "max_ms": 96.32
+    },
+    {
+      "endpoint": "PUT /cotizaciones/e5dbd2bd-4e71-4c73-94e4-dc66363ea027/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 76.62,
+      "p95_ms": 76.62,
+      "max_ms": 76.62
+    },
+    {
+      "endpoint": "PUT /cotizaciones/ec5f42e6-94d2-486a-89c5-5da233c99c58/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 116.23,
+      "p95_ms": 116.23,
+      "max_ms": 116.23
+    }
+  ],
+  "sample_errors": []
+}

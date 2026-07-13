@@ -6,6 +6,25 @@ Semana 2 del MVP a 3 semanas. Entregables: Distribución automática de cotizaci
 
 ---
 
+## Estado de la revisión de backend (2026-07-06)
+
+> Revisión de código + seguridad realizada sobre `proyecto/backend`. Alcance: Tareas 2.1 a 2.5 (backend). Las tareas 2.6 a 2.10 (frontend) siguen pendientes — el directorio `proyecto/frontend` todavía no existe en el repositorio.
+>
+> - ✅ Suite de tests: **101/101 passing** localmente (`pytest`) y en Docker (`docker compose run --rm tests`).
+> - ✅ Se corrigieron IDOR críticos en `ordenes.py`, `importadores.py` y `cotizaciones.py` (comparaciones de propiedad contra una clave de JWT que no existía, dejando la autorización deshabilitada de facto).
+> - ✅ Se implementó verificación real de firma HMAC-SHA256 en el webhook de Wompi (antes era un stub que siempre aprobaba).
+> - ✅ Se agregó el modelo `Pago` (antes solo documentado, no implementado) con `wompi_payment_id` único para idempotencia real.
+> - ✅ Se reforzaron condiciones de carrera con `IntegrityError` + `rollback` en creación de propuestas y órdenes, respaldadas por constraints únicos a nivel de base de datos (ACID).
+> - ✅ Se agregó rate limiting a `/auth/login` y `/auth/register`, manejo global de excepciones (no se filtran stack traces/detalles internos al cliente), y defensa en profundidad contra inyección SQL en `database.py`.
+> - ✅ Se removieron `.env` y `__pycache__` del control de versiones (`.gitignore` + `.env.example`).
+>
+> **Revisión de congruencia con el PDF y los wireframes (2026-07-06):** se leyó `docs/Propuesta_Plataforma_Importacion.pdf` completo y se contrastó contra `Frontend/Wireframes.md`, `Pantallas-Solicitante.md` y `Pantallas-Importador.md`. La estructura general es congruente (modalidad dirigida/abierta, campos del formulario, catálogo de importadores, checkout Wompi, los 6 estados de orden). Se encontraron y corrigieron 2 gaps concretos entre el backend y los wireframes:
+> - ✅ Faltaba el campo `incoterm` en `Propuesta` (modelo, schema y endpoints), requerido por las Pantallas 6 y 11. Agregado con migración de esquema (`propuestas.incoterm VARCHAR(50) NOT NULL`) y cubierto por tests.
+> - ✅ El contador "X de Y importadores respondieron" y la lista de "Pendientes de Responder" del panel de propuestas (Pantalla 6) no tenían endpoint propio, aunque `services/matching_service.py` ya calculaba esos datos internamente. Se expuso `GET /cotizaciones/{id}/matching-status`.
+> - ⬜ Pendiente, correctamente diferido a Semana 3 (no es un gap, está en el roadmap del propio PDF): asignación real de `asesor_asignado_id` y endpoints de asesores (Tarea 3.7), creación automática de conversación de chat al confirmar el pago, y el consumidor WebSocket de las notificaciones Redis Pub/Sub (el `publish` ya existe, best-effort).
+
+---
+
 ## Resumen de entregables
 
 | Entregable | Módulo | Prioridad |
@@ -39,6 +58,7 @@ Implementar el modelo ORM para Propuesta con campos para precio ofrecido, tiempo
        cotizacion_id: str  # ID de la cotización a la que responde
        precio_ofrecido_usd: float  # Precio ofrecido por el importador
        tiempo_estimado_entrega: str  # Tiempo estimado (ej: "45 días")
+       incoterm: str  # Incoterm propuesto (FOB, CIF, EXW, DDP...)
        condiciones_adicionales: Optional[str] = None  # Condiciones adicionales
    
    class PropuestaResponse(BaseModel):
@@ -47,12 +67,15 @@ Implementar el modelo ORM para Propuesta con campos para precio ofrecido, tiempo
        importador_id: str
        precio_ofrecido_usd: float
        tiempo_estimado_entrega: str
+       incoterm: str
        condiciones_adicionales: Optional[str]
        estado: str  # "pendiente", "aceptada", "rechazada"
    ```
 
+   > **Nota (revisión de congruencia con wireframes, 2026-07-06):** la especificación original de esta tarea no incluía `incoterm`, pero los wireframes "Panel de Propuestas Recibidas" (Pantalla 6) y "Formulario de Respuesta a Cotización" (Pantalla 11), y el flujo del PDF de referencia (paso 15: "responde con propuesta de precio, tiempo estimado, condiciones e incoterm"), lo exigen como campo obligatorio de cada propuesta. Se agregó `incoterm` al modelo, esquema y endpoints — ver sección "Estado de la revisión" al inicio del documento.
+
 2. **Crear modelo ORM para Propuesta** (`models/cotizacion.py`)
-   - Campos: id (UUID), cotizacion_id FK → cotizaciones.id, importador_id FK → importadores.id, precio_ofrecido_usd, tiempo_estimado_entrega, condiciones_adicionales, estado (ENUM: "pendiente", "aceptada", "rechazada"), fecha_envio
+   - Campos: id (UUID), cotizacion_id FK → cotizaciones.id, importador_id FK → importadores.id, precio_ofrecido_usd, tiempo_estimado_entrega, incoterm, condiciones_adicionales, estado (ENUM: "pendiente", "aceptada", "rechazada"), fecha_envio
    - **Restricción única:** Un importador solo puede enviar UNA propuesta por cotización (`UNIQUE KEY unique_propuesta_cotizacion_importador (cotizacion_id, importador_id)`)
 
 3. **Implementar endpoint POST /propuestas** (`routers/cotizaciones.py`) — Solo para importadores
@@ -118,19 +141,28 @@ Implementar el modelo ORM para Propuesta con campos para precio ofrecido, tiempo
 4. **Implementar endpoint GET /cotizaciones/{id}/propuestas** (`routers/cotizaciones.py`) — Solo para el solicitante de la cotización
    - Listar todas las propuestas recibidas para una cotización abierta
 
+5. **Implementar endpoint GET /cotizaciones/{id}/matching-status** (`routers/cotizaciones.py`) — Solo para el solicitante de la cotización
+   - Devuelve `total_matching`, `respondidos`, `pendientes` e `importadores_pendientes` (id, nombre, logo) para alimentar el contador "X de Y importadores respondieron" y la sección "Pendientes de Responder" del wireframe Pantalla 6. Usa el motor de matching (`services/matching_service.py`), que ya calculaba estos datos internamente pero no estaban expuestos por ningún endpoint.
+
 #### Criterios de aceptación
 
-- [ ] POST /propuestas con datos válidos crea nueva propuesta (201 Created)
-- [ ] POST /propuestas sin rol importador retorna 403 Forbidden
-- [ ] POST /propuestas para una cotización cerrada retorna 404 Not Found
-- [ ] POST /propuestas si el importador ya envió una propuesta a esa cotización retorna 400 Bad Request
-- [ ] GET /cotizaciones/{id}/propuestas retorna lista de propuestas recibidas (200 OK)
+- [x] POST /propuestas con datos válidos crea nueva propuesta (201 Created) — verificado en `tests/test_propuestas.py::TestEnviarPropuesta::test_enviar_propuesta_exitoso`
+- [x] POST /propuestas sin rol importador retorna 403 Forbidden — `test_enviar_propuesta_sin_rol_importador`
+- [x] POST /propuestas para una cotización cerrada retorna 404 Not Found — `test_enviar_propuesta_cotizacion_no_encontrada`
+- [x] POST /propuestas si el importador ya envió una propuesta a esa cotización retorna 400 Bad Request — `test_enviar_propuesta_duplicada` (y protegido a nivel de base de datos con `IntegrityError`/rollback ante condiciones de carrera)
+- [x] GET /cotizaciones/{id}/propuestas retorna lista de propuestas recibidas (200 OK), incluyendo `incoterm` — `TestListarPropuestas`
+- [x] GET /cotizaciones/{id}/matching-status retorna conteos e importadores pendientes (200 OK), solo accesible al solicitante dueño y solo para modalidad "abierta" — `TestMatchingStatus`
+
+**Revisión de seguridad (2026-07-06):** se corrigieron 2 bugs críticos encontrados en la implementación real: (1) el router de `/propuestas` estaba anidado bajo `/cotizaciones`, generando rutas duplicadas (`/cotizaciones/propuestas`); se separó en un `APIRouter` independiente. (2) La creación de la propuesta usaba `PyUUID()` sin argumentos (bug, lanzaba `TypeError` en cada request) en lugar de `uuid4()`.
+
+**Revisión de congruencia con wireframes (2026-07-06):** se detectaron y corrigieron 2 gaps frente al PDF de referencia y los wireframes del vault: (1) faltaba el campo `incoterm` en `Propuesta`, requerido por las Pantallas 6 y 11; (2) el conteo "X de Y importadores respondieron" y la lista de pendientes no estaban expuestos por ningún endpoint, aunque la lógica ya existía en `matching_service.py`. Ambos se resolvieron sin romper compatibilidad con el resto de la API.
 
 #### Entregables
 
-1. Modelo ORM para Propuesta con restricción única (un importador, una propuesta por cotización)
-2. Endpoint POST /propuestas funcional con validación de permisos
-3. Endpoint GET /cotizaciones/{id}/propuestas funcional
+1. ✅ Modelo ORM para Propuesta con restricción única (un importador, una propuesta por cotización) e `incoterm`
+2. ✅ Endpoint POST /propuestas funcional con validación de permisos
+3. ✅ Endpoint GET /cotizaciones/{id}/propuestas funcional
+4. ✅ Endpoint GET /cotizaciones/{id}/matching-status funcional
 
 ---
 
@@ -199,18 +231,20 @@ Implementar el modelo ORM para Orden con campos para seguimiento del ciclo de vi
 
 #### Criterios de aceptación
 
-- [ ] Modelo Orden con todos los campos del ciclo de vida del pedido
-- [ ] Modelo HistorialEstadosOrden para rastrear cambios de estado con fecha y hora
-- [ ] GET /ordenes retorna solo las órdenes del usuario autenticado (200 OK)
-- [ ] GET /ordenes/{id} retorna detalles de una orden específica o 404 si no existe
-- [ ] PUT /ordenes/{id}/estado actualiza el estado y registra en historial_estados_orden
+- [x] Modelo Orden con todos los campos del ciclo de vida del pedido — incluye además `UniqueConstraint` en `cotizacion_id` (1 orden por cotización, ver Tarea 2.3)
+- [x] Modelo HistorialEstadosOrden para rastrear cambios de estado con fecha y hora
+- [x] GET /ordenes retorna solo las órdenes del usuario autenticado (200 OK) — `tests/test_ordenes.py::TestListarOrdenes`
+- [x] GET /ordenes/{id} retorna detalles de una orden específica o 404 si no existe — `TestObtenerOrden`
+- [x] PUT /ordenes/{id}/estado actualiza el estado y registra en historial_estados_orden — `TestActualizarEstadoOrden`
+
+**Revisión de seguridad (2026-07-06):** se corrigieron IDOR en `GET /ordenes` y `GET /ordenes/{id}` para el rol `importador` (el código comparaba contra `current_user["importador_id"]`, una clave que nunca existe en el JWT, por lo que el filtro de autorización quedaba efectivamente deshabilitado). Ahora se compara siempre contra `current_user["user_id"]`.
 
 #### Entregables
 
-1. Modelos ORM para Orden, HistorialEstadosOrden y DocumentoOrden
-2. Endpoint GET /ordenes filtrado por usuario autenticado
-3. Endpoint GET /ordenes/{id}
-4. Endpoint PUT /ordenes/{id}/estado con registro en historial de estados
+1. ✅ Modelos ORM para Orden, HistorialEstadosOrden y DocumentoOrden
+2. ✅ Endpoint GET /ordenes filtrado por usuario autenticado
+3. ✅ Endpoint GET /ordenes/{id}
+4. ✅ Endpoint PUT /ordenes/{id}/estado con registro en historial de estados
 
 ---
 
@@ -372,18 +406,24 @@ Implementar el flujo completo de conversión de cotización aceptada en orden ac
 
 #### Criterios de aceptación
 
-- [ ] POST /pagos/checkout con cotización válida genera enlace de pago con Wompi (200 OK)
-- [ ] POST /pagos/webhook/wompi con evento payment.confirmed convierte cotización en orden activa
-- [ ] El webhook verifica la firma de Wompi para evitar falsificaciones
-- [ ] El webhook es idempotente: no procesa el mismo evento dos veces
-- [ ] Al confirmar pago, se crea automáticamente una conversación de chat entre solicitante e importador
+- [x] POST /pagos/checkout con cotización válida genera enlace de pago con Wompi (200 OK) — `tests/test_pagos.py::TestGenerarCheckout`. Es idempotente (reutiliza el pago pendiente existente) y valida que la cotización pertenezca al solicitante autenticado (evita IDOR)
+- [x] POST /pagos/webhook/wompi con evento payment.confirmed convierte cotización en orden activa — `TestWebhookWompi::test_webhook_confirmado_crea_orden`
+- [x] El webhook verifica la firma de Wompi para evitar falsificaciones — implementación **real** de checksum HMAC-SHA256 (antes era un `TODO` que siempre devolvía `True`); `test_webhook_sin_firma_es_rechazado`, `test_webhook_con_firma_invalida_es_rechazado`. Fail-closed: sin `WOMPI_EVENTS_SECRET` configurado, el webhook rechaza todo
+- [x] El webhook es idempotente: no procesa el mismo evento dos veces — `test_webhook_es_idempotente`
+- [ ] Al confirmar pago, se crea automáticamente una conversación de chat entre solicitante e importador — **diferido a Semana 3** (el modelo de chat/`ConversacionChat` y WebSockets todavía no existen en el backend; queda como `TODO` explícito en `routers/pagos.py`)
+
+**Revisión de seguridad (2026-07-06) — hallazgos críticos corregidos:**
+1. El webhook **no verificaba ninguna firma real** (la función `verificar_firma_wompi` era un stub que siempre retornaba `True`), permitiendo que cualquiera con la URL del webhook pudiera falsificar pagos confirmados y generar órdenes gratis. Se implementó verificación real de checksum HMAC-SHA256 siguiendo el esquema de Wompi (`properties` + `timestamp` + secreto).
+2. No existía tabla/modelo `Pago` en el código (solo en la documentación). Se agregó `models/pago.py` con `wompi_payment_id` **UNIQUE** (garantiza idempotencia real a nivel de base de datos, no solo por lógica de aplicación).
+3. Se agregó manejo de `IntegrityError` + rollback en la creación de la orden desde el webhook, por si dos webhooks concurrentes procesan el mismo pago (la restricción única en `Orden.cotizacion_id` es la garantía ACID real).
+4. Se agregó el endpoint `GET /pagos/{id}` (documentado pero no implementado) con verificación de propiedad para evitar IDOR.
 
 #### Entregables
 
-1. Endpoint POST /pagos/checkout funcional con integración Wompi
-2. Endpoint POST /pagos/webhook/wompi funcional con verificación de firma
-3. Flujo completo: cotización aceptada → checkout → pago confirmado → orden activa
-4. Creación automática de conversación de chat al confirmar pago
+1. ✅ Endpoint POST /pagos/checkout funcional con integración Wompi (simulada para MVP) y persistencia real en tabla `pagos`
+2. ✅ Endpoint POST /pagos/webhook/wompi funcional con verificación real de firma HMAC-SHA256
+3. ✅ Flujo completo: cotización aceptada → checkout → pago confirmado → orden activa
+4. ⬜ Creación automática de conversación de chat al confirmar pago — pendiente para Semana 3 (depende del módulo de Chat-WebSocket)
 
 ---
 
@@ -465,16 +505,18 @@ Implementar las notificaciones en tiempo real para cambios de estado de orden us
 
 #### Criterios de aceptación
 
-- [ ] PUT /ordenes/{id}/estado con estado válido actualiza la orden y registra en historial
-- [ ] PUT /ordenes/{id}/estado con transición inválida retorna 400 Bad Request
-- [ ] El solicitante recibe notificación en tiempo real vía Redis Pub/Sub cuando cambia el estado de su orden
-- [ ] GET /ordenes/importador/{id} retorna órdenes asignadas al importador
+- [x] PUT /ordenes/{id}/estado con estado válido actualiza la orden y registra en historial — `tests/test_ordenes.py::TestActualizarEstadoOrden::test_actualizar_estado_exitoso`
+- [x] PUT /ordenes/{id}/estado con transición inválida retorna 400 Bad Request — `test_actualizar_estado_transicion_invalida`
+- [ ] El solicitante recibe notificación en tiempo real vía Redis Pub/Sub cuando cambia el estado de su orden — el `redis_client.publish(...)` existe y es best-effort (no rompe la petición si Redis está caído), pero **no hay ningún endpoint WebSocket que reenvíe ese mensaje al frontend todavía**; el consumidor real se implementa en el módulo Backend/Chat-WebSocket de la Semana 3
+- [x] GET /ordenes/importador/{id} retorna órdenes asignadas al importador — implementado como `GET /ordenes/importador/{id}/activas` (ver Tarea 2.5); no existe una variante sin filtrar por activas
+
+**Revisión de seguridad (2026-07-06):** la publicación en Redis no estaba protegida contra fallos de conexión: si Redis no estaba disponible, `PUT /ordenes/{id}/estado` fallaba con `500 Internal Server Error` y **no llegaba a hacer `commit()`**, es decir, se perdía la actualización de estado por completo. Se envolvió en `try/except` (best-effort) para que la actualización de la orden se confirme siempre, incluso si la notificación en tiempo real falla.
 
 #### Entregables
 
-1. Endpoint PUT /ordenes/{id}/estado funcional con validación de transiciones
-2. Notificaciones en tiempo real para cambios de estado vía Redis Pub/Sub
-3. Endpoint GET /ordenes/importador/{id}
+1. ✅ Endpoint PUT /ordenes/{id}/estado funcional con validación de transiciones
+2. ⚠️ Notificaciones vía Redis Pub/Sub emitidas desde el backend (best-effort), pero sin consumidor WebSocket aún (Semana 3)
+3. ✅ Endpoint GET /ordenes/importador/{id}/activas
 
 ---
 
@@ -501,15 +543,19 @@ Implementar los endpoints REST para que el importador pueda ver todas las solici
 
 #### Criterios de aceptación
 
-- [ ] GET /importadores/{id}/solicitudes-dirigidas retorna cotizaciones dirigidas al importador (200 OK)
-- [ ] GET /importadores/{id}/solicitudes-abiertas retorna cotizaciones abiertas que aplican al importador (200 OK)
-- [ ] GET /ordenes/importador/{id}/activas retorna órdenes activas del importador (200 OK)
+- [x] GET /importadores/{id}/solicitudes-dirigidas retorna cotizaciones dirigidas al importador (200 OK) — `tests/test_importadores.py::TestBandejaSolicitudesImportador::test_solicitudes_dirigidas_solo_propias`
+- [x] GET /importadores/{id}/solicitudes-abiertas retorna cotizaciones abiertas que aplican al importador (200 OK) — `test_solicitudes_abiertas_con_matching`
+- [x] GET /ordenes/importador/{id}/activas retorna órdenes activas del importador (200 OK) — `tests/test_ordenes.py::TestListarOrdenesActivasImportador`
+
+**Revisión de seguridad (2026-07-06) — hallazgos críticos corregidos, sin tests previos:**
+1. **IDOR en los 3 endpoints**: comparaban `importador_id` de la URL contra `current_user.get("importador_id")`, una clave inexistente en el JWT (siempre `None`), por lo que el `if` de autorización nunca se ejecutaba y **cualquier importador autenticado podía leer la bandeja de solicitudes/órdenes de cualquier otro importador** simplemente cambiando el UUID en la URL. Se corrigió comparando contra `current_user["user_id"]`, y se agregaron tests explícitos de IDOR (`test_solicitudes_dirigidas_idor_rechazado`, `test_solicitudes_abiertas_idor_rechazado`) que confirman 403.
+2. **Bug funcional en `solicitudes-abiertas`**: el código construía un diccionario `cotizaciones_matching` a partir de Redis pero comprobaba una variable distinta (`importadores_matching`) que nunca se asignaba — el filtro de matching nunca se aplicaba y el importador veía **todas** las cotizaciones abiertas de la plataforma, sin importar si el motor de matching realmente lo había seleccionado (país + categoría). Corregido y cubierto por `test_solicitudes_abiertas_con_matching`.
 
 #### Entregables
 
-1. Endpoint GET /importadores/{id}/solicitudes-dirigidas funcional
-2. Endpoint GET /importadores/{id}/solicitudes-abiertas funcional
-3. Endpoint GET /ordenes/importador/{id}/activas funcional
+1. ✅ Endpoint GET /importadores/{id}/solicitudes-dirigidas funcional (con verificación de propiedad)
+2. ✅ Endpoint GET /importadores/{id}/solicitudes-abiertas funcional (con filtro de matching real vía Redis)
+3. ✅ Endpoint GET /ordenes/importador/{id}/activas funcional (con verificación de propiedad)
 
 ---
 
@@ -573,7 +619,7 @@ Implementar la pantalla P6 — Panel de Propuestas Recibidas donde el solicitant
 3. **Crear componente de tarjeta de propuesta pendiente** (`components/PropuestaPendienteCard.tsx`)
    - Logo del importador, nombre, indicador de espera (spinner)
 
-4. **Implementar fetch de propuestas** — Llamar a GET /cotizaciones/{id}/propuestas al cargar la página
+4. **Implementar fetch de propuestas** — Llamar a GET /cotizaciones/{id}/propuestas (propuestas activas) y a GET /cotizaciones/{id}/matching-status (contador "X de Y" y lista de importadores pendientes) al cargar la página
 
 5. **Implementar conexión con importador elegido** — Al hacer clic en "Conectar con este importador", redirigir al checkout de pago Wompi (P7)
 
@@ -835,13 +881,16 @@ Implementar la pantalla P11 — Formulario de Respuesta a Cotización donde el i
 
 ## Criterios de aceptacion — Semana 2 (Resumen)
 
-| Entregable | Criterio de aceptación |
-|------------|----------------------|
-| Propuestas | Los importadores matching pueden enviar propuestas. El solicitante ve las propuestas recibidas en tiempo real. |
-| Órdenes | Al confirmar el pago con Wompi, la cotización se convierte automáticamente en orden. Las órdenes tienen estados visuales. |
-| Checkout Wompi | El solicitante puede completar el pago a través de Wompi y ser redirigido al detalle de la orden tras confirmación. |
-| Bandeja importador | El importador ve todas las solicitudes dirigidas y abiertas que le aplican, con filtros por modalidad y estado. |
-| Formulario respuesta | El importador puede enviar una propuesta con precio, tiempo estimado e incoterm para cualquier solicitud recibida. |
+| Entregable | Criterio de aceptación | Estado backend | Estado frontend |
+|------------|----------------------|-----------------|------------------|
+| Propuestas | Los importadores matching pueden enviar propuestas (incluyendo incoterm). El solicitante ve las propuestas recibidas en tiempo real. | ✅ API + tests | ⬜ No implementado |
+| Panel de propuestas recibidas | El solicitante ve cuántos importadores de la red respondieron ("X de Y") y cuáles siguen pendientes, con nombre y logo. | ✅ API + tests (`GET /cotizaciones/{id}/matching-status`) | ⬜ No implementado |
+| Órdenes | Al confirmar el pago con Wompi, la cotización se convierte automáticamente en orden. Las órdenes tienen estados visuales. | ✅ API + tests | ⬜ No implementado |
+| Checkout Wompi | El solicitante puede completar el pago a través de Wompi y ser redirigido al detalle de la orden tras confirmación. | ✅ API + tests (firma real, idempotente) | ⬜ No implementado |
+| Bandeja importador | El importador ve todas las solicitudes dirigidas y abiertas que le aplican, con filtros por modalidad y estado. | ✅ API + tests (IDOR corregido) | ⬜ No implementado |
+| Formulario respuesta | El importador puede enviar una propuesta con precio, tiempo estimado e incoterm para cualquier solicitud recibida. | ✅ API + tests | ⬜ No implementado |
+
+*"Tiempo real" en Propuestas/Órdenes se refiere al Pub/Sub de Redis emitido por el backend; el consumidor WebSocket que lo entrega al navegador es trabajo de Semana 3.*
 
 ---
 

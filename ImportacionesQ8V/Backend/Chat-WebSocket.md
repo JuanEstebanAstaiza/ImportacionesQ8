@@ -2,7 +2,13 @@
 
 ## Descripción general
 
-Chat en tiempo real dentro de la plataforma, construido sobre **WebSockets** con **Redis Pub/Sub** como canal de mensajería. Redis maneja los canales de mensajería en tiempo real sin sobrecargar MySQL con escrituras de alta frecuencia. Historial de chat ligado a la orden, no solo al usuario, para que el contexto no se pierda si cambia el asesor.
+Chat en tiempo real dentro de la plataforma, construido sobre **WebSockets** con **Redis Pub/Sub** como canal de mensajería. Redis maneja los canales de mensajería en tiempo real sin sobrecargar MySQL con escrituras de alta frecuencia. Historial de chat ligado a la cotización/orden, no solo al usuario, para que el contexto no se pierda si cambia el trabajador asignado.
+
+> **Estado de implementación (Semana 3, verificado con `tests/test_chat.py`, 10/10 tests):** implementado en `routers/chat.py` y `models/chat.py`. Diferencias respecto al diseño original documentado más abajo:
+> - La conversación se crea al **aceptar/rechazar la propuesta** (`routers/cotizaciones.py::aceptar_propuesta`), no solo al confirmar el pago — para permitir negociar por chat antes de que exista una orden. `orden_id` queda `NULL` hasta que se genera la orden.
+> - El campo antes llamado `importador_id` en `conversaciones_chat` es en realidad `importador_usuario_id` (FK a `usuarios.id`, no a `importadores.id`): apunta al **trabajador que reclamó la cotización**, o a la cuenta dueña si nadie la reclamó (ver `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md`, Tarea 3.14).
+> - Sin Redis disponible, el WebSocket degrada a **eco directo** de la confirmación al propio emisor (en vez de fallar), y el fallback REST sigue funcionando siempre.
+> - No se implementaron aún las restricciones `UNIQUE` de "una sola conversación por orden/por par solicitante-empresa" ni el campo `archivo_url` — quedan como trabajo futuro.
 
 ---
 

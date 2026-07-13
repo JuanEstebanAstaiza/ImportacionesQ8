@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, JSON
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, JSON
 from uuid import uuid4
 from datetime import datetime
 import enum
@@ -21,6 +21,15 @@ class Importador(Base):
     tiempo_respuesta_promedio = Column(String(10), nullable=False)  # "24h"
     capacidad_volumen = Column(Integer, nullable=True)
     estado = Column(String(20), default="activo")  # Usar String en lugar de Enum para compatibilidad con SQLite
+    # Empresas que optan por un formulario de cotización propio (campos personalizados)
+    # quedan fuera del motor de matching de cotizaciones abiertas: solo pueden recibir
+    # cotizaciones dirigidas, ya que el formulario estándar es lo único compatible con
+    # la difusión simultánea a varios importadores.
+    solo_cotizaciones_directas = Column(Boolean, default=False, nullable=False)
+    # Badge real de "socio verificado" (Semana 4 - Fase 6), independiente de
+    # `estado`: una empresa puede estar activa sin estar verificada. Solo el
+    # admin puede fijarlo (`POST /admin/importadores/{id}/verificar`).
+    verificado = Column(Boolean, default=False, nullable=False)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

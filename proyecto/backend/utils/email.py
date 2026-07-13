@@ -1,0 +1,65 @@
+import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+import config
+
+logger = logging.getLogger("importacionesq8")
+
+
+def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
+    """
+    Envía un correo real vía SMTP usando las credenciales configuradas en
+    variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
+    `SMTP_FROM`, `SMTP_USE_TLS`).
+
+    Si no hay `SMTP_HOST` configurado (ej. entorno de desarrollo/tests sin
+    credenciales reales), se registra el correo en el log en vez de fallar, para
+    no bloquear el flujo de negocio por falta de configuración de correo. En
+    producción, `SMTP_HOST` debe estar siempre configurado.
+
+    Devuelve `True` si el correo se envió (o se simuló vía log), `False` si el
+    envío SMTP real fue intentado pero falló.
+    """
+    if not config.SMTP_HOST:
+        logger.warning(
+            "SMTP no configurado (SMTP_HOST vacío): se omite el envío real y se "
+            "registra el contenido para depuración. destinatario=%s asunto=%s cuerpo=%s",
+            destinatario, asunto, cuerpo_texto
+        )
+        return True
+
+    mensaje = MIMEMultipart("alternative")
+    mensaje["Subject"] = asunto
+    mensaje["From"] = config.SMTP_FROM
+    mensaje["To"] = destinatario
+    mensaje.attach(MIMEText(cuerpo_texto, "plain"))
+    if cuerpo_html:
+        mensaje.attach(MIMEText(cuerpo_html, "html"))
+
+    try:
+        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as servidor:
+            if config.SMTP_USE_TLS:
+                servidor.starttls()
+            if config.SMTP_USER and config.SMTP_PASSWORD:
+                servidor.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            servidor.sendmail(config.SMTP_FROM, [destinatario], mensaje.as_string())
+        return True
+    except Exception:
+        logger.exception("Error enviando correo SMTP a %s", destinatario)
+        return False
+
+
+def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str) -> bool:
+    """Construye y envía el correo de recuperación de contraseña con el OTP y el enlace."""
+    enlace = f"{config.FRONTEND_URL}/restablecer-password?token={token}"
+    asunto = "Recupera tu contraseña — ImportacionesQ8"
+    cuerpo_texto = (
+        f"Recibimos una solicitud para restablecer tu contraseña.\n\n"
+        f"Tu código de verificación (OTP) es: {otp}\n"
+        f"Este código y el enlace vencen en {config.PASSWORD_RESET_EXPIRE_MINUTES} minutos.\n\n"
+        f"Enlace para restablecer tu contraseña: {enlace}\n\n"
+        f"Si no solicitaste este cambio, puedes ignorar este correo."
+    )
+    return enviar_correo(destinatario, asunto, cuerpo_texto)
