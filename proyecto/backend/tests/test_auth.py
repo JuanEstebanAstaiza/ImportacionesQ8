@@ -360,18 +360,20 @@ class TestDependencies:
         assert response.status_code == status.HTTP_403_FORBIDDEN
     
     def test_require_admin_role_success(self, client):
-        """Verificar que admin puede crear importadores"""
-        # El auto-registro de "admin" está cerrado; se genera el token directamente
+        """Verificar que admin puede crear importadores (via /admin/importadores con dueno)."""
         from utils.security import create_access_token
         from uuid import uuid4
         token = create_access_token(str(uuid4()), "admin")
-        
-        # Crear importador como admin - debería funcionar
-        response = client.post("/importadores", json={
+
+        response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Test",
             "especialidad_producto": ["Textiles"],
             "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
+            "tiempo_respuesta_promedio": "24h",
+            "email_dueño": "dueño_auth_admin@example.com",
+            "password_dueño": "123456789",
+            "nombre_dueño": "Dueño Test"
         }, headers={"Authorization": f"Bearer {token}"})
-        
+
         assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["importador"]["nombre_empresa"] == "Importadora Test"

@@ -117,7 +117,8 @@ class TestAmbosLadosFinalizan:
         assert response.json()["estado"] == "aceptada"
 
         db_session.refresh(cotizacion)
-        assert cotizacion.estado == EstadoCotizacion.cotizacion_aceptada.value
+        assert cotizacion.estado == EstadoCotizacion.orden_activa.value
+        assert cotizacion.importador_id == importador.id
 
         orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
         assert orden is not None

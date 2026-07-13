@@ -99,3 +99,20 @@ docker compose run --rm tests
 ```
 
 Carga opcional: ver [[Pruebas-Carga-1000-Concurrentes]].
+
+---
+
+## Seguimiento — flujos Admin / Dueño (2026-07-13, tarde)
+
+Ajustes tras la revisión de flujos de administrador y dueño de importadora (siempre hay representante legal porque el alta es `POST /admin/importadores`).
+
+| # | Cambio | Detalle |
+|---|--------|---------|
+| F1 | Recreación en cotizaciones **abiertas** | Empresa ganadora vía propuesta `aceptada` (y `importador_id` fijado al aceptar); ya no depende solo de `cotizacion.importador_id` |
+| F2 | Estado `orden_activa` | Tras doble aceptación: cotización → `orden_activa` + `importador_id` = empresa ganadora |
+| F3 | Métricas | `importadores_verificados` cuenta `verificado=True`, no activos |
+| F4 | Alta sin dueño | `POST /importadores` → **410 Gone**; única vía = `POST /admin/importadores` |
+| F5 | Dueño reclama pool | `POST /cotizaciones/{id}/reclamar` admite `importador` y `asesor` |
+| F6 | Matching fail-closed | `POST /propuestas/` en abiertas exige Redis; sin Redis → 503 |
+
+Ver también [[API-Rest]] y [[Seguridad]].

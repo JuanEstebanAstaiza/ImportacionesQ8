@@ -185,6 +185,9 @@
   },
   "active": "f459d60cd271d13b",
   "lastOpenFiles": [
+    "Frontend/Wireframes.md",
+    "Backend/Pagos-Wompi.md",
+    "00-Index-y-Navegacion/README.md",
     "00-Index-y-Navegacion/Mapa-Conexiones-Obsidian.md",
     "Propuesta_Plataforma_Importacion.md",
     "Fases-Desarrollo/Semana-4-Asesores-Creditos-Registro/Tareas-Semana-4.md",
@@ -207,17 +210,14 @@
     "Backend/README.md",
     "Inversionistas/Metricas-MVP.md",
     "Frontend/UX-UI-Guia.md",
-    "Frontend/Wireframes.md",
     "Frontend/Pantallas-Admin.md",
     "Frontend/Pantallas-Importador.md",
     "Frontend/Pantallas-Solicitante.md",
     "Backend/Matching-Cotizaciones.md",
     "Backend/Chat-WebSocket.md",
-    "Backend/Pagos-Wompi.md",
     "Backend/Autenticacion.md",
     "Backend/Base-Datos.md",
     "Backend/API-Rest.md",
-    "00-Index-y-Navegacion/README.md",
     "Bienvenido.md"
   ]
 }

@@ -228,9 +228,32 @@ class TestMetricas:
         for campo in [
             "total_cotizaciones", "cotizaciones_dirigidas", "cotizaciones_abiertas",
             "tasa_respuesta_abiertas", "tasa_conversion_a_orden", "importadores_activos",
-            "ordenes_en_disputa"
+            "importadores_verificados", "ordenes_en_disputa"
         ]:
             assert campo in data
+
+    def test_importadores_verificados_cuenta_solo_badge(self, client, db_session, auth_headers_admin):
+        from models.importador import Importador
+
+        activo = Importador(
+            id=str(uuid4()), nombre_empresa="Activa No Verificada",
+            especialidad_producto=["Textiles"], paises_origen=["China"],
+            tiempo_respuesta_promedio="24h", estado="activo", verificado=False
+        )
+        verificado = Importador(
+            id=str(uuid4()), nombre_empresa="Activa Verificada",
+            especialidad_producto=["Textiles"], paises_origen=["China"],
+            tiempo_respuesta_promedio="24h", estado="activo", verificado=True
+        )
+        db_session.add_all([activo, verificado])
+        db_session.commit()
+
+        response = client.get("/admin/metricas", headers=auth_headers_admin)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["importadores_verificados"] >= 1
+        assert data["importadores_activos"] >= data["importadores_verificados"]
+        assert data["importadores_activos"] > data["importadores_verificados"]
 
     def test_no_admin_no_puede_ver_metricas(self, client, solicitante):
         token = create_access_token(str(solicitante.id), "solicitante")

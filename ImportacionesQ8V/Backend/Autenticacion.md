@@ -45,7 +45,7 @@ sequenceDiagram
 
 ### Registro de importador (placeholder)
 
-No existe auto-registro de empresas importadoras: `POST /auth/register` con `rol="importador"` responde `400 Bad Request` con el mensaje *"Contáctese con el equipo administrativo para registrar tu empresa importadora"*. El frontend debe mostrar este mensaje como placeholder en la pantalla de registro de importador (ver `Frontend/Pantallas-Registro-y-Login.md`). El alta real la hace un admin vía `POST /admin/importadores`.
+No existe auto-registro de empresas importadoras: `POST /auth/register` con `rol="importador"` responde `400 Bad Request` con el mensaje *"Contáctese con el equipo administrativo para registrar tu empresa importadora"*. El frontend debe mostrar este mensaje como placeholder en la pantalla de registro de importador (ver `Frontend/Pantallas-Registro-y-Login.md`). El alta real la hace un admin vía `POST /admin/importadores` (**siempre** empresa + dueño/representante legal). `POST /importadores` (ficha sin dueño) está **deshabilitado (410)**.
 
 ### Inicio de sesión
 

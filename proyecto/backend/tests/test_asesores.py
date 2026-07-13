@@ -256,8 +256,8 @@ class TestPoolEmpresaYReclamo:
         response = client.post(f"/cotizaciones/{cotizacion.id}/reclamar", headers=auth_headers_for(asesor_b))
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_dueño_no_puede_reclamar_cotizaciones(self, client, db_session, empresa_a, solicitante):
-        """Solo el rol 'asesor' reclama; la cuenta dueña no (ella envía la propuesta formal)."""
+    def test_dueño_puede_reclamar_cotizaciones(self, client, db_session, empresa_a, solicitante):
+        """El dueño (representante legal) puede reclamar del pool como jefe de operadores."""
         importador, dueño = empresa_a
         cotizacion = Cotizacion(
             id=str(uuid4()), solicitante_id=solicitante.id, importador_id=importador.id,
@@ -270,7 +270,8 @@ class TestPoolEmpresaYReclamo:
         db_session.commit()
 
         response = client.post(f"/cotizaciones/{cotizacion.id}/reclamar", headers=auth_headers_for(dueño))
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["asesor_asignado_id"] == str(dueño.id)
 
 
 class TestCotizacionesAsignadasAsesor:

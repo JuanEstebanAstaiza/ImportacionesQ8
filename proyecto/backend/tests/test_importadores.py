@@ -133,13 +133,10 @@ class TestCrearImportador:
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
     
-    def test_crear_importador_con_role_admin(self, client):
-        """Crear importador con rol de admin"""
-        # El auto-registro público de "admin" está cerrado por seguridad; en tests
-        # se genera el token directamente, igual que haría un admin ya existente.
+    def test_crear_importador_con_role_admin_deshabilitado(self, client):
+        """POST /importadores sin dueño está deshabilitado; el alta oficial es /admin/importadores."""
         token = create_access_token(str(uuid4()), "admin")
-        
-        # Crear importador - debería funcionar
+
         response = client.post("/importadores", json={
             "nombre_empresa": "Importadora Test Admin",
             "especialidad_producto": ["Textiles", "Electrónica"],
@@ -148,21 +145,19 @@ class TestCrearImportador:
             "calificacion_promedio": 4.5,
             "capacidad_volumen": 50000
         }, headers={"Authorization": f"Bearer {token}"})
-        
-        assert response.status_code == status.HTTP_201_CREATED
-        data = response.json()
-        assert data["nombre_empresa"] == "Importadora Test Admin"
-        assert data["estado"] == "activo"
-    
+
+        assert response.status_code == status.HTTP_410_GONE
+        assert "/admin/importadores" in response.json()["detail"]
+
     def test_crear_importador_campos_requeridos(self, client):
-        """Crear importador con campos requeridos faltantes"""
+        """Crear importador con campos requeridos faltantes (validación Pydantic antes del 410)"""
         token = create_access_token(str(uuid4()), "admin")
-        
+
         # Intentar crear sin campos requeridos - debería fallar
         response = client.post("/importadores", json={
             "nombre_empresa": ""  # Campo vacío
         }, headers={"Authorization": f"Bearer {token}"})
-        
+
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 class TestImportadorModel:

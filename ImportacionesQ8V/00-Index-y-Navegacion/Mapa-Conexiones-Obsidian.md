@@ -307,6 +307,7 @@ graph TD
     C --> C5[Pre-aceptar propuesta como dueño]
     C --> C6[Editar perfil de empresa]
     C --> C7[Crear/gestionar cuentas de asesor]
+    C --> C8[Reclamar del pool - jefe de operadores]
 
     C2 --> C2a[Reclamar cotizaciones del pool de su empresa]
     C2 --> C2b[Redactar/editar borradores de propuesta]
@@ -315,7 +316,7 @@ graph TD
 
     D --> D1[Ver todas las cotizaciones abiertas]
     D --> D2[Mediar en disputas]
-    D --> D3[Gestionar importadores vinculados - crear, verificar]
+    D --> D3[Alta obligatoria: empresa + dueño/representante legal]
     D --> D4[Monitorear métricas del sistema]
     D --> D5[Resolver solicitudes de recreación de cotización]
 ```

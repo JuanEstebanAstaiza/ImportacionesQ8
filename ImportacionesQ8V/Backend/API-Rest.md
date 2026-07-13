@@ -51,7 +51,7 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 |--------|----------|-------------|
 | GET | `/importadores` | Listar importadores disponibles (filtros: `especialidad`, `pais`, `certificado`; orden: `orden=calificacion\|reciente`) |
 | GET | `/importadores/{id}` | Obtener detalles de un importador específico |
-| POST | `/importadores` | Registrar nueva empresa importadora (admin) |
+| POST | `/importadores` | **Deshabilitado (410).** Usar `POST /admin/importadores` (empresa + dueño) |
 | GET | `/importadores/destacados` | (Semana 4) Top N por `calificacion_promedio` desc, para el dashboard del solicitante |
 | GET | `/importadores/por-categoria` | (Semana 4) Importadores agrupados por `especialidad_producto` (`{categoria: [importadores]}`) |
 | GET | `/importadores/certificados` | (Semana 4) Solo empresas con `verificado=true` |
@@ -75,7 +75,7 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | GET | `/creditos/movimientos` | Solicitante | Historial de movimientos de créditos |
 | GET | `/pagos/{id}` | Dueño del pago | Obtener estado de un pago de créditos |
 | POST | `/pagos/webhook/wompi` | Wompi | Webhook de confirmación: acredita créditos al confirmarse el pago |
-| POST | `/cotizaciones/{id}/solicitar-recreacion` | Solicitante o asesor/dueño asignado | Solicita anular una cotización aceptada por error |
+| POST | `/cotizaciones/{id}/solicitar-recreacion` | Solicitante o dueño/asesor de la empresa ganadora | Anular cotización aceptada/`orden_activa` por error (también en abiertas vía propuesta aceptada) |
 | GET | `/admin/recreaciones` | Admin | Lista solicitudes de recreación pendientes/resueltas |
 | PUT | `/admin/recreaciones/{id}/resolver` | Admin | Decide la parte responsable; reembolsa créditos si aplica |
 
@@ -100,7 +100,7 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | GET | `/importadores/asesores` | Dueño | Listar asesores de la empresa |
 | PUT | `/importadores/asesores/{id}/estado` | Dueño | Activar/desactivar un asesor |
 | GET | `/cotizaciones/pool-empresa` | Dueño + asesor | Cotizaciones de la empresa sin reclamar (estilo "Uber": el primero en reclamar la atiende) |
-| POST | `/cotizaciones/{id}/reclamar` | Asesor | Reclamo atómico de una cotización del pool |
+| POST | `/cotizaciones/{id}/reclamar` | Dueño + asesor | Reclamo atómico del pool (el dueño es jefe de operadores; cualquiera de los dos puede tomar la cotización) |
 | GET | `/asesores/me/cotizaciones` | Asesor | Cotizaciones asignadas al asesor autenticado |
 | PUT | `/importadores/{id}` | Dueño | Autoservicio del perfil de la empresa |
 
@@ -131,7 +131,7 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | Método | Endpoint | Rol | Descripción |
 |--------|----------|-----|-------------|
 | PUT | `/ordenes/{id}/reportar-problema` | Solicitante | Abrir una disputa sobre su orden |
-| POST | `/admin/importadores` | Admin | Crear empresa importadora + cuenta dueña en un solo paso |
+| POST | `/admin/importadores` | Admin | **Única vía oficial:** crear empresa + cuenta dueño/representante legal en un solo paso |
 | POST | `/admin/importadores/{id}/verificar` | Admin | Verificar/activar una empresa |
 | PUT | `/admin/importadores/{id}/estado` | Admin | Activar/desactivar una empresa |
 | GET | `/admin/usuarios` | Admin | Monitoreo de cuentas (filtrable por rol/estado) |
@@ -317,8 +317,8 @@ class CampoPersonalizado(BaseModel):
 | Rol | Cotizaciones | Importadores | Órdenes | Créditos | Chat | Asesores | Admin |
 |-----|-------------|--------------|---------|-------|------|--------------|-------|
 | Solicitante | ✅ Propias, reportar disputa, solicitar recreación | 🔍 Solo lectura + catálogo enriquecido | ✅ Propias (no las crea directamente) | ✅ Comprar créditos | ✅ Propio | ❌ | ❌ |
-| Importador (dueño) | ✅ Recibidas + **enviar** propuesta | ✅ Perfil propio + formulario personalizado | ✅ Propias (heredadas de doble aceptación) | ❌ | ✅ Asignado (recibe el chat traspasado como supervisor) | ✅ Crear/listar/activar los suyos | ❌ |
-| Asesor (Semana 3, renombrado en Semana 4) | ✅ Reclamar del pool de su empresa, **redactar/editar** borradores de propuesta | ❌ | ❌ | ❌ | ✅ Solo el asignado (hasta el traspaso al dueño) | ❌ (no crea a otros) | ❌ |
+| Importador (dueño / representante legal) | ✅ Recibidas + **reclamar** pool + **enviar** propuesta | ✅ Perfil propio + formulario personalizado | ✅ Propias (heredadas de doble aceptación) | ❌ | ✅ Asignado (recibe el chat traspasado como supervisor) | ✅ Crear/listar/activar los suyos | ❌ |
+| Asesor (operador) | ✅ Reclamar del pool de su empresa, **redactar/editar** borradores de propuesta | ❌ | ❌ | ❌ | ✅ Solo el asignado (hasta el traspaso al dueño) | ❌ (no crea a otros) | ❌ |
 | Admin | ✅ Todas (solo lectura vía panel), resolver recreaciones | ✅ Crear empresa + dueño, verificar, activar | ✅ Todas (vía disputas) | ✅ Ver todos los pagos | ❌ (media por fuera del chat) | ❌ | ✅ Todo, incluido monitoreo/desactivación de cuentas y métricas |
 
 ---

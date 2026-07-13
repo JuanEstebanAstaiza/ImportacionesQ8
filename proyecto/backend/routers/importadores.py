@@ -343,42 +343,27 @@ async def obtener_importador(
     
     return importador
 
-@router.post("/", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def crear_importador(
     importador_data: ImportadorCreate,
     current_user: dict = Depends(require_rol("admin")),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
-    Crea un nuevo importador en el sistema. Solo administradores pueden crear importadores.
-    
-    - **nombre_empresa**: Nombre de la empresa importadora
-    - **logo_url**: URL del logo (opcional)
-    - **especialidad_producto**: Lista de categorías de producto
-    - **paises_origen**: Lista de países de origen
-    - **tiempo_respuesta_promedio**: Tiempo promedio de respuesta (ej: "24h")
-    - **calificacion_promedio**: Calificación promedio (default: 0.0)
-    - **capacidad_volumen**: Capacidad máxima de volumen por pedido (opcional)
+    **Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba
+    importadoras sin representante legal (dueño). El alta oficial es siempre:
+
+    `POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)
+    en un solo paso. El dueño es el jefe de los asesores/operadores.
     """
-    from uuid import uuid4
-    
-    nuevo_importador = Importador(
-        id=str(uuid4()),  # Convertir a string para SQLite
-        nombre_empresa=importador_data.nombre_empresa,
-        logo_url=importador_data.logo_url,
-        especialidad_producto=importador_data.especialidad_producto,
-        paises_origen=importador_data.paises_origen,
-        calificacion_promedio=importador_data.calificacion_promedio,
-        tiempo_respuesta_promedio=importador_data.tiempo_respuesta_promedio,
-        capacidad_volumen=importador_data.capacidad_volumen,
-        estado="activo"
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Este endpoint está deshabilitado: no se permite crear una empresa "
+            "sin representante legal. Usa POST /admin/importadores para crear "
+            "la empresa junto con su cuenta dueño."
+        )
     )
-    
-    db.add(nuevo_importador)
-    db.commit()
-    db.refresh(nuevo_importador)
-    
-    return nuevo_importador
 
 # ==================== Endpoints de la bandeja de solicitudes del importador (Tarea 2.5) ====================
 

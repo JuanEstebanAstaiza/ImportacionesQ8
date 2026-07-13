@@ -51,7 +51,7 @@ Ningún endpoint confía en un ID recibido en la URL o el body para decidir *qu�
 | `PUT /importadores/{id}` | Solo el dueño de esa empresa | `tests/test_perfiles.py::TestPerfilEmpresa` |
 | `GET/PUT /ordenes/{id}` | Solicitante dueño o empresa asignada, según el rol | `tests/test_ordenes.py` |
 | `GET /pagos/{id}` | Solo el solicitante que generó el pago | `tests/test_pagos.py` |
-| `POST /cotizaciones/{id}/reclamar` | La cotización debe ser de la empresa del asesor (dirigida) o abierta | `tests/test_asesores.py::TestPoolEmpresaYReclamo` |
+| `POST /cotizaciones/{id}/reclamar` | Dueño o asesor de la empresa (dirigida/abierta del pool) | `tests/test_asesores.py::TestPoolEmpresaYReclamo` |
 | `PUT /importadores/asesores/{id}/estado` | El asesor debe pertenecer a la empresa del dueño autenticado | `tests/test_asesores.py::TestListarYActualizarAsesores` |
 | `GET/POST /chat/conversaciones/{id}/mensajes`, WebSocket `/ws/chat/{id}` | Solo el solicitante o la cuenta de empresa de esa conversación (`_verificar_acceso_conversacion`) | `tests/test_chat.py::TestMensajesRest`, `TestWebSocketChat` |
 | `PUT /ordenes/{id}/reportar-problema` | Solo el solicitante dueño de la orden | `tests/test_admin.py::TestDisputas` |
@@ -70,8 +70,8 @@ Antes del desacople de identidad, el backend asumía `Usuario.id == Importador.i
 - **Contraseñas con `bcrypt`** (`passlib`), nunca en texto plano ni con hashes reversibles.
 - **JWT firmado con HS256** (`utils/security.py`), con expiración (`exp`) e `iat`; el secreto (`SECRET_KEY`) se configura por variable de entorno, nunca hardcodeado en el repositorio para producción.
 - **Cierre del auto-registro de cuentas elevadas (Semana 3):** `POST /auth/register` rechaza cualquier `rol` distinto de `solicitante` con `400 Bad Request`. Antes, cualquiera podía crear una cuenta `admin` o `importador` sin ninguna verificación — el vector de escalamiento de privilegios más crítico encontrado en la revisión.
-  - Las cuentas `importador` (dueño) solo las crea un admin ya autenticado (`POST /admin/importadores`), junto con la empresa, en una transacción atómica.
-  - Las cuentas `asesor` solo las crea la cuenta dueña de su propia empresa (`POST /importadores/asesores`).
+  - Las cuentas `importador` (dueño / representante legal) solo las crea un admin ya autenticado (`POST /admin/importadores`), junto con la empresa, en una transacción atómica. `POST /importadores` (empresa sin dueño) responde **410 Gone**.
+  - Las cuentas `asesor` (operadores) solo las crea la cuenta dueña de su propia empresa (`POST /importadores/asesores`).
   - No existe **ningún** camino, público o de autoservicio, para crear una cuenta `admin`.
 - **Cuentas desactivables (`Usuario.activo`, Semana 3):** el login y la renovación de token (`/auth/refresh`) rechazan explícitamente cuentas con `activo=False` con `401 Unauthorized`, incluso si la contraseña es correcta. Permite a un admin revocar el acceso de una cuenta comprometida o de un empleado que deja la empresa, de forma inmediata (`PUT /admin/usuarios/{id}/estado`).
 - **Rate limiting (`slowapi`):** `RATE_LIMIT_LOGIN` (por defecto `5/minute` por IP) y `RATE_LIMIT_REGISTER` (por defecto `10/minute` por IP) mitigan ataques de fuerza bruta y registro masivo automatizado.
@@ -84,7 +84,7 @@ Ver [[Autenticacion]] para el detalle completo del flujo y los claims del JWT.
 
 - **`require_rol(rol)`:** exige un rol exacto (ej. `require_rol("admin")` en todos los endpoints de `/admin/*`).
 - **`require_rol_in(*roles)` (Semana 3):** exige que el rol esté en un conjunto permitido, usado para endpoints compartidos entre la cuenta dueña y sus asesores (ej. `GET /cotizaciones/pool-empresa`).
-- **Principio de mínimo privilegio para `asesor` (Semana 3):** por diseño explícito, un asesor **solo** puede reclamar cotizaciones del pool de su empresa, ver sus propias cotizaciones asignadas y participar en el chat de esas conversaciones. No puede crear otros asesores, editar el perfil de la empresa, ni enviar la propuesta formal — esas acciones quedan reservadas a la cuenta dueña.
+- **Principio de roles en la empresa importadora:** el **dueño** es representante legal y jefe de operadores: puede reclamar del pool, enviar propuestas, gestionar asesores, órdenes y chat post-aceptación. El **asesor** reclama, redacta borradores y negocia hasta el traspaso; no crea otros asesores ni edita el perfil de empresa.
 - **Separación estricta admin vs. operación de negocio:** un admin no reemplaza a un dueño de empresa (no puede editar el perfil de una empresa ni enviar propuestas), y viceversa — reduce la superficie de una cuenta admin comprometida.
 
 ---

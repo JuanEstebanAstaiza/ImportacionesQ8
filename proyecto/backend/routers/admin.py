@@ -34,9 +34,10 @@ async def crear_importador_con_dueño(
     current_user: dict = Depends(require_rol("admin"))
 ):
     """
-    Crea una empresa importadora Y su cuenta dueña (rol="importador") en un solo
-    paso, ya que el auto-registro público de cuentas "importador" está cerrado por
-    seguridad. La cuenta dueña luego puede crear asesores y personalizar el perfil.
+    **Única vía oficial de alta de importadoras.** Crea la empresa y su cuenta
+    dueña / representante legal (`rol="importador"`) en un solo paso. El
+    auto-registro público de `importador` está cerrado; siempre hay un dueño que
+    actúa como jefe de los asesores (operadores) de esa empresa.
     """
     usuario_existente = db.query(Usuario).filter(Usuario.email == datos.email_dueño).first()
     if usuario_existente:
@@ -391,6 +392,7 @@ async def obtener_metricas(
     tasa_conversion = (ordenes_creadas / propuestas_aceptadas * 100) if propuestas_aceptadas > 0 else 0.0
 
     importadores_activos = db.query(Importador).filter(Importador.estado == "activo").count()
+    importadores_verificados = db.query(Importador).filter(Importador.verificado == True).count()
     ordenes_en_disputa = db.query(Orden).filter(Orden.en_disputa == True).count()
 
     return MetricasResponse(
@@ -401,6 +403,6 @@ async def obtener_metricas(
         tiempo_promedio_primera_propuesta_horas=round(tiempo_promedio, 2) if tiempo_promedio is not None else None,
         tasa_conversion_a_orden=round(tasa_conversion, 2),
         importadores_activos=importadores_activos,
-        importadores_verificados=importadores_activos,
+        importadores_verificados=importadores_verificados,
         ordenes_en_disputa=ordenes_en_disputa
     )

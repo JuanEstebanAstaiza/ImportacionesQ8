@@ -118,7 +118,7 @@
 | incoterm | VARCHAR(50) | Incoterm acordado (FOB, CIF, etc.) |
 | notas_adicionales | TEXT NULL | Notas adicionales del solicitante |
 | campos_personalizados_valores | JSON NULL | Valores del formulario personalizado (`{campo_id: valor}`) cuando la empresa dirigida es `solo_cotizaciones_directas=TRUE` |
-| asesor_asignado_id | UUID FK → usuarios.id, NULLABLE | Asesor de la empresa que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
+| asesor_asignado_id | UUID FK → usuarios.id, NULLABLE | Dueño o asesor que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
 | costo_creditos | DECIMAL(10,2) NULL | (Semana 4) Créditos descontados al crear esta cotización (trazabilidad) |
 | cotizacion_origen_id | UUID FK → cotizaciones.id, NULLABLE | (Semana 4) Si esta cotización nace como reemplazo de una cancelada por error, referencia a la original |
 | cancelada_por_error | VARCHAR(20) NULL | (Semana 4) `NULL`, o quién fue responsable: `"solicitante"`/`"importador"` |
