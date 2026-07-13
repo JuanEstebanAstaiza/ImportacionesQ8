@@ -17,6 +17,7 @@ from schemas.pago import (
     SaldoCreditosResponse, MovimientoCreditoResponse, WompiWebhookEvent
 )
 from utils.dependencies import get_db, get_current_user, require_rol
+from services.credito_wallet import obtener_wallet, acreditar, debitar_atomico
 
 router = APIRouter(prefix="/pagos", tags=["Pagos"])
 creditos_router = APIRouter(prefix="/creditos", tags=["Créditos"])
@@ -114,11 +115,16 @@ async def obtener_saldo(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("solicitante"))
 ):
-    """Saldo de créditos actual del solicitante autenticado."""
+    """Saldo efectivo: wallet de organización si pertenece a una, si no el personal."""
     usuario = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
     if not usuario:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
-    return SaldoCreditosResponse(creditos_balance=usuario.creditos_balance)
+    wallet = obtener_wallet(db, usuario)
+    return SaldoCreditosResponse(
+        creditos_balance=wallet.balance,
+        wallet_tipo=wallet.kind,
+        organizacion_id=wallet.organizacion_id,
+    )
 
 
 @creditos_router.get("/movimientos", response_model=list[MovimientoCreditoResponse])
@@ -126,11 +132,20 @@ async def listar_movimientos(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("solicitante"))
 ):
-    """Historial de movimientos de créditos (compras, consumos, reembolsos) del solicitante autenticado."""
-    movimientos = db.query(MovimientoCredito).filter(
-        MovimientoCredito.usuario_id == current_user["user_id"]
-    ).order_by(MovimientoCredito.fecha.desc()).all()
-    return movimientos
+    """Historial del wallet efectivo (org o movimientos del usuario)."""
+    usuario = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    wallet = obtener_wallet(db, usuario)
+    q = db.query(MovimientoCredito)
+    if wallet.organizacion_id:
+        q = q.filter(MovimientoCredito.organizacion_id == wallet.organizacion_id)
+    else:
+        q = q.filter(
+            MovimientoCredito.usuario_id == current_user["user_id"],
+            MovimientoCredito.organizacion_id.is_(None),
+        )
+    return q.order_by(MovimientoCredito.fecha.desc()).all()
 
 
 @router.get("/{pago_id}", response_model=PagoResponse)
@@ -197,15 +212,15 @@ async def webhook_wompi(
     if evento_tipo == "payment.confirmed" or estado_wompi == "confirmed":
         usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
         if usuario:
-            usuario.creditos_balance = (usuario.creditos_balance or 0) + pago.creditos_comprados
-            db.add(MovimientoCredito(
-                id=str(uuid4()),
-                usuario_id=usuario.id,
+            wallet = obtener_wallet(db, usuario)
+            acreditar(
+                db,
+                wallet,
+                pago.creditos_comprados,
                 tipo=TipoMovimientoCredito.compra.value,
-                monto=pago.creditos_comprados,
                 pago_id=pago.id,
-                descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})"
-            ))
+                descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})",
+            )
 
         pago.estado = EstadoPago.confirmado.value
         pago.fecha_confirmacion = get_db_now(db)
@@ -226,18 +241,33 @@ async def webhook_wompi(
         db.commit()
 
     elif evento_tipo == "payment.refunded" or estado_wompi == "refunded":
-        # Revertir los créditos acreditados si el pago se reembolsa
         usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
         if usuario and pago.estado == EstadoPago.confirmado.value:
-            usuario.creditos_balance = max(0, (usuario.creditos_balance or 0) - pago.creditos_comprados)
-            db.add(MovimientoCredito(
-                id=str(uuid4()),
-                usuario_id=usuario.id,
-                tipo=TipoMovimientoCredito.consumo.value,
-                monto=-pago.creditos_comprados,
-                pago_id=pago.id,
-                descripcion=f"Reversión por reembolso de pago Wompi ({pago.wompi_payment_id})"
-            ))
+            wallet = obtener_wallet(db, usuario)
+            try:
+                debitar_atomico(
+                    db,
+                    wallet,
+                    pago.creditos_comprados,
+                    tipo=TipoMovimientoCredito.consumo.value,
+                    pago_id=pago.id,
+                    descripcion=f"Reversión por reembolso de pago Wompi ({pago.wompi_payment_id})",
+                )
+            except HTTPException:
+                # Si no hay saldo suficiente, forzar a cero el wallet efectivo
+                if wallet.organizacion is not None:
+                    wallet.organizacion.creditos_balance = 0
+                else:
+                    wallet.usuario.creditos_balance = 0
+                db.add(MovimientoCredito(
+                    id=str(uuid4()),
+                    usuario_id=usuario.id,
+                    organizacion_id=wallet.organizacion_id,
+                    tipo=TipoMovimientoCredito.consumo.value,
+                    monto=-pago.creditos_comprados,
+                    pago_id=pago.id,
+                    descripcion=f"Reversión por reembolso Wompi (saldo forzado) ({pago.wompi_payment_id})",
+                ))
         pago.estado = EstadoPago.reembolsado.value
         db.commit()
 

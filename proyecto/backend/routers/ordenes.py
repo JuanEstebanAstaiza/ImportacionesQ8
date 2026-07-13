@@ -481,7 +481,7 @@ async def obtener_orden_por_cotizacion(
         ]
     )
 
-# ==================== Disputas (Tarea 3.4, versión ligera) ====================
+# ==================== Disputas (dispute room) ====================
 
 @router.put("/{orden_id}/reportar-problema", response_model=dict)
 async def reportar_problema_orden(
@@ -490,8 +490,9 @@ async def reportar_problema_orden(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("solicitante"))
 ):
-    """El solicitante reporta un problema con su orden, abriendo una disputa que
-    revisa el equipo de administración."""
+    """Abre una disputa (sala) sobre la orden y marca en_disputa=True."""
+    from models.disputa import Disputa, EstadoDisputa, MensajeDisputa, TipoMensajeDisputa
+
     user_id_str = str(PyUUID(current_user["user_id"]))
 
     try:
@@ -507,9 +508,30 @@ async def reportar_problema_orden(
     if not orden:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
 
+    existente = db.query(Disputa).filter(Disputa.orden_id == orden_id_str).first()
+    if existente and existente.estado not in (EstadoDisputa.resuelta.value, EstadoDisputa.cerrada.value):
+        raise HTTPException(status_code=400, detail="Ya existe una disputa abierta para esta orden")
+
     orden.en_disputa = True
     orden.motivo_disputa = datos.motivo
     orden.fecha_actualizacion = get_db_now(db)
+
+    disputa = Disputa(
+        id=str(uuid4()),
+        orden_id=orden_id_str,
+        abierta_por_usuario_id=user_id_str,
+        estado=EstadoDisputa.abierta.value,
+        motivo=datos.motivo,
+    )
+    db.add(disputa)
+    db.flush()
+    db.add(MensajeDisputa(
+        id=str(uuid4()),
+        disputa_id=disputa.id,
+        autor_id=user_id_str,
+        contenido=f"Disputa abierta: {datos.motivo}",
+        tipo=TipoMensajeDisputa.sistema.value,
+    ))
     db.commit()
 
-    return {"success": True, "en_disputa": True}
+    return {"success": True, "en_disputa": True, "disputa_id": disputa.id}

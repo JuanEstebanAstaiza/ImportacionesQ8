@@ -116,3 +116,19 @@ Ajustes tras la revisión de flujos de administrador y dueño de importadora (si
 | F6 | Matching fail-closed | `POST /propuestas/` en abiertas exige Redis; sin Redis → 503 |
 
 Ver también [[API-Rest]] y [[Seguridad]].
+
+---
+
+## Features de valor (2026-07-13, tarde)
+
+Pack de producto en backend (sin frontend ni cobro de importadoras en plataforma). Detalle: [[Features-Valor-Jul-2026]].
+
+| # | Capacidad | Notas |
+|---|-----------|--------|
+| V1 | Evidencias importador | Moderación admin; catálogo solo `aprobada` |
+| V2 | Créditos corporativos | Solo solicitantes; org jurídica multi-usuario; importadoras sin wallet |
+| V3 | Dispute room | `Disputa` + evidencias/mensajes; `reportar-problema` crea sala |
+| V4 | Referidos | Código en registro; bonos al wallet efectivo |
+| V5 | Traducción Google | Chat preview + cache en metadata; mock en tests |
+
+Suite Docker: `tests/test_features_valor.py` + suite completa.

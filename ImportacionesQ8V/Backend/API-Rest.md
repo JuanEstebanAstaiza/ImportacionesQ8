@@ -88,7 +88,30 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | GET | `/chat/conversaciones` | Listar conversaciones del usuario autenticado |
 | GET | `/chat/conversaciones/{id}/mensajes` | Obtener mensajes de una conversación |
 | POST | `/chat/conversaciones/{id}/mensajes` | Enviar mensaje a una conversación |
+| POST | `/chat/traducir` | Preview de traducción (Google Cloud Translation o mock); no persiste |
+| POST | `/chat/mensajes/{mensaje_id}/traducir` | Traduce un mensaje y cachea en `metadata.traducciones` |
 | WS | `/ws/chat/{conversacion_id}?token=...` | Conexión WebSocket para chat en tiempo real |
+
+### Features de valor (2026-07-13)
+
+> Importadoras **no** tienen wallet: su cobro es contractual fuera de plataforma. Los créditos son solo de **solicitantes** (natural o jurídica / organización). Detalle: [[Features-Valor-Jul-2026]].
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| POST/GET/DELETE | `/importadores/evidencias` | Dueño importador | CRUD de evidencias de perfil (URL); estado inicial `pendiente` |
+| PUT | `/admin/evidencias/{id}/revisar` | Admin | Aprueba/rechaza evidencia (`aprobada`/`rechazada` + nota) |
+| GET | `/importadores/{id}` | Público | Incluye `evidencias_aprobadas` en el detalle |
+| GET | `/organizaciones/me` | Solicitante con org | Organización solicitante y saldo corporativo |
+| POST | `/organizaciones/miembros` | Owner/admin org | Invitar/vincular miembro por email + rol |
+| POST | `/organizaciones/invitar` | Owner/admin org | Crea solicitante o vincula existente al equipo |
+| GET | `/disputas/{id}` | Partes orden + admin | Dispute room (estado, evidencias, mensajes) |
+| POST | `/disputas/{id}/evidencias` | Solicitante o dueño importador | Adjuntar evidencia (URL) |
+| POST | `/disputas/{id}/mensajes` | Partes + admin | Mensaje del hilo de disputa |
+| PUT | `/admin/disputas/{id}/resolver` | Admin | Resuelve por `disputa.id` (limpia `orden.en_disputa`) |
+| GET | `/referidos/mi-codigo` | Solicitante | Código propio (lazy create) |
+| GET | `/referidos/estadisticas` | Solicitante | Usos y créditos ganados como referidor |
+
+Registro: body opcional `codigo_referido` en `POST /auth/register`. Persona jurídica crea `OrganizacionSolicitante` + wallet de org; naturales usan `Usuario.creditos_balance`.
 
 ### Usuarios y asesores (Semana 3, rol renombrado de "trabajador" a "asesor" en Semana 4)
 
@@ -126,19 +149,20 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | DELETE | `/importadores/campos-personalizados/{id}` | Dueño | Eliminar un campo propio |
 | GET | `/importadores/{id}/formulario` | Público | Formulario efectivo (estándar o personalizado) de una empresa |
 
-### Disputas y administración (Semana 3)
+### Disputas y administración (Semana 3 + dispute room 2026-07-13)
 
 | Método | Endpoint | Rol | Descripción |
 |--------|----------|-----|-------------|
-| PUT | `/ordenes/{id}/reportar-problema` | Solicitante | Abrir una disputa sobre su orden |
+| PUT | `/ordenes/{id}/reportar-problema` | Solicitante | Abre disputa: crea `Disputa` + `orden.en_disputa=True` |
+| GET | `/disputas/{id}` | Partes + admin | Sala de disputa (evidencias + mensajes) |
 | POST | `/admin/importadores` | Admin | **Única vía oficial:** crear empresa + cuenta dueño/representante legal en un solo paso |
 | POST | `/admin/importadores/{id}/verificar` | Admin | Verificar/activar una empresa |
 | PUT | `/admin/importadores/{id}/estado` | Admin | Activar/desactivar una empresa |
 | GET | `/admin/usuarios` | Admin | Monitoreo de cuentas (filtrable por rol/estado) |
 | PUT | `/admin/usuarios/{id}/estado` | Admin | Activar/desactivar cualquier cuenta |
 | GET | `/admin/cotizaciones-abiertas` | Admin | Vista de todas las cotizaciones abiertas |
-| GET | `/admin/disputas` | Admin | Listar órdenes con disputa abierta |
-| PUT | `/admin/disputas/{id}/resolver` | Admin | Resolver una disputa |
+| GET | `/admin/disputas` | Admin | Listar órdenes/disputas abiertas |
+| PUT | `/admin/disputas/{id}/resolver` | Admin | Resolver por id de `Disputa` (preferido); legacy por `orden_id` delega al modelo nuevo |
 | GET | `/admin/metricas` | Admin | Métricas de éxito de la plataforma (sección del PDF) |
 
 > **Nota:** `POST /auth/register` solo acepta `rol="solicitante"` desde la Semana 3 (ver [[Autenticacion]]); las cuentas `importador` y `asesor` se crean desde los endpoints de arriba. (Semana 4) El registro de `solicitante` ahora distingue persona natural/jurídica con validación condicional de campos.

@@ -22,7 +22,10 @@ Documento de referencia único ("fuente de verdad") sobre el blindaje de segurid
 | Fugas de datos entre empresas (multi-tenant) | ✅ Blindado | Claim `importador_id` en el JWT en vez de `Usuario.id == Importador.id` |
 | Recuperación de contraseña (Semana 4) | ✅ Blindado | OTP + token de un solo uso, ambos hasheados en BD, expiración corta, sin enumeración de usuarios, envío real vía SMTP |
 | Enumeración de cuentas vía `/auth/forgot-password` | ✅ Blindado | Respuesta `200` genérica idéntica exista o no el email |
-| Integridad del sistema de créditos (Semana 4 + fix 2026-07-13) | ✅ Blindado | Débito con `UPDATE ... WHERE creditos_balance >= costo` (sin race a saldo negativo) + `MovimientoCredito`; `402` si insuficiente |
+| Integridad del sistema de créditos (Semana 4 + fix 2026-07-13) | ✅ Blindado | Débito atómico vía `credito_wallet` (personal u org) + `MovimientoCredito`; `402` si insuficiente |
+| Créditos corporativos / multi-tenant org (2026-07-13) | ✅ Blindado | Solo solicitantes; invite restringido a `owner`/`admin` de la org; importadoras sin wallet |
+| Dispute room / evidencias (2026-07-13) | ✅ Blindado | Acceso a disputa y evidencias limitado a partes de la orden + admin; revisión de evidencias de perfil solo admin |
+| Traducción asistida (2026-07-13) | ✅ Blindado | Traducir mensaje exige ser participante de la conversación (misma regla que leer chat) |
 | Congruencia de categoría en propuestas (Semana 4) | ✅ Blindado | Una empresa solo puede responder cotizaciones de su propia `especialidad_producto` |
 | Autenticación con Google / hashing Argon2 | 🔜 Roadmap | Documentado como mejora futura, no implementado en esta iteración (ver sección 10) |
 

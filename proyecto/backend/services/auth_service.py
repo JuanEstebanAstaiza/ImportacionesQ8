@@ -1,37 +1,80 @@
 from sqlalchemy.orm import Session
 from uuid import uuid4
 from datetime import datetime, timedelta
+from typing import Optional
+import secrets
+import string
 
 import config
 from models.usuario import Usuario
 from models.password_reset import PasswordResetToken
+from models.organizacion import OrganizacionSolicitante, MiembroOrganizacion, RolOrganizacion
+from models.referido import CodigoReferido, ReferidoUso
+from models.credito import MovimientoCredito, TipoMovimientoCredito
 from schemas.auth import (
     RegistroRequest, LoginRequest, TokenResponse, LoginResponse,
     ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest
 )
 from utils.security import hash_password, verify_password, create_access_token, generar_otp, generar_token_seguro, hash_token
 from utils.email import enviar_correo_recuperacion_password
+from services.credito_wallet import obtener_wallet, acreditar
 from fastapi import HTTPException, status
+
+
+def _generar_codigo_referido() -> str:
+    alfabeto = string.ascii_uppercase + string.digits
+    return "Q8" + "".join(secrets.choice(alfabeto) for _ in range(8))
+
+
+def aplicar_referido_si_aplica(db: Session, nuevo_usuario: Usuario, codigo: Optional[str]) -> None:
+    if not codigo:
+        return
+    codigo_row = db.query(CodigoReferido).filter(
+        CodigoReferido.codigo == codigo.strip().upper(),
+        CodigoReferido.activo == True,  # noqa: E712
+    ).first()
+    if not codigo_row:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código de referido inválido")
+    if codigo_row.usuario_id == nuevo_usuario.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No puedes usar tu propio código")
+
+    referidor = db.query(Usuario).filter(Usuario.id == codigo_row.usuario_id).first()
+    if not referidor or referidor.rol != "solicitante":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código de referido inválido")
+
+    ya_usado = db.query(ReferidoUso).filter(ReferidoUso.usuario_referido_id == nuevo_usuario.id).first()
+    if ya_usado:
+        return
+
+    bono_ref = float(config.CREDITO_BONO_REFERIDO)
+    bono_dor = float(config.CREDITO_BONO_REFERIDOR)
+
+    wallet_nuevo = obtener_wallet(db, nuevo_usuario)
+    wallet_dor = obtener_wallet(db, referidor)
+    acreditar(
+        db, wallet_nuevo, bono_ref,
+        tipo=TipoMovimientoCredito.bono_referido.value,
+        descripcion=f"Bono por registro con código {codigo_row.codigo}",
+    )
+    acreditar(
+        db, wallet_dor, bono_dor,
+        tipo=TipoMovimientoCredito.bono_referidor.value,
+        descripcion=f"Bono por referir a {nuevo_usuario.email}",
+    )
+    db.add(ReferidoUso(
+        id=str(uuid4()),
+        codigo_id=codigo_row.id,
+        usuario_referido_id=nuevo_usuario.id,
+        bono_referidor=bono_dor,
+        bono_referido=bono_ref,
+    ))
+
 
 def register_user(registro: RegistroRequest, db: Session) -> TokenResponse:
     """
-    Registra un nuevo usuario en el sistema.
-    
-    Args:
-        registro: Datos de registro (email, password, rol)
-        db: Sesión de base de datos
-        
-    Returns:
-        TokenResponse con access_token, user_id y rol
-        
-    Raises:
-        HTTPException 400: Si el email ya está registrado o el rol es inválido
+    Registra un nuevo solicitante. Persona jurídica crea OrganizaciónSolicitante
+    con wallet corporativo. Persona natural usa wallet personal.
     """
-    # El auto-registro público solo permite el rol "solicitante". Las cuentas de
-    # "importador" (dueño de empresa) y "asesor" las crea un admin o el dueño
-    # de la empresa respectivamente, y "admin" solo se crea por otro admin o por
-    # seed inicial: esto cierra el hueco de seguridad de auto-registro de cuentas
-    # privilegiadas.
     if registro.rol != "solicitante":
         detalle = "Rol inválido. El auto-registro público solo permite el rol 'solicitante'"
         if registro.rol == "importador":
@@ -40,26 +83,23 @@ def register_user(registro: RegistroRequest, db: Session) -> TokenResponse:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detalle
         )
-    
-    # Verificar que el email no exista ya en la base de datos
+
     usuario_existente = db.query(Usuario).filter(Usuario.email == registro.email).first()
     if usuario_existente:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El email ya está registrado"
         )
-    
-    # Generar hash de la contraseña
-    password_hash = hash_password(registro.password)
-    
-    # Nombre completo a partir de los campos condicionales (persona natural usa
-    # nombre + apellido; persona jurídica usa la razón social como "nombre" de
-    # contacto para mostrar en el perfil).
-    nombre_registro = registro.nombre if registro.tipo_persona == "natural" else registro.razon_social
 
-    # Crear nuevo usuario en la base de datos
+    password_hash = hash_password(registro.password)
+    nombre_registro = registro.nombre if registro.tipo_persona == "natural" else registro.razon_social
+    bono = float(config.CREDITO_BONO_REGISTRO)
+
+    # Jurídica: bono va al wallet de la org; natural: al personal.
+    saldo_personal_inicial = 0.0 if registro.tipo_persona == "juridica" else bono
+
     nuevo_usuario = Usuario(
-        id=str(uuid4()),  # Generar UUID como string para SQLite
+        id=str(uuid4()),
         email=registro.email,
         password_hash=password_hash,
         rol=registro.rol,
@@ -74,59 +114,90 @@ def register_user(registro: RegistroRequest, db: Session) -> TokenResponse:
         telefono=registro.telefono,
         acepto_politica_datos=registro.acepto_politica_datos,
         fecha_aceptacion_politica=datetime.utcnow(),
-        creditos_balance=config.CREDITO_BONO_REGISTRO,
+        creditos_balance=saldo_personal_inicial,
         perfil_completo=True
     )
-    
     db.add(nuevo_usuario)
+    db.flush()
+
+    if registro.tipo_persona == "juridica":
+        org = OrganizacionSolicitante(
+            id=str(uuid4()),
+            razon_social=registro.razon_social,
+            nit=registro.nit,
+            creditos_balance=bono,
+            owner_usuario_id=nuevo_usuario.id,
+            activo=True,
+        )
+        db.add(org)
+        db.flush()
+        nuevo_usuario.organizacion_id = org.id
+        db.add(MiembroOrganizacion(
+            id=str(uuid4()),
+            organizacion_id=org.id,
+            usuario_id=nuevo_usuario.id,
+            rol_org=RolOrganizacion.owner.value,
+            activo=True,
+        ))
+        db.add(MovimientoCredito(
+            id=str(uuid4()),
+            usuario_id=nuevo_usuario.id,
+            organizacion_id=org.id,
+            tipo=TipoMovimientoCredito.bono_registro.value,
+            monto=bono,
+            descripcion="Bono de registro (organización)",
+        ))
+    else:
+        if bono > 0:
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=nuevo_usuario.id,
+                tipo=TipoMovimientoCredito.bono_registro.value,
+                monto=bono,
+                descripcion="Bono de registro",
+            ))
+
+    aplicar_referido_si_aplica(db, nuevo_usuario, registro.codigo_referido)
+
     db.commit()
     db.refresh(nuevo_usuario)
-    
-    # Generar JWT token
-    access_token = create_access_token(str(nuevo_usuario.id), nuevo_usuario.rol)
-    
+
+    access_token = create_access_token(
+        str(nuevo_usuario.id),
+        nuevo_usuario.rol,
+        importador_id=nuevo_usuario.importador_id,
+    )
+
     return TokenResponse(
         access_token=access_token,
         user_id=str(nuevo_usuario.id),
         rol=nuevo_usuario.rol
     )
 
+
 def login_user(login: LoginRequest, db: Session) -> LoginResponse:
-    """
-    Inicia sesión de un usuario existente.
-    
-    Args:
-        login: Datos de inicio de sesión (email, password)
-        db: Sesión de base de datos
-        
-    Returns:
-        LoginResponse con access_token, user_id, rol y perfil_completo
-        
-    Raises:
-        HTTPException 401: Si las credenciales son inválidas
-    """
-    # Buscar usuario por email
     usuario = db.query(Usuario).filter(Usuario.email == login.email).first()
-    
+
     if not usuario or not verify_password(login.password, usuario.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Una cuenta desactivada (por un admin, o por el dueño de la empresa a un
-    # asesor) no puede iniciar sesión, aunque la contraseña sea correcta.
+
     if not usuario.activo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Cuenta desactivada. Contacta al administrador de tu cuenta",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Generar JWT token
-    access_token = create_access_token(str(usuario.id), usuario.rol, importador_id=usuario.importador_id)
-    
+
+    access_token = create_access_token(
+        str(usuario.id),
+        usuario.rol,
+        importador_id=usuario.importador_id,
+    )
+
     return LoginResponse(
         access_token=access_token,
         user_id=str(usuario.id),
@@ -134,42 +205,32 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
         perfil_completo=usuario.perfil_completo
     )
 
+
 def refresh_token(token: str, db: Session) -> TokenResponse:
-    """
-    Renueva un token JWT expirado (si el usuario sigue activo).
-    
-    Args:
-        token: Token JWT actual a renovar
-        db: Sesión de base de datos
-        
-    Returns:
-        TokenResponse con nuevo access_token
-        
-    Raises:
-        HTTPException 401: Si el token es inválido o está expirado
-    """
+    """Renueva un token JWT si el usuario sigue activo."""
     from utils.security import decode_access_token
-    
+
     try:
         payload = decode_access_token(token)
         user_id = payload.get("sub")
         rol = payload.get("rol")
-        
+
         if user_id is None or rol is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token inválido",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Token inválido o expirado: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Verificar que el usuario aún existe y está activo
-    usuario = db.query(Usuario).filter(Usuario.id == str(user_id)).first()  # Convertir a string para SQLite
+
+    usuario = db.query(Usuario).filter(Usuario.id == str(user_id)).first()
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -182,15 +243,15 @@ def refresh_token(token: str, db: Session) -> TokenResponse:
             detail="Cuenta desactivada",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Generar nuevo token JWT
+
     access_token = create_access_token(str(usuario.id), usuario.rol, importador_id=usuario.importador_id)
-    
+
     return TokenResponse(
         access_token=access_token,
         user_id=str(usuario.id),
         rol=usuario.rol
     )
+
 
 def forgot_password(solicitud: ForgotPasswordRequest, db: Session) -> ForgotPasswordResponse:
     """
@@ -198,8 +259,7 @@ def forgot_password(solicitud: ForgotPasswordRequest, db: Session) -> ForgotPass
     los guarda hasheados, y envía por correo el enlace + el OTP.
 
     Siempre responde el mismo mensaje genérico exista o no el email, para no
-    permitir enumeración de cuentas registradas (se ejecuta el mismo trabajo
-    "shape" en ambos casos salvo el envío real del correo).
+    permitir enumeración de cuentas registradas.
     """
     usuario = db.query(Usuario).filter(Usuario.email == solicitud.email).first()
 
@@ -207,7 +267,6 @@ def forgot_password(solicitud: ForgotPasswordRequest, db: Session) -> ForgotPass
         otp = generar_otp()
         token = generar_token_seguro()
 
-        # Invalidar cualquier token de recuperación pendiente anterior del usuario
         db.query(PasswordResetToken).filter(
             PasswordResetToken.usuario_id == usuario.id,
             PasswordResetToken.usado == False  # noqa: E712
@@ -228,10 +287,10 @@ def forgot_password(solicitud: ForgotPasswordRequest, db: Session) -> ForgotPass
 
     return ForgotPasswordResponse()
 
+
 def reset_password(solicitud: ResetPasswordRequest, db: Session) -> None:
     """
-    Completa la recuperación de contraseña validando el token + OTP (ambos
-    deben corresponder al mismo registro, no estar usados ni expirados).
+    Completa la recuperación de contraseña validando el token + OTP.
     """
     token_hash = hash_token(solicitud.token)
     otp_hash = hash_token(solicitud.otp)

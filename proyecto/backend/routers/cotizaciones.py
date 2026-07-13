@@ -249,15 +249,12 @@ async def crear_cotizacion(
     - **incoterm**: Incoterm acordado (FOB, CIF, etc.)
     """
     from uuid import uuid4
-    from sqlalchemy import update
     from models.usuario import Usuario
-    from models.credito import MovimientoCredito, TipoMovimientoCredito
+    from services.credito_wallet import obtener_wallet, debitar_atomico
 
     user_id_str = str(UUID(current_user["user_id"]))  # Convertir a string para SQLite
 
-    # Créditos (Semana 4): crear una cotización tiene costo, distinto según la
-    # modalidad. La plataforma no cobra comisión sobre la orden; solo cobra por
-    # conectar (crear la solicitud), sin responsabilizarse del negocio posterior.
+    # Créditos: costo por modalidad. Wallet = org (jurídica/equipo) o personal (natural).
     solicitante = db.query(Usuario).filter(Usuario.id == user_id_str).first()
     if not solicitante:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -266,13 +263,13 @@ async def crear_cotizacion(
         config.CREDITO_COSTO_COTIZACION_ABIERTA if cotizacion_data.modalidad == "abierta"
         else config.CREDITO_COSTO_COTIZACION_DIRIGIDA
     )
-    saldo_actual = solicitante.creditos_balance or 0
-    if saldo_actual < costo_creditos:
+    wallet = obtener_wallet(db, solicitante)
+    if wallet.balance < costo_creditos:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=(
                 f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
-                f"cotización (saldo actual: {saldo_actual}). Compra créditos en "
+                f"cotización (saldo actual: {wallet.balance}). Compra créditos en "
                 f"POST /creditos/comprar"
             )
         )
@@ -348,36 +345,13 @@ async def crear_cotizacion(
     
     db.add(nuevo_cotizacion)
 
-    # Débito atómico: UPDATE ... WHERE balance >= costo evita saldos negativos
-    # bajo peticiones concurrentes (read-check-write clásico).
-    debito = db.execute(
-        update(Usuario)
-        .where(
-            Usuario.id == user_id_str,
-            Usuario.creditos_balance >= costo_creditos,
-        )
-        .values(creditos_balance=Usuario.creditos_balance - costo_creditos)
-    )
-    if debito.rowcount != 1:
-        db.rollback()
-        solicitante = db.query(Usuario).filter(Usuario.id == user_id_str).first()
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=(
-                f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
-                f"cotización (saldo actual: {(solicitante.creditos_balance if solicitante else 0) or 0}). "
-                f"Compra créditos en POST /creditos/comprar"
-            ),
-        )
-
-    db.add(MovimientoCredito(
-        id=str(uuid4()),
-        usuario_id=user_id_str,
-        tipo=TipoMovimientoCredito.consumo.value,
-        monto=-costo_creditos,
+    debitar_atomico(
+        db,
+        wallet,
+        costo_creditos,
         cotizacion_id=nuevo_cotizacion.id,
-        descripcion=f"Creación de cotización {cotizacion_data.modalidad}"
-    ))
+        descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
+    )
 
     db.commit()
     db.refresh(nuevo_cotizacion)

@@ -14,6 +14,7 @@ from schemas.campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
     FormularioImportadorResponse
 )
+from schemas.features import EvidenciaImportadorCreate, EvidenciaImportadorResponse
 from models.importador import Importador
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
@@ -310,6 +311,91 @@ async def listar_importadores_certificados(
         Importador.estado == "activo",
         Importador.verificado == True  # noqa: E712 - comparación explícita requerida por SQLAlchemy
     ).order_by(Importador.calificacion_promedio.desc()).all()
+
+
+# ==================== Evidencias de perfil ====================
+
+@router.post("/evidencias", response_model=EvidenciaImportadorResponse, status_code=status.HTTP_201_CREATED)
+async def crear_evidencia(
+    datos: EvidenciaImportadorCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    from uuid import uuid4
+    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(status_code=400, detail="Cuenta sin empresa asociada")
+
+    ev = EvidenciaImportador(
+        id=str(uuid4()),
+        importador_id=importador_id,
+        tipo=datos.tipo,
+        titulo=datos.titulo,
+        descripcion=datos.descripcion,
+        url=datos.url,
+        estado=EstadoEvidenciaImportador.pendiente.value,
+    )
+    db.add(ev)
+    db.commit()
+    db.refresh(ev)
+    return ev
+
+
+@router.get("/evidencias", response_model=List[EvidenciaImportadorResponse])
+async def listar_mis_evidencias(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    from models.evidencia import EvidenciaImportador
+
+    importador_id = current_user.get("importador_id")
+    return db.query(EvidenciaImportador).filter(
+        EvidenciaImportador.importador_id == importador_id
+    ).order_by(EvidenciaImportador.fecha_creacion.desc()).all()
+
+
+@router.delete("/evidencias/{evidencia_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_evidencia(
+    evidencia_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    from models.evidencia import EvidenciaImportador
+
+    try:
+        eid = str(UUID(evidencia_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    ev = db.query(EvidenciaImportador).filter(
+        EvidenciaImportador.id == eid,
+        EvidenciaImportador.importador_id == current_user.get("importador_id"),
+    ).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    db.delete(ev)
+    db.commit()
+    return None
+
+
+@router.get("/{importador_id}/evidencias", response_model=List[EvidenciaImportadorResponse])
+async def listar_evidencias_aprobadas_publicas(
+    importador_id: str,
+    db: Session = Depends(get_db),
+):
+    """Catálogo público: solo evidencias aprobadas por admin."""
+    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+
+    try:
+        iid = str(UUID(importador_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Importador no encontrado")
+    return db.query(EvidenciaImportador).filter(
+        EvidenciaImportador.importador_id == iid,
+        EvidenciaImportador.estado == EstadoEvidenciaImportador.aprobada.value,
+    ).order_by(EvidenciaImportador.fecha_creacion.desc()).all()
+
 
 @router.get("/{importador_id}", response_model=ImportadorResponse)
 async def obtener_importador(
