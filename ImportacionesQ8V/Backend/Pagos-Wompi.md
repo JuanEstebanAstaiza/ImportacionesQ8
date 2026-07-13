@@ -1,179 +1,173 @@
-# Pagos con Wompi — ImportacionesQ8
+# Pagos con Wompi y sistema de créditos — ImportacionesQ8
 
 ## Descripción general
 
-Integración de **Wompi** como pasarela de pagos para el mercado colombiano. Delega el cumplimiento de seguridad de pagos (PCI) al proveedor, evitando que el equipo tenga que construir o certificar esa capa. Integración rápida y confiable, ideal para un sprint de 3 semanas.
+Integración de **Wompi** como pasarela de pagos para el mercado colombiano. Delega el cumplimiento de seguridad de pagos (PCI) al proveedor.
+
+> **Cambio de modelo (Semana 4):** el pago vía Wompi **ya NO es una comisión sobre la orden aceptada**. Ahora el solicitante **compra créditos** dentro de la plataforma, y esos créditos se consumen al **crear una cotización** (una cantidad fija por cotización abierta, otra por cotización dirigida, configurable). La **orden se crea automáticamente** cuando ambas partes se aceptan mutuamente (ver `Backend/API-Rest.md` y `Fases-Desarrollo/Semana-4-Asesores-Creditos-Registro/Tareas-Semana-4.md`), **sin ningún pago de por medio**: la plataforma solo conecta solicitantes con empresas importadoras, no se responsabiliza por el cumplimiento del negocio concretado entre las partes.
 
 ---
 
-## Flujo de pago con Wompi
+## Flujo de compra y consumo de créditos
 
 ```mermaid
 sequenceDiagram
     participant S as Solicitante
-    participant F as Frontend React/Next.js
     participant API as FastAPI
     participant W as Wompi API
     participant DB as MySQL
 
-    Note over S,DB: === GENERAR CHECKOUT DE PAGO ===
-    S->>F: Acepta oferta en cotización
-    F->>API: POST /pagos/checkout {cotizacion_id}
-    API->>DB: Verificar cotización y estado
-    DB-->>API: Cotización válida, precio_acordado_usd
-    API->>W: Crear checkout de pago (monto en USD)
-    W-->>API: Checkout URL + payment_id
-    API->>DB: INSERT INTO pagos {orden_id, wompi_payment_id, monto_usd, estado='pendiente', webhook_url}
-    DB-->>API: Pago creado
-    API-->>F: {checkout_url, wompi_payment_id}
-    F->>S: Redirige a Wompi para completar pago
-
-    Note over S,DB: === CONFIRMACIÓN DE PAGO (WEBHOOK) ===
+    Note over S,DB: === COMPRAR CRÉDITOS ===
+    S->>API: POST /creditos/comprar {monto_usd}
+    API->>DB: INSERT INTO pagos {usuario_id, monto_usd, creditos_comprados, estado='pendiente'}
+    API-->>S: {checkout_url, wompi_payment_id, creditos_a_acreditar}
     S->>W: Completa el pago en la pasarela
-    W->>API: POST /pagos/webhook/wompi {event, payment_id, data}
-    API->>DB: Verificar wompi_payment_id
-    DB-->>API: Pago pendiente encontrado
-    API->>DB: Actualizar pagos SET estado='confirmado', fecha_confirmacion=NOW()
-    DB-->>API: Pago confirmado
-    API->>DB: Actualizar cotizaciones SET estado='orden_activa'
-    DB-->>API: Cotización convertida en orden
-    API->>DB: INSERT INTO ordenes (cotizacion_id, importador_id, solicitante_id)
-    DB-->>API: Orden creada
-    API->>F: Notificar cambio de estado vía WebSocket
+
+    Note over S,DB: === CONFIRMACIÓN (WEBHOOK) ===
+    W->>API: POST /pagos/webhook/wompi {event: payment.confirmed, data}
+    API->>API: Verificar firma HMAC-SHA256 (fail-closed)
+    API->>DB: usuarios.creditos_balance += creditos_comprados
+    API->>DB: INSERT INTO movimientos_credito {tipo='compra'}
+    API->>DB: pagos.estado = 'confirmado'
+
+    Note over S,DB: === CONSUMIR CRÉDITOS AL CREAR COTIZACIÓN ===
+    S->>API: POST /cotizaciones {modalidad, ...}
+    API->>DB: Verificar creditos_balance >= costo_segun_modalidad
+    alt Saldo suficiente
+        API->>DB: creditos_balance -= costo, INSERT INTO cotizaciones
+        API->>DB: INSERT INTO movimientos_credito {tipo='consumo'}
+        API-->>S: 201 Created
+    else Saldo insuficiente
+        API-->>S: 402 Payment Required
+    end
 ```
 
 ---
 
-## Endpoints de pagos
+## Endpoints de créditos (`/creditos`)
 
-### Generar checkout de pago
+### Comprar créditos
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| POST | `/pagos/checkout` | Genera enlace de pago con Wompi para una cotización aceptada |
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| POST | `/creditos/comprar` | `solicitante` | Genera un checkout de Wompi para recargar créditos |
 
 **Request body:**
 ```json
-{
-    "cotizacion_id": "550e8400-e29b-41d4-a716-446655440000"
-}
+{ "monto_usd": 50.0 }
 ```
 
 **Response (200 OK):**
 ```json
 {
-    "success": true,
-    "data": {
-        "checkout_url": "https://pay.wompi.co/checkout/abc123",
-        "wompi_payment_id": "wpm_abc123"
-    }
+    "checkout_url": "https://pay.wompi.co/pay/wpm_abc123",
+    "wompi_payment_id": "wpm_abc123",
+    "monto_usd": 50.0,
+    "creditos_a_acreditar": 500.0
 }
 ```
 
-**Response (400 Bad Request):**
-```json
-{
-    "success": false,
-    "error": "La cotización no está en estado 'cotizacion_aceptada'"
-}
-```
+Los créditos **no se acreditan en este endpoint**: solo se acreditan cuando Wompi confirma el pago vía webhook.
 
-### Obtener estado del pago
+### Saldo y movimientos
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| GET | `/creditos/saldo` | `solicitante` | Saldo actual de créditos del usuario autenticado |
+| GET | `/creditos/movimientos` | `solicitante` | Historial de movimientos (compra/consumo/reembolso) |
+
+### Consultar un pago
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| GET | `/pagos/{id}` | Dueño del pago | Estado de un pago de créditos. Verifica propiedad (evita IDOR) |
+
+### Webhook de confirmación (Wompi)
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET | `/pagos/{id}` | Obtiene el estado actual de un pago |
+| POST | `/pagos/webhook/wompi` | Recibe notificaciones de Wompi sobre pagos de créditos |
 
-**Response (200 OK):**
-```json
-{
-    "success": true,
-    "data": {
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "orden_id": "660f9500-f39c-52e5-b827-557766551111",
-        "wompi_payment_id": "wpm_abc123",
-        "monto_usd": 150.00,
-        "estado": "confirmado",
-        "fecha_creacion": "2026-07-05T10:00:00Z",
-        "fecha_confirmacion": "2026-07-05T10:05:00Z"
-    }
-}
-```
+**Eventos manejados:**
 
-### Webhook de confirmación de pago (Wompi)
+| Evento Wompi | Acción | Estado del pago |
+|--------------|--------|------------------|
+| `payment.confirmed` | Acredita `creditos_comprados` a `Usuario.creditos_balance`, registra `MovimientoCredito(tipo="compra")` | `confirmado` |
+| `payment.failed` | No se acreditan créditos | `fallido` |
+| `payment.refunded` | Revierte los créditos acreditados (`MovimientoCredito(tipo="consumo")`, monto negativo) | `reembolsado` |
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| POST | `/pagos/webhook/wompi` | Recibe notificaciones de Wompi sobre el estado del pago |
-
-**Request body (evento de pago confirmado):**
-```json
-{
-    "event": "payment.confirmed",
-    "data": {
-        "id": "wpm_abc123",
-        "amount_including_taxes": 150.00,
-        "currency": "USD",
-        "status": "confirmed"
-    }
-}
-```
-
-**Response (200 OK):**
-```json
-{
-    "success": true
-}
-```
+**Seguridad del webhook (sin cambios respecto a Semana 2):** firma HMAC-SHA256 verificada con `WOMPI_EVENTS_SECRET`, **fail-closed** (sin firma válida, `403` y no se procesa). Idempotente: reintentos del mismo evento no duplican la acreditación de créditos (se revisa `Pago.estado` antes de aplicar efectos, más `IntegrityError`/rollback como defensa adicional ante condiciones de carrera).
 
 ---
 
-## Eventos de Wompi manejados
+## Costos de créditos por cotización
 
-| Evento | Acción en la plataforma | Estado del pago |
-|--------|----------------------|-----------------|
-| `payment.confirmed` | Cotización → Orden activa, notificar al solicitante y importador vía WebSocket | `confirmado` |
-| `payment.failed` | Mantener cotización en estado "pendiente de pago", notificar al solicitante | `fallido` |
-| `payment.refunded` | Notificar disputa, cambiar estado de orden a "en disputa/reembolso" | `reembolsado` |
+Configurables en `.env` / `config.py`, con un valor por defecto documentado (decisión de negocio ajustable sin tocar código):
+
+| Variable | Descripción | Default sugerido |
+|----------|-------------|-------------------|
+| `CREDITO_COSTO_COTIZACION_ABIERTA` | Créditos que cuesta crear una cotización **abierta** (difusión a toda la red) | `10.0` |
+| `CREDITO_COSTO_COTIZACION_DIRIGIDA` | Créditos que cuesta crear una cotización **dirigida** a una sola empresa | `5.0` |
+| `CREDITO_USD_POR_UNIDAD` | Tasa de conversión USD → créditos usada en `POST /creditos/comprar` | `0.1` (1 USD = 10 créditos) |
+| `CREDITO_BONO_REGISTRO` | Créditos de bienvenida al registrarse (`services/auth_service.py::register_user`) | `20.0` |
+
+El cobro ocurre en `routers/cotizaciones.py::crear_cotizacion`, en la **misma transacción atómica** que la creación de la cotización: si el saldo no alcanza, se responde `402 Payment Required` y no se crea nada; si alcanza, se descuenta el saldo y se registra el `MovimientoCredito` antes del `commit()`.
 
 ---
 
-## Estados del pago
+## Recreación de una cotización por error (mediada por admin)
+
+Una cotización es "one-time": una vez enviada y aceptada por ambas partes, si hubo un error en la negociación (por chat) se debe **crear una cotización completamente nueva**, no editar la original. La pregunta de quién asume el costo de esa nueva cotización la resuelve el equipo de administración:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Pendiente: Generar checkout Wompi
-    Pendiente --> Confirmado: Webhook payment.confirmed
-    Pendiente --> Fallido: Webhook payment.failed
-    Confirmado --> Reembolsado: Webhook payment.refunded
-    Fallido --> Pendiente: Reintento de pago (nuevo checkout)
+sequenceDiagram
+    participant U as Solicitante o Asesor/Dueño
+    participant API as FastAPI
+    participant Admin as Administrador
+    participant DB as MySQL
+
+    U->>API: POST /cotizaciones/{id}/solicitar-recreacion {motivo, parte_atribuida_sugerida}
+    API->>DB: INSERT INTO solicitudes_recreacion {estado='pendiente'}
+    Admin->>API: GET /admin/recreaciones
+    Admin->>API: PUT /admin/recreaciones/{id}/resolver {parte_atribuida_real}
+    API->>DB: cotizaciones.estado='cancelada', cancelada_por_error=parte_atribuida_real
+    alt Responsable = empresa importadora
+        API->>DB: MovimientoCredito(tipo='reembolso') — exime al solicitante del costo de la nueva cotización
+    else Responsable = solicitante
+        API->>API: El solicitante paga créditos normalmente por la nueva cotización
+    end
 ```
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| POST | `/cotizaciones/{id}/solicitar-recreacion` | `solicitante` o `asesor`/`importador` asignado | Solicita anular una cotización aceptada por error, sugiriendo quién fue responsable |
+| GET | `/admin/recreaciones` | `admin` | Lista solicitudes de recreación pendientes/resueltas |
+| PUT | `/admin/recreaciones/{id}/resolver` | `admin` | Decide la parte realmente responsable; si es la empresa importadora, reembolsa créditos al solicitante |
 
 ---
 
-## Integración con Wompi — Configuración
-
-### Credenciales necesarias
+## Configuración de Wompi
 
 | Variable | Descripción |
 |----------|-------------|
 | `WOMPI_PUBLIC_KEY` | Clave pública de Wompi para generar el checkout |
-| `WOMPI_SECRET_KEY` | Clave secreta de Wompi para verificar webhooks |
-| `WOMPI_WEBHOOK_URL` | URL del webhook en nuestra API (ej: `https://api.importacionesq8.com/pagos/webhook/wompi`) |
-
-### Flujo de configuración inicial con Wompi
-
-1. Crear cuenta en Wompi y obtener las credenciales (sandbox para desarrollo, producción para lanzamiento)
-2. Configurar el webhook URL en el panel de administración de Wompi
-3. Configurar la variable `WOMPI_WEBHOOK_URL` en las variables de entorno del backend
-4. Probar con pagos sandbox antes de activar producción
+| `WOMPI_SECRET_KEY` | Clave secreta de Wompi |
+| `WOMPI_EVENTS_SECRET` | Secreto usado para verificar la firma HMAC-SHA256 de los webhooks (sin esta variable, el webhook rechaza **todos** los eventos por diseño) |
 
 ---
 
-## Notas de implementación
+## Estado de implementación (Semana 4, 2026-07-08)
 
-- **Moneda:** Los pagos se procesan en USD (moneda principal del proyecto). Wompi soporta múltiples monedas.
-- **Monto dinámico:** El monto del pago se obtiene de `precio_acordado_usd` de la cotización aceptada, no es un valor fijo.
-- **Webhook seguro:** Verificar la firma del webhook de Wompi usando `WOMPI_SECRET_KEY` para evitar falsificaciones.
-- **Idempotencia:** El webhook puede recibir el mismo evento múltiples veces; verificar que el pago ya esté confirmado antes de procesar.
-- **No se almacenan datos de tarjetas:** La plataforma nunca maneja directamente los datos de la tarjeta o cuenta bancaria del solicitante — Wompi es responsable del cumplimiento PCI.
+| Elemento documentado | Estado | Detalle |
+|---|---|---|
+| Modelo `Pago` (compra de créditos, ya no ligado a orden/cotización) | ✅ Implementado | `models/pago.py` — `usuario_id` + `creditos_comprados`, `wompi_payment_id` **UNIQUE** |
+| Modelo `MovimientoCredito` | ✅ Implementado | `models/credito.py` — tipos `compra`/`consumo`/`reembolso` |
+| `POST /creditos/comprar` | ✅ Implementado | `routers/pagos.py::comprar_creditos` |
+| `GET /creditos/saldo`, `GET /creditos/movimientos` | ✅ Implementado | `routers/pagos.py` |
+| `POST /pagos/webhook/wompi` acredita créditos (ya no crea `Orden`) | ✅ Implementado | La creación de la orden se movió a la doble aceptación de propuestas (Fase 5, ver `API-Rest.md`) |
+| Cobro de créditos al crear cotización (`402` si no alcanza) | ✅ Implementado | `routers/cotizaciones.py::crear_cotizacion`, atómico |
+| Recreación mediada por admin + reembolso condicional | ✅ Implementado | `models/solicitud_recreacion.py`, `routers/admin.py` |
+| `POST /ordenes/crear-orden` (manual, Semana 2) | 🗑️ Eliminado | Reemplazado por creación automática vía doble aceptación (`POST /propuestas/{id}/pre-aceptar`) |
+| Integración real con la API de Wompi (checkout/API keys reales) | ⬜ Pendiente | El MVP simula la generación del checkout (`wpm_...` + URL simulada); la integración real queda para antes de producción |
+
+**Tests:** `tests/test_creditos.py`, `tests/test_pagos.py`, `tests/test_recreacion_cotizacion.py`.

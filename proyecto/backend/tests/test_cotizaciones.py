@@ -1,6 +1,10 @@
 import pytest
+from uuid import uuid4
 from fastapi.testclient import TestClient
 from fastapi import status
+
+from utils.security import create_access_token
+from conftest import registro_payload
 
 class TestListarCotizaciones:
     """Tests para el endpoint GET /cotizaciones"""
@@ -39,14 +43,9 @@ class TestCrearCotizacion:
     
     def test_crear_cotizacion_sin_role_solicitante(self, client):
         """Intentar crear cotización sin rol de solicitante"""
-        # Registrar usuario importador y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "importador@example.com",
-            "password": "123456789",
-            "rol": "importador"
-        })
-        
-        token = register_response.json()["access_token"]
+        # El auto-registro público de "importador" está cerrado por seguridad; se
+        # genera el token directamente, como haría una cuenta creada por un admin.
+        token = create_access_token(str(uuid4()), "importador")
         
         # Intentar crear cotización - debería fallar por rol insuficiente
         response = client.post("/cotizaciones", json={
@@ -65,11 +64,7 @@ class TestCrearCotizacion:
     def test_crear_cotizacion_dirigida_sin_importador_id(self, client):
         """Intentar crear cotización dirigida sin importador_id"""
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -93,11 +88,7 @@ class TestCrearCotizacion:
         from uuid import uuid4
         
         # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json={
-            "email": "solicitante2@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_response = client.post("/auth/register", json=registro_payload("solicitante2@example.com"))
         
         token = register_response.json()["access_token"]
         
@@ -118,30 +109,22 @@ class TestCrearCotizacion:
     
     def test_crear_cotizacion_dirigida_exitosa(self, client):
         """Crear cotización dirigida exitosamente"""
-        # Registrar usuario admin y crear importador
-        register_admin = client.post("/auth/register", json={
-            "email": "admin@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token_admin = register_admin.json()["access_token"]
-        
-        importador_response = client.post("/importadores", json={
+        token_admin = create_access_token(str(uuid4()), "admin")
+
+        importador_response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Test",
             "especialidad_producto": ["Textiles"],
             "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
+            "tiempo_respuesta_promedio": "24h",
+            "email_dueño": "dueño_cotiz_dirigida@example.com",
+            "password_dueño": "123456789"
         }, headers={"Authorization": f"Bearer {token_admin}"})
-        
-        importador_id = importador_response.json()["id"]
+
+        assert importador_response.status_code == status.HTTP_201_CREATED
+        importador_id = importador_response.json()["importador"]["id"]
         
         # Registrar usuario solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json={
-            "email": "solicitante3@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante3@example.com"))
         
         token_solicitante = register_solicitante.json()["access_token"]
         
@@ -165,14 +148,7 @@ class TestCrearCotizacion:
     
     def test_crear_cotizacion_abierta_exitosa(self, client):
         """Crear cotización abierta exitosamente"""
-        # Registrar usuario admin y crear importador
-        register_admin = client.post("/auth/register", json={
-            "email": "admin2@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
-        
-        token_admin = register_admin.json()["access_token"]
+        token_admin = create_access_token(str(uuid4()), "admin")
         
         importador_response = client.post("/importadores", json={
             "nombre_empresa": "China Textiles Co.",
@@ -182,11 +158,7 @@ class TestCrearCotizacion:
         }, headers={"Authorization": f"Bearer {token_admin}"})
         
         # Registrar usuario solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json={
-            "email": "solicitante4@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante4@example.com"))
         
         token_solicitante = register_solicitante.json()["access_token"]
         
@@ -315,30 +287,23 @@ class TestCotizacionEndpointsIntegration:
     
     def test_flujo_completo_cotizacion_dirigida(self, client):
         """Probar el flujo completo de una cotización dirigida"""
-        # 1. Registrar admin y crear importador
-        register_admin = client.post("/auth/register", json={
-            "email": "admin3@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
+        # 1. Generar token admin (el auto-registro de admin está cerrado) y crear importador
+        token_admin = create_access_token(str(uuid4()), "admin")
         
-        token_admin = register_admin.json()["access_token"]
-        
-        importador_response = client.post("/importadores", json={
+        importador_response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Dirigida",
             "especialidad_producto": ["Textiles"],
             "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
+            "tiempo_respuesta_promedio": "24h",
+            "email_dueño": "dueño_flujo_dirigida@example.com",
+            "password_dueño": "123456789"
         }, headers={"Authorization": f"Bearer {token_admin}"})
-        
-        importador_id = importador_response.json()["id"]
+
+        assert importador_response.status_code == status.HTTP_201_CREATED
+        importador_id = importador_response.json()["importador"]["id"]
         
         # 2. Registrar solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json={
-            "email": "solicitante5@example.com",
-            "password": "123456789",
-            "rol": "solicitante"
-        })
+        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante5@example.com"))
         
         token_solicitante = register_solicitante.json()["access_token"]
         
@@ -378,27 +343,23 @@ class TestImportadoresEndpointsIntegration:
     
     def test_flujo_completo_importador(self, client):
         """Probar el flujo completo de un importador"""
-        # 1. Registrar admin y obtener token
-        register_admin = client.post("/auth/register", json={
-            "email": "admin4@example.com",
-            "password": "123456789",
-            "rol": "admin"
-        })
+        # 1. Generar token admin (el auto-registro de admin está cerrado)
+        token_admin = create_access_token(str(uuid4()), "admin")
         
-        token_admin = register_admin.json()["access_token"]
-        
-        # 2. Crear importador
-        response_crear = client.post("/importadores", json={
+        # 2. Crear importador + dueño (única vía oficial)
+        response_crear = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Completa",
             "especialidad_producto": ["Textiles", "Electrónica"],
             "paises_origen": ["China", "Vietnam"],
             "tiempo_respuesta_promedio": "12h",
             "calificacion_promedio": 4.5,
-            "capacidad_volumen": 50000
+            "capacidad_volumen": 50000,
+            "email_dueño": "dueño_flujo_completo@example.com",
+            "password_dueño": "123456789"
         }, headers={"Authorization": f"Bearer {token_admin}"})
-        
+
         assert response_crear.status_code == status.HTTP_201_CREATED
-        importador_id = response_crear.json()["id"]
+        importador_id = response_crear.json()["importador"]["id"]
         
         # 3. Listar importadores (debería ver el nuevo)
         response_listar = client.get("/importadores")

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON
+from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON, ForeignKey
+from sqlalchemy.orm import relationship, object_session
 from uuid import uuid4
 from datetime import datetime
 import enum
@@ -29,6 +30,7 @@ class EstadoCotizacion(str, enum.Enum):
     propuestas_recibidas = "propuestas_recibidas"
     cotizacion_aceptada = "cotizacion_aceptada"
     orden_activa = "orden_activa"
+    cancelada = "cancelada"  # Semana 4: anulada por error tras una SolicitudRecreacion aprobada
 
 class Cotizacion(Base):
     __tablename__ = "cotizaciones"
@@ -51,9 +53,79 @@ class Cotizacion(Base):
     precio_objetivo_usd = Column(Float, nullable=True)
     incoterm = Column(String(50), nullable=False)
     notas_adicionales = Column(Text, nullable=True)
+    # Valores de los campos personalizados definidos por el importador (solo aplica
+    # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.
+    campos_personalizados_valores = Column(JSON, nullable=True)
+    # Asesor de la empresa que reclamó esta cotización ("el primero que hace
+    # clic se la queda"). NULL mientras nadie de la empresa la ha tomado.
+    asesor_asignado_id = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
     estado = Column(String(30), default=EstadoCotizacion.creada)
+
+    # --- Créditos y recreación por error (Semana 4) ---
+    # Créditos descontados al crear esta cotización (trazabilidad; ver MovimientoCredito).
+    costo_creditos = Column(Float, nullable=True)
+    # Si esta cotización nace como reemplazo de una cancelada por error, referencia
+    # a la original (trazabilidad de "recreaciones").
+    cotizacion_origen_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=True)
+    cancelada_por_error = Column(String(20), nullable=True)  # NULL, o quien fue responsable: "solicitante"/"importador"
+    motivo_cancelacion = Column(Text, nullable=True)
+
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relaciones
+    propuestas = relationship("Propuesta", back_populates="cotizacion")
+    orden = relationship("Orden", back_populates="cotizacion", uselist=False)
+    conversacion = relationship("ConversacionChat", back_populates="cotizacion", uselist=False)
+
+    # --- Navegación cruzada (Semana 4 - Fase 7) ---
+    # Estas properties permiten que `CotizacionResponse` (con `from_attributes`)
+    # exponga automáticamente el enlace al chat y el contacto asignado, sin tener
+    # que reconstruir la respuesta a mano en cada endpoint que ya hace
+    # `return cotizacion`/`return cotizaciones`.
+
+    @property
+    def conversacion_id(self):
+        if object_session(self) is None:
+            return None
+        return str(self.conversacion.id) if self.conversacion else None
+
+    @property
+    def contacto_asignado(self):
+        """Contacto de la empresa a cargo de la negociación de esta cotización:
+        el asesor asignado mientras la propuesta sigue `pendiente`, o el dueño de
+        la empresa una vez la propuesta queda `aceptada` (traspaso de chat,
+        Fase 5). Devuelve `None` si todavía no hay ninguna propuesta enviada."""
+        session = object_session(self)
+        if session is None:
+            return None
+
+        propuesta = next((p for p in self.propuestas if p.estado == "aceptada"), None)
+        if propuesta is None:
+            propuesta = next((p for p in self.propuestas if p.estado == "pendiente"), None)
+        if propuesta is None:
+            return None
+
+        from models.usuario import Usuario
+
+        usuario = None
+        if propuesta.estado == "pendiente" and self.asesor_asignado_id:
+            usuario = session.query(Usuario).filter(Usuario.id == self.asesor_asignado_id).first()
+        if usuario is None:
+            usuario = session.query(Usuario).filter(
+                Usuario.importador_id == propuesta.importador_id,
+                Usuario.rol == "importador"
+            ).first()
+
+        if usuario is None:
+            return None
+
+        return {
+            "usuario_id": str(usuario.id),
+            "nombre": usuario.nombre,
+            "foto_url": usuario.foto_url,
+            "whatsapp": usuario.whatsapp,
+        }
 
     def __repr__(self):
         return f"<Cotizacion(id={self.id}, solicitante_id={self.solicitante_id}, estado={self.estado})>"
