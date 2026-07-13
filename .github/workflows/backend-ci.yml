@@ -20,7 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Compose interpola TODAS las services al parsear el YAML; backend exige
+      # SECRET_KEY y WOMPI_EVENTS_SECRET aunque solo se ejecute el servicio tests.
       - name: Run test suite
+        env:
+          SECRET_KEY: test-secret-key-not-for-production-use-only
+          WOMPI_EVENTS_SECRET: test_events_secret_for_ci
         run: docker compose run --rm tests
 
   smoke-ready:
