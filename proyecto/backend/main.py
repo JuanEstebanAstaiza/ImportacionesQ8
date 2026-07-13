@@ -117,8 +117,34 @@ async def root():
 
 @app.get("/health", tags=["Salud"])
 async def health_check():
-    """Endpoint de verificación de salud para monitoreo"""
+    """Liveness: el proceso responde (no valida dependencias)."""
     return {"status": "healthy"}
+
+@app.get("/health/ready", tags=["Salud"])
+async def readiness_check():
+    """
+    Readiness: MySQL y Redis deben responder.
+    Útil para orquestadores (K8s / load balancers) antes de enviar tráfico.
+    """
+    from database import check_database
+    from config import redis_client
+
+    checks = {"database": False, "redis": False}
+
+    checks["database"] = check_database()
+
+    try:
+        checks["redis"] = bool(redis_client and redis_client.ping())
+    except Exception:
+        checks["redis"] = False
+
+    if checks["database"] and checks["redis"]:
+        return {"status": "ready", "checks": checks}
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "not_ready", "checks": checks},
+    )
 
 if __name__ == "__main__":
     import uvicorn

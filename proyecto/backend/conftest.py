@@ -11,6 +11,8 @@ os.makedirs(DB_DIR, exist_ok=True)
 
 # Sobrescribir DATABASE_URL ANTES de importar cualquier módulo del proyecto
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_DIR}/test.db"
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use-only!!")
 
 # Secreto de eventos de Wompi usado en tests para firmar webhooks simulados
 os.environ.setdefault("WOMPI_EVENTS_SECRET", "test_events_secret_for_ci")
@@ -441,6 +443,10 @@ def mock_redis_client(monkeypatch):
     redis_mock.get.return_value = None
     redis_mock.ttl.return_value = 259200
     redis_mock.exists.return_value = False
+    redis_mock.smembers.return_value = set()
+    redis_mock.ping.return_value = True
+    # pipeline() encadenable para índice SET (sadd/expire/srem/execute)
+    redis_mock.pipeline.return_value = redis_mock
     
     # Sobrescribir en el módulo config
     original_redis = config.redis_client

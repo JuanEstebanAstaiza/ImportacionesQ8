@@ -1,15 +1,15 @@
 services:
-  # MySQL Database
   mysql:
     image: mysql:8.0
     container_name: importacionesq8_mysql
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: importacionesq8
-      MYSQL_USER: usuario_q8
-      # ASCII-only password: non-ASCII chars (e.g. ñ) break SQLAlchemy/PyMySQL URL parsing and auth.
-      MYSQL_PASSWORD: password_q8
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-importacionesq8}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
@@ -19,7 +19,6 @@ services:
       timeout: 20s
       retries: 10
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: importacionesq8_redis
@@ -33,33 +32,35 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend API
   backend:
     build: .
     container_name: importacionesq8_backend
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+pymysql://usuario_q8:password_q8@mysql/importacionesq8
-      SECRET_KEY: clave-secreta-para-desarrollo-cambiar-en-produccion-2024
-      ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
-      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql/${MYSQL_DATABASE:-importacionesq8}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       REDIS_URL: redis://redis:6379/0
+      APP_ENV: ${APP_ENV:-development}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-pub_test_placeholder}
       WOMPI_SECRET_KEY: ${WOMPI_SECRET_KEY:-prv_test_placeholder}
-      WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:-cambiar-por-el-secreto-de-eventos-de-wompi}
-      RATE_LIMIT_LOGIN: 5/minute
-      RATE_LIMIT_REGISTER: 10/minute
-      RATE_LIMIT_FORGOT_PASSWORD: 5/minute
+      WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:?WOMPI_EVENTS_SECRET must be set in .env}
+      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-5/minute}
+      RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-10/minute}
+      RATE_LIMIT_FORGOT_PASSWORD: ${RATE_LIMIT_FORGOT_PASSWORD:-5/minute}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
 
-  # Backend Tests (usa SQLite, no necesita MySQL/Redis)
   tests:
     build:
       context: .
@@ -67,13 +68,15 @@ services:
     container_name: importacionesq8_tests
     environment:
       DATABASE_URL: sqlite:////app/test.db
-      SECRET_KEY: clave-secreta-para-desarrollo-cambiar-en-produccion-2024
+      SECRET_KEY: test-secret-key-not-for-production-use-only
+      APP_ENV: test
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 1440
       CORS_ORIGINS: http://localhost:3000,http://localhost:8000
       WOMPI_EVENTS_SECRET: test_events_secret_for_ci
       RATE_LIMIT_LOGIN: 1000/minute
       RATE_LIMIT_REGISTER: 1000/minute
+      RATE_LIMIT_FORGOT_PASSWORD: 1000/minute
     volumes:
       - ./test_data:/app/test_data
 

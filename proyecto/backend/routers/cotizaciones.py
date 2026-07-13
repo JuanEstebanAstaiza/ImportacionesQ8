@@ -114,21 +114,9 @@ async def listar_pool_empresa(
 
     cotizaciones_candidatas = query.order_by(Cotizacion.fecha_creacion.desc()).all()
 
-    # Para las abiertas, solo mostrar las que efectivamente hacen matching con esta
-    # empresa según Redis (evita listar toda la red abierta a cualquier asesor).
-    matching_ids = set()
-    if config.redis_client:
-        try:
-            all_keys = config.redis_client.keys("cotizacion_abierta:*")
-            for key in all_keys:
-                partes = key.split(":")
-                if len(partes) != 2:
-                    continue
-                importadores_hash = config.redis_client.hgetall(key)
-                if importador_id_str in importadores_hash:
-                    matching_ids.add(partes[1])
-        except Exception:
-            logger.warning("Redis no disponible al listar pool-empresa para %s", importador_id_str)
+    # Índice Redis por importador (SET) — sin KEYS O(N).
+    from services.matching_service import listar_cotizaciones_matching_importador
+    matching_ids = listar_cotizaciones_matching_importador(importador_id_str)
 
     resultado = [
         c for c in cotizaciones_candidatas
@@ -260,6 +248,7 @@ async def crear_cotizacion(
     - **incoterm**: Incoterm acordado (FOB, CIF, etc.)
     """
     from uuid import uuid4
+    from sqlalchemy import update
     from models.usuario import Usuario
     from models.credito import MovimientoCredito, TipoMovimientoCredito
 
@@ -276,12 +265,13 @@ async def crear_cotizacion(
         config.CREDITO_COSTO_COTIZACION_ABIERTA if cotizacion_data.modalidad == "abierta"
         else config.CREDITO_COSTO_COTIZACION_DIRIGIDA
     )
-    if (solicitante.creditos_balance or 0) < costo_creditos:
+    saldo_actual = solicitante.creditos_balance or 0
+    if saldo_actual < costo_creditos:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=(
                 f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
-                f"cotización (saldo actual: {solicitante.creditos_balance or 0}). Compra créditos en "
+                f"cotización (saldo actual: {saldo_actual}). Compra créditos en "
                 f"POST /creditos/comprar"
             )
         )
@@ -357,8 +347,28 @@ async def crear_cotizacion(
     
     db.add(nuevo_cotizacion)
 
-    # Descuento atómico de créditos en la misma transacción que crea la cotización.
-    solicitante.creditos_balance = (solicitante.creditos_balance or 0) - costo_creditos
+    # Débito atómico: UPDATE ... WHERE balance >= costo evita saldos negativos
+    # bajo peticiones concurrentes (read-check-write clásico).
+    debito = db.execute(
+        update(Usuario)
+        .where(
+            Usuario.id == user_id_str,
+            Usuario.creditos_balance >= costo_creditos,
+        )
+        .values(creditos_balance=Usuario.creditos_balance - costo_creditos)
+    )
+    if debito.rowcount != 1:
+        db.rollback()
+        solicitante = db.query(Usuario).filter(Usuario.id == user_id_str).first()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=(
+                f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
+                f"cotización (saldo actual: {(solicitante.creditos_balance if solicitante else 0) or 0}). "
+                f"Compra créditos en POST /creditos/comprar"
+            ),
+        )
+
     db.add(MovimientoCredito(
         id=str(uuid4()),
         usuario_id=user_id_str,
@@ -370,6 +380,7 @@ async def crear_cotizacion(
 
     db.commit()
     db.refresh(nuevo_cotizacion)
+    db.refresh(solicitante)
     
     # Si es cotización abierta, ejecutar el motor de matching (después del commit para tener ID)
     if cotizacion_data.modalidad == "abierta":

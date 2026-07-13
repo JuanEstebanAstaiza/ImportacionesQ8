@@ -1,0 +1,66 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "proyecto/backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "proyecto/backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+defaults:
+  run:
+    working-directory: proyecto/backend
+
+jobs:
+  unit-tests:
+    name: Pytest (Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run test suite
+        run: docker compose run --rm tests
+
+  smoke-ready:
+    name: Stack smoke (/health/ready)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare .env
+        run: |
+          SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+          cat > .env <<EOF
+          APP_ENV=development
+          SECRET_KEY=${SECRET}
+          MYSQL_ROOT_PASSWORD=rootpassword
+          MYSQL_DATABASE=importacionesq8
+          MYSQL_USER=usuario_q8
+          MYSQL_PASSWORD=password_q8
+          WOMPI_EVENTS_SECRET=ci_test_events_secret
+          WOMPI_PUBLIC_KEY=pub_test_ci
+          WOMPI_SECRET_KEY=prv_test_ci
+          WEB_CONCURRENCY=2
+          CORS_ORIGINS=http://localhost:3000
+          RATE_LIMIT_LOGIN=100/minute
+          RATE_LIMIT_REGISTER=100/minute
+          RATE_LIMIT_FORGOT_PASSWORD=100/minute
+          EOF
+      - name: Start stack
+        run: docker compose up -d --build mysql redis backend
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health/ready; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend not ready"
+          docker compose logs backend
+          exit 1
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

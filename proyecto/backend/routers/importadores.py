@@ -467,28 +467,14 @@ async def listar_solicitudes_abiertas(
         Cotizacion.estado.in_([EstadoCotizacion.abierta.value, EstadoCotizacion.propuestas_recibidas.value])
     ).order_by(Cotizacion.fecha_creacion.desc()).all()
     
-    # Filtrar por matching real usando Redis: solo mostrar cotizaciones donde este
-    # importador específico aparece en la lista de matching (país + categoría).
-    # Si Redis no está disponible, se degrada a "sin resultados" en vez de un error 500.
-    cotizaciones_matching = {}
-    if config.redis_client:
-        try:
-            all_keys = config.redis_client.keys("cotizacion_abierta:*")
-            for key in all_keys:
-                # Ignorar claves auxiliares (":expiracion", ":respuestas")
-                partes = key.split(":")
-                if len(partes) != 2:
-                    continue
-                cid = partes[1]
-                importadores_hash = config.redis_client.hgetall(key)
-                cotizaciones_matching[cid] = list(importadores_hash.keys())
-        except Exception:
-            logger.warning("Redis no disponible al listar solicitudes abiertas para importador %s", importador_id_str)
-    
+    # Índice Redis por importador (SET) — sin KEYS O(N). Si Redis no está
+    # disponible, se degrada a "sin resultados" en vez de un error 500.
+    from services.matching_service import listar_cotizaciones_matching_importador
+    matching_ids = listar_cotizaciones_matching_importador(importador_id_str)
+
     resultados = []
     for c in cotizaciones:
-        # Verificar si este importador está en la lista de matching para esta cotización
-        if config.redis_client and importador_id_str not in cotizaciones_matching.get(str(c.id), []):
+        if config.redis_client and str(c.id) not in matching_ids:
             continue
         
         # Verificar si el importador ya envió una propuesta a esta cotización

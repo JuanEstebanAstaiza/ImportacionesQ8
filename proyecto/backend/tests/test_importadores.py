@@ -494,9 +494,9 @@ class TestBandejaSolicitudesImportador:
 
         import config
         redis_mock = MagicMock()
-        # Solo la primera cotización tiene a este importador en su lista de matching de Redis
-        redis_mock.keys.return_value = [f"cotizacion_abierta:{cotizacion_con_matching.id}"]
-        redis_mock.hgetall.return_value = {str(importador_user.importador_id): "pendiente"}
+        redis_mock.ping.return_value = True
+        # Índice SET por importador (reemplaza KEYS + hgetall)
+        redis_mock.smembers.return_value = {str(cotizacion_con_matching.id)}
         original_redis = config.redis_client
         config.redis_client = redis_mock
 
