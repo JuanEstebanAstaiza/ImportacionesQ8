@@ -88,8 +88,9 @@ async def listar_pool_empresa(
 ):
     """
     Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas donde aparece
-    en el matching) que todavía nadie ha reclamado. Tanto la cuenta dueña como los
-    asesores pueden verlo; el primero en reclamar ("POST /reclamar") se la queda.
+    en el matching) que todavía nadie ha reclamado. La cuenta dueña (representante
+    legal) y los asesores pueden verlo; cualquiera de ellos puede reclamar
+    (`POST /reclamar`) — el primero se la queda.
     """
     importador_id_str = current_user.get("importador_id")
     if not importador_id_str:
@@ -114,21 +115,9 @@ async def listar_pool_empresa(
 
     cotizaciones_candidatas = query.order_by(Cotizacion.fecha_creacion.desc()).all()
 
-    # Para las abiertas, solo mostrar las que efectivamente hacen matching con esta
-    # empresa según Redis (evita listar toda la red abierta a cualquier asesor).
-    matching_ids = set()
-    if config.redis_client:
-        try:
-            all_keys = config.redis_client.keys("cotizacion_abierta:*")
-            for key in all_keys:
-                partes = key.split(":")
-                if len(partes) != 2:
-                    continue
-                importadores_hash = config.redis_client.hgetall(key)
-                if importador_id_str in importadores_hash:
-                    matching_ids.add(partes[1])
-        except Exception:
-            logger.warning("Redis no disponible al listar pool-empresa para %s", importador_id_str)
+    # Índice Redis por importador (SET) — sin KEYS O(N).
+    from services.matching_service import listar_cotizaciones_matching_importador
+    matching_ids = listar_cotizaciones_matching_importador(importador_id_str)
 
     resultado = [
         c for c in cotizaciones_candidatas
@@ -141,13 +130,13 @@ async def listar_pool_empresa(
 async def reclamar_cotizacion(
     cotizacion_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("asesor"))
+    current_user: dict = Depends(require_rol_in("importador", "asesor"))
 ):
     """
     Reclamo atómico de una cotización del pool de la empresa: "el primero que hace
-    clic se la queda". La atomicidad real la da el UPDATE condicional (no un
-    check-then-set en Python), así que dos asesores reclamando a la vez no
-    pueden quedarse ambos con la misma cotización.
+    clic se la queda". Pueden reclamar el **dueño** (representante legal / jefe de
+    operadores) o un **asesor**. La atomicidad real la da el UPDATE condicional
+    (no un check-then-set en Python).
     """
     importador_id_str = current_user.get("importador_id")
     if not importador_id_str:
@@ -165,15 +154,15 @@ async def reclamar_cotizacion(
     if not cotizacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
 
-    # La cotización debe pertenecer a la empresa del asesor (dirigida) o ser
-    # abierta; en ambos casos debe seguir sin reclamar.
+    # La cotización debe pertenecer a la empresa (dirigida) o ser abierta;
+    # en ambos casos debe seguir sin reclamar.
     if cotizacion.importador_id and cotizacion.importador_id != importador_id_str:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado - Cotización de otra empresa")
 
     user_id_str = str(UUID(current_user["user_id"]))
 
     # UPDATE condicional: solo tiene efecto si asesor_asignado_id sigue NULL.
-    # rowcount == 0 significa que otro asesor la reclamó primero (o ya no existe).
+    # rowcount == 0 significa que otro miembro la reclamó primero (o ya no existe).
     resultado = db.query(Cotizacion).filter(
         Cotizacion.id == cotizacion_id_str,
         Cotizacion.asesor_asignado_id.is_(None)
@@ -183,7 +172,7 @@ async def reclamar_cotizacion(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Esta cotización ya fue reclamada por otro asesor de la empresa"
+            detail="Esta cotización ya fue reclamada por otro miembro de la empresa"
         )
 
     db.commit()
@@ -261,13 +250,11 @@ async def crear_cotizacion(
     """
     from uuid import uuid4
     from models.usuario import Usuario
-    from models.credito import MovimientoCredito, TipoMovimientoCredito
+    from services.credito_wallet import obtener_wallet, debitar_atomico
 
     user_id_str = str(UUID(current_user["user_id"]))  # Convertir a string para SQLite
 
-    # Créditos (Semana 4): crear una cotización tiene costo, distinto según la
-    # modalidad. La plataforma no cobra comisión sobre la orden; solo cobra por
-    # conectar (crear la solicitud), sin responsabilizarse del negocio posterior.
+    # Créditos: costo por modalidad. Wallet = org (jurídica/equipo) o personal (natural).
     solicitante = db.query(Usuario).filter(Usuario.id == user_id_str).first()
     if not solicitante:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -276,12 +263,13 @@ async def crear_cotizacion(
         config.CREDITO_COSTO_COTIZACION_ABIERTA if cotizacion_data.modalidad == "abierta"
         else config.CREDITO_COSTO_COTIZACION_DIRIGIDA
     )
-    if (solicitante.creditos_balance or 0) < costo_creditos:
+    wallet = obtener_wallet(db, solicitante)
+    if wallet.balance < costo_creditos:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=(
                 f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
-                f"cotización (saldo actual: {solicitante.creditos_balance or 0}). Compra créditos en "
+                f"cotización (saldo actual: {wallet.balance}). Compra créditos en "
                 f"POST /creditos/comprar"
             )
         )
@@ -357,19 +345,17 @@ async def crear_cotizacion(
     
     db.add(nuevo_cotizacion)
 
-    # Descuento atómico de créditos en la misma transacción que crea la cotización.
-    solicitante.creditos_balance = (solicitante.creditos_balance or 0) - costo_creditos
-    db.add(MovimientoCredito(
-        id=str(uuid4()),
-        usuario_id=user_id_str,
-        tipo=TipoMovimientoCredito.consumo.value,
-        monto=-costo_creditos,
+    debitar_atomico(
+        db,
+        wallet,
+        costo_creditos,
         cotizacion_id=nuevo_cotizacion.id,
-        descripcion=f"Creación de cotización {cotizacion_data.modalidad}"
-    ))
+        descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
+    )
 
     db.commit()
     db.refresh(nuevo_cotizacion)
+    db.refresh(solicitante)
     
     # Si es cotización abierta, ejecutar el motor de matching (después del commit para tener ID)
     if cotizacion_data.modalidad == "abierta":
@@ -468,11 +454,13 @@ async def enviar_propuesta(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Esta cotización no está dirigida a tu empresa"
             )
-    # 2. Verificar que el importador está en la lista de matching para esta cotización (Redis).
-    # Solo aplica a cotizaciones abiertas (las dirigidas no pasan por el motor de matching).
-    # Fail-closed: si Redis no está disponible no podemos verificar la autorización,
-    # así que se rechaza la solicitud en lugar de dejarla pasar sin control.
-    elif config.redis_client:
+    # 2. Verificar matching Redis en cotizaciones abiertas (fail-closed).
+    elif cotizacion.modalidad == "abierta":
+        if not config.redis_client:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
+            )
         try:
             importadores_matching = config.redis_client.hgetall(f"cotizacion_abierta:{cotizacion_id_str}")
         except Exception:
@@ -516,8 +504,9 @@ async def enviar_propuesta(
     )
     db.add(nueva_propuesta)
     
-    # 5. Actualizar estado de la cotización a "propuestas_recibidas" si es la primera propuesta
-    if cotizacion.estado == "abierta":
+    # 5. Actualizar estado de la cotización a "propuestas_recibidas" al recibir la primera propuesta
+    # (aplica a abierta Y dirigida; sin esto, negociar/aceptar falla en dirigidas).
+    if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
     
     # 6. Confirmar en una única transacción atómica (ACID). La restricción única
@@ -699,7 +688,7 @@ async def enviar_borrador_propuesta(
     _validar_congruencia_categoria(cotizacion, propuesta_db.importador_id, db)
 
     propuesta_db.estado = EstadoPropuesta.pendiente
-    if cotizacion.estado == "abierta":
+    if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
 
     db.commit()
@@ -989,11 +978,12 @@ async def pre_aceptar_propuesta(
     Cuando ambos lados quedan en `True` (sin importar el orden), la propuesta
     se finaliza automáticamente en la misma transacción:
     - Pasa a `estado="aceptada"`; las demás propuestas de la cotización se rechazan.
-    - La cotización pasa a `estado="cotizacion_aceptada"`.
+    - La cotización pasa a `estado="orden_activa"` y se fija `importador_id` a la
+      empresa ganadora (también en modalidad abierta, donde antes quedaba NULL).
     - Se crea la **Orden automáticamente** (sin pago de por medio: la plataforma
       solo conecta, no se responsabiliza del cumplimiento entre las partes).
-    - El chat de negociación se **traspasa al dueño** de la empresa (supervisor),
-      quien queda a cargo de ahí en adelante y de actualizar el estado de la orden.
+    - El chat de negociación se **traspasa al dueño** de la empresa (supervisor /
+      representante legal), quien queda a cargo de ahí en adelante.
 
     Mientras el otro lado no haya aceptado, cualquiera de las dos partes puede
     revertir su propia marca (`aceptar: false`). Una vez finalizada (ambos lados
@@ -1057,7 +1047,10 @@ async def pre_aceptar_propuesta(
         for p in otras:
             p.estado = EstadoPropuesta.rechazada
 
-        cotizacion.estado = EstadoCotizacion.cotizacion_aceptada
+        # Orden creada en la misma transacción → estado operativo de la cotización.
+        cotizacion.estado = EstadoCotizacion.orden_activa
+        # En abiertas el importador_id era NULL; fijarlo a la empresa ganadora.
+        cotizacion.importador_id = propuesta.importador_id
 
         nueva_orden = db.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
         if not nueva_orden:
@@ -1163,10 +1156,23 @@ async def solicitar_recreacion(
 
     user_id_str = str(UUID(current_user["user_id"]))
     rol = current_user["rol"]
+    empresa_id = current_user.get("importador_id")
 
-    # IDOR: solo el solicitante dueño, o alguien de la empresa involucrada, puede solicitar la recreación
+    # IDOR: solicitante dueño, o miembro de la empresa ganadora.
+    # En abiertas históricas `cotizacion.importador_id` podía ser NULL: se valida
+    # también contra la propuesta aceptada.
     es_solicitante_dueño = rol == "solicitante" and cotizacion.solicitante_id == user_id_str
-    es_empresa_involucrada = rol in ("importador", "asesor") and cotizacion.importador_id == current_user.get("importador_id")
+    es_empresa_involucrada = False
+    if rol in ("importador", "asesor") and empresa_id:
+        if cotizacion.importador_id == empresa_id:
+            es_empresa_involucrada = True
+        else:
+            propuesta_ganadora = db.query(Propuesta).filter(
+                Propuesta.cotizacion_id == cotizacion_id_str,
+                Propuesta.importador_id == empresa_id,
+                Propuesta.estado == EstadoPropuesta.aceptada.value
+            ).first()
+            es_empresa_involucrada = propuesta_ganadora is not None
     if not (es_solicitante_dueño or es_empresa_involucrada):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado sobre esta cotización")
 

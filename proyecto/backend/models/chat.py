@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 from datetime import datetime
@@ -43,6 +43,8 @@ class MensajeChat(Base):
     remitente_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
     contenido = Column(Text, nullable=False)
     tipo = Column(String(20), default=TipoMensajeChat.texto)  # "texto" o "archivo"
+    # Ej. {"traducciones": {"en": "...", "zh-CN": "..."}}
+    metadata_json = Column("metadata", JSON, nullable=True)
     fecha_envio = Column(DateTime, default=datetime.utcnow)
 
     conversacion = relationship("ConversacionChat", back_populates="mensajes")

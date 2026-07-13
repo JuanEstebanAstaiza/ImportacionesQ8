@@ -2,7 +2,7 @@
 
 ## Descripción general
 
-Documento de referencia único ("fuente de verdad") sobre el blindaje de seguridad implementado en el backend de ImportacionesQ8, consolidando las medidas aplicadas durante la revisión de Semana 2, ampliadas en la Semana 3, y reforzadas en la Semana 4 (recuperación de contraseña con OTP + SMTP real, sistema de créditos, doble aceptación mutua). Cada punto está verificado con la suite de tests (local y Docker) y referenciado a su implementación real en el código.
+Documento de referencia único ("fuente de verdad") sobre el blindaje de seguridad implementado en el backend de ImportacionesQ8, consolidando las medidas aplicadas durante la revisión de Semana 2, ampliadas en la Semana 3, reforzadas en la Semana 4 (recuperación de contraseña con OTP + SMTP real, sistema de créditos, doble aceptación mutua), y actualizadas tras la auditoría del **2026-07-13** (débito atómico de créditos, secrets, readiness). Cada punto está verificado con la suite de tests (local y Docker) y referenciado a su implementación real en el código. Informe completo: [[Auditoria-Backend-2026-07-13]].
 
 ---
 
@@ -16,13 +16,16 @@ Documento de referencia único ("fuente de verdad") sobre el blindaje de segurid
 | Autorización por rol | ✅ Blindado | Dependencias `require_rol`/`require_rol_in` en cada endpoint sensible; principio de mínimo privilegio para `asesor` |
 | Fuerza bruta / abuso | ✅ Blindado | Rate limiting (`slowapi`) en `/auth/login` y `/auth/register` |
 | Webhooks de terceros (Wompi) | ✅ Blindado | Verificación de firma HMAC-SHA256, fail-closed |
-| Condiciones de carrera | ✅ Blindado | Restricciones `UNIQUE` a nivel de base de datos + `UPDATE` condicional atómico para el reclamo de cotizaciones |
+| Condiciones de carrera | ✅ Blindado | Restricciones `UNIQUE` a nivel de base de datos + `UPDATE` condicional atómico (reclamo de cotizaciones y débito de créditos) |
 | Exposición de errores internos | ✅ Blindado | Manejador global de excepciones; nunca se filtran tracebacks/detalles internos al cliente |
 | CORS | ✅ Blindado | Restringido a orígenes configurados por entorno |
 | Fugas de datos entre empresas (multi-tenant) | ✅ Blindado | Claim `importador_id` en el JWT en vez de `Usuario.id == Importador.id` |
 | Recuperación de contraseña (Semana 4) | ✅ Blindado | OTP + token de un solo uso, ambos hasheados en BD, expiración corta, sin enumeración de usuarios, envío real vía SMTP |
 | Enumeración de cuentas vía `/auth/forgot-password` | ✅ Blindado | Respuesta `200` genérica idéntica exista o no el email |
-| Integridad del sistema de créditos (Semana 4) | ✅ Blindado | Descuento/acreditación atómica junto al registro de `MovimientoCredito`; validación de saldo antes de crear cotizaciones (`402` si insuficiente) |
+| Integridad del sistema de créditos (Semana 4 + fix 2026-07-13) | ✅ Blindado | Débito atómico vía `credito_wallet` (personal u org) + `MovimientoCredito`; `402` si insuficiente |
+| Créditos corporativos / multi-tenant org (2026-07-13) | ✅ Blindado | Solo solicitantes; invite restringido a `owner`/`admin` de la org; importadoras sin wallet |
+| Dispute room / evidencias (2026-07-13) | ✅ Blindado | Acceso a disputa y evidencias limitado a partes de la orden + admin; revisión de evidencias de perfil solo admin |
+| Traducción asistida (2026-07-13) | ✅ Blindado | Traducir mensaje exige ser participante de la conversación (misma regla que leer chat) |
 | Congruencia de categoría en propuestas (Semana 4) | ✅ Blindado | Una empresa solo puede responder cotizaciones de su propia `especialidad_producto` |
 | Autenticación con Google / hashing Argon2 | 🔜 Roadmap | Documentado como mejora futura, no implementado en esta iteración (ver sección 10) |
 
@@ -51,7 +54,7 @@ Ningún endpoint confía en un ID recibido en la URL o el body para decidir *qu�
 | `PUT /importadores/{id}` | Solo el dueño de esa empresa | `tests/test_perfiles.py::TestPerfilEmpresa` |
 | `GET/PUT /ordenes/{id}` | Solicitante dueño o empresa asignada, según el rol | `tests/test_ordenes.py` |
 | `GET /pagos/{id}` | Solo el solicitante que generó el pago | `tests/test_pagos.py` |
-| `POST /cotizaciones/{id}/reclamar` | La cotización debe ser de la empresa del asesor (dirigida) o abierta | `tests/test_asesores.py::TestPoolEmpresaYReclamo` |
+| `POST /cotizaciones/{id}/reclamar` | Dueño o asesor de la empresa (dirigida/abierta del pool) | `tests/test_asesores.py::TestPoolEmpresaYReclamo` |
 | `PUT /importadores/asesores/{id}/estado` | El asesor debe pertenecer a la empresa del dueño autenticado | `tests/test_asesores.py::TestListarYActualizarAsesores` |
 | `GET/POST /chat/conversaciones/{id}/mensajes`, WebSocket `/ws/chat/{id}` | Solo el solicitante o la cuenta de empresa de esa conversación (`_verificar_acceso_conversacion`) | `tests/test_chat.py::TestMensajesRest`, `TestWebSocketChat` |
 | `PUT /ordenes/{id}/reportar-problema` | Solo el solicitante dueño de la orden | `tests/test_admin.py::TestDisputas` |
@@ -70,8 +73,8 @@ Antes del desacople de identidad, el backend asumía `Usuario.id == Importador.i
 - **Contraseñas con `bcrypt`** (`passlib`), nunca en texto plano ni con hashes reversibles.
 - **JWT firmado con HS256** (`utils/security.py`), con expiración (`exp`) e `iat`; el secreto (`SECRET_KEY`) se configura por variable de entorno, nunca hardcodeado en el repositorio para producción.
 - **Cierre del auto-registro de cuentas elevadas (Semana 3):** `POST /auth/register` rechaza cualquier `rol` distinto de `solicitante` con `400 Bad Request`. Antes, cualquiera podía crear una cuenta `admin` o `importador` sin ninguna verificación — el vector de escalamiento de privilegios más crítico encontrado en la revisión.
-  - Las cuentas `importador` (dueño) solo las crea un admin ya autenticado (`POST /admin/importadores`), junto con la empresa, en una transacción atómica.
-  - Las cuentas `asesor` solo las crea la cuenta dueña de su propia empresa (`POST /importadores/asesores`).
+  - Las cuentas `importador` (dueño / representante legal) solo las crea un admin ya autenticado (`POST /admin/importadores`), junto con la empresa, en una transacción atómica. `POST /importadores` (empresa sin dueño) responde **410 Gone**.
+  - Las cuentas `asesor` (operadores) solo las crea la cuenta dueña de su propia empresa (`POST /importadores/asesores`).
   - No existe **ningún** camino, público o de autoservicio, para crear una cuenta `admin`.
 - **Cuentas desactivables (`Usuario.activo`, Semana 3):** el login y la renovación de token (`/auth/refresh`) rechazan explícitamente cuentas con `activo=False` con `401 Unauthorized`, incluso si la contraseña es correcta. Permite a un admin revocar el acceso de una cuenta comprometida o de un empleado que deja la empresa, de forma inmediata (`PUT /admin/usuarios/{id}/estado`).
 - **Rate limiting (`slowapi`):** `RATE_LIMIT_LOGIN` (por defecto `5/minute` por IP) y `RATE_LIMIT_REGISTER` (por defecto `10/minute` por IP) mitigan ataques de fuerza bruta y registro masivo automatizado.
@@ -84,7 +87,7 @@ Ver [[Autenticacion]] para el detalle completo del flujo y los claims del JWT.
 
 - **`require_rol(rol)`:** exige un rol exacto (ej. `require_rol("admin")` en todos los endpoints de `/admin/*`).
 - **`require_rol_in(*roles)` (Semana 3):** exige que el rol esté en un conjunto permitido, usado para endpoints compartidos entre la cuenta dueña y sus asesores (ej. `GET /cotizaciones/pool-empresa`).
-- **Principio de mínimo privilegio para `asesor` (Semana 3):** por diseño explícito, un asesor **solo** puede reclamar cotizaciones del pool de su empresa, ver sus propias cotizaciones asignadas y participar en el chat de esas conversaciones. No puede crear otros asesores, editar el perfil de la empresa, ni enviar la propuesta formal — esas acciones quedan reservadas a la cuenta dueña.
+- **Principio de roles en la empresa importadora:** el **dueño** es representante legal y jefe de operadores: puede reclamar del pool, enviar propuestas, gestionar asesores, órdenes y chat post-aceptación. El **asesor** reclama, redacta borradores y negocia hasta el traspaso; no crea otros asesores ni edita el perfil de empresa.
 - **Separación estricta admin vs. operación de negocio:** un admin no reemplaza a un dueño de empresa (no puede editar el perfil de una empresa ni enviar propuestas), y viceversa — reduce la superficie de una cuenta admin comprometida.
 
 ---
@@ -139,19 +142,21 @@ Ver [[Autenticacion]] para el flujo completo con diagrama de secuencia.
 
 ---
 
-## 10. Sistema de créditos: integridad financiera interna (Semana 4)
+## 10. Sistema de créditos: integridad financiera interna (Semana 4 + remediación 2026-07-13)
 
-- **Verificación y descuento atómico:** al crear una cotización, `crear_cotizacion` valida `Usuario.creditos_balance >= costo_segun_modalidad` y descuenta el saldo **en la misma transacción** que crea la `Cotizacion` y registra el `MovimientoCredito` tipo `consumo`; si el saldo es insuficiente, responde `402 Payment Required` sin tocar el balance ni crear la cotización (verificado en `tests/test_creditos.py::test_creditos_insuficientes_no_crea_cotizacion`).
+- **Débito atómico en BD (post-auditoría):** al crear una cotización, el saldo se descuenta con un único `UPDATE usuarios SET creditos_balance = creditos_balance - :costo WHERE id = :user_id AND creditos_balance >= :costo`. Si `rowcount != 1` → `402 Payment Required` + rollback (no queda cotización a medias ni saldo negativo bajo concurrencia). Evita el patrón read-check-write en Python. Verificado en `tests/test_health_ready_creditos.py` y `tests/test_creditos.py`.
+- **Misma transacción:** el `UPDATE` atómico, la creación de la `Cotizacion` y el `MovimientoCredito` tipo `consumo` ocurren juntos.
 - **Idempotencia del webhook de acreditación:** igual que en el modelo anterior de pagos, `wompi_payment_id` es `UNIQUE`, por lo que un reintento del webhook de Wompi no acredita créditos dos veces.
 - **Trazabilidad completa:** cada movimiento de crédito (`compra`, `consumo`, `reembolso`) queda registrado en `movimientos_credito` con referencia a la cotización o pago relacionado — nunca se modifica `creditos_balance` sin dejar un registro auditable.
 - **Recreación mediada por admin, no por autoservicio:** si una cotización aceptada tuvo un error, ninguna de las partes puede auto-eximirse del costo; solo un `admin` autenticado, vía `PUT /admin/recreaciones/{id}/resolver`, decide la parte responsable y autoriza el reembolso — evita que un solicitante o una empresa se auto-otorguen créditos gratis alegando errores falsos.
 - **Congruencia de categoría como control de negocio:** `_validar_congruencia_categoria` impide que una empresa de una industria distinta responda (y potencialmente "robe" o distorsione) una cotización fuera de su especialidad, tanto en modalidad abierta como dirigida.
+- **Detalle de remediaciones:** [[Remediaciones-Backend-Jul-2026]].
 
 ---
 
 ## 11. Roadmap de seguridad (no implementado en esta iteración)
 
-Estas mejoras fueron discutidas con el usuario y se documentan explícitamente como trabajo futuro, no deuda oculta:
+Estas mejoras fueron discutidas con el usuario y se documentan explícitamente como trabajo futuro, no deuda oculta. Parte del backlog también aparece en [[Auditoria-Backend-2026-07-13]]:
 
 | Mejora | Estado | Motivo de posposición |
 |---|---|---|
@@ -159,10 +164,13 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 | **Migración de hashing de contraseñas a Argon2** | 🔜 Pendiente | El backend usa `bcrypt` (`passlib`) actualmente, que sigue siendo seguro; la migración a Argon2 (ganador del Password Hashing Competition) se documenta como mejora incremental, no una vulnerabilidad activa |
 | **Auditoría/logging estructurado de acciones administrativas** | 🔜 Pendiente | Ya señalado como pendiente desde la Semana 3 |
 | **HTTPS en producción** | 🔜 Pendiente | Depende de la capa de despliegue, fuera del alcance del código del backend |
+| **Revocación real de JWT en logout** | 🔜 Pendiente | Logout sigue siendo client-side; blacklist/Redis o tokens de corta vida |
+| **JWT de WebSocket fuera del query string** | 🔜 Pendiente | Limitación de browsers; mitigar con token corto de un solo uso |
+| **Rate limits en escritura de negocio** | 🔜 Pendiente | Hoy el rate limiting cubre auth; cotizaciones/chat bajo abuso quedan abiertos |
 
 ---
 
-## Checklist de seguridad — Estado real (verificado en Semana 4)
+## Checklist de seguridad — Estado real (verificado Semana 4 + auditoría 2026-07-13)
 
 - [x] Sin inyección SQL posible (ORM parametrizado en el 100% del acceso a datos)
 - [x] IDOR cubierto en todos los endpoints que expuestos por ID (empresa, orden, pago, cotización, conversación, campo personalizado, asesor)
@@ -171,6 +179,8 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [x] Rate limiting en endpoints de autenticación
 - [x] Verificación de firma en webhooks de terceros (fail-closed)
 - [x] Condiciones de carrera cubiertas con restricciones de base de datos y `UPDATE` condicional, no con checks en la capa de aplicación
+- [x] Débito de créditos atómico (`UPDATE ... WHERE creditos_balance >= costo`) — remediación 2026-07-13
+- [x] `SECRET_KEY` no hardcodeada en Compose; rechazo de claves débiles si `APP_ENV=production`
 - [x] Sin fuga de detalles internos en errores 500
 - [x] CORS restringido por entorno
 - [x] Multi-tenant real: una cuenta de una empresa no puede ver/modificar datos de otra empresa aunque adivine un UUID válido
@@ -180,6 +190,7 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [x] Congruencia de categoría al enviar propuestas (evita respuestas fuera de especialidad)
 - [ ] HTTPS en producción — depende del despliegue, fuera del alcance del código del backend
 - [ ] Auditoría/logging estructurado de acciones administrativas críticas (activar/desactivar cuentas, resolver disputas) — recomendado para una futura iteración, no implementado aún
+- [ ] Revocación real de JWT / WS token fuera del query string / rate limits de negocio — ver sección 11 y [[Auditoria]]
 - [ ] Autenticación con Google (OAuth 2.0) — roadmap, ver sección 11
 - [ ] Migración de hashing de contraseñas a Argon2 — roadmap, ver sección 11
 
@@ -190,5 +201,6 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [[Autenticacion]] — JWT, claims, roles, rate limiting, registro extendido, recuperación de contraseña con OTP
 - [[Pagos-Wompi]] — verificación de firma de webhooks, idempotencia, sistema de créditos
 - [[Base-Datos]] — restricciones `UNIQUE` y claves foráneas que sustentan varias de estas protecciones
+- [[Auditoria]] · [[Auditoria-Backend-2026-07-13]] · [[Remediaciones-Backend-Jul-2026]] — campaña de auditoría y fixes
 - `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` — Tarea 3.13 (refactor de identidad y cierre de auto-registro)
 - `Fases-Desarrollo/Semana-4-Asesores-Creditos-Registro/Tareas-Semana-4.md` — detalle de las fases de Semana 4

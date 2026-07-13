@@ -14,6 +14,7 @@ from schemas.campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
     FormularioImportadorResponse
 )
+from schemas.features import EvidenciaImportadorCreate, EvidenciaImportadorResponse
 from models.importador import Importador
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
@@ -311,6 +312,91 @@ async def listar_importadores_certificados(
         Importador.verificado == True  # noqa: E712 - comparación explícita requerida por SQLAlchemy
     ).order_by(Importador.calificacion_promedio.desc()).all()
 
+
+# ==================== Evidencias de perfil ====================
+
+@router.post("/evidencias", response_model=EvidenciaImportadorResponse, status_code=status.HTTP_201_CREATED)
+async def crear_evidencia(
+    datos: EvidenciaImportadorCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    from uuid import uuid4
+    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(status_code=400, detail="Cuenta sin empresa asociada")
+
+    ev = EvidenciaImportador(
+        id=str(uuid4()),
+        importador_id=importador_id,
+        tipo=datos.tipo,
+        titulo=datos.titulo,
+        descripcion=datos.descripcion,
+        url=datos.url,
+        estado=EstadoEvidenciaImportador.pendiente.value,
+    )
+    db.add(ev)
+    db.commit()
+    db.refresh(ev)
+    return ev
+
+
+@router.get("/evidencias", response_model=List[EvidenciaImportadorResponse])
+async def listar_mis_evidencias(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    from models.evidencia import EvidenciaImportador
+
+    importador_id = current_user.get("importador_id")
+    return db.query(EvidenciaImportador).filter(
+        EvidenciaImportador.importador_id == importador_id
+    ).order_by(EvidenciaImportador.fecha_creacion.desc()).all()
+
+
+@router.delete("/evidencias/{evidencia_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_evidencia(
+    evidencia_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    from models.evidencia import EvidenciaImportador
+
+    try:
+        eid = str(UUID(evidencia_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    ev = db.query(EvidenciaImportador).filter(
+        EvidenciaImportador.id == eid,
+        EvidenciaImportador.importador_id == current_user.get("importador_id"),
+    ).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    db.delete(ev)
+    db.commit()
+    return None
+
+
+@router.get("/{importador_id}/evidencias", response_model=List[EvidenciaImportadorResponse])
+async def listar_evidencias_aprobadas_publicas(
+    importador_id: str,
+    db: Session = Depends(get_db),
+):
+    """Catálogo público: solo evidencias aprobadas por admin."""
+    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+
+    try:
+        iid = str(UUID(importador_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Importador no encontrado")
+    return db.query(EvidenciaImportador).filter(
+        EvidenciaImportador.importador_id == iid,
+        EvidenciaImportador.estado == EstadoEvidenciaImportador.aprobada.value,
+    ).order_by(EvidenciaImportador.fecha_creacion.desc()).all()
+
+
 @router.get("/{importador_id}", response_model=ImportadorResponse)
 async def obtener_importador(
     importador_id: str,
@@ -343,42 +429,27 @@ async def obtener_importador(
     
     return importador
 
-@router.post("/", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def crear_importador(
     importador_data: ImportadorCreate,
     current_user: dict = Depends(require_rol("admin")),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
-    Crea un nuevo importador en el sistema. Solo administradores pueden crear importadores.
-    
-    - **nombre_empresa**: Nombre de la empresa importadora
-    - **logo_url**: URL del logo (opcional)
-    - **especialidad_producto**: Lista de categorías de producto
-    - **paises_origen**: Lista de países de origen
-    - **tiempo_respuesta_promedio**: Tiempo promedio de respuesta (ej: "24h")
-    - **calificacion_promedio**: Calificación promedio (default: 0.0)
-    - **capacidad_volumen**: Capacidad máxima de volumen por pedido (opcional)
+    **Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba
+    importadoras sin representante legal (dueño). El alta oficial es siempre:
+
+    `POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)
+    en un solo paso. El dueño es el jefe de los asesores/operadores.
     """
-    from uuid import uuid4
-    
-    nuevo_importador = Importador(
-        id=str(uuid4()),  # Convertir a string para SQLite
-        nombre_empresa=importador_data.nombre_empresa,
-        logo_url=importador_data.logo_url,
-        especialidad_producto=importador_data.especialidad_producto,
-        paises_origen=importador_data.paises_origen,
-        calificacion_promedio=importador_data.calificacion_promedio,
-        tiempo_respuesta_promedio=importador_data.tiempo_respuesta_promedio,
-        capacidad_volumen=importador_data.capacidad_volumen,
-        estado="activo"
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Este endpoint está deshabilitado: no se permite crear una empresa "
+            "sin representante legal. Usa POST /admin/importadores para crear "
+            "la empresa junto con su cuenta dueño."
+        )
     )
-    
-    db.add(nuevo_importador)
-    db.commit()
-    db.refresh(nuevo_importador)
-    
-    return nuevo_importador
 
 # ==================== Endpoints de la bandeja de solicitudes del importador (Tarea 2.5) ====================
 
@@ -467,28 +538,14 @@ async def listar_solicitudes_abiertas(
         Cotizacion.estado.in_([EstadoCotizacion.abierta.value, EstadoCotizacion.propuestas_recibidas.value])
     ).order_by(Cotizacion.fecha_creacion.desc()).all()
     
-    # Filtrar por matching real usando Redis: solo mostrar cotizaciones donde este
-    # importador específico aparece en la lista de matching (país + categoría).
-    # Si Redis no está disponible, se degrada a "sin resultados" en vez de un error 500.
-    cotizaciones_matching = {}
-    if config.redis_client:
-        try:
-            all_keys = config.redis_client.keys("cotizacion_abierta:*")
-            for key in all_keys:
-                # Ignorar claves auxiliares (":expiracion", ":respuestas")
-                partes = key.split(":")
-                if len(partes) != 2:
-                    continue
-                cid = partes[1]
-                importadores_hash = config.redis_client.hgetall(key)
-                cotizaciones_matching[cid] = list(importadores_hash.keys())
-        except Exception:
-            logger.warning("Redis no disponible al listar solicitudes abiertas para importador %s", importador_id_str)
-    
+    # Índice Redis por importador (SET) — sin KEYS O(N). Si Redis no está
+    # disponible, se degrada a "sin resultados" en vez de un error 500.
+    from services.matching_service import listar_cotizaciones_matching_importador
+    matching_ids = listar_cotizaciones_matching_importador(importador_id_str)
+
     resultados = []
     for c in cotizaciones:
-        # Verificar si este importador está en la lista de matching para esta cotización
-        if config.redis_client and importador_id_str not in cotizaciones_matching.get(str(c.id), []):
+        if config.redis_client and str(c.id) not in matching_ids:
             continue
         
         # Verificar si el importador ya envió una propuesta a esta cotización

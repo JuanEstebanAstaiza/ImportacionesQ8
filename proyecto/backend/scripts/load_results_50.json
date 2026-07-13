@@ -1,0 +1,327 @@
+{
+  "users_total": 50,
+  "users_ok": 10,
+  "users_fail": 40,
+  "success_rate_pct": 20.0,
+  "wall_time_ms": 3027.18,
+  "throughput_users_per_sec": 16.52,
+  "request_count": 150,
+  "request_ok": 110,
+  "latency_avg_ms": 271.87,
+  "latency_p50_ms": 119.01,
+  "latency_p95_ms": 1210.43,
+  "latency_p99_ms": 1764.54,
+  "latency_max_ms": 1977.19,
+  "fail_stages": {
+    "register": 40
+  },
+  "endpoint_stats": [
+    {
+      "endpoint": "GET /chat/conversaciones",
+      "count": 10,
+      "avg_ms": 101.67,
+      "p95_ms": 198.99,
+      "max_ms": 212.17
+    },
+    {
+      "endpoint": "GET /ordenes/",
+      "count": 10,
+      "avg_ms": 62.74,
+      "p95_ms": 93.5,
+      "max_ms": 93.77
+    },
+    {
+      "endpoint": "POST /auth/register",
+      "count": 50,
+      "avg_ms": 782.88,
+      "p95_ms": 2197.21,
+      "max_ms": 2268.24
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/05f0817b-be7e-4edc-8e41-04a36c54fc14/mensajes",
+      "count": 3,
+      "avg_ms": 94.35,
+      "p95_ms": 126.54,
+      "max_ms": 128.92
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/1dd75cf2-c698-4702-8655-f8a3982ec7c5/mensajes",
+      "count": 3,
+      "avg_ms": 93.85,
+      "p95_ms": 118.2,
+      "max_ms": 120.88
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/30fb801a-a68c-4726-b130-4966df9923e9/mensajes",
+      "count": 3,
+      "avg_ms": 117.23,
+      "p95_ms": 128.63,
+      "max_ms": 130.35
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/5099eb40-56f3-43cc-82ed-e254200f121f/mensajes",
+      "count": 3,
+      "avg_ms": 84.53,
+      "p95_ms": 123.42,
+      "max_ms": 125.78
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/69bea392-3c67-4a51-a2d2-a6efa63fea99/mensajes",
+      "count": 3,
+      "avg_ms": 120.38,
+      "p95_ms": 133.97,
+      "max_ms": 134.13
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/6cc59a60-2649-4004-89d8-4af7db85b0b4/mensajes",
+      "count": 3,
+      "avg_ms": 118.65,
+      "p95_ms": 128.31,
+      "max_ms": 129.68
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/83f5b309-6bfd-49ba-887f-0671a464f751/mensajes",
+      "count": 3,
+      "avg_ms": 120.83,
+      "p95_ms": 125.84,
+      "max_ms": 125.91
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/af0d895d-48ad-481a-8e57-bd7dbd8c9302/mensajes",
+      "count": 3,
+      "avg_ms": 95.28,
+      "p95_ms": 132.83,
+      "max_ms": 133.42
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/b8af4caf-b548-473e-908a-88ff11f05b15/mensajes",
+      "count": 3,
+      "avg_ms": 115.8,
+      "p95_ms": 139.34,
+      "max_ms": 143.31
+    },
+    {
+      "endpoint": "POST /chat/conversaciones/bdd9c01b-ae07-4dcf-a3bd-c0a0d727ce4a/mensajes",
+      "count": 3,
+      "avg_ms": 100.33,
+      "p95_ms": 123.99,
+      "max_ms": 124.61
+    },
+    {
+      "endpoint": "POST /cotizaciones/",
+      "count": 10,
+      "avg_ms": 767.71,
+      "p95_ms": 1210.43,
+      "max_ms": 1219.18
+    },
+    {
+      "endpoint": "POST /propuestas/",
+      "count": 10,
+      "avg_ms": 267.79,
+      "p95_ms": 651.65,
+      "max_ms": 651.68
+    },
+    {
+      "endpoint": "POST /propuestas/1dcc2065-bf47-4a96-be9d-24eba6f35906/pre-aceptar",
+      "count": 2,
+      "avg_ms": 109.74,
+      "p95_ms": 111.86,
+      "max_ms": 112.09
+    },
+    {
+      "endpoint": "POST /propuestas/1f22b696-e0c9-40da-8297-fdbcc12f30c3/pre-aceptar",
+      "count": 2,
+      "avg_ms": 111.72,
+      "p95_ms": 122.15,
+      "max_ms": 123.31
+    },
+    {
+      "endpoint": "POST /propuestas/2687802c-5006-4570-b396-1049923db830/pre-aceptar",
+      "count": 2,
+      "avg_ms": 112.71,
+      "p95_ms": 113.32,
+      "max_ms": 113.39
+    },
+    {
+      "endpoint": "POST /propuestas/27e10542-7e9b-4a02-aafd-42ee4f06a5e6/pre-aceptar",
+      "count": 2,
+      "avg_ms": 105.36,
+      "p95_ms": 111.32,
+      "max_ms": 111.98
+    },
+    {
+      "endpoint": "POST /propuestas/27e26a7a-649b-4ee4-bd71-78b992ae6299/pre-aceptar",
+      "count": 2,
+      "avg_ms": 96.53,
+      "p95_ms": 110.46,
+      "max_ms": 112.01
+    },
+    {
+      "endpoint": "POST /propuestas/2a31f7f2-d93f-4da6-aec1-8645e18f5873/pre-aceptar",
+      "count": 2,
+      "avg_ms": 100.26,
+      "p95_ms": 108.91,
+      "max_ms": 109.87
+    },
+    {
+      "endpoint": "POST /propuestas/43c9bf88-2964-4e29-8a76-b7e6dfccf2e3/pre-aceptar",
+      "count": 2,
+      "avg_ms": 114.8,
+      "p95_ms": 134.56,
+      "max_ms": 136.76
+    },
+    {
+      "endpoint": "POST /propuestas/45e63af7-453c-406a-a9c5-90f62fdf19d1/pre-aceptar",
+      "count": 2,
+      "avg_ms": 96.16,
+      "p95_ms": 106.34,
+      "max_ms": 107.47
+    },
+    {
+      "endpoint": "POST /propuestas/5e330bb1-11ba-43ab-acbb-909da38a8304/pre-aceptar",
+      "count": 2,
+      "avg_ms": 95.58,
+      "p95_ms": 109.56,
+      "max_ms": 111.11
+    },
+    {
+      "endpoint": "POST /propuestas/86b8f574-5f33-41a5-8754-f2d5f2443b0a/pre-aceptar",
+      "count": 2,
+      "avg_ms": 111.62,
+      "p95_ms": 114.65,
+      "max_ms": 114.99
+    },
+    {
+      "endpoint": "PUT /cotizaciones/17a9baa7-ddaf-4b27-be05-f5845c061f18/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 161.72,
+      "p95_ms": 161.72,
+      "max_ms": 161.72
+    },
+    {
+      "endpoint": "PUT /cotizaciones/2c13c776-9e9e-43d8-a09d-f583ef463c0d/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 116.81,
+      "p95_ms": 116.81,
+      "max_ms": 116.81
+    },
+    {
+      "endpoint": "PUT /cotizaciones/31f59aba-2444-49a1-beb6-0c83cd976455/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 209.28,
+      "p95_ms": 209.28,
+      "max_ms": 209.28
+    },
+    {
+      "endpoint": "PUT /cotizaciones/4247f22b-0ce8-4c62-a243-9d2567820233/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 143.04,
+      "p95_ms": 143.04,
+      "max_ms": 143.04
+    },
+    {
+      "endpoint": "PUT /cotizaciones/955ef1b0-9bc6-49ce-b5ba-05c5a263d2d1/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 157.0,
+      "p95_ms": 157.0,
+      "max_ms": 157.0
+    },
+    {
+      "endpoint": "PUT /cotizaciones/9ab59eaf-fc57-47c1-8698-87f9e170dbca/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 120.98,
+      "p95_ms": 120.98,
+      "max_ms": 120.98
+    },
+    {
+      "endpoint": "PUT /cotizaciones/9bd062d5-70de-4666-9e49-af9c1de1a985/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 130.29,
+      "p95_ms": 130.29,
+      "max_ms": 130.29
+    },
+    {
+      "endpoint": "PUT /cotizaciones/9de6cadf-bd78-47e6-a01a-513fad4067b4/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 216.88,
+      "p95_ms": 216.88,
+      "max_ms": 216.88
+    },
+    {
+      "endpoint": "PUT /cotizaciones/9eaa304d-ce1f-4b1e-aeb2-c4728de7cda4/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 185.54,
+      "p95_ms": 185.54,
+      "max_ms": 185.54
+    },
+    {
+      "endpoint": "PUT /cotizaciones/db5812f1-5dea-4519-b045-2603d7be2a5f/propuestas/aceptar",
+      "count": 1,
+      "avg_ms": 132.23,
+      "p95_ms": 132.23,
+      "max_ms": 132.23
+    }
+  ],
+  "sample_errors": [
+    {
+      "user": 9,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 11,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 12,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 13,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 14,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 17,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 19,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 16,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 15,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    },
+    {
+      "user": 18,
+      "stage": "register",
+      "error": "",
+      "status": 429
+    }
+  ]
+}

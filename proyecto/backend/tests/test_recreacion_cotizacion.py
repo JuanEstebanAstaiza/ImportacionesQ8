@@ -115,7 +115,56 @@ class TestSolicitarRecreacion:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-class TestResolverRecreacion:
+class TestSolicitarRecreacionAbierta:
+    """En cotizaciones abiertas el importador_id puede ser NULL hasta fijarse;
+    la empresa ganadora se identifica por la propuesta aceptada."""
+
+    def test_dueño_puede_solicitar_recreacion_en_abierta_via_propuesta(
+        self, client, db_session, solicitante, empresa
+    ):
+        from models.propuesta import Propuesta, EstadoPropuesta
+
+        importador, dueño = empresa
+        cotizacion = Cotizacion(
+            id=str(uuid4()),
+            solicitante_id=solicitante.id,
+            importador_id=None,
+            modalidad="abierta",
+            pais_importacion="China",
+            nombre_producto="Producto abierto aceptado",
+            descripcion_cliente="Descripción de prueba con más de veinte caracteres",
+            linea_producto="Textiles",
+            tipo_calidad="estandar",
+            cantidad_minima=100,
+            precio_objetivo_usd=2.0,
+            incoterm="FOB",
+            costo_creditos=5.0,
+            estado=EstadoCotizacion.orden_activa.value,
+        )
+        db_session.add(cotizacion)
+        db_session.flush()
+        propuesta = Propuesta(
+            id=str(uuid4()),
+            cotizacion_id=cotizacion.id,
+            importador_id=importador.id,
+            precio_ofrecido_usd=2.0,
+            tiempo_estimado_entrega="20 días",
+            incoterm="FOB",
+            estado=EstadoPropuesta.aceptada.value,
+        )
+        db_session.add(propuesta)
+        db_session.commit()
+
+        response = client.post(
+            f"/cotizaciones/{cotizacion.id}/solicitar-recreacion",
+            json={
+                "motivo": "Error en especificaciones de la cotización abierta",
+                "parte_atribuida_sugerida": "solicitante",
+            },
+            headers=auth_headers_for(dueño),
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["estado"] == "pendiente"
 
     def _crear_solicitud(self, client, cotizacion_aceptada, solicitante):
         response = client.post(

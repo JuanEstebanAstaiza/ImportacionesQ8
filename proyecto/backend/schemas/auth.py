@@ -32,6 +32,7 @@ class RegistroRequest(BaseModel):
     indicativo_pais_telefono: str = Field(..., description="Indicativo de país del teléfono, ej. '+57'")
     telefono: str = Field(..., description="Número de teléfono sin el indicativo de país")
     acepto_politica_datos: bool = Field(..., description="Debe ser true: aceptación de la política de tratamiento de datos")
+    codigo_referido: Optional[str] = Field(None, description="Código de referido opcional al registrarse")
 
     @model_validator(mode="after")
     def validar_campos_condicionales(self):

@@ -8,6 +8,15 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 
 ## Endpoints principales
 
+### Salud / readiness (ops — 2026-07-13)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/health` | Liveness: el proceso responde (no comprueba dependencias) |
+| GET | `/health/ready` | Readiness: MySQL `SELECT 1` + Redis `PING`; **503** si alguna falla |
+
+Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backend-Jul-2026]].
+
 ### Autenticación
 
 | Método | Endpoint | Descripción |
@@ -42,7 +51,7 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 |--------|----------|-------------|
 | GET | `/importadores` | Listar importadores disponibles (filtros: `especialidad`, `pais`, `certificado`; orden: `orden=calificacion\|reciente`) |
 | GET | `/importadores/{id}` | Obtener detalles de un importador específico |
-| POST | `/importadores` | Registrar nueva empresa importadora (admin) |
+| POST | `/importadores` | **Deshabilitado (410).** Usar `POST /admin/importadores` (empresa + dueño) |
 | GET | `/importadores/destacados` | (Semana 4) Top N por `calificacion_promedio` desc, para el dashboard del solicitante |
 | GET | `/importadores/por-categoria` | (Semana 4) Importadores agrupados por `especialidad_producto` (`{categoria: [importadores]}`) |
 | GET | `/importadores/certificados` | (Semana 4) Solo empresas con `verificado=true` |
@@ -66,7 +75,7 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 | GET | `/creditos/movimientos` | Solicitante | Historial de movimientos de créditos |
 | GET | `/pagos/{id}` | Dueño del pago | Obtener estado de un pago de créditos |
 | POST | `/pagos/webhook/wompi` | Wompi | Webhook de confirmación: acredita créditos al confirmarse el pago |
-| POST | `/cotizaciones/{id}/solicitar-recreacion` | Solicitante o asesor/dueño asignado | Solicita anular una cotización aceptada por error |
+| POST | `/cotizaciones/{id}/solicitar-recreacion` | Solicitante o dueño/asesor de la empresa ganadora | Anular cotización aceptada/`orden_activa` por error (también en abiertas vía propuesta aceptada) |
 | GET | `/admin/recreaciones` | Admin | Lista solicitudes de recreación pendientes/resueltas |
 | PUT | `/admin/recreaciones/{id}/resolver` | Admin | Decide la parte responsable; reembolsa créditos si aplica |
 
@@ -79,7 +88,30 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 | GET | `/chat/conversaciones` | Listar conversaciones del usuario autenticado |
 | GET | `/chat/conversaciones/{id}/mensajes` | Obtener mensajes de una conversación |
 | POST | `/chat/conversaciones/{id}/mensajes` | Enviar mensaje a una conversación |
+| POST | `/chat/traducir` | Preview de traducción (Google Cloud Translation o mock); no persiste |
+| POST | `/chat/mensajes/{mensaje_id}/traducir` | Traduce un mensaje y cachea en `metadata.traducciones` |
 | WS | `/ws/chat/{conversacion_id}?token=...` | Conexión WebSocket para chat en tiempo real |
+
+### Features de valor (2026-07-13)
+
+> Importadoras **no** tienen wallet: su cobro es contractual fuera de plataforma. Los créditos son solo de **solicitantes** (natural o jurídica / organización). Detalle: [[Features-Valor-Jul-2026]].
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| POST/GET/DELETE | `/importadores/evidencias` | Dueño importador | CRUD de evidencias de perfil (URL); estado inicial `pendiente` |
+| PUT | `/admin/evidencias/{id}/revisar` | Admin | Aprueba/rechaza evidencia (`aprobada`/`rechazada` + nota) |
+| GET | `/importadores/{id}` | Público | Incluye `evidencias_aprobadas` en el detalle |
+| GET | `/organizaciones/me` | Solicitante con org | Organización solicitante y saldo corporativo |
+| POST | `/organizaciones/miembros` | Owner/admin org | Invitar/vincular miembro por email + rol |
+| POST | `/organizaciones/invitar` | Owner/admin org | Crea solicitante o vincula existente al equipo |
+| GET | `/disputas/{id}` | Partes orden + admin | Dispute room (estado, evidencias, mensajes) |
+| POST | `/disputas/{id}/evidencias` | Solicitante o dueño importador | Adjuntar evidencia (URL) |
+| POST | `/disputas/{id}/mensajes` | Partes + admin | Mensaje del hilo de disputa |
+| PUT | `/admin/disputas/{id}/resolver` | Admin | Resuelve por `disputa.id` (limpia `orden.en_disputa`) |
+| GET | `/referidos/mi-codigo` | Solicitante | Código propio (lazy create) |
+| GET | `/referidos/estadisticas` | Solicitante | Usos y créditos ganados como referidor |
+
+Registro: body opcional `codigo_referido` en `POST /auth/register`. Persona jurídica crea `OrganizacionSolicitante` + wallet de org; naturales usan `Usuario.creditos_balance`.
 
 ### Usuarios y asesores (Semana 3, rol renombrado de "trabajador" a "asesor" en Semana 4)
 
@@ -91,7 +123,7 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 | GET | `/importadores/asesores` | Dueño | Listar asesores de la empresa |
 | PUT | `/importadores/asesores/{id}/estado` | Dueño | Activar/desactivar un asesor |
 | GET | `/cotizaciones/pool-empresa` | Dueño + asesor | Cotizaciones de la empresa sin reclamar (estilo "Uber": el primero en reclamar la atiende) |
-| POST | `/cotizaciones/{id}/reclamar` | Asesor | Reclamo atómico de una cotización del pool |
+| POST | `/cotizaciones/{id}/reclamar` | Dueño + asesor | Reclamo atómico del pool (el dueño es jefe de operadores; cualquiera de los dos puede tomar la cotización) |
 | GET | `/asesores/me/cotizaciones` | Asesor | Cotizaciones asignadas al asesor autenticado |
 | PUT | `/importadores/{id}` | Dueño | Autoservicio del perfil de la empresa |
 
@@ -117,19 +149,20 @@ La API REST es el motor central de la plataforma, construida con **FastAPI** en 
 | DELETE | `/importadores/campos-personalizados/{id}` | Dueño | Eliminar un campo propio |
 | GET | `/importadores/{id}/formulario` | Público | Formulario efectivo (estándar o personalizado) de una empresa |
 
-### Disputas y administración (Semana 3)
+### Disputas y administración (Semana 3 + dispute room 2026-07-13)
 
 | Método | Endpoint | Rol | Descripción |
 |--------|----------|-----|-------------|
-| PUT | `/ordenes/{id}/reportar-problema` | Solicitante | Abrir una disputa sobre su orden |
-| POST | `/admin/importadores` | Admin | Crear empresa importadora + cuenta dueña en un solo paso |
+| PUT | `/ordenes/{id}/reportar-problema` | Solicitante | Abre disputa: crea `Disputa` + `orden.en_disputa=True` |
+| GET | `/disputas/{id}` | Partes + admin | Sala de disputa (evidencias + mensajes) |
+| POST | `/admin/importadores` | Admin | **Única vía oficial:** crear empresa + cuenta dueño/representante legal en un solo paso |
 | POST | `/admin/importadores/{id}/verificar` | Admin | Verificar/activar una empresa |
 | PUT | `/admin/importadores/{id}/estado` | Admin | Activar/desactivar una empresa |
 | GET | `/admin/usuarios` | Admin | Monitoreo de cuentas (filtrable por rol/estado) |
 | PUT | `/admin/usuarios/{id}/estado` | Admin | Activar/desactivar cualquier cuenta |
 | GET | `/admin/cotizaciones-abiertas` | Admin | Vista de todas las cotizaciones abiertas |
-| GET | `/admin/disputas` | Admin | Listar órdenes con disputa abierta |
-| PUT | `/admin/disputas/{id}/resolver` | Admin | Resolver una disputa |
+| GET | `/admin/disputas` | Admin | Listar órdenes/disputas abiertas |
+| PUT | `/admin/disputas/{id}/resolver` | Admin | Resolver por id de `Disputa` (preferido); legacy por `orden_id` delega al modelo nuevo |
 | GET | `/admin/metricas` | Admin | Métricas de éxito de la plataforma (sección del PDF) |
 
 > **Nota:** `POST /auth/register` solo acepta `rol="solicitante"` desde la Semana 3 (ver [[Autenticacion]]); las cuentas `importador` y `asesor` se crean desde los endpoints de arriba. (Semana 4) El registro de `solicitante` ahora distingue persona natural/jurídica con validación condicional de campos.
@@ -308,8 +341,8 @@ class CampoPersonalizado(BaseModel):
 | Rol | Cotizaciones | Importadores | Órdenes | Créditos | Chat | Asesores | Admin |
 |-----|-------------|--------------|---------|-------|------|--------------|-------|
 | Solicitante | ✅ Propias, reportar disputa, solicitar recreación | 🔍 Solo lectura + catálogo enriquecido | ✅ Propias (no las crea directamente) | ✅ Comprar créditos | ✅ Propio | ❌ | ❌ |
-| Importador (dueño) | ✅ Recibidas + **enviar** propuesta | ✅ Perfil propio + formulario personalizado | ✅ Propias (heredadas de doble aceptación) | ❌ | ✅ Asignado (recibe el chat traspasado como supervisor) | ✅ Crear/listar/activar los suyos | ❌ |
-| Asesor (Semana 3, renombrado en Semana 4) | ✅ Reclamar del pool de su empresa, **redactar/editar** borradores de propuesta | ❌ | ❌ | ❌ | ✅ Solo el asignado (hasta el traspaso al dueño) | ❌ (no crea a otros) | ❌ |
+| Importador (dueño / representante legal) | ✅ Recibidas + **reclamar** pool + **enviar** propuesta | ✅ Perfil propio + formulario personalizado | ✅ Propias (heredadas de doble aceptación) | ❌ | ✅ Asignado (recibe el chat traspasado como supervisor) | ✅ Crear/listar/activar los suyos | ❌ |
+| Asesor (operador) | ✅ Reclamar del pool de su empresa, **redactar/editar** borradores de propuesta | ❌ | ❌ | ❌ | ✅ Solo el asignado (hasta el traspaso al dueño) | ❌ (no crea a otros) | ❌ |
 | Admin | ✅ Todas (solo lectura vía panel), resolver recreaciones | ✅ Crear empresa + dueño, verificar, activar | ✅ Todas (vía disputas) | ✅ Ver todos los pagos | ❌ (media por fuera del chat) | ❌ | ✅ Todo, incluido monitoreo/desactivación de cuentas y métricas |
 
 ---
@@ -388,5 +421,6 @@ graph LR
 - **Formato de respuesta:** JSON con estructura uniforme: `{"success": true/false, "data": {...}, "error": null}`
 - **Paginación:** Todos los endpoints que retornan listas soportan `?page=1&limit=20`
 - **Filtros:** Los endpoints GET soportan filtros query params (ej. `/importadores?especialidad=textiles&pais=china`)
-- **Errores HTTP:** 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), 500 (Internal Server Error)
+- **Errores HTTP:** 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), 402 (créditos insuficientes), 409 (conflicto/carrera), 500 (Internal Server Error), 503 (no ready)
 - **Documentación automática:** Swagger UI en `/docs` y OpenAPI spec en `/openapi.json`
+- **Carga / capacidad:** resultados de 1000 usuarios concurrentes en [[Pruebas-Carga-1000-Concurrentes]]; workers vía `WEB_CONCURRENCY`

@@ -41,6 +41,12 @@ graph LR
         T[Metricas-MVP]
     end
 
+    subgraph Auditoria["Auditoria"]
+        AUD[Auditoria-Backend-2026-07-13]
+        REM[Remediaciones-Backend-Jul-2026]
+        LOAD[Pruebas-Carga-1000-Concurrentes]
+    end
+
     A --> B
     A --> C
     A --> D
@@ -100,6 +106,14 @@ graph LR
     N --> Q
 
     U --> V
+
+    AUD --> REM
+    AUD --> LOAD
+    AUD --> U
+    AUD --> D
+    REM --> E
+    REM --> I
+    LOAD --> D
 
     R --> S
     R --> T
@@ -293,6 +307,7 @@ graph TD
     C --> C5[Pre-aceptar propuesta como dueño]
     C --> C6[Editar perfil de empresa]
     C --> C7[Crear/gestionar cuentas de asesor]
+    C --> C8[Reclamar del pool - jefe de operadores]
 
     C2 --> C2a[Reclamar cotizaciones del pool de su empresa]
     C2 --> C2b[Redactar/editar borradores de propuesta]
@@ -301,7 +316,7 @@ graph TD
 
     D --> D1[Ver todas las cotizaciones abiertas]
     D --> D2[Mediar en disputas]
-    D --> D3[Gestionar importadores vinculados - crear, verificar]
+    D --> D3[Alta obligatoria: empresa + dueño/representante legal]
     D --> D4[Monitorear métricas del sistema]
     D --> D5[Resolver solicitudes de recreación de cotización]
 ```

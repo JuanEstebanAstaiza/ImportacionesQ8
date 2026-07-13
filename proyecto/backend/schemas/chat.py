@@ -1,20 +1,40 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from typing import Optional, List, Any, Dict
 from datetime import datetime
+
 
 class MensajeChatCreate(BaseModel):
     contenido: str = Field(..., min_length=1)
     tipo: str = "texto"  # "texto" o "archivo"
 
+
 class MensajeChatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     conversacion_id: str
     remitente_id: str
     contenido: str
     tipo: str
     fecha_envio: datetime
+    # No usar from_attributes sobre "metadata": en SQLAlchemy es MetaData del registry.
+    metadata: Optional[Dict[str, Any]] = None
 
-    model_config = {"from_attributes": True}
+    @model_validator(mode="before")
+    @classmethod
+    def _desde_orm_o_dict(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return data
+        return {
+            "id": str(data.id),
+            "conversacion_id": data.conversacion_id,
+            "remitente_id": data.remitente_id,
+            "contenido": data.contenido,
+            "tipo": data.tipo,
+            "fecha_envio": data.fecha_envio,
+            "metadata": getattr(data, "metadata_json", None),
+        }
+
 
 class ConversacionChatResponse(BaseModel):
     id: str
@@ -25,4 +45,4 @@ class ConversacionChatResponse(BaseModel):
     fecha_creacion: datetime
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)

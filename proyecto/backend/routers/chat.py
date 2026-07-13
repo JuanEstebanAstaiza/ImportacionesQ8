@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 import config
 from models.chat import ConversacionChat, MensajeChat
 from schemas.chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse
+from schemas.features import TraducirRequest, TraducirResponse
 from utils.dependencies import get_db, get_current_user
 from utils.security import decode_access_token
 
@@ -133,6 +134,70 @@ async def enviar_mensaje(
             logger.warning("No se pudo publicar mensaje de chat en Redis para conversación %s", conversacion_id)
 
     return nuevo_mensaje
+
+
+@router.post("/traducir", response_model=TraducirResponse)
+async def traducir_preview(
+    datos: TraducirRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Traduce texto libre (preview) sin asociarlo a un mensaje."""
+    from services.translation_service import traducir_texto
+    from schemas.features import TraducirResponse
+
+    if not datos.texto:
+        raise HTTPException(status_code=400, detail="texto es obligatorio")
+    original, traducido, origen = traducir_texto(db, datos.texto, datos.idioma_destino)
+    return TraducirResponse(
+        original=original,
+        traducido=traducido,
+        idioma_origen_detectado=origen,
+        idioma_destino=datos.idioma_destino,
+    )
+
+
+@router.post("/mensajes/{mensaje_id}/traducir", response_model=TraducirResponse)
+async def traducir_mensaje(
+    mensaje_id: str,
+    datos: TraducirRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Traduce un mensaje existente y cachea el resultado en metadata del mensaje."""
+    from services.translation_service import traducir_texto
+    from schemas.features import TraducirResponse
+
+    mensaje = db.query(MensajeChat).filter(MensajeChat.id == mensaje_id).first()
+    if not mensaje:
+        raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == mensaje.conversacion_id).first()
+    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user):
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    meta = dict(mensaje.metadata_json or {})
+    traducciones = dict(meta.get("traducciones") or {})
+    if datos.idioma_destino in traducciones:
+        return TraducirResponse(
+            original=mensaje.contenido,
+            traducido=traducciones[datos.idioma_destino],
+            idioma_origen_detectado=meta.get("idioma_origen", "es"),
+            idioma_destino=datos.idioma_destino,
+        )
+
+    original, traducido, origen = traducir_texto(db, mensaje.contenido, datos.idioma_destino)
+    traducciones[datos.idioma_destino] = traducido
+    meta["traducciones"] = traducciones
+    meta["idioma_origen"] = origen
+    mensaje.metadata_json = meta
+    db.commit()
+
+    return TraducirResponse(
+        original=original,
+        traducido=traducido,
+        idioma_origen_detectado=origen,
+        idioma_destino=datos.idioma_destino,
+    )
 
 
 @ws_router.websocket("/ws/chat/{conversacion_id}")

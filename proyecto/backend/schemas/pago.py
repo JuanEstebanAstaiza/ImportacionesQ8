@@ -25,6 +25,8 @@ class PagoResponse(BaseModel):
 
 class SaldoCreditosResponse(BaseModel):
     creditos_balance: float
+    wallet_tipo: str = "personal"  # personal | organizacion
+    organizacion_id: Optional[str] = None
 
 class MovimientoCreditoResponse(BaseModel):
     id: str
@@ -32,6 +34,7 @@ class MovimientoCreditoResponse(BaseModel):
     monto: float
     cotizacion_id: Optional[str]
     pago_id: Optional[str]
+    organizacion_id: Optional[str] = None
     descripcion: Optional[str]
     fecha: datetime
 

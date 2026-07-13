@@ -18,6 +18,9 @@ from routers.usuarios import router as usuarios_router, asesores_router
 from routers.chat import router as chat_router, ws_router as chat_ws_router
 from routers.admin import router as admin_router
 from routers.legal import router as legal_router
+from routers.organizaciones import router as organizaciones_router
+from routers.disputas import router as disputas_router
+from routers.referidos import router as referidos_router
 from utils.limiter import limiter
 
 logger = logging.getLogger("importacionesq8")
@@ -25,13 +28,16 @@ logger = logging.getLogger("importacionesq8")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestiona el inicio y parada de la aplicación"""
-    # Inicio - inicializar recursos (ej. conectar a Redis)
-    print("🚀 Iniciando servidor ImportacionesQ8...")
+    print("Iniciando servidor ImportacionesQ8...")
+    try:
+        from database import init_db
+        init_db()
+    except Exception as e:
+        logger.exception("No se pudo inicializar la base de datos: %s", e)
     
     yield
     
-    # Parada - limpiar recursos
-    print("🛑 Apagando servidor ImportacionesQ8...")
+    print("Apagando servidor ImportacionesQ8...")
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -102,6 +108,9 @@ app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.include_router(admin_router)
 app.include_router(legal_router)
+app.include_router(organizaciones_router)
+app.include_router(disputas_router)
+app.include_router(referidos_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
@@ -114,8 +123,34 @@ async def root():
 
 @app.get("/health", tags=["Salud"])
 async def health_check():
-    """Endpoint de verificación de salud para monitoreo"""
+    """Liveness: el proceso responde (no valida dependencias)."""
     return {"status": "healthy"}
+
+@app.get("/health/ready", tags=["Salud"])
+async def readiness_check():
+    """
+    Readiness: MySQL y Redis deben responder.
+    Útil para orquestadores (K8s / load balancers) antes de enviar tráfico.
+    """
+    from database import check_database
+    from config import redis_client
+
+    checks = {"database": False, "redis": False}
+
+    checks["database"] = check_database()
+
+    try:
+        checks["redis"] = bool(redis_client and redis_client.ping())
+    except Exception:
+        checks["redis"] = False
+
+    if checks["database"] and checks["redis"]:
+        return {"status": "ready", "checks": checks}
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "not_ready", "checks": checks},
+    )
 
 if __name__ == "__main__":
     import uvicorn

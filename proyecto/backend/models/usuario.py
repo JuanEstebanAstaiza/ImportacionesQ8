@@ -26,6 +26,14 @@ class Usuario(Base):
     # solicitante/admin. Se usa para toda la lógica de autorización de la empresa,
     # en lugar de asumir que Usuario.id == Importador.id.
     importador_id = Column(String(36), ForeignKey("importadores.id"), nullable=True)
+    # Organización solicitante (solo quien cotiza). Si está set, el wallet efectivo
+    # es el de la organización (créditos corporativos). Las importadoras no usan esto.
+    organizacion_id = Column(
+        String(36),
+        ForeignKey("organizaciones_solicitantes.id", use_alter=True, name="fk_usuarios_organizacion_id"),
+        nullable=True,
+        index=True,
+    )
     nombre = Column(String(255), nullable=True)
     apellido = Column(String(255), nullable=True)  # Solo persona natural
     telefono = Column(String(30), nullable=True)
@@ -44,8 +52,8 @@ class Usuario(Base):
     acepto_politica_datos = Column(Boolean, default=False, nullable=False)
     fecha_aceptacion_politica = Column(DateTime, nullable=True)
 
-    # Saldo de créditos consumibles al crear cotizaciones (Semana 4). Solo tiene
-    # sentido para "solicitante"; el resto de roles queda en 0.
+    # Saldo de créditos personal (solicitante natural). Si pertenece a una
+    # organización, el saldo efectivo es OrganizacionSolicitante.creditos_balance.
     creditos_balance = Column(Float, default=0.0, nullable=False)
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o

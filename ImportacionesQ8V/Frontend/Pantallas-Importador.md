@@ -95,6 +95,8 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 
 - Al hacer clic en una solicitud → Redirige a Pantalla 11 (Formulario de respuesta a cotización)
 - Las solicitudes dirigidas tienen prioridad visual sobre las abiertas
+- El **dueño** (representante legal) y los **asesores** pueden reclamar del pool; el dueño es jefe de operadores
+- Tras la doble aceptación, la cotización queda en `orden_activa` y el chat pasa al dueño
 - Las órdenes activas se actualizan en tiempo real vía WebSocket cuando cambia el estado
 
 ---

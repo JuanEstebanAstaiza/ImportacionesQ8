@@ -1,0 +1,159 @@
+{
+  "run_id": "c7e99b84",
+  "target_concurrent_users": 1000,
+  "max_in_flight": 1000,
+  "provision": {
+    "registered_ok": 1000,
+    "registered_total": 1000,
+    "wall_time_ms": 58931.18,
+    "register_p95_ms": 5178.19,
+    "register_fail": 0
+  },
+  "peak": {
+    "phase": "peak_mixed_async",
+    "users_total": 1000,
+    "users_ok": 1000,
+    "users_fail": 0,
+    "success_rate_pct": 100.0,
+    "wall_time_ms": 27227.97,
+    "throughput_users_per_sec": 36.73,
+    "request_count": 6000,
+    "request_ok": 6000,
+    "latency_avg_ms": 3022.85,
+    "latency_p50_ms": 2882.98,
+    "latency_p95_ms": 6072.57,
+    "latency_p99_ms": 9335.18,
+    "latency_max_ms": 10725.83,
+    "scenarios": {
+      "full_deal": {
+        "ok": 200,
+        "fail": 0
+      },
+      "chat_negociacion": {
+        "ok": 200,
+        "fail": 0
+      },
+      "browse": {
+        "ok": 300,
+        "fail": 0
+      },
+      "cotizacion_abierta": {
+        "ok": 200,
+        "fail": 0
+      },
+      "auth_refresh": {
+        "ok": 100,
+        "fail": 0
+      }
+    },
+    "fail_stages": {},
+    "endpoint_stats": [
+      {
+        "endpoint": "POST /chat/conversaciones/{id}/mensajes",
+        "count": 1400,
+        "avg_ms": 1513.96,
+        "p95_ms": 2558.92,
+        "max_ms": 3289.77
+      },
+      {
+        "endpoint": "POST /cotizaciones/",
+        "count": 600,
+        "avg_ms": 5582.96,
+        "p95_ms": 10172.03,
+        "max_ms": 10725.83
+      },
+      {
+        "endpoint": "GET /cotizaciones/",
+        "count": 500,
+        "avg_ms": 3629.64,
+        "p95_ms": 4173.69,
+        "max_ms": 5151.93
+      },
+      {
+        "endpoint": "POST /propuestas/",
+        "count": 400,
+        "avg_ms": 4327.45,
+        "p95_ms": 4946.09,
+        "max_ms": 8287.28
+      },
+      {
+        "endpoint": "PUT /cotizaciones/{id}/propuestas/aceptar",
+        "count": 400,
+        "avg_ms": 3628.51,
+        "p95_ms": 5179.36,
+        "max_ms": 5615.47
+      },
+      {
+        "endpoint": "GET /chat/conversaciones",
+        "count": 400,
+        "avg_ms": 2502.82,
+        "p95_ms": 3189.73,
+        "max_ms": 3990.29
+      },
+      {
+        "endpoint": "POST /propuestas/{id}/pre-aceptar",
+        "count": 400,
+        "avg_ms": 1438.86,
+        "p95_ms": 1996.06,
+        "max_ms": 2918.35
+      },
+      {
+        "endpoint": "GET /usuarios/me",
+        "count": 400,
+        "avg_ms": 2166.27,
+        "p95_ms": 3700.08,
+        "max_ms": 5384.46
+      },
+      {
+        "endpoint": "GET /importadores/",
+        "count": 300,
+        "avg_ms": 4846.55,
+        "p95_ms": 8161.0,
+        "max_ms": 9502.47
+      },
+      {
+        "endpoint": "GET /creditos/saldo",
+        "count": 300,
+        "avg_ms": 3340.16,
+        "p95_ms": 4072.31,
+        "max_ms": 4181.17
+      },
+      {
+        "endpoint": "GET /health",
+        "count": 300,
+        "avg_ms": 2388.09,
+        "p95_ms": 2869.2,
+        "max_ms": 2902.52
+      },
+      {
+        "endpoint": "GET /ordenes/",
+        "count": 200,
+        "avg_ms": 1085.02,
+        "p95_ms": 2248.91,
+        "max_ms": 3013.58
+      },
+      {
+        "endpoint": "GET /cotizaciones/{id}/matching-status",
+        "count": 200,
+        "avg_ms": 4199.62,
+        "p95_ms": 5041.34,
+        "max_ms": 7941.99
+      },
+      {
+        "endpoint": "POST /auth/login",
+        "count": 100,
+        "avg_ms": 5888.9,
+        "p95_ms": 10028.76,
+        "max_ms": 10662.84
+      },
+      {
+        "endpoint": "POST /auth/refresh",
+        "count": 100,
+        "avg_ms": 4091.44,
+        "p95_ms": 4904.41,
+        "max_ms": 6538.25
+      }
+    ],
+    "sample_errors": []
+  }
+}

@@ -118,7 +118,7 @@
 | incoterm | VARCHAR(50) | Incoterm acordado (FOB, CIF, etc.) |
 | notas_adicionales | TEXT NULL | Notas adicionales del solicitante |
 | campos_personalizados_valores | JSON NULL | Valores del formulario personalizado (`{campo_id: valor}`) cuando la empresa dirigida es `solo_cotizaciones_directas=TRUE` |
-| asesor_asignado_id | UUID FK → usuarios.id, NULLABLE | Asesor de la empresa que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
+| asesor_asignado_id | UUID FK → usuarios.id, NULLABLE | Dueño o asesor que reclamó la cotización del pool (`POST /cotizaciones/{id}/reclamar`) |
 | costo_creditos | DECIMAL(10,2) NULL | (Semana 4) Créditos descontados al crear esta cotización (trazabilidad) |
 | cotizacion_origen_id | UUID FK → cotizaciones.id, NULLABLE | (Semana 4) Si esta cotización nace como reemplazo de una cancelada por error, referencia a la original |
 | cancelada_por_error | VARCHAR(20) NULL | (Semana 4) `NULL`, o quién fue responsable: `"solicitante"`/`"importador"` |
@@ -312,7 +312,27 @@ erDiagram
 
 ## Migraciones y esquema inicial
 
-### Script de creación del esquema (pseudocódigo SQL)
+### Alembic (estado actual — 2026-07-13)
+
+El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`:
+
+| Pieza | Rol |
+|-------|-----|
+| `alembic.ini` + `alembic/env.py` | Configuración y URL desde settings |
+| Revisión inicial `20260713_0001` | Baseline del esquema |
+| Arranque (`main.py` lifespan) | `alembic upgrade head`; si hace falta, fallback `init_db()` (`create_all`) + stamp |
+
+Comandos típicos:
+
+```bash
+cd proyecto/backend
+alembic upgrade head
+alembic revision --autogenerate -m "descripcion"
+```
+
+> **Importante:** no usar solo `create_all` al importar módulos: la metadata debe estar cargada (modelos importados) antes de crear tablas. Detalle en [[Remediaciones-Backend-Jul-2026]] y [[Auditoria-Backend-2026-07-13]].
+
+### Script de creación del esquema (pseudocódigo SQL de referencia)
 
 ```sql
 -- Crear base de datos
@@ -488,3 +508,5 @@ CREATE INDEX idx_ordenes_solicitante_estado ON ordenes(solicitante_id, estado);
 - **JSON para arrays de categorías:** `especialidad_producto` y `paises_origen` usan tipo JSON en lugar de tablas separadas para simplificar las consultas iniciales
 - **UUIDs como primary keys:** mejor seguridad (no exponer IDs secuenciales) y facilidad para generar IDs distribuidos sin conflictos
 - **Timestamps automáticos:** uso de `DEFAULT CURRENT_TIMESTAMP` y `ON UPDATE CURRENT_TIMESTAMP` para mantener trazabilidad sin lógica adicional en el backend
+- **Migraciones versionadas:** cambios de esquema vía Alembic (no depender de `create_all` en producción)
+- **Pool de conexiones:** `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` + `pool_pre_ping`; MySQL Compose con `--max-connections=500` para carga alta (ver [[Pruebas-Carga-1000-Concurrentes]])

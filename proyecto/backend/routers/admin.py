@@ -17,6 +17,7 @@ from schemas.importador import AdminCrearImportadorRequest, AdminCrearImportador
 from schemas.admin import UsuarioAdminResponse, UsuarioEstadoUpdate, DisputaOrdenResponse, MetricasResponse
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
+from schemas.features import RevisarEvidenciaRequest, ResolverDisputaRoomRequest
 from utils.dependencies import get_db, require_rol
 from utils.security import hash_password
 
@@ -34,9 +35,10 @@ async def crear_importador_con_dueño(
     current_user: dict = Depends(require_rol("admin"))
 ):
     """
-    Crea una empresa importadora Y su cuenta dueña (rol="importador") en un solo
-    paso, ya que el auto-registro público de cuentas "importador" está cerrado por
-    seguridad. La cuenta dueña luego puede crear asesores y personalizar el perfil.
+    **Única vía oficial de alta de importadoras.** Crea la empresa y su cuenta
+    dueña / representante legal (`rol="importador"`) en un solo paso. El
+    auto-registro público de `importador` está cerrado; siempre hay un dueño que
+    actúa como jefe de los asesores (operadores) de esa empresa.
     """
     usuario_existente = db.query(Usuario).filter(Usuario.email == datos.email_dueño).first()
     if usuario_existente:
@@ -231,7 +233,10 @@ async def resolver_disputa(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("admin"))
 ):
-    """El equipo de administración marca una disputa como resuelta."""
+    """Resuelve disputa por orden_id (compat). También actualiza el modelo Disputa si existe."""
+    from models.disputa import Disputa, EstadoDisputa, MensajeDisputa, TipoMensajeDisputa
+    from datetime import datetime
+
     try:
         orden_id_str = str(PyUUID(orden_id))
     except ValueError:
@@ -243,6 +248,21 @@ async def resolver_disputa(
 
     orden.en_disputa = False
     orden.motivo_disputa = f"[RESUELTO] {orden.motivo_disputa or ''} — Resolución: {datos.resolucion}"
+
+    disputa = db.query(Disputa).filter(Disputa.orden_id == orden_id_str).first()
+    if disputa:
+        disputa.estado = EstadoDisputa.resuelta.value
+        disputa.resolucion_admin = datos.resolucion
+        disputa.resuelta_por_admin_id = current_user["user_id"]
+        disputa.fecha_resolucion = datetime.utcnow()
+        db.add(MensajeDisputa(
+            id=str(uuid4()),
+            disputa_id=disputa.id,
+            autor_id=current_user["user_id"],
+            contenido=f"Resolución admin: {datos.resolucion}",
+            tipo=TipoMensajeDisputa.admin.value,
+        ))
+
     db.commit()
     db.refresh(orden)
 
@@ -261,6 +281,60 @@ async def resolver_disputa(
         historial_estados=[],
         documentos_adjuntos=[]
     )
+
+
+@router.put("/disputas-room/{disputa_id}/resolver", response_model=dict)
+async def resolver_disputa_por_id(
+    disputa_id: str,
+    datos: ResolverDisputaRoomRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    from models.disputa import Disputa, EstadoDisputa, MensajeDisputa, TipoMensajeDisputa
+
+    disputa = db.query(Disputa).filter(Disputa.id == disputa_id).first()
+    if not disputa:
+        raise HTTPException(status_code=404, detail="Disputa no encontrada")
+    orden = db.query(Orden).filter(Orden.id == disputa.orden_id).first()
+    if orden:
+        orden.en_disputa = False
+        orden.motivo_disputa = f"[RESUELTO] {orden.motivo_disputa or ''} — {datos.resolucion}"
+
+    disputa.estado = datos.estado
+    disputa.resolucion_admin = datos.resolucion
+    disputa.resuelta_por_admin_id = current_user["user_id"]
+    disputa.fecha_resolucion = datetime.utcnow()
+    db.add(MensajeDisputa(
+        id=str(uuid4()),
+        disputa_id=disputa.id,
+        autor_id=current_user["user_id"],
+        contenido=f"Resolución admin: {datos.resolucion}",
+        tipo=TipoMensajeDisputa.admin.value,
+    ))
+    db.commit()
+    return {"success": True, "disputa_id": disputa.id, "estado": disputa.estado}
+
+
+@router.put("/evidencias/{evidencia_id}/revisar", response_model=dict)
+async def revisar_evidencia_importador(
+    evidencia_id: str,
+    datos: RevisarEvidenciaRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+
+    ev = db.query(EvidenciaImportador).filter(EvidenciaImportador.id == evidencia_id).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    if datos.estado not in (EstadoEvidenciaImportador.aprobada.value, EstadoEvidenciaImportador.rechazada.value):
+        raise HTTPException(status_code=400, detail="Estado inválido")
+    ev.estado = datos.estado
+    ev.nota_revision = datos.nota_revision
+    ev.revisado_por_admin_id = current_user["user_id"]
+    ev.fecha_revision = datetime.utcnow()
+    db.commit()
+    return {"success": True, "id": ev.id, "estado": ev.estado}
 
 
 # ==================== Recreación de cotizaciones por error (créditos) ====================
@@ -333,18 +407,19 @@ async def resolver_recreacion(
     if datos.parte_atribuida_final == "importador" and cotizacion.costo_creditos:
         solicitante = db.query(Usuario).filter(Usuario.id == cotizacion.solicitante_id).first()
         if solicitante:
-            solicitante.creditos_balance = (solicitante.creditos_balance or 0) + cotizacion.costo_creditos
-            db.add(MovimientoCredito(
-                id=str(uuid4()),
-                usuario_id=solicitante.id,
+            from services.credito_wallet import obtener_wallet, acreditar
+            wallet = obtener_wallet(db, solicitante)
+            acreditar(
+                db,
+                wallet,
+                cotizacion.costo_creditos,
                 tipo=TipoMovimientoCredito.reembolso.value,
-                monto=cotizacion.costo_creditos,
                 cotizacion_id=cotizacion.id,
                 descripcion=(
                     f"Reembolso por recreación de cotización {cotizacion.id} "
                     f"(error atribuido a la empresa importadora)"
-                )
-            ))
+                ),
+            )
 
     db.commit()
     db.refresh(solicitud)
@@ -391,6 +466,7 @@ async def obtener_metricas(
     tasa_conversion = (ordenes_creadas / propuestas_aceptadas * 100) if propuestas_aceptadas > 0 else 0.0
 
     importadores_activos = db.query(Importador).filter(Importador.estado == "activo").count()
+    importadores_verificados = db.query(Importador).filter(Importador.verificado == True).count()
     ordenes_en_disputa = db.query(Orden).filter(Orden.en_disputa == True).count()
 
     return MetricasResponse(
@@ -401,6 +477,6 @@ async def obtener_metricas(
         tiempo_promedio_primera_propuesta_horas=round(tiempo_promedio, 2) if tiempo_promedio is not None else None,
         tasa_conversion_a_orden=round(tasa_conversion, 2),
         importadores_activos=importadores_activos,
-        importadores_verificados=importadores_activos,
+        importadores_verificados=importadores_verificados,
         ordenes_en_disputa=ordenes_en_disputa
     )
