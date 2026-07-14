@@ -20,6 +20,9 @@ import { clsx } from "clsx";
 import { Quote } from "../types/quote";
 import { Importer } from "../types/importer";
 import { SidebarCtrl } from "../types/portal";
+import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
+import { AuthScreen } from "@/features/auth/components/AuthScreen";
+import { useAuth } from "@/hooks/useAuth";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM COMPONENTS
@@ -3039,64 +3042,15 @@ function PolicyScreen({page,onBack}:{page:"data"|"terms";onBack:()=>void}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────────────────────────────────────────
-type AuthView="login"|"forgot";
-
 function LoginScreen({onLogin,onRegister,onLanding,onPolicy}:{onLogin:(role:UserRole)=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void}) {
-  const [view,setView]=useState<AuthView>("login");
-  const [dark,setDark]=useState(false);const[showPw,setShowPw]=useState(false);const[loading,setLoading]=useState(false);const[success,setSuccess]=useState(false);
-  const [selectedRole,setSelectedRole]=useState<UserRole>("solicitante");
-  const [email,setEmail]=useState("");const[password,setPassword]=useState("");const[emailErr,setEmailErr]=useState("");const[pwErr,setPwErr]=useState("");
-  function validate(){let ok=true;if(!email){setEmailErr("El correo es requerido.");ok=false;}else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){setEmailErr("Ingresa un correo válido.");ok=false;}else setEmailErr("");if(view==="login"&&!password){setPwErr("La contraseña es requerida.");ok=false;}else setPwErr("");return ok;}
-  async function handleSubmit(e:React.FormEvent){e.preventDefault();if(!validate())return;setLoading(true);await new Promise(r=>setTimeout(r,900));setLoading(false);if(view==="forgot")setSuccess(true);else onLogin(selectedRole);}
-  function sw(next:AuthView){setView(next);setEmail("");setPassword("");setEmailErr("");setPwErr("");setSuccess(false);}
-  const ROLE_OPTS:[UserRole,React.ReactNode,string][]=[
-    ["solicitante",<UserRound className="w-5 h-5"/>,"Solicitante"],
-    ["importadora",<Building2 className="w-5 h-5"/>,"Importadora"],
-    ["asesor",<Users className="w-5 h-5"/>,"Asesor"],
-  ];
   return (
-    <div className="min-h-screen flex flex-col bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
-      <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-border">
-        <button onClick={onLanding}><Logo/></button>
-        <div className="flex items-center gap-1">
-          <button onClick={()=>setDark(d=>!d)} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">{dark?<Sun className="w-4 h-4"/>:<Moon className="w-4 h-4"/>}</button>
-        </div>
-      </header>
-      <main className="flex-1 flex items-center justify-center px-4 py-10"><div className="w-full max-w-[420px]"><div className="bg-white rounded-2xl border border-border shadow-sm"><div className="px-8 py-8">
-        {view==="login"&&<>
-          <div className="text-center mb-6"><h1 className="text-xl font-semibold tracking-tight">Iniciar sesión</h1><p className="text-sm text-muted-foreground mt-1">Selecciona tu rol y accede a tu portal</p></div>
-          <div className="mb-5">
-            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Acceder como</p>
-            <div className="flex gap-2">
-              {ROLE_OPTS.map(([r,icon,label])=>(
-                <button key={r} onClick={()=>setSelectedRole(r)} className={clsx("flex-1 py-3 flex flex-col items-center gap-1.5 border rounded-xl text-xs font-semibold transition-all",selectedRole===r?"border-primary bg-primary/5 text-primary shadow-sm":"border-border text-muted-foreground hover:border-primary/40")}>
-                  {icon}<span>{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-            <Input label="Correo electrónico" type="email" placeholder="correo@empresa.com" autoComplete="username" value={email} onChange={e=>{setEmail(e.target.value);if(emailErr)setEmailErr("");}} error={emailErr} prefix={<Mail className="w-4 h-4"/>}/>
-            <Input label="Contraseña" type={showPw?"text":"password"} placeholder="••••••••" autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);if(pwErr)setPwErr("");}} error={pwErr} prefix={<Lock className="w-4 h-4"/>} suffix={<button type="button" onClick={()=>setShowPw(v=>!v)} className="focus:outline-none">{showPw?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button>} rightLabel={<button type="button" onClick={()=>sw("forgot")} className="text-xs text-primary hover:text-blue-700 font-medium transition-colors">¿Olvidaste tu contraseña?</button>}/>
-            <Button type="submit" variant="primary" fullWidth loading={loading} className="mt-1 h-10 uppercase tracking-wide text-[13px]">{!loading&&<><LogIn className="w-4 h-4"/><span>Ingresar</span></>}</Button>
-          </form>
-          <div className="mt-4 flex gap-2.5 bg-blue-50 border border-blue-100 rounded-lg px-3.5 py-3"><Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"/><p className="text-xs text-blue-700 leading-relaxed">Demostración: usa cualquier correo y contraseña para acceder.</p></div>
-          <div className="mt-5 flex flex-col gap-2 text-center">
-            <p className="text-xs text-muted-foreground">¿No tienes cuenta? <button type="button" onClick={onRegister} className="text-primary hover:text-blue-700 font-medium">Regístrate gratis</button></p>
-            <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Volver a la página principal</button>
-          </div>
-        </>}
-        {view==="forgot"&&!success&&<><div className="text-center mb-6"><h1 className="text-xl font-semibold tracking-tight">Recuperar acceso</h1><p className="text-sm text-accent mt-1">Te enviaremos un enlace a tu correo</p></div>
-          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4"><Input label="Correo electrónico" type="email" placeholder="correo@empresa.com" value={email} onChange={e=>{setEmail(e.target.value);if(emailErr)setEmailErr("");}} error={emailErr} prefix={<Mail className="w-4 h-4"/>}/><Button type="submit" variant="primary" fullWidth loading={loading} className="mt-1 h-10 uppercase tracking-wide text-[13px]">{!loading&&"Enviar enlace"}</Button></form>
-          <button type="button" onClick={()=>sw("login")} className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors">← Volver al inicio de sesión</button></>}
-        {view==="forgot"&&success&&<div className="flex flex-col items-center text-center gap-3 py-4"><CheckCircle2 className="w-10 h-10 text-emerald-500"/><div><p className="font-semibold">Correo enviado</p><p className="text-sm text-muted-foreground mt-1">Revisa tu bandeja en <span className="font-medium">{email}</span>.</p></div><Button variant="ghost" size="sm" onClick={()=>sw("login")}>Volver al inicio de sesión</Button></div>}
-      </div></div></div></main>
-      <footer className="py-4 flex items-center justify-center gap-4 text-center text-xs text-muted-foreground border-t border-border bg-white">
-        <span>© 2025 ImportacionesQ8</span>
-        <button onClick={()=>onPolicy("data")} className="hover:text-foreground transition-colors">Tratamiento de Datos</button>
-        <button onClick={()=>onPolicy("terms")} className="hover:text-foreground transition-colors">Términos</button>
-      </footer>
-    </div>
+    <AuthScreen
+      onLogin={onLogin}
+      onRegister={onRegister}
+      onLanding={onLanding}
+      onPolicy={onPolicy}
+      logo={<Logo />}
+    />
   );
 }
 
@@ -3106,6 +3060,7 @@ function LoginScreen({onLogin,onRegister,onLanding,onPolicy}:{onLogin:(role:User
 type Screen="landing"|"login"|"register"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"create-response"|"notifications";
 
 export default function App() {
+  const { isAuthenticated, isInitializing, appRole } = useAuth();
   const [screen,setScreen]=useState<Screen>("landing");
   const [userRole,setUserRole]=useState<UserRole>("solicitante");
   const [selectedQuoteId,setSelectedQuoteId]=useState("");
@@ -3120,6 +3075,13 @@ export default function App() {
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
   const [availableQuotes,setAvailableQuotes]=useState<AvailableQuote[]>(INIT_AVAILABLE);
   const [prevScreen,setPrevScreen]=useState<Screen>("dashboard");
+
+  useEffect(() => {
+    if (!appRole) {
+      return;
+    }
+    setUserRole(appRole === "admin" ? "importadora" : appRole);
+  }, [appRole]);
 
   const unreadCount=notifications.filter(n=>!n.read).length;
 
@@ -3158,44 +3120,110 @@ export default function App() {
     else goTo("dashboard");
   }
 
+  const publicScreens: Screen[] = ["landing", "login", "register", "policy-data", "policy-terms"];
+  const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
+    "imp-dashboard": ["importadora"],
+    "imp-profile": ["importadora"],
+    "imp-advisors": ["importadora"],
+    "imp-quotes": ["importadora"],
+    "adv-dashboard": ["asesor"],
+    "adv-available": ["asesor"],
+    "adv-my-quotes": ["asesor"],
+  };
+
+  const allowedRoles = screenAllowedByRole[screen];
+  const loadingFallback = (
+    <div className="min-h-screen flex items-center justify-center bg-[#F0F2F5]">
+      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Verificando sesion...
+      </div>
+    </div>
+  );
+
+  const unauthenticatedFallback = (
+    <LoginScreen
+      onLogin={handleLogin}
+      onRegister={()=>goTo("register")}
+      onLanding={()=>goTo("landing")}
+      onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}
+    />
+  );
+
+  const unauthorizedFallback = (
+    <div className="min-h-screen bg-[#F0F2F5] flex items-center justify-center px-4">
+      <Card className="max-w-md w-full p-6">
+        <h2 className="text-lg font-semibold">Acceso restringido</h2>
+        <p className="text-sm text-muted-foreground mt-2">Tu rol no tiene permisos para esta vista.</p>
+        <Button
+          className="mt-4"
+          onClick={() => {
+            if (userRole === "importadora") {
+              goTo("imp-dashboard");
+              return;
+            }
+            if (userRole === "asesor") {
+              goTo("adv-dashboard");
+              return;
+            }
+            goTo("dashboard");
+          }}
+        >
+          Ir a mi panel
+        </Button>
+      </Card>
+    </div>
+  );
+
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={()=>goTo("login")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
   if(screen==="policy-data")return <PolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
   if(screen==="policy-terms")return <PolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
   if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
 
-  // ── Importer portal ─────────────────────────────────────────────────────────
-  if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb}/>;
-  if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb}/>;
-  if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb}/>;
-  if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
+  const renderPrivateScreen = () => {
+    // ── Importer portal ───────────────────────────────────────────────────────
+    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb}/>;
+    if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb}/>;
+    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
 
-  // ── Advisor portal ───────────────────────────────────────────────────────────
-  if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={availableQuotes.filter(q=>!q.claimedBy).length}/>;
-  if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={availableQuotes} onClaim={claimQuote}/>;
-  if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb}/>;
+    // ── Advisor portal ────────────────────────────────────────────────────────
+    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={availableQuotes.filter(q=>!q.claimedBy).length}/>;
+    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={availableQuotes} onClaim={claimQuote}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb}/>;
 
-  // ── Shared ───────────────────────────────────────────────────────────────────
-  if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole}/>;
-  if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
+    // ── Shared ────────────────────────────────────────────────────────────────
+    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole}/>;
+    if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
 
-  // ── Solicitante portal ───────────────────────────────────────────────────────
-  const headerUser=userRole==="importadora"?USER_IMPORTADORA:userRole==="asesor"?USER_ASESOR:USER;
-  const sbWithNotif=(Component:React.ReactElement)=>Component;
-  void sbWithNotif;
+    // ── Solicitante portal ────────────────────────────────────────────────────
+    if(screen==="dashboard")return <DashboardScreen sb={sb} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="quotes")return <QuotesScreen onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
+    if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId}/>;
+    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} onBack={()=>goTo("quotes")} onViewResponse={(id,from,fqid)=>openResponse(id,from,fqid)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb}/>;
+    if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId}/>;
+    if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb}/>;
+    if(screen==="order-detail")return <OrderDetailScreen orderId={selectedOrderId} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="documentos")return <DocumentosScreen sb={sb}/>;
+    if(screen==="pagos")return <PagosScreen sb={sb}/>;
+    return null;
+  };
 
-  if(screen==="dashboard")return <DashboardScreen sb={sb} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-  if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="quotes")return <QuotesScreen onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
-  if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId}/>;
-  if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} onBack={()=>goTo("quotes")} onViewResponse={(id,from,fqid)=>openResponse(id,from,fqid)} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb}/>;
-  if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId}/>;
-  if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb}/>;
-  if(screen==="order-detail")return <OrderDetailScreen orderId={selectedOrderId} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="documentos")return <DocumentosScreen sb={sb}/>;
-  if(screen==="pagos")return <PagosScreen sb={sb}/>;
-  void headerUser;
-  return null;
+  return (
+    <ProtectedRoute
+      isInitializing={isInitializing}
+      isAuthenticated={isAuthenticated}
+      currentRole={userRole}
+      allowedRoles={allowedRoles}
+      loadingFallback={loadingFallback}
+      unauthenticatedFallback={unauthenticatedFallback}
+      unauthorizedFallback={unauthorizedFallback}
+    >
+      {renderPrivateScreen()}
+    </ProtectedRoute>
+  );
 }
