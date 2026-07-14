@@ -1,6 +1,8 @@
 from .auth import (
     RegistroRequest, LoginRequest, TokenResponse, LoginResponse,
-    ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest
+    ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest,
+    RegistroPendienteResponse, VerificarEmailRequest, ReenviarOtpRequest,
+    ReenviarOtpResponse, LoginOtpRequest,
 )
 from .importador import (
     ImportadorCreate, ImportadorResponse, ImportadorUpdate,
@@ -38,6 +40,11 @@ __all__ = [
     "ForgotPasswordRequest",
     "ForgotPasswordResponse",
     "ResetPasswordRequest",
+    "RegistroPendienteResponse",
+    "VerificarEmailRequest",
+    "ReenviarOtpRequest",
+    "ReenviarOtpResponse",
+    "LoginOtpRequest",
     "ImportadorCreate",
     "ImportadorResponse",
     "ImportadorUpdate",

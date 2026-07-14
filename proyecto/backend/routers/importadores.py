@@ -108,6 +108,7 @@ async def crear_asesor(
         nombre=datos.nombre,
         telefono=datos.telefono,
         activo=True,
+        email_verificado=True,
         perfil_completo=bool(datos.nombre)
     )
     db.add(nuevo_asesor)

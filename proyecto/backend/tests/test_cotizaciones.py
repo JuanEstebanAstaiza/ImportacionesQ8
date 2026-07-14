@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from fastapi import status
 
 from utils.security import create_access_token
-from conftest import registro_payload
+from conftest import registro_payload, registrar_verificado
 
 class TestListarCotizaciones:
     """Tests para el endpoint GET /cotizaciones"""
@@ -61,12 +61,10 @@ class TestCrearCotizacion:
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
     
-    def test_crear_cotizacion_dirigida_sin_importador_id(self, client):
+    def test_crear_cotizacion_dirigida_sin_importador_id(self, client, monkeypatch):
         """Intentar crear cotización dirigida sin importador_id"""
-        # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
-        
-        token = register_response.json()["access_token"]
+        data = registrar_verificado(client, monkeypatch, "solicitante@example.com")
+        token = data["access_token"]
         
         # Intentar crear cotización dirigida sin importador_id - debería fallar
         response = client.post("/cotizaciones", json={
@@ -83,14 +81,12 @@ class TestCrearCotizacion:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "importador_id" in response.json()["detail"]
     
-    def test_crear_cotizacion_dirigida_con_importador_no_existente(self, client):
+    def test_crear_cotizacion_dirigida_con_importador_no_existente(self, client, monkeypatch):
         """Intentar crear cotización dirigida con importador que no existe"""
         from uuid import uuid4
-        
-        # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json=registro_payload("solicitante2@example.com"))
-        
-        token = register_response.json()["access_token"]
+
+        data = registrar_verificado(client, monkeypatch, "solicitante2@example.com")
+        token = data["access_token"]
         
         # Intentar crear cotización dirigida con importador inexistente - debería fallar
         response = client.post("/cotizaciones", json={
@@ -107,7 +103,7 @@ class TestCrearCotizacion:
         
         assert response.status_code == status.HTTP_404_NOT_FOUND
     
-    def test_crear_cotizacion_dirigida_exitosa(self, client):
+    def test_crear_cotizacion_dirigida_exitosa(self, client, monkeypatch):
         """Crear cotización dirigida exitosamente"""
         token_admin = create_access_token(str(uuid4()), "admin")
 
@@ -124,9 +120,7 @@ class TestCrearCotizacion:
         importador_id = importador_response.json()["importador"]["id"]
         
         # Registrar usuario solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante3@example.com"))
-        
-        token_solicitante = register_solicitante.json()["access_token"]
+        token_solicitante = registrar_verificado(client, monkeypatch, "solicitante3@example.com")["access_token"]
         
         # Crear cotización dirigida - debería funcionar
         response = client.post("/cotizaciones", json={
@@ -146,7 +140,7 @@ class TestCrearCotizacion:
         assert data["modalidad"] == "dirigida"
         assert data["estado"] == "dirigida"
     
-    def test_crear_cotizacion_abierta_exitosa(self, client):
+    def test_crear_cotizacion_abierta_exitosa(self, client, monkeypatch):
         """Crear cotización abierta exitosamente"""
         token_admin = create_access_token(str(uuid4()), "admin")
         
@@ -158,9 +152,7 @@ class TestCrearCotizacion:
         }, headers={"Authorization": f"Bearer {token_admin}"})
         
         # Registrar usuario solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante4@example.com"))
-        
-        token_solicitante = register_solicitante.json()["access_token"]
+        token_solicitante = registrar_verificado(client, monkeypatch, "solicitante4@example.com")["access_token"]
         
         # Crear cotización abierta - debería funcionar
         response = client.post("/cotizaciones", json={
@@ -285,7 +277,7 @@ class TestCotizacionSchemas:
 class TestCotizacionEndpointsIntegration:
     """Tests de integración para el flujo completo de cotizaciones"""
     
-    def test_flujo_completo_cotizacion_dirigida(self, client):
+    def test_flujo_completo_cotizacion_dirigida(self, client, monkeypatch):
         """Probar el flujo completo de una cotización dirigida"""
         # 1. Generar token admin (el auto-registro de admin está cerrado) y crear importador
         token_admin = create_access_token(str(uuid4()), "admin")
@@ -303,9 +295,7 @@ class TestCotizacionEndpointsIntegration:
         importador_id = importador_response.json()["importador"]["id"]
         
         # 2. Registrar solicitante y obtener token
-        register_solicitante = client.post("/auth/register", json=registro_payload("solicitante5@example.com"))
-        
-        token_solicitante = register_solicitante.json()["access_token"]
+        token_solicitante = registrar_verificado(client, monkeypatch, "solicitante5@example.com")["access_token"]
         
         # 3. Crear cotización dirigida
         response_cotizacion = client.post("/cotizaciones", json={

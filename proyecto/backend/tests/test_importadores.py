@@ -116,12 +116,11 @@ class TestCrearImportador:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
     
-    def test_crear_importador_sin_role_admin(self, client):
+    def test_crear_importador_sin_role_admin(self, client, monkeypatch):
         """Intentar crear importador sin rol de admin"""
-        # Registrar usuario solicitante y obtener token
-        register_response = client.post("/auth/register", json=registro_payload("solicitante@example.com"))
-        
-        token = register_response.json()["access_token"]
+        from conftest import registrar_verificado
+        data = registrar_verificado(client, monkeypatch, "solicitante@example.com")
+        token = data["access_token"]
         
         # Intentar crear importador - debería fallar por rol insuficiente
         response = client.post("/importadores", json={

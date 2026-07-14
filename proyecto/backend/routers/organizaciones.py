@@ -100,6 +100,7 @@ async def invitar_miembro(
             organizacion_id=org.id,
             creditos_balance=0.0,
             activo=True,
+            email_verificado=True,
             perfil_completo=True,
             acepto_politica_datos=True,
         )

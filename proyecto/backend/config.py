@@ -55,6 +55,9 @@ SMTP_FROM = os.getenv("SMTP_FROM", "no-reply@importacionesq8.com")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
+OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))
+LOGIN_TARDIO_HORAS = int(os.getenv("LOGIN_TARDIO_HORAS", "72"))
+RATE_LIMIT_OTP = os.getenv("RATE_LIMIT_OTP", "10/minute")
 
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))
 CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DIRIGIDA", "5"))

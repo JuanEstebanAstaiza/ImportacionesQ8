@@ -21,12 +21,15 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/auth/register` | Registro de solicitante (persona natural o jurídica; ver [[Autenticacion]]). `rol="importador"` responde placeholder, ver Semana 4 |
-| POST | `/auth/login` | Inicio de sesión y obtención de JWT token |
-| POST | `/auth/refresh` | Renovación de token JWT expirado |
-| POST | `/auth/logout` | Cierre de sesión y revocación de token |
-| POST | `/auth/forgot-password` | (Semana 4) Solicita recuperación de contraseña: envía OTP + enlace por correo (SMTP real) |
-| POST | `/auth/reset-password` | (Semana 4) Confirma la recuperación con `{token, otp, nueva_password}` |
+| POST | `/auth/register` | Registro de solicitante; envía OTP de verificación (sin JWT) |
+| POST | `/auth/verificar-email` | Confirma OTP de registro y emite JWT |
+| POST | `/auth/reenviar-otp` | Reenvía OTP (`verificacion_email` \| `login_tardio`) |
+| POST | `/auth/login` | Login; si >72h desde último acceso → `requiere_otp` + challenge |
+| POST | `/auth/login/verificar-otp` | Completa login tardío con challenge + OTP |
+| POST | `/auth/refresh` | Renovación de token JWT |
+| POST | `/auth/logout` | Cierre de sesión (cliente borra token) |
+| POST | `/auth/forgot-password` | Recuperación: OTP + enlace por correo |
+| POST | `/auth/reset-password` | Confirma recuperación con `{token, otp, nueva_password}` |
 
 ### Páginas legales (Semana 4)
 
