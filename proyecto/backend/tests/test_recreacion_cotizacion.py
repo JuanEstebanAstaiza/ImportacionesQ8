@@ -9,6 +9,7 @@ from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.credito import MovimientoCredito
 from utils.security import hash_password, create_access_token
+from conftest import crear_usuario_con_token
 from conftest import crear_empresa_importadora, auth_headers_for
 
 
@@ -78,12 +79,12 @@ class TestSolicitarRecreacion:
         assert data["estado"] == "pendiente"
         assert data["cotizacion_origen_id"] == cotizacion_aceptada.id
 
-    def test_no_puede_solicitar_recreacion_de_cotizacion_ajena(self, client, cotizacion_aceptada):
-        otro_token = create_access_token(str(uuid4()), "solicitante")
+    def test_no_puede_solicitar_recreacion_de_cotizacion_ajena(self, client, db_session, cotizacion_aceptada):
+        _, headers = crear_usuario_con_token(db_session, rol="solicitante", email="otro_recreacion@example.com")
         response = client.post(
             f"/cotizaciones/{cotizacion_aceptada.id}/solicitar-recreacion",
             json={"motivo": "Motivo cualquiera de más de diez caracteres", "parte_atribuida_sugerida": "solicitante"},
-            headers={"Authorization": f"Bearer {otro_token}"}
+            headers=headers
         )
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -180,7 +181,7 @@ class TestSolicitarRecreacionAbierta:
         solicitud_id = self._crear_solicitud(client, cotizacion_aceptada, solicitante)
         saldo_antes = solicitante.creditos_balance
 
-        admin_token = create_access_token(str(uuid4()), "admin")
+        _, _ah = crear_usuario_con_token(db_session, rol="admin"); admin_token = _ah["Authorization"].split(" ", 1)[1]
         response = client.put(
             f"/admin/recreaciones/{solicitud_id}/resolver",
             json={"parte_atribuida_final": "importador", "aprobado": True},
@@ -209,7 +210,7 @@ class TestSolicitarRecreacionAbierta:
         solicitud_id = self._crear_solicitud(client, cotizacion_aceptada, solicitante)
         saldo_antes = solicitante.creditos_balance
 
-        admin_token = create_access_token(str(uuid4()), "admin")
+        _, _ah = crear_usuario_con_token(db_session, rol="admin"); admin_token = _ah["Authorization"].split(" ", 1)[1]
         response = client.put(
             f"/admin/recreaciones/{solicitud_id}/resolver",
             json={"parte_atribuida_final": "solicitante", "aprobado": True},
@@ -231,9 +232,9 @@ class TestSolicitarRecreacionAbierta:
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_no_se_puede_resolver_dos_veces(self, client, cotizacion_aceptada, solicitante):
+    def test_no_se_puede_resolver_dos_veces(self, client, db_session, cotizacion_aceptada, solicitante):
         solicitud_id = self._crear_solicitud(client, cotizacion_aceptada, solicitante)
-        admin_token = create_access_token(str(uuid4()), "admin")
+        _, _ah = crear_usuario_con_token(db_session, rol="admin"); admin_token = _ah["Authorization"].split(" ", 1)[1]
         headers = {"Authorization": f"Bearer {admin_token}"}
 
         primera = client.put(
@@ -250,10 +251,10 @@ class TestSolicitarRecreacionAbierta:
         )
         assert segunda.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_listar_recreaciones_admin(self, client, cotizacion_aceptada, solicitante):
+    def test_listar_recreaciones_admin(self, client, db_session, cotizacion_aceptada, solicitante):
         self._crear_solicitud(client, cotizacion_aceptada, solicitante)
 
-        admin_token = create_access_token(str(uuid4()), "admin")
+        _, _ah = crear_usuario_con_token(db_session, rol="admin"); admin_token = _ah["Authorization"].split(" ", 1)[1]
         response = client.get("/admin/recreaciones", headers={"Authorization": f"Bearer {admin_token}"})
 
         assert response.status_code == status.HTTP_200_OK

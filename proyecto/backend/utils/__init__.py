@@ -1,11 +1,2 @@
-from .security import hash_password, verify_password, create_access_token
-from .dependencies import get_current_user, require_rol, get_db
-
-__all__ = [
-    "hash_password",
-    "verify_password", 
-    "create_access_token",
-    "get_current_user",
-    "require_rol",
-    "get_db"
-]
+# Evitar imports pesados aquí: provocan ciclos schemas ↔ utils ↔ services.
+__all__ = []

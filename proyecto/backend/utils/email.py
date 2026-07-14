@@ -24,9 +24,9 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
     """
     if not config.SMTP_HOST:
         logger.warning(
-            "SMTP no configurado (SMTP_HOST vacío): se omite el envío real y se "
-            "registra el contenido para depuración. destinatario=%s asunto=%s cuerpo=%s",
-            destinatario, asunto, cuerpo_texto
+            "SMTP no configurado (SMTP_HOST vacío): se omite el envío real. "
+            "destinatario=%s asunto=%s (cuerpo omitido por seguridad)",
+            destinatario, asunto,
         )
         return True
 

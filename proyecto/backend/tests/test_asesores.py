@@ -48,7 +48,7 @@ class TestCrearAsesor:
         importador, dueño = empresa_a
         response = client.post(
             "/importadores/asesores",
-            json={"email": "asesor1@example.com", "password": "123456789", "nombre": "Juan Pérez"},
+            json={"email": "asesor1@example.com", "password": "ClaveSegura1", "nombre": "Juan Pérez"},
             headers=auth_headers_for(dueño)
         )
         assert response.status_code == status.HTTP_201_CREATED
@@ -60,7 +60,7 @@ class TestCrearAsesor:
         token = create_access_token(str(solicitante.id), "solicitante")
         response = client.post(
             "/importadores/asesores",
-            json={"email": "asesor2@example.com", "password": "123456789"},
+            json={"email": "asesor2@example.com", "password": "ClaveSegura1"},
             headers={"Authorization": f"Bearer {token}"}
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -76,7 +76,7 @@ class TestCrearAsesor:
 
         response = client.post(
             "/importadores/asesores",
-            json={"email": "otro_asesor@example.com", "password": "123456789"},
+            json={"email": "otro_asesor@example.com", "password": "ClaveSegura1"},
             headers=auth_headers_for(asesor)
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -85,12 +85,12 @@ class TestCrearAsesor:
         importador, dueño = empresa_a
         client.post(
             "/importadores/asesores",
-            json={"email": "duplicado@example.com", "password": "123456789"},
+            json={"email": "duplicado@example.com", "password": "ClaveSegura1"},
             headers=auth_headers_for(dueño)
         )
         response = client.post(
             "/importadores/asesores",
-            json={"email": "duplicado@example.com", "password": "123456789"},
+            json={"email": "duplicado@example.com", "password": "ClaveSegura1"},
             headers=auth_headers_for(dueño)
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -101,8 +101,8 @@ class TestListarYActualizarAsesores:
         importador_a, dueño_a = empresa_a
         importador_b, dueño_b = empresa_b
 
-        client.post("/importadores/asesores", json={"email": "t_a@example.com", "password": "123456789"}, headers=auth_headers_for(dueño_a))
-        client.post("/importadores/asesores", json={"email": "t_b@example.com", "password": "123456789"}, headers=auth_headers_for(dueño_b))
+        client.post("/importadores/asesores", json={"email": "t_a@example.com", "password": "ClaveSegura1"}, headers=auth_headers_for(dueño_a))
+        client.post("/importadores/asesores", json={"email": "t_b@example.com", "password": "ClaveSegura1"}, headers=auth_headers_for(dueño_b))
 
         response = client.get("/importadores/asesores", headers=auth_headers_for(dueño_a))
         assert response.status_code == status.HTTP_200_OK
@@ -114,7 +114,7 @@ class TestListarYActualizarAsesores:
         importador, dueño = empresa_a
         crear_response = client.post(
             "/importadores/asesores",
-            json={"email": "desactivar@example.com", "password": "123456789"},
+            json={"email": "desactivar@example.com", "password": "ClaveSegura1"},
             headers=auth_headers_for(dueño)
         )
         asesor_id = crear_response.json()["id"]
@@ -133,7 +133,7 @@ class TestListarYActualizarAsesores:
 
         crear_response = client.post(
             "/importadores/asesores",
-            json={"email": "t_b2@example.com", "password": "123456789"},
+            json={"email": "t_b2@example.com", "password": "ClaveSegura1"},
             headers=auth_headers_for(dueño_b)
         )
         asesor_b_id = crear_response.json()["id"]

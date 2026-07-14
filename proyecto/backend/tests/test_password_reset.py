@@ -45,21 +45,21 @@ class TestResetPassword:
         response = client.post("/auth/reset-password", json={
             "token": capturado["token"],
             "otp": capturado["otp"],
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
         login = client.post("/auth/login", json={
             "email": "reset2@example.com",
-            "password": "nuevaPassword123"
+            "password": "NuevaClave123"
         })
         assert login.status_code == status.HTTP_200_OK
         assert login.json()["access_token"]
 
         login_viejo = client.post("/auth/login", json={
             "email": "reset2@example.com",
-            "password": "123456789"
+            "password": "ClaveSegura1"
         })
         assert login_viejo.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -69,7 +69,7 @@ class TestResetPassword:
         response = client.post("/auth/reset-password", json={
             "token": capturado["token"],
             "otp": "000000",
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -78,7 +78,7 @@ class TestResetPassword:
         response = client.post("/auth/reset-password", json={
             "token": "token-que-no-existe",
             "otp": "123456",
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -89,14 +89,14 @@ class TestResetPassword:
         primera = client.post("/auth/reset-password", json={
             "token": capturado["token"],
             "otp": capturado["otp"],
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
         assert primera.status_code == status.HTTP_204_NO_CONTENT
 
         segunda = client.post("/auth/reset-password", json={
             "token": capturado["token"],
             "otp": capturado["otp"],
-            "nueva_password": "otraPasswordMas"
+            "nueva_password": "OtraClave123"
         })
         assert segunda.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -116,7 +116,7 @@ class TestResetPassword:
         response = client.post("/auth/reset-password", json={
             "token": capturado["token"],
             "otp": capturado["otp"],
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -137,13 +137,13 @@ class TestResetPassword:
         response = client.post("/auth/reset-password", json={
             "token": primero["token"],
             "otp": primero["otp"],
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
         response_ok = client.post("/auth/reset-password", json={
             "token": segundo["token"],
             "otp": segundo["otp"],
-            "nueva_password": "nuevaPassword123"
+            "nueva_password": "NuevaClave123"
         })
         assert response_ok.status_code == status.HTTP_204_NO_CONTENT

@@ -80,9 +80,16 @@ async def comprar_creditos(
 
     creditos_a_acreditar = round(solicitud.monto_usd / config.CREDITO_USD_POR_UNIDAD, 2)
 
-    # Identificador de pago simulado (en producción vendría de la respuesta de la API de Wompi)
+    if config.APP_ENV == "production" and getattr(config, "WOMPI_SIMULATE", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Pagos Wompi no configurados para producción (WOMPI_SIMULATE=true)",
+        )
+
+    # Sandbox/dev: referencia local. En producción real se debe crear el pago vía API Wompi
+    # y persistir el id devuelto por el PSP (WOMPI_SIMULATE=false + keys reales).
     wompi_payment_id = f"wpm_{secrets.token_hex(12)}"
-    wompi_checkout_url = f"https://pay.wompi.co/pay/{wompi_payment_id}"
+    wompi_checkout_url = f"https://checkout.wompi.co/l/{wompi_payment_id}"
 
     nuevo_pago = Pago(
         id=str(uuid4()),
@@ -180,12 +187,8 @@ async def webhook_wompi(
     db: Session = Depends(get_db)
 ):
     """
-    Webhook de Wompi que recibe notificaciones sobre el estado del pago de compra de créditos.
-
-    Seguridad:
-    - Se verifica la firma HMAC-SHA256 del evento antes de procesarlo (fail-closed).
-    - El procesamiento es idempotente: si el pago ya está confirmado, se responde
-      200 OK sin duplicar la acreditación de créditos (Wompi puede reenviar el mismo evento).
+    Webhook de Wompi. Firma fail-closed + transición atómica pendiente→confirmado
+    para evitar doble acreditación bajo reintentos concurrentes.
     """
     if not verificar_firma_wompi(evento):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Firma de webhook inválida")
@@ -202,14 +205,29 @@ async def webhook_wompi(
 
     pago = db.query(Pago).filter(Pago.wompi_payment_id == wompi_payment_id).first()
     if not pago:
-        # Evento desconocido o de un pago que no existe en nuestra base - se ignora
-        return {"success": True}
-
-    # Idempotencia: si ya se procesó este pago, no repetir efectos secundarios
-    if pago.estado in (EstadoPago.confirmado.value, EstadoPago.reembolsado.value) and evento_tipo != "payment.refunded":
         return {"success": True}
 
     if evento_tipo == "payment.confirmed" or estado_wompi == "confirmed":
+        # Solo un worker gana la carrera: UPDATE ... WHERE estado=pendiente
+        ahora = get_db_now(db)
+        ganado = (
+            db.query(Pago)
+            .filter(
+                Pago.id == pago.id,
+                Pago.estado == EstadoPago.pendiente.value,
+            )
+            .update(
+                {
+                    Pago.estado: EstadoPago.confirmado.value,
+                    Pago.fecha_confirmacion: ahora,
+                },
+                synchronize_session=False,
+            )
+        )
+        if ganado != 1:
+            db.rollback()
+            return {"success": True}
+
         usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
         if usuario:
             wallet = obtener_wallet(db, usuario)
@@ -221,28 +239,37 @@ async def webhook_wompi(
                 pago_id=pago.id,
                 descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})",
             )
-
-        pago.estado = EstadoPago.confirmado.value
-        pago.fecha_confirmacion = get_db_now(db)
-
         try:
             db.commit()
         except IntegrityError:
-            # Otro webhook concurrente ya procesó este mismo pago
             db.rollback()
-            pago_actual = db.query(Pago).filter(Pago.wompi_payment_id == wompi_payment_id).first()
-            if pago_actual and pago_actual.estado != EstadoPago.confirmado.value:
-                pago_actual.estado = EstadoPago.confirmado.value
-                pago_actual.fecha_confirmacion = get_db_now(db)
-                db.commit()
+            return {"success": True}
 
     elif evento_tipo == "payment.failed" or estado_wompi == "failed":
-        pago.estado = EstadoPago.fallido.value
+        db.query(Pago).filter(
+            Pago.id == pago.id,
+            Pago.estado == EstadoPago.pendiente.value,
+        ).update({Pago.estado: EstadoPago.fallido.value}, synchronize_session=False)
         db.commit()
 
     elif evento_tipo == "payment.refunded" or estado_wompi == "refunded":
+        ganado = (
+            db.query(Pago)
+            .filter(
+                Pago.id == pago.id,
+                Pago.estado == EstadoPago.confirmado.value,
+            )
+            .update(
+                {Pago.estado: EstadoPago.reembolsado.value},
+                synchronize_session=False,
+            )
+        )
+        if ganado != 1:
+            db.rollback()
+            return {"success": True}
+
         usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
-        if usuario and pago.estado == EstadoPago.confirmado.value:
+        if usuario:
             wallet = obtener_wallet(db, usuario)
             try:
                 debitar_atomico(
@@ -254,7 +281,6 @@ async def webhook_wompi(
                     descripcion=f"Reversión por reembolso de pago Wompi ({pago.wompi_payment_id})",
                 )
             except HTTPException:
-                # Si no hay saldo suficiente, forzar a cero el wallet efectivo
                 if wallet.organizacion is not None:
                     wallet.organizacion.creditos_balance = 0
                 else:
@@ -268,7 +294,6 @@ async def webhook_wompi(
                     pago_id=pago.id,
                     descripcion=f"Reversión por reembolso Wompi (saldo forzado) ({pago.wompi_payment_id})",
                 ))
-        pago.estado = EstadoPago.reembolsado.value
         db.commit()
 
     return {"success": True}

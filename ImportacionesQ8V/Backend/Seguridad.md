@@ -165,8 +165,8 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 | **Migración de hashing de contraseñas a Argon2** | 🔜 Pendiente | El backend usa `bcrypt` (`passlib`) actualmente, que sigue siendo seguro; la migración a Argon2 (ganador del Password Hashing Competition) se documenta como mejora incremental, no una vulnerabilidad activa |
 | **Auditoría/logging estructurado de acciones administrativas** | 🔜 Pendiente | Ya señalado como pendiente desde la Semana 3 |
 | **HTTPS en producción** | 🔜 Pendiente | Depende de la capa de despliegue, fuera del alcance del código del backend |
-| **Revocación real de JWT en logout** | 🔜 Pendiente | Logout sigue siendo client-side; blacklist/Redis o tokens de corta vida |
-| **JWT de WebSocket fuera del query string** | 🔜 Pendiente | Limitación de browsers; mitigar con token corto de un solo uso |
+| **Revocación real de JWT en logout** | ✅ Hecho (2026-07-14) | `jti` + tabla `jwt_blacklist` (+ Redis opcional); refresh rota el token |
+| **JWT de WebSocket fuera del query string** | ✅ Parcial (2026-07-14) | `POST /chat/ws-ticket` + `?ticket=`; `?token=` deprecado por compatibilidad |
 | **Rate limits en escritura de negocio** | 🔜 Pendiente | Hoy el rate limiting cubre auth; cotizaciones/chat bajo abuso quedan abiertos |
 
 ---

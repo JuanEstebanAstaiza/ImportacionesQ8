@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
 
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, APP_ENV
 from routers.auth import router as auth_router
 from routers.importadores import router as importadores_router
 from routers.cotizaciones import router as cotizaciones_router, propuestas_router
@@ -40,20 +40,26 @@ async def lifespan(app: FastAPI):
     print("Apagando servidor ImportacionesQ8...")
 
 # Crear la aplicación FastAPI
+_docs = None if APP_ENV == "production" else "/docs"
+_redoc = None if APP_ENV == "production" else "/redoc"
+_openapi = None if APP_ENV == "production" else "/openapi.json"
 app = FastAPI(
     title="ImportacionesQ8 API",
     description="API REST para la plataforma de importaciones Q8",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=_docs,
+    redoc_url=_redoc,
+    openapi_url=_openapi,
 )
 
-# Configurar CORS
+# Configurar CORS (métodos/headers acotados — no wildcard)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip() and o.strip() != "*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # Configurar rate limiting (fuerza bruta en /auth/login, abuso en /auth/register)

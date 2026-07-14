@@ -10,10 +10,10 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-importacionesq8}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    # Capacidad para alto flujo: workers × (pool_size + max_overflow) < max-connections
     command: ["--max-connections=500", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    # Solo localhost: no exponer MySQL a la red (OWASP A05)
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -25,12 +25,13 @@ services:
     image: redis:7-alpine
     container_name: importacionesq8_redis
     restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis_q8_dev_change_me}"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_q8_dev_change_me}", "ping"]
       timeout: 5s
       retries: 5
 
@@ -46,9 +47,9 @@ services:
       DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql/${MYSQL_DATABASE:-importacionesq8}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
       ALGORITHM: ${ALGORITHM:-HS256}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_q8_dev_change_me}@redis:6379/0
       APP_ENV: ${APP_ENV:-development}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
@@ -56,6 +57,7 @@ services:
       WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-pub_test_placeholder}
       WOMPI_SECRET_KEY: ${WOMPI_SECRET_KEY:-prv_test_placeholder}
       WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:?WOMPI_EVENTS_SECRET must be set in .env}
+      WOMPI_SIMULATE: ${WOMPI_SIMULATE:-true}
       RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-5/minute}
       RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-10/minute}
       RATE_LIMIT_FORGOT_PASSWORD: ${RATE_LIMIT_FORGOT_PASSWORD:-5/minute}
@@ -75,12 +77,14 @@ services:
       SECRET_KEY: test-secret-key-not-for-production-use-only
       APP_ENV: test
       ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
       CORS_ORIGINS: http://localhost:3000,http://localhost:8000
       WOMPI_EVENTS_SECRET: test_events_secret_for_ci
+      WOMPI_SIMULATE: "true"
       RATE_LIMIT_LOGIN: 1000/minute
       RATE_LIMIT_REGISTER: 1000/minute
       RATE_LIMIT_FORGOT_PASSWORD: 1000/minute
+      RATE_LIMIT_OTP: 1000/minute
     volumes:
       - ./test_data:/app/test_data
 

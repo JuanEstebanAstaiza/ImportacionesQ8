@@ -72,6 +72,8 @@ from models.chat import ConversacionChat, MensajeChat
 from models.password_reset import PasswordResetToken
 from models.credito import MovimientoCredito
 from models.solicitud_recreacion import SolicitudRecreacion
+from models.jwt_blacklist import JwtBlacklist  # noqa: F401 — registra metadata
+from models.otp import CodigoOtp  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -213,7 +215,7 @@ def crear_empresa_importadora(db_session, nombre_empresa="Empresa Importadora Te
     db_session.refresh(dueño)
     return importador, dueño
 
-def registro_payload(email, password="123456789", rol="solicitante", tipo_persona="natural", **overrides):
+def registro_payload(email, password="ClaveSegura1", rol="solicitante", tipo_persona="natural", **overrides):
     """
     Devuelve un payload válido para POST /auth/register (Semana 4: distingue
     persona natural/jurídica y exige aceptación de política de datos). Los tests
@@ -265,7 +267,7 @@ def registrar_verificado(client, monkeypatch, email, **kwargs):
     LoginResponse (con access_token).
     """
     capturado = capturar_otp_envio(monkeypatch)
-    password = kwargs.pop("password", "123456789")
+    password = kwargs.pop("password", "ClaveSegura1")
     r = client.post("/auth/register", json=registro_payload(email, password=password, **kwargs))
     assert r.status_code == 201, r.text
     v = client.post("/auth/verificar-email", json={"email": email, "otp": capturado["otp"]})
@@ -273,6 +275,30 @@ def registrar_verificado(client, monkeypatch, email, **kwargs):
     data = v.json()
     assert data.get("access_token")
     return data
+
+
+def crear_usuario_con_token(db_session, *, rol="solicitante", email=None, **kwargs):
+    """Crea Usuario en BD y devuelve (usuario, headers Authorization). Para tests que mintaban JWT huérfanos."""
+    from uuid import uuid4
+    email = email or f"{rol}_{uuid4().hex[:8]}@example.com"
+    user = Usuario(
+        id=str(uuid4()),
+        email=email,
+        password_hash=hash_password(kwargs.get("password", "ClaveSegura1")),
+        rol=rol,
+        importador_id=kwargs.get("importador_id"),
+        organizacion_id=kwargs.get("organizacion_id"),
+        nombre=kwargs.get("nombre", "Test"),
+        activo=True,
+        email_verificado=True,
+        perfil_completo=True,
+        creditos_balance=kwargs.get("creditos_balance", 100.0),
+        fecha_creacion=datetime.utcnow(),
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user, auth_headers_for(user)
 
 
 def auth_headers_for(usuario):
@@ -455,16 +481,14 @@ def test_cotizacion_dirigida(db_session):
     return cotizacion
 
 @pytest.fixture()
-def auth_headers_test_user():
-    """Headers de autenticación para usuario de prueba"""
-    token = create_access_token(str(uuid4()), "solicitante")
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers_test_user(test_user):
+    """Headers de autenticación para usuario de prueba (usuario real en BD)."""
+    return auth_headers_for(test_user)
 
 @pytest.fixture()
-def auth_headers_admin():
-    """Headers de autenticación para admin"""
-    token = create_access_token(str(uuid4()), "admin")
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers_admin(admin_user):
+    """Headers de autenticación para admin (usuario real en BD)."""
+    return auth_headers_for(admin_user)
 
 @pytest.fixture()
 def mock_redis_client(monkeypatch):

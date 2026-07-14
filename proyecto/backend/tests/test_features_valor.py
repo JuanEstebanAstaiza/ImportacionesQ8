@@ -13,7 +13,7 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
 from models.chat import ConversacionChat, MensajeChat
 from utils.security import hash_password, create_access_token
-from conftest import crear_empresa_importadora, auth_headers_for, registro_payload, registrar_verificado
+from conftest import crear_empresa_importadora, auth_headers_for, registro_payload, registrar_verificado, crear_usuario_con_token
 
 
 @pytest.fixture()
@@ -32,7 +32,7 @@ def solicitante(db_session):
 class TestEvidenciasImportador:
     def test_dueño_crea_y_admin_aprueba(self, client, db_session):
         importador, dueño = crear_empresa_importadora(db_session)
-        admin_h = {"Authorization": f"Bearer {create_access_token(str(uuid4()), 'admin')}"}
+        _, admin_h = crear_usuario_con_token(db_session, rol="admin")
 
         r = client.post(
             "/importadores/evidencias",
@@ -62,7 +62,7 @@ class TestOrganizacionCreditos:
         capturado = capturar_otp_envio(monkeypatch)
         r = client.post("/auth/register", json={
             "email": "corp@example.com",
-            "password": "123456789",
+            "password": "ClaveSegura1",
             "rol": "solicitante",
             "tipo_persona": "juridica",
             "nit": "900123456-1",
@@ -91,7 +91,7 @@ class TestOrganizacionCreditos:
         capturado = capturar_otp_envio(monkeypatch)
         r = client.post("/auth/register", json={
             "email": "owner_org@example.com",
-            "password": "123456789",
+            "password": "ClaveSegura1",
             "rol": "solicitante",
             "tipo_persona": "juridica",
             "nit": "900999888-1",
@@ -106,12 +106,12 @@ class TestOrganizacionCreditos:
         owner_h = {"Authorization": f"Bearer {v.json()['access_token']}"}
         inv = client.post(
             "/organizaciones/me/invitar",
-            json={"email": "member_org@example.com", "password": "123456789", "rol_org": "member"},
+            json={"email": "member_org@example.com", "password": "ClaveSegura1", "rol_org": "member"},
             headers=owner_h,
         )
         assert inv.status_code == 201
 
-        login = client.post("/auth/login", json={"email": "member_org@example.com", "password": "123456789"})
+        login = client.post("/auth/login", json={"email": "member_org@example.com", "password": "ClaveSegura1"})
         member_h = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
         empresa, _ = crear_empresa_importadora(db_session, email_dueño="imp_org_cred@example.com")

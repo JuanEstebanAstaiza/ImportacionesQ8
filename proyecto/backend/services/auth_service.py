@@ -17,7 +17,10 @@ from schemas.auth import (
     RegistroPendienteResponse, VerificarEmailRequest, ReenviarOtpRequest,
     ReenviarOtpResponse, LoginOtpRequest,
 )
-from utils.security import hash_password, verify_password, create_access_token, generar_otp, generar_token_seguro, hash_token
+from utils.security import (
+    hash_password, verify_password, create_access_token, generar_otp,
+    generar_token_seguro, hash_token, password_cumple_politica,
+)
 from utils.email import enviar_correo_recuperacion_password
 from services.credito_wallet import obtener_wallet, acreditar
 from services.otp_service import (
@@ -108,11 +111,17 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
             detail=detalle
         )
 
+    if not password_cumple_politica(registro.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña debe tener al menos 9 caracteres, una letra y un dígito",
+        )
+
     usuario_existente = db.query(Usuario).filter(Usuario.email == registro.email).first()
     if usuario_existente:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya está registrado"
+            detail="No se pudo completar el registro con los datos proporcionados",
         )
 
     password_hash = hash_password(registro.password)
@@ -200,9 +209,12 @@ def verificar_email(solicitud: VerificarEmailRequest, db: Session) -> LoginRespo
     if not usuario or not usuario.activo:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP inválido o expirado")
 
+    # Si ya está verificado, NO emitir JWT (evita account takeover sin password).
     if usuario.email_verificado:
-        marcar_login_exitoso(db, usuario)
-        return _respuesta_login(usuario)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP inválido o expirado",
+        )
 
     usuario = consumir_otp(
         db,
@@ -272,9 +284,6 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
             motivo_otp=PropositoOtp.login_tardio.value,
             challenge_token=challenge,
             mensaje="Por seguridad, confirma el código OTP enviado a tu correo",
-            user_id=str(usuario.id),
-            rol=usuario.rol,
-            perfil_completo=usuario.perfil_completo,
         )
 
     marcar_login_exitoso(db, usuario)

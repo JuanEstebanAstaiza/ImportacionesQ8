@@ -12,12 +12,41 @@ from models.chat import ConversacionChat, MensajeChat
 from schemas.chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse
 from schemas.features import TraducirRequest, TraducirResponse
 from utils.dependencies import get_db, get_current_user
-from utils.security import decode_access_token
+from utils.security import decode_access_token, JWTError
+from services.token_revocation import crear_ticket_ws, consumir_ticket_ws, jti_revocado
+from models.usuario import Usuario
+from pydantic import BaseModel
 
 logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 ws_router = APIRouter(tags=["Chat"])
+
+
+class WsTicketRequest(BaseModel):
+    conversacion_id: str
+
+
+class WsTicketResponse(BaseModel):
+    ticket: str
+    expires_in_seconds: int = 60
+
+
+@router.post("/ws-ticket", response_model=WsTicketResponse)
+async def emitir_ticket_ws(
+    body: WsTicketRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Emite un ticket opaco de un solo uso (60s) para el handshake WebSocket.
+    Preferir `?ticket=` frente a pasar el JWT en la query (OWASP A07).
+    """
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == body.conversacion_id).first()
+    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
+    ticket = crear_ticket_ws(current_user["user_id"], body.conversacion_id, ttl_seconds=60)
+    return WsTicketResponse(ticket=ticket)
 
 
 def _verificar_acceso_conversacion(conversacion: ConversacionChat, current_user: dict) -> bool:
@@ -204,28 +233,59 @@ async def traducir_mensaje(
 async def websocket_chat(
     websocket: WebSocket,
     conversacion_id: str,
-    token: Optional[str] = Query(None),
+    ticket: Optional[str] = Query(None),
+    token: Optional[str] = Query(None, deprecated=True),
     db: Session = Depends(get_db)
 ):
     """
-    Canal de negociación en tiempo real de una cotización aceptada/rechazada.
+    Canal de negociación en tiempo real.
 
-    Autenticación: el token JWT se pasa como query param (?token=...) porque los
-    navegadores no permiten headers personalizados en el handshake de WebSocket.
-    Solo el solicitante y el usuario de la empresa de esa conversación pueden conectarse.
+    Auth preferida: `?ticket=` (ticket de un solo uso vía POST /chat/ws-ticket).
+    `?token=` JWT se acepta por compatibilidad pero está deprecado (fuga en logs).
     """
-    if not token:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+    current_user = None
 
-    try:
-        payload = decode_access_token(token)
+    if ticket:
+        consumed = consumir_ticket_ws(ticket)
+        if not consumed:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        user_id, ticket_conv = consumed
+        if ticket_conv != conversacion_id:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        usuario = db.query(Usuario).filter(Usuario.id == user_id, Usuario.activo == True).first()  # noqa: E712
+        if not usuario:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
         current_user = {
-            "user_id": payload.get("sub"),
-            "rol": payload.get("rol"),
-            "importador_id": payload.get("importador_id")
+            "user_id": str(usuario.id),
+            "rol": usuario.rol,
+            "importador_id": usuario.importador_id,
         }
-    except Exception:
+    elif token:
+        try:
+            payload = decode_access_token(token)
+            jti = payload.get("jti")
+            if jti_revocado(db, jti):
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            usuario = db.query(Usuario).filter(
+                Usuario.id == str(payload.get("sub")),
+                Usuario.activo == True,  # noqa: E712
+            ).first()
+            if not usuario:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            current_user = {
+                "user_id": str(usuario.id),
+                "rol": usuario.rol,
+                "importador_id": usuario.importador_id,
+            }
+        except (JWTError, Exception):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    else:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

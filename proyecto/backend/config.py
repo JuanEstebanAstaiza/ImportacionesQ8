@@ -34,7 +34,8 @@ if SECRET_KEY in _INSECURE_SECRET_MARKERS or (SECRET_KEY and len(SECRET_KEY) < 3
         SECRET_KEY = "dev-insecure-secret-key-do-not-use-in-production!!"
 
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+# TTL corto por defecto (OWASP): renovar vía /auth/refresh
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 ACCESS_TOKEN_EXPIRE = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -42,6 +43,8 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY")
 WOMPI_SECRET_KEY = os.getenv("WOMPI_SECRET_KEY")
 WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET")
+# En production debe ser false y usarse la API real de Wompi
+WOMPI_SIMULATE = os.getenv("WOMPI_SIMULATE", "true" if APP_ENV != "production" else "false").lower() == "true"
 
 RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "5/minute")
 RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "10/minute")

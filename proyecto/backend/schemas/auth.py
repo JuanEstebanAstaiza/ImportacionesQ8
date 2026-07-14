@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_validator
 from typing import Optional
+from utils.password_policy import password_cumple_politica
 
 
 class RegistroRequest(BaseModel):
@@ -34,6 +35,13 @@ class RegistroRequest(BaseModel):
     telefono: str = Field(..., description="Número de teléfono sin el indicativo de país")
     acepto_politica_datos: bool = Field(..., description="Debe ser true: aceptación de la política de tratamiento de datos")
     codigo_referido: Optional[str] = Field(None, description="Código de referido opcional al registrarse")
+
+    @field_validator("password")
+    @classmethod
+    def validar_password(cls, v: str) -> str:
+        if not password_cumple_politica(v):
+            raise ValueError("La contraseña debe tener al menos 9 caracteres, una letra y un dígito")
+        return v
 
     @model_validator(mode="after")
     def validar_campos_condicionales(self):
@@ -74,6 +82,13 @@ class ResetPasswordRequest(BaseModel):
     token: str
     otp: str = Field(..., min_length=6, max_length=6)
     nueva_password: str = Field(..., min_length=9, description="La contraseña debe tener al menos 9 caracteres")
+
+    @field_validator("nueva_password")
+    @classmethod
+    def validar_nueva_password(cls, v: str) -> str:
+        if not password_cumple_politica(v):
+            raise ValueError("La contraseña debe tener al menos 9 caracteres, una letra y un dígito")
+        return v
 
 
 class RegistroPendienteResponse(BaseModel):
