@@ -1,0 +1,3525 @@
+{
+  "info": {
+    "name": "ImportacionesQ8 API",
+    "description": "Colección generada desde OpenAPI del backend.\n\n1. Importa en Postman o Insomnia.\n2. Variable base_url = http://localhost:8000\n3. Tras login/verificar-email se guarda access_token automáticamente (Postman).\n4. Completa path vars: cotizacion_id, conversacion_id, etc.\n\nDocs: ImportacionesQ8V/API-Frontend/",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "challenge_token",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "cotizacion_id",
+      "value": ""
+    },
+    {
+      "key": "propuesta_id",
+      "value": ""
+    },
+    {
+      "key": "orden_id",
+      "value": ""
+    },
+    {
+      "key": "importador_id",
+      "value": ""
+    },
+    {
+      "key": "conversacion_id",
+      "value": ""
+    },
+    {
+      "key": "pago_id",
+      "value": ""
+    },
+    {
+      "key": "disputa_id",
+      "value": ""
+    },
+    {
+      "key": "reset_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Administración",
+      "item": [
+        {
+          "name": "Listar Cotizaciones Abiertas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/cotizaciones-abiertas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "cotizaciones-abiertas"
+              ]
+            },
+            "description": "Vista de administración de todas las cotizaciones en modalidad abierta."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Disputas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/disputas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "disputas"
+              ]
+            },
+            "description": "Lista las órdenes con una disputa abierta reportada por el solicitante."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolver Disputa Por Id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/disputas-room/:disputa_id/resolver",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "disputas-room",
+                ":disputa_id",
+                "resolver"
+              ],
+              "variable": [
+                {
+                  "key": "disputa_id",
+                  "value": "{{disputa_id}}"
+                }
+              ]
+            },
+            "description": "Resolver Disputa Por Id",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resolver Disputa",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/disputas/:orden_id/resolver",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "disputas",
+                ":orden_id",
+                "resolver"
+              ],
+              "variable": [
+                {
+                  "key": "orden_id",
+                  "value": "{{orden_id}}"
+                }
+              ]
+            },
+            "description": "Resuelve disputa por orden_id (compat). También actualiza el modelo Disputa si existe.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revisar Evidencia Importador",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/evidencias/:evidencia_id/revisar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "evidencias",
+                ":evidencia_id",
+                "revisar"
+              ],
+              "variable": [
+                {
+                  "key": "evidencia_id",
+                  "value": "{{evidencia_id}}"
+                }
+              ]
+            },
+            "description": "Revisar Evidencia Importador",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Importador Con Dueño",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/importadores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "importadores"
+              ]
+            },
+            "description": "**Única vía oficial de alta de importadoras.** Crea la empresa y su cuenta\ndueña / representante legal (`rol=\"importador\"`) en un solo paso. El\nauto-registro público de `importador` está cerrado; siempre hay un dueño que\nactúa como jefe de los asesores (operadores) de esa empresa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Estado Importador",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/importadores/:importador_id/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "importadores",
+                ":importador_id",
+                "estado"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "",
+                  "disabled": false,
+                  "description": "'activo' o 'inactivo'"
+                }
+              ]
+            },
+            "description": "Activa o desactiva una empresa importadora (ej. tras detectar un problema)."
+          },
+          "response": []
+        },
+        {
+          "name": "Verificar Importador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/importadores/:importador_id/verificar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "importadores",
+                ":importador_id",
+                "verificar"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Marca una empresa importadora como verificada (badge de \"socio verificado\",\nvisible en el catálogo del dashboard del solicitante) y la activa."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Metricas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/metricas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "metricas"
+              ]
+            },
+            "description": "Métricas de éxito de la plataforma, según la sección \"Métricas de éxito\" del\nPDF de referencia: volumen de cotizaciones, tasa de respuesta de la red abierta,\ntiempo a primera propuesta, tasa de conversión a orden pagada, y salud de la red\nde importadores."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Recreaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/recreaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "recreaciones"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por estado: 'pendiente', 'aprobada', 'rechazada'"
+                }
+              ]
+            },
+            "description": "Lista las solicitudes de recreación de cotización pendientes de mediación por el admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolver Recreacion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/recreaciones/:solicitud_id/resolver",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "recreaciones",
+                ":solicitud_id",
+                "resolver"
+              ],
+              "variable": [
+                {
+                  "key": "solicitud_id",
+                  "value": "{{solicitud_id}}"
+                }
+              ]
+            },
+            "description": "El admin decide qué parte fue realmente responsable del error en la\nnegociación. Si aprueba y atribuye la responsabilidad a la empresa\nimportadora, se reembolsa al solicitante el costo en créditos equivalente a\nuna nueva cotización (queda exento de pagar por la recreación). La\ncotización original queda marcada como `cancelada` para trazabilidad; el\nsolicitante debe crear una nueva cotización (posiblemente gratuita, gracias\nal reembolso) para continuar el proceso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/usuarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "usuarios"
+              ],
+              "query": [
+                {
+                  "key": "rol",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por rol"
+                },
+                {
+                  "key": "activo",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por estado activo/inactivo"
+                }
+              ]
+            },
+            "description": "Monitoreo de cuentas de la plataforma, filtrable por rol y estado."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Estado Usuario",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/usuarios/:usuario_id/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "usuarios",
+                ":usuario_id",
+                "estado"
+              ],
+              "variable": [
+                {
+                  "key": "usuario_id",
+                  "value": "{{usuario_id}}"
+                }
+              ]
+            },
+            "description": "Activa o desactiva cualquier cuenta de la plataforma (control crítico de seguridad).",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Asesores",
+      "item": [
+        {
+          "name": "Listar Mis Cotizaciones Asignadas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asesores/me/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asesores",
+                "me",
+                "cotizaciones"
+              ]
+            },
+            "description": "Cotizaciones que el asesor autenticado ha reclamado (pantalla \"cuántas\ntengo asignadas\" del panel de empresa)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Autenticación",
+      "item": [
+        {
+          "name": "Olvido Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/forgot-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Olvido Password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dev.frontend@ejemplo.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Iniciar Sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Iniciar Sesion",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dev.frontend@ejemplo.com\",\n  \"password\": \"ClaveSegura1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.access_token) pm.collectionVariables.set('access_token', j.access_token);",
+                  "  if (j.challenge_token) pm.collectionVariables.set('challenge_token', j.challenge_token);",
+                  "  if (j.user_id) pm.collectionVariables.set('user_id', j.user_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar Login Otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login/verificar-otp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login",
+                "verificar-otp"
+              ]
+            },
+            "description": "Confirmar Login Otp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_token\": \"{{challenge_token}}\",\n  \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cerrar Sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revoca el jti del JWT actual (blacklist hasta su expiración)."
+          },
+          "response": []
+        },
+        {
+          "name": "Reenviar Codigo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/reenviar-otp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "reenviar-otp"
+              ]
+            },
+            "description": "Reenviar Codigo",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dev.frontend@ejemplo.com\",\n  \"proposito\": \"verificacion_email\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Renovar Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Renueva JWT tras revalidar usuario activo; revoca el jti anterior."
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar Usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Registrar Usuario",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dev.frontend@ejemplo.com\",\n  \"password\": \"ClaveSegura1\",\n  \"rol\": \"solicitante\",\n  \"tipo_persona\": \"natural\",\n  \"tipo_documento\": \"cedula\",\n  \"numero_documento\": \"1234567890\",\n  \"nombre\": \"Dev\",\n  \"apellido\": \"Frontend\",\n  \"indicativo_pais_telefono\": \"+57\",\n  \"telefono\": \"3001234567\",\n  \"acepto_politica_datos\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Restablecer Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/reset-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Restablecer Password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reset_token}}\",\n  \"otp\": \"123456\",\n  \"nueva_password\": \"NuevaClave9\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verificar Correo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/verificar-email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "verificar-email"
+              ]
+            },
+            "description": "Verificar Correo",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dev.frontend@ejemplo.com\",\n  \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.access_token) pm.collectionVariables.set('access_token', j.access_token);",
+                  "  if (j.user_id) pm.collectionVariables.set('user_id', j.user_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Listar Mis Conversaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/conversaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "conversaciones"
+              ]
+            },
+            "description": "Lista las conversaciones de chat del usuario autenticado (solicitante o cuenta de empresa)."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Mensajes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/conversaciones/:conversacion_id/mensajes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "conversaciones",
+                ":conversacion_id",
+                "mensajes"
+              ],
+              "variable": [
+                {
+                  "key": "conversacion_id",
+                  "value": "{{conversacion_id}}"
+                }
+              ]
+            },
+            "description": "Historial de mensajes de una conversación (fallback REST sin WebSocket)."
+          },
+          "response": []
+        },
+        {
+          "name": "Enviar Mensaje",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/conversaciones/:conversacion_id/mensajes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "conversaciones",
+                ":conversacion_id",
+                "mensajes"
+              ],
+              "variable": [
+                {
+                  "key": "conversacion_id",
+                  "value": "{{conversacion_id}}"
+                }
+              ]
+            },
+            "description": "Envía un mensaje por REST (fallback cuando el cliente no usa WebSocket).\nTambién publica el mensaje en Redis para que quien esté conectado por WS lo reciba.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Traducir Mensaje",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/mensajes/:mensaje_id/traducir",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "mensajes",
+                ":mensaje_id",
+                "traducir"
+              ],
+              "variable": [
+                {
+                  "key": "mensaje_id",
+                  "value": "{{mensaje_id}}"
+                }
+              ]
+            },
+            "description": "Traduce un mensaje existente y cachea el resultado en metadata del mensaje.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Traducir Preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/traducir",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "traducir"
+              ]
+            },
+            "description": "Traduce texto libre (preview) sin asociarlo a un mensaje.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Emitir Ticket Ws",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/ws-ticket",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "ws-ticket"
+              ]
+            },
+            "description": "Emite un ticket opaco de un solo uso (60s) para el handshake WebSocket.\nPreferir `?ticket=` frente a pasar el JWT en la query (OWASP A07).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversacion_id\": \"{{conversacion_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cotizaciones",
+      "item": [
+        {
+          "name": "Listar Cotizaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones"
+              ]
+            },
+            "description": "Lista las cotizaciones del usuario autenticado.\n\n- Solicitante: solo sus propias cotizaciones\n- Importador: cotizaciones dirigidas a su empresa + cotizaciones abiertas que le aplican"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Cotizacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones"
+              ]
+            },
+            "description": "Crea una nueva cotización. Solo los solicitantes pueden crear cotizaciones.\n\n- **modalidad**: \"dirigida\" o \"abierta\"\n- **importador_id**: Solo para modalidad dirigida (opcional para abierta)\n- **pais_importacion**: País desde donde se importa\n- **nombre_producto**: Nombre del producto a importar\n- **descripcion_cliente**: Descripción detallada del producto\n- **linea_producto**: Categoría/línea del producto\n- **tipo_calidad**: Tipo de calidad (\"economica\", \"estandar\", \"premium\")\n- **cantidad_mini",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modalidad\": \"abierta\",\n  \"pais_importacion\": \"China\",\n  \"nombre_producto\": \"Botellas PET 500ml\",\n  \"descripcion_cliente\": \"Botellas transparentes con tapa rosca, uso alimentario.\",\n  \"linea_producto\": \"Empaques\",\n  \"tipo_calidad\": \"estandar\",\n  \"cantidad_minima\": 5000,\n  \"precio_objetivo_usd\": 0.12,\n  \"incoterm\": \"FOB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Pool Empresa",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/pool-empresa",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                "pool-empresa"
+              ]
+            },
+            "description": "Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas donde aparece\nen el matching) que todavía nadie ha reclamado. La cuenta dueña (representante\nlegal) y los asesores pueden verlo; cualquiera de ellos puede reclamar\n(`POST /reclamar`) — el primero se la queda."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Cotizacion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Obtiene los detalles de una cotización específica. Solo si el usuario tiene acceso.\n\n- **cotizacion_id**: ID de la cotización (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Estado Matching",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id/matching-status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id",
+                "matching-status"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Obtiene el estado de difusión de una cotización abierta a la red de importadores:\ncuántos importadores la recibieron, cuántos ya respondieron con una propuesta y\ncuáles siguen pendientes. Corresponde al wireframe \"Panel de Propuestas Recibidas\"\n(Pantalla 6), que muestra el contador \"X de Y importadores respondieron\" y la\nsección \"Pendientes de Responder\".\n\nSolo el solicitante dueño de la cotización puede consultar este estado, y solo\naplica a cotizaciones en modalidad \"abierta\"."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Propuestas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id/propuestas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id",
+                "propuestas"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Listar todas las propuestas recibidas para una cotización. Solo el solicitante de la cotización puede verlas.\n\n- **cotizacion_id**: ID de la cotización (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Aceptar Propuesta",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id/propuestas/aceptar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id",
+                "propuestas",
+                "aceptar"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Abre la negociación con la empresa de una propuesta: crea (o reutiliza) el\nchat con el asesor asignado (o el dueño, si nadie la reclamó) para que\nambas partes negocien antes de la aceptación definitiva.\n\n**Este endpoint NO acepta la propuesta de forma definitiva.** Desde la\nSemana 4, una propuesta solo queda aceptada mediante doble aceptación\nmutua: ver `POST /propuestas/{propuesta_id}/pre-aceptar`. Este paso previo\nsolo habilita el canal de chat para negociar condiciones antes de que\nambas part",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reclamar Cotizacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id/reclamar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id",
+                "reclamar"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Reclamo atómico de una cotización del pool de la empresa: \"el primero que hace\nclic se la queda\". Pueden reclamar el **dueño** (representante legal / jefe de\noperadores) o un **asesor**. La atomicidad real la da el UPDATE condicional\n(no un check-then-set en Python)."
+          },
+          "response": []
+        },
+        {
+          "name": "Solicitar Recreacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id/solicitar-recreacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id",
+                "solicitar-recreacion"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Solicita anular y recrear una cotización que tuvo un error durante la\nnegociación (una vez aceptada, la cotización es \"one-time\": para corregirla\nhay que crear una completamente nueva). Un admin decide qué parte fue\nresponsable en `PUT /admin/recreaciones/{id}/resolver`; si es la empresa\nimportadora, se exime al solicitante del costo de la cotización de reemplazo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Créditos",
+      "item": [
+        {
+          "name": "Comprar Creditos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/creditos/comprar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "creditos",
+                "comprar"
+              ]
+            },
+            "description": "Genera un enlace de pago con Wompi para recargar créditos.\n\nLos créditos se acreditan cuando Wompi confirma el pago vía webhook\n(`POST /pagos/webhook/wompi`), no en este endpoint.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paquete_creditos\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Movimientos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/creditos/movimientos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "creditos",
+                "movimientos"
+              ]
+            },
+            "description": "Historial del wallet efectivo (org o movimientos del usuario)."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Saldo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/creditos/saldo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "creditos",
+                "saldo"
+              ]
+            },
+            "description": "Saldo efectivo: wallet de organización si pertenece a una, si no el personal."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Disputas",
+      "item": [
+        {
+          "name": "Disputa Por Orden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/disputas/orden/:orden_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "disputas",
+                "orden",
+                ":orden_id"
+              ],
+              "variable": [
+                {
+                  "key": "orden_id",
+                  "value": "{{orden_id}}"
+                }
+              ]
+            },
+            "description": "Disputa Por Orden"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Disputa",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/disputas/:disputa_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "disputas",
+                ":disputa_id"
+              ],
+              "variable": [
+                {
+                  "key": "disputa_id",
+                  "value": "{{disputa_id}}"
+                }
+              ]
+            },
+            "description": "Obtener Disputa"
+          },
+          "response": []
+        },
+        {
+          "name": "Subir Evidencia Disputa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/disputas/:disputa_id/evidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "disputas",
+                ":disputa_id",
+                "evidencias"
+              ],
+              "variable": [
+                {
+                  "key": "disputa_id",
+                  "value": "{{disputa_id}}"
+                }
+              ]
+            },
+            "description": "Subir Evidencia Disputa",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mensaje Disputa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/disputas/:disputa_id/mensajes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "disputas",
+                ":disputa_id",
+                "mensajes"
+              ],
+              "variable": [
+                {
+                  "key": "disputa_id",
+                  "value": "{{disputa_id}}"
+                }
+              ]
+            },
+            "description": "Mensaje Disputa",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Importadores",
+      "item": [
+        {
+          "name": "Listar Importadores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores"
+              ],
+              "query": [
+                {
+                  "key": "especialidad",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por especialidad de producto"
+                },
+                {
+                  "key": "pais",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por país de origen"
+                },
+                {
+                  "key": "orden",
+                  "value": "",
+                  "disabled": true,
+                  "description": "'calificacion' o 'reciente'"
+                },
+                {
+                  "key": "certificado",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por empresas verificadas (true/false)"
+                }
+              ]
+            },
+            "description": "Lista todos los importadores activos con filtros opcionales.\n\n- **especialidad**: Filtrar por especialidad de producto (ej: \"Textiles\")\n- **pais**: Filtrar por país de origen (ej: \"China\")\n- **orden**: 'calificacion' (mejor calificados primero) o 'reciente' (más nuevos primero)\n- **certificado**: `true` para solo empresas verificadas, `false` para no verificadas"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Importador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores"
+              ]
+            },
+            "description": "**Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba\nimportadoras sin representante legal (dueño). El alta oficial es siempre:\n\n`POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)\nen un solo paso. El dueño es el jefe de los asesores/operadores.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Asesores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/asesores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "asesores"
+              ]
+            },
+            "description": "Lista los asesores de la empresa del usuario autenticado (solo la cuenta dueña)."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Asesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/asesores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "asesores"
+              ]
+            },
+            "description": "Crea una cuenta de asesor para la empresa del usuario autenticado (solo la\ncuenta dueña puede crear asesores). El asesor solo podrá ver cuántas\ncotizaciones tiene asignadas y negociar por chat.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Estado Asesor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/asesores/:asesor_id/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "asesores",
+                ":asesor_id",
+                "estado"
+              ],
+              "variable": [
+                {
+                  "key": "asesor_id",
+                  "value": "{{asesor_id}}"
+                }
+              ]
+            },
+            "description": "Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa).",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Mis Campos Personalizados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/campos-personalizados",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "campos-personalizados"
+              ]
+            },
+            "description": "Lista los campos personalizados de la empresa del usuario autenticado."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Campo Personalizado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/campos-personalizados",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "campos-personalizados"
+              ]
+            },
+            "description": "Crea un campo personalizado para el formulario de cotización de la empresa.\nSolo disponible para empresas marcadas como solo_cotizaciones_directas=True:\na cambio de definir su propio formulario, quedan fuera del matching de la red abierta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Campo Personalizado",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/campos-personalizados/:campo_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "campos-personalizados",
+                ":campo_id"
+              ],
+              "variable": [
+                {
+                  "key": "campo_id",
+                  "value": "{{campo_id}}"
+                }
+              ]
+            },
+            "description": "Elimina un campo personalizado. Solo el dueño de la empresa que lo creó."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Campo Personalizado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/campos-personalizados/:campo_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "campos-personalizados",
+                ":campo_id"
+              ],
+              "variable": [
+                {
+                  "key": "campo_id",
+                  "value": "{{campo_id}}"
+                }
+              ]
+            },
+            "description": "Actualiza un campo personalizado. Solo el dueño de la empresa que lo creó.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Importadores Certificados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/certificados",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "certificados"
+              ]
+            },
+            "description": "Empresas importadoras activas y verificadas (\"socio verificado\" por el\nequipo de la plataforma), para la sección \"Empresas certificadas\" del\ndashboard del solicitante."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Importadores Destacados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/destacados",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "destacados"
+              ],
+              "query": [
+                {
+                  "key": "limite",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Cantidad máxima de empresas a devolver"
+                }
+              ]
+            },
+            "description": "Top empresas importadoras activas por calificación promedio, para la sección\n\"Mejor calificados\" del dashboard del solicitante."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Mis Evidencias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/evidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "evidencias"
+              ]
+            },
+            "description": "Listar Mis Evidencias"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Evidencia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/evidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "evidencias"
+              ]
+            },
+            "description": "Crear Evidencia",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Evidencia",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/evidencias/:evidencia_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "evidencias",
+                ":evidencia_id"
+              ],
+              "variable": [
+                {
+                  "key": "evidencia_id",
+                  "value": "{{evidencia_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Evidencia"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Importadores Por Categoria",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/por-categoria",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "por-categoria"
+              ]
+            },
+            "description": "Empresas importadoras activas agrupadas por categoría/especialidad de\nproducto, para la sección \"Por categoría\" del dashboard del solicitante.\nUna empresa con varias especialidades aparece en cada una de sus categorías."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Obtiene los detalles de un importador específico.\n\n- **importador_id**: ID del importador (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Perfil Importador",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Autoservicio de personalización del perfil de la empresa. Solo la cuenta dueña\n(rol=\"importador\") de esa empresa puede modificarlo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Evidencias Aprobadas Publicas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id/evidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id",
+                "evidencias"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Catálogo público: solo evidencias aprobadas por admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Formulario Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id/formulario",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id",
+                "formulario"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Endpoint público que indica al frontend si debe renderizar el formulario\nestándar del PDF o el formulario personalizado de esta empresa antes de\nenviar POST /cotizaciones."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Ordenes Activas Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id/ordenes-activas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id",
+                "ordenes-activas"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Listar órdenes asignadas al importador con estado diferente a \"entregado\".\n\n- **importador_id**: ID del importador (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Solicitudes Abiertas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id/solicitudes-abiertas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id",
+                "solicitudes-abiertas"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Listar cotizaciones abiertas que aplican al importador (usando el motor de matching).\n\n- **importador_id**: ID del importador (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Solicitudes Dirigidas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/:importador_id/solicitudes-dirigidas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                ":importador_id",
+                "solicitudes-dirigidas"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Listar cotizaciones dirigidas al importador con estado \"dirigida\" o \"propuestas_recibidas\".\n\n- **importador_id**: ID del importador (UUID)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Legal",
+      "item": [
+        {
+          "name": "Politica Tratamiento Datos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/legal/politica-tratamiento-datos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "legal",
+                "politica-tratamiento-datos"
+              ]
+            },
+            "description": "Placeholder de la política de tratamiento de datos personales (en construcción)."
+          },
+          "response": []
+        },
+        {
+          "name": "Terminos Condiciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/legal/terminos-condiciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "legal",
+                "terminos-condiciones"
+              ]
+            },
+            "description": "Placeholder de los términos y condiciones de uso de la plataforma (en construcción)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Organizaciones solicitantes",
+      "item": [
+        {
+          "name": "Mi Organizacion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/organizaciones/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "organizaciones",
+                "me"
+              ]
+            },
+            "description": "Mi Organizacion"
+          },
+          "response": []
+        },
+        {
+          "name": "Invitar Miembro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/organizaciones/me/invitar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "organizaciones",
+                "me",
+                "invitar"
+              ]
+            },
+            "description": "Crea o vincula un solicitante al wallet corporativo de la organización.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Miembros",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/organizaciones/me/miembros",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "organizaciones",
+                "me",
+                "miembros"
+              ]
+            },
+            "description": "Listar Miembros"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Miembro",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/organizaciones/me/miembros/:miembro_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "organizaciones",
+                "me",
+                "miembros",
+                ":miembro_id"
+              ],
+              "variable": [
+                {
+                  "key": "miembro_id",
+                  "value": "{{miembro_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Miembro",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pagos",
+      "item": [
+        {
+          "name": "Webhook Wompi",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pagos/webhook/wompi",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pagos",
+                "webhook",
+                "wompi"
+              ]
+            },
+            "description": "Webhook de Wompi. Firma fail-closed + transición atómica pendiente→confirmado\npara evitar doble acreditación bajo reintentos concurrentes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Pago",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pagos/:pago_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pagos",
+                ":pago_id"
+              ],
+              "variable": [
+                {
+                  "key": "pago_id",
+                  "value": "{{pago_id}}"
+                }
+              ]
+            },
+            "description": "Obtiene el estado de un pago. Solo el solicitante que lo generó puede verlo (evita IDOR)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Propuestas",
+      "item": [
+        {
+          "name": "Enviar Propuesta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/propuestas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "propuestas"
+              ]
+            },
+            "description": "Enviar una propuesta directamente (sin pasar por borrador). Solo la cuenta\ndueña de la empresa puede enviar propuestas directamente; un asesor debe\nredactarla primero como borrador (`POST /propuestas/borrador`) y esta misma\ncuenta dueña la envía después (`POST /propuestas/{id}/enviar`).\n\n- **cotizacion_id**: ID de la cotización a la que responde\n- **precio_ofrecido_usd**: Precio ofrecido por el importador\n- **tiempo_estimado_entrega**: Tiempo estimado (ej: \"45 días\")\n- **incoterm**: Incoterm pro",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"precio_ofrecido_usd\": 0.11,\n  \"tiempo_estimado_entrega\": \"35-45 días\",\n  \"incoterm\": \"FOB\",\n  \"condiciones_adicionales\": \"Incluye inspección\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Borrador Propuesta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/propuestas/borrador",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "propuestas",
+                "borrador"
+              ]
+            },
+            "description": "Un asesor redacta un borrador de propuesta para una cotización que reclamó\n(`POST /cotizaciones/{id}/reclamar`). El borrador no es visible para el\nsolicitante hasta que la cuenta dueña lo envíe (`POST /propuestas/{id}/enviar`).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"precio_ofrecido_usd\": 0.11,\n  \"tiempo_estimado_entrega\": \"35-45 días\",\n  \"incoterm\": \"FOB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Editar Propuesta",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/propuestas/:propuesta_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "propuestas",
+                ":propuesta_id"
+              ],
+              "variable": [
+                {
+                  "key": "propuesta_id",
+                  "value": "{{propuesta_id}}"
+                }
+              ]
+            },
+            "description": "Edita una propuesta propia (de tu empresa) mientras siga en borrador, o ya\nenviada (`pendiente`) para reflejar ajustes negociados por chat con el\nsolicitante. No se puede editar una propuesta ya aceptada o rechazada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Enviar Borrador Propuesta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/propuestas/:propuesta_id/enviar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "propuestas",
+                ":propuesta_id",
+                "enviar"
+              ],
+              "variable": [
+                {
+                  "key": "propuesta_id",
+                  "value": "{{propuesta_id}}"
+                }
+              ]
+            },
+            "description": "La cuenta dueña envía un borrador redactado por un asesor (o por ella misma)\nal solicitante, previa validación de congruencia de categoría. A partir de\naquí la propuesta es visible para el solicitante."
+          },
+          "response": []
+        },
+        {
+          "name": "Pre Aceptar Propuesta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/propuestas/:propuesta_id/pre-aceptar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "propuestas",
+                ":propuesta_id",
+                "pre-aceptar"
+              ],
+              "variable": [
+                {
+                  "key": "propuesta_id",
+                  "value": "{{propuesta_id}}"
+                }
+              ]
+            },
+            "description": "Marca (o revierte) la pre-aceptación de tu lado sobre una propuesta enviada\n(doble aceptación mutua, Semana 4).\n\n- El **solicitante** dueño de la cotización marca/revierte el lado \"solicitante\".\n- El **asesor asignado** a la cotización o el **dueño** (cuenta `importador`)\n  de la empresa marcan/revierten el lado \"empresa\".\n\nCuando ambos lados quedan en `True` (sin importar el orden), la propuesta\nse finaliza automáticamente en la misma transacción:\n- Pasa a `estado=\"aceptada\"`; las demás propues",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Referidos",
+      "item": [
+        {
+          "name": "Estadisticas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/referidos/estadisticas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "referidos",
+                "estadisticas"
+              ]
+            },
+            "description": "Estadisticas"
+          },
+          "response": []
+        },
+        {
+          "name": "Mi Codigo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/referidos/mi-codigo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "referidos",
+                "mi-codigo"
+              ]
+            },
+            "description": "Obtiene o crea el código de referido del solicitante autenticado."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Salud",
+      "item": [
+        {
+          "name": "Root",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": []
+            },
+            "description": "Endpoint de salud - verifica que el servidor está funcionando"
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness: el proceso responde (no valida dependencias)."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health/ready",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Readiness: MySQL y Redis deben responder.\nÚtil para orquestadores (K8s / load balancers) antes de enviar tráfico."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Usuarios",
+      "item": [
+        {
+          "name": "Obtener Mi Perfil",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/usuarios/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "me"
+              ]
+            },
+            "description": "Obtiene el perfil personal de la cuenta autenticada (cualquier rol)."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Mi Perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/usuarios/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "me"
+              ]
+            },
+            "description": "Personaliza el perfil personal de la cuenta autenticada: nombre, teléfono,\nfoto y WhatsApp (aplica tanto al cliente solicitante como a las cuentas de la\nempresa importadora: dueño y asesores).",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Órdenes",
+      "item": [
+        {
+          "name": "Listar Ordenes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes"
+              ]
+            },
+            "description": "Listar órdenes del usuario autenticado.\n\n- Solicitante: solo sus propias órdenes\n- Importador: solo las órdenes asignadas a su empresa"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Orden Por Cotizacion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes/cotizacion/:cotizacion_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes",
+                "cotizacion",
+                ":cotizacion_id"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Obtener la orden asociada a una cotización. Solo si el usuario tiene acceso.\n\n- **cotizacion_id**: ID de la cotización (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Ordenes Activas Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes/importador/:importador_id/activas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes",
+                "importador",
+                ":importador_id",
+                "activas"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Listar órdenes activas asignadas al importador. Solo el importador puede verlas.\n\n- **importador_id**: ID del importador (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Orden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes/:orden_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes",
+                ":orden_id"
+              ],
+              "variable": [
+                {
+                  "key": "orden_id",
+                  "value": "{{orden_id}}"
+                }
+              ]
+            },
+            "description": "Obtener detalles de una orden específica. Solo si el usuario tiene acceso.\n\n- **orden_id**: ID de la orden (UUID)"
+          },
+          "response": []
+        },
+        {
+          "name": "Agregar Documento Orden",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes/:orden_id/documentos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes",
+                ":orden_id",
+                "documentos"
+              ],
+              "variable": [
+                {
+                  "key": "orden_id",
+                  "value": "{{orden_id}}"
+                }
+              ]
+            },
+            "description": "Agregar un documento a una orden. Solo los importadores asignados pueden agregar documentos.\n\n- **orden_id**: ID de la orden (UUID)\n- **documento**: Datos del documento (nombre, url, tipo)",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Estado Orden",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes/:orden_id/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes",
+                ":orden_id",
+                "estado"
+              ],
+              "variable": [
+                {
+                  "key": "orden_id",
+                  "value": "{{orden_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar el estado de una orden. Solo los importadores asignados pueden actualizar el estado.\n\n- **orden_id**: ID de la orden (UUID)\n- **nuevo_estado**: Nuevo estado de la orden\n\nValidaciones:\n1. La orden debe existir y el importador debe ser el asignado\n2. El nuevo estado debe ser una transición válida según el ciclo de vida del pedido",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reportar Problema Orden",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ordenes/:orden_id/reportar-problema",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ordenes",
+                ":orden_id",
+                "reportar-problema"
+              ],
+              "variable": [
+                {
+                  "key": "orden_id",
+                  "value": "{{orden_id}}"
+                }
+              ]
+            },
+            "description": "Abre una disputa (sala) sobre la orden y marca en_disputa=True.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

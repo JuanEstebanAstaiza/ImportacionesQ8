@@ -11,6 +11,7 @@ Este vault de Obsidian contiene toda la documentación del proyecto **Importacio
 | Carpeta | Descripción |
 |---------|-------------|
 | [00-Index-y-Navegacion](./) | Índice principal, mapa de conexiones y documentos maestros |
+| [API-Frontend](../API-Frontend/) | **Guía de integración para frontend/fullstack**: todas las APIs, `.env` y convenciones de conexión |
 | [Backend](../Backend/) | Documentación técnica del backend (API, base de datos, autenticación, pagos, chat) |
 | [Frontend](../Frontend/) | Documentación técnica del frontend (pantallas, componentes, wireframes, UX/UI) |
 | [Fases-Desarrollo](../Fases-Desarrollo/) | Tareas y entregables organizados por semana de desarrollo |
@@ -44,6 +45,12 @@ graph TD
     B --> B6[Matching-Cotizaciones]
     B --> B7[Seguridad]
 
+    APIFE[API-Frontend] --> APIFE1[00-Env-y-Arranque]
+    APIFE --> APIFE2[Catalogo-Completo]
+    APIFE --> APIFE3[02-Auth]
+    APIFE --> B1
+    APIFE --> C
+
     AUD[Auditoria] --> AUD1[Auditoria-Backend-2026-07-13]
     AUD --> AUD2[Remediaciones-Backend-Jul-2026]
     AUD --> AUD3[Pruebas-Carga-1000-Concurrentes]
@@ -75,6 +82,13 @@ graph TD
 ---
 
 ## Inicio rápido para nuevos miembros del equipo
+
+### Si eres desarrollador Frontend / Fullstack (conectar la API):
+1. Empieza por [[README]] en la carpeta **API-Frontend** (`ImportacionesQ8V/API-Frontend/`)
+2. Configura variables: [[00-Env-y-Arranque]] (backend Docker + `VITE_*` del cliente)
+3. Convenciones JWT/errores: [[01-Convenciones-Auth-y-Cliente]]
+4. Lista de endpoints: [[Catalogo-Completo]]
+5. Pantallas de producto: [[Pantallas-Solicitante]], [[Pantallas-Importador]], [[Pantallas-Admin]]
 
 ### Si eres desarrollador Backend:
 1. Lee [[Propuesta-Completa]] para entender el contexto del proyecto

@@ -28,6 +28,13 @@ graph LR
         N[UX-UI-Guia]
     end
 
+    subgraph APIFrontend["API-Frontend (integración)"]
+        APIR[README-API-Frontend]
+        APIENV[00-Env-y-Arranque]
+        APICAT[Catalogo-Completo]
+        APIAUTH[02-Auth]
+    end
+
     subgraph Fases["Fases de Desarrollo"]
         O[Semana-1-Fundaciones-y-Cotizaciones]
         P[Semana-2-Red-y-Ordenes]
@@ -58,6 +65,14 @@ graph LR
     C --> E
     C --> F
     C --> G
+
+    APIR --> APIENV
+    APIR --> APICAT
+    APIR --> APIAUTH
+    APIR --> D
+    APIR --> J
+    APIENV --> D
+    APICAT --> D
     C --> H
     C --> I
     C --> U
