@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 
+
 class RegistroRequest(BaseModel):
     """
     Registro público de solicitante (persona natural o jurídica).
@@ -53,22 +54,55 @@ class RegistroRequest(BaseModel):
 
         return self
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
 
 class ForgotPasswordResponse(BaseModel):
     # Mensaje genérico siempre igual, exista o no el email, para evitar
     # enumeración de usuarios registrados.
     mensaje: str = "Si el correo está registrado, recibirás un enlace y un código para restablecer tu contraseña"
 
+
 class ResetPasswordRequest(BaseModel):
     token: str
     otp: str = Field(..., min_length=6, max_length=6)
     nueva_password: str = Field(..., min_length=9, description="La contraseña debe tener al menos 9 caracteres")
+
+
+class RegistroPendienteResponse(BaseModel):
+    """Registro creado; falta verificar email con OTP antes de obtener JWT."""
+    user_id: str
+    email: str
+    requiere_verificacion: bool = True
+    mensaje: str = "Te enviamos un código de 6 dígitos a tu correo para activar la cuenta"
+
+
+class VerificarEmailRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+
+
+class ReenviarOtpRequest(BaseModel):
+    email: EmailStr
+    proposito: str = Field(..., description="'verificacion_email' o 'login_tardio'")
+
+
+class ReenviarOtpResponse(BaseModel):
+    mensaje: str = "Si el correo aplica, recibirás un nuevo código de verificación"
+    challenge_token: Optional[str] = None
+
+
+class LoginOtpRequest(BaseModel):
+    challenge_token: str
+    otp: str = Field(..., min_length=6, max_length=6)
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -76,5 +110,18 @@ class TokenResponse(BaseModel):
     user_id: str
     rol: str
 
-class LoginResponse(TokenResponse):
-    perfil_completo: bool
+
+class LoginResponse(BaseModel):
+    """
+    Login normal: access_token + datos de usuario.
+    Login tardío (>72h): requiere_otp=True + challenge_token (sin JWT hasta OTP).
+    """
+    requiere_otp: bool = False
+    motivo_otp: Optional[str] = None
+    challenge_token: Optional[str] = None
+    mensaje: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    user_id: Optional[str] = None
+    rol: Optional[str] = None
+    perfil_completo: Optional[bool] = None

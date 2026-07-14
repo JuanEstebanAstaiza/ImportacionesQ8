@@ -21,6 +21,7 @@ Documento de referencia único ("fuente de verdad") sobre el blindaje de segurid
 | CORS | ✅ Blindado | Restringido a orígenes configurados por entorno |
 | Fugas de datos entre empresas (multi-tenant) | ✅ Blindado | Claim `importador_id` en el JWT en vez de `Usuario.id == Importador.id` |
 | Recuperación de contraseña (Semana 4) | ✅ Blindado | OTP + token de un solo uso, ambos hasheados en BD, expiración corta, sin enumeración de usuarios, envío real vía SMTP |
+| Verificación de email en registro + login tardío (2026-07-13) | ✅ Blindado | OTP hasheado; login >72h exige challenge_token + OTP; cuentas admin/asesor/importador nacen verificadas |
 | Enumeración de cuentas vía `/auth/forgot-password` | ✅ Blindado | Respuesta `200` genérica idéntica exista o no el email |
 | Integridad del sistema de créditos (Semana 4 + fix 2026-07-13) | ✅ Blindado | Débito atómico vía `credito_wallet` (personal u org) + `MovimientoCredito`; `402` si insuficiente |
 | Créditos corporativos / multi-tenant org (2026-07-13) | ✅ Blindado | Solo solicitantes; invite restringido a `owner`/`admin` de la org; importadoras sin wallet |

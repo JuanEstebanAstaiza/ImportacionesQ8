@@ -60,6 +60,10 @@ class Usuario(Base):
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva
     # no puede iniciar sesión.
     activo = Column(Boolean, default=True, nullable=False)
+    # Auto-registro: False hasta OTP de verificación. Cuentas admin/asesor/importador: True.
+    email_verificado = Column(Boolean, default=False, nullable=False)
+    # Último login exitoso (JWT emitido). Si supera LOGIN_TARDIO_HORAS → OTP.
+    ultimo_login_at = Column(DateTime, nullable=True)
     perfil_completo = Column(Boolean, default=False)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
 

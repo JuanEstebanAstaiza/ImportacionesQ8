@@ -37,10 +37,14 @@ sequenceDiagram
     API->>DB: Verificar email único
     DB-->>API: Email disponible
     API->>API: Generar password_hash (bcrypt)
-    API->>DB: INSERT INTO usuarios (..., creditos_balance=CREDITO_BONO_REGISTRO)
-    DB-->>API: Usuario creado con ID
-    API->>API: Generar JWT token
-    API-->>Cliente: {token, user_id, rol}
+    API->>DB: INSERT INTO usuarios (..., email_verificado=false, creditos_balance=CREDITO_BONO_REGISTRO)
+    API->>API: Generar OTP verificación, hashear, enviar por SMTP
+    API-->>Cliente: {user_id, email, requiere_verificacion=true}  (sin JWT)
+
+    Cliente->>API: POST /auth/verificar-email {email, otp}
+    API->>API: Validar OTP
+    API->>DB: email_verificado=true, ultimo_login_at=now
+    API-->>Cliente: {access_token, user_id, rol, ...}
 ```
 
 ### Registro de importador (placeholder)
@@ -49,21 +53,31 @@ No existe auto-registro de empresas importadoras: `POST /auth/register` con `rol
 
 ### Inicio de sesión
 
+Si el correo no está verificado → `403` y reenvío de OTP de verificación.
+
+Si el último login exitoso fue hace más de `LOGIN_TARDIO_HORAS` (default **72h**) → contraseña OK pero respuesta `requiere_otp=true` + `challenge_token` (sin JWT). Completar con `POST /auth/login/verificar-otp`.
+
 ```mermaid
 sequenceDiagram
     participant Cliente as Frontend React/Next.js
     participant API as FastAPI
     participant DB as MySQL
+    participant SMTP as SMTP
 
     Cliente->>API: POST /auth/login {email, password}
     API->>DB: SELECT usuario WHERE email = ?
-    DB-->>API: Usuario encontrado con password_hash
-    API->>API: Verificar password (bcrypt.check)
-    alt Password correcto
-        API->>API: Generar JWT token (user_id, rol, exp)
-        API-->>Cliente: {token, user_id, rol}
-    else Password incorrecto
-        API-->>Cliente: 401 Unauthorized
+    API->>API: Verificar password (bcrypt)
+    alt Email no verificado
+        API->>SMTP: OTP verificación
+        API-->>Cliente: 403 verificar correo
+    else Login tardío (>72h desde ultimo_login_at)
+        API->>SMTP: OTP login_tardio
+        API-->>Cliente: {requiere_otp:true, challenge_token}
+        Cliente->>API: POST /auth/login/verificar-otp {challenge_token, otp}
+        API-->>Cliente: {access_token, ...}
+    else Login reciente
+        API->>DB: ultimo_login_at=now
+        API-->>Cliente: {access_token, user_id, rol, perfil_completo}
     end
 ```
 

@@ -20,6 +20,9 @@ os.environ.setdefault("WOMPI_EVENTS_SECRET", "test_events_secret_for_ci")
 os.environ.setdefault("RATE_LIMIT_LOGIN", "1000/minute")
 os.environ.setdefault("RATE_LIMIT_REGISTER", "1000/minute")
 os.environ.setdefault("RATE_LIMIT_FORGOT_PASSWORD", "1000/minute")
+os.environ.setdefault("RATE_LIMIT_OTP", "1000/minute")
+os.environ.setdefault("LOGIN_TARDIO_HORAS", "72")
+os.environ.setdefault("OTP_EXPIRE_MINUTES", "15")
 
 import pytest
 from uuid import uuid4
@@ -142,6 +145,7 @@ def test_user(db_session):
         email="test@example.com",
         password_hash=hash_password("123456789"),
         rol="solicitante",
+        email_verificado=True,
         perfil_completo=False,
         fecha_creacion=datetime.utcnow()
     )
@@ -158,6 +162,7 @@ def admin_user(db_session):
         email="admin@example.com",
         password_hash=hash_password("123456789"),
         rol="admin",
+        email_verificado=True,
         perfil_completo=False,
         fecha_creacion=datetime.utcnow()
     )
@@ -198,6 +203,7 @@ def crear_empresa_importadora(db_session, nombre_empresa="Empresa Importadora Te
         importador_id=importador.id,
         nombre=kwargs.get("nombre_dueño"),
         activo=True,
+        email_verificado=True,
         perfil_completo=True,
         fecha_creacion=datetime.utcnow()
     )
@@ -237,6 +243,37 @@ def registro_payload(email, password="123456789", rol="solicitante", tipo_person
         })
     payload.update(overrides)
     return payload
+
+
+def capturar_otp_envio(monkeypatch):
+    """Monkeypatch del envío SMTP de OTP; retorna dict mutable con el último otp."""
+    capturado = {}
+
+    def _fake(destinatario, otp, proposito):
+        capturado["email"] = destinatario
+        capturado["otp"] = otp
+        capturado["proposito"] = proposito
+        return True
+
+    monkeypatch.setattr("services.otp_service.enviar_correo_otp", _fake)
+    return capturado
+
+
+def registrar_verificado(client, monkeypatch, email, **kwargs):
+    """
+    Registra solicitante, captura OTP y verifica email. Devuelve el JSON de
+    LoginResponse (con access_token).
+    """
+    capturado = capturar_otp_envio(monkeypatch)
+    password = kwargs.pop("password", "123456789")
+    r = client.post("/auth/register", json=registro_payload(email, password=password, **kwargs))
+    assert r.status_code == 201, r.text
+    v = client.post("/auth/verificar-email", json={"email": email, "otp": capturado["otp"]})
+    assert v.status_code == 200, v.text
+    data = v.json()
+    assert data.get("access_token")
+    return data
+
 
 def auth_headers_for(usuario):
     """Genera headers de autenticación válidos para un Usuario de prueba, incluyendo

@@ -67,6 +67,7 @@ async def crear_importador_con_dueño(
         importador_id=nuevo_importador.id,
         nombre=datos.nombre_dueño,
         activo=True,
+        email_verificado=True,
         perfil_completo=bool(datos.nombre_dueño)
     )
     db.add(nuevo_dueño)

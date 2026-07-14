@@ -63,3 +63,25 @@ def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str)
         f"Si no solicitaste este cambio, puedes ignorar este correo."
     )
     return enviar_correo(destinatario, asunto, cuerpo_texto)
+
+
+def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
+    """Envía OTP de verificación de email o de login tras inactividad prolongada."""
+    if proposito == "verificacion_email":
+        asunto = "Verifica tu cuenta — ImportacionesQ8"
+        cuerpo_texto = (
+            f"Gracias por registrarte en ImportacionesQ8.\n\n"
+            f"Tu código de verificación es: {otp}\n"
+            f"Caduca en {config.OTP_EXPIRE_MINUTES} minutos.\n\n"
+            f"Si no creaste esta cuenta, ignora este correo."
+        )
+    else:
+        asunto = "Confirma tu inicio de sesión — ImportacionesQ8"
+        cuerpo_texto = (
+            f"Detectamos un inicio de sesión tras un periodo de inactividad.\n\n"
+            f"Tu código de verificación es: {otp}\n"
+            f"Caduca en {config.OTP_EXPIRE_MINUTES} minutos.\n\n"
+            f"Si no fuiste tú, cambia tu contraseña de inmediato."
+        )
+    return enviar_correo(destinatario, asunto, cuerpo_texto)
+

@@ -13,7 +13,7 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
 from models.chat import ConversacionChat, MensajeChat
 from utils.security import hash_password, create_access_token
-from conftest import crear_empresa_importadora, auth_headers_for, registro_payload
+from conftest import crear_empresa_importadora, auth_headers_for, registro_payload, registrar_verificado
 
 
 @pytest.fixture()
@@ -21,7 +21,7 @@ def solicitante(db_session):
     u = Usuario(
         id=str(uuid4()), email="sol_feat@example.com", password_hash=hash_password("123456789"),
         rol="solicitante", tipo_persona="natural", creditos_balance=50.0, perfil_completo=True,
-        activo=True, fecha_creacion=datetime.utcnow(),
+        activo=True, email_verificado=True, fecha_creacion=datetime.utcnow(),
     )
     db_session.add(u)
     db_session.commit()
@@ -57,7 +57,9 @@ class TestEvidenciasImportador:
 
 
 class TestOrganizacionCreditos:
-    def test_registro_juridica_crea_org_wallet(self, client, db_session):
+    def test_registro_juridica_crea_org_wallet(self, client, db_session, monkeypatch):
+        from conftest import capturar_otp_envio
+        capturado = capturar_otp_envio(monkeypatch)
         r = client.post("/auth/register", json={
             "email": "corp@example.com",
             "password": "123456789",
@@ -70,7 +72,9 @@ class TestOrganizacionCreditos:
             "acepto_politica_datos": True,
         })
         assert r.status_code == 201
-        token = r.json()["access_token"]
+        v = client.post("/auth/verificar-email", json={"email": "corp@example.com", "otp": capturado["otp"]})
+        assert v.status_code == 200
+        token = v.json()["access_token"]
         h = {"Authorization": f"Bearer {token}"}
 
         org = client.get("/organizaciones/me", headers=h)
@@ -82,8 +86,9 @@ class TestOrganizacionCreditos:
         assert saldo.json()["wallet_tipo"] == "organizacion"
         assert saldo.json()["creditos_balance"] == 20.0
 
-    def test_miembro_consume_wallet_org(self, client, db_session):
-        # Registrar org owner
+    def test_miembro_consume_wallet_org(self, client, db_session, monkeypatch):
+        from conftest import capturar_otp_envio
+        capturado = capturar_otp_envio(monkeypatch)
         r = client.post("/auth/register", json={
             "email": "owner_org@example.com",
             "password": "123456789",
@@ -95,7 +100,10 @@ class TestOrganizacionCreditos:
             "telefono": "3009998887",
             "acepto_politica_datos": True,
         })
-        owner_h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+        assert r.status_code == 201
+        v = client.post("/auth/verificar-email", json={"email": "owner_org@example.com", "otp": capturado["otp"]})
+        assert v.status_code == 200
+        owner_h = {"Authorization": f"Bearer {v.json()['access_token']}"}
         inv = client.post(
             "/organizaciones/me/invitar",
             json={"email": "member_org@example.com", "password": "123456789", "rol_org": "member"},
@@ -165,23 +173,26 @@ class TestDisputaRoom:
 
 
 class TestReferidos:
-    def test_codigo_y_bono_al_registrar(self, client, db_session):
-        r1 = client.post("/auth/register", json=registro_payload("ref_owner@example.com"))
-        assert r1.status_code == 201
-        h1 = {"Authorization": f"Bearer {r1.json()['access_token']}"}
+    def test_codigo_y_bono_al_registrar(self, client, db_session, monkeypatch):
+        d1 = registrar_verificado(client, monkeypatch, "ref_owner@example.com")
+        h1 = {"Authorization": f"Bearer {d1['access_token']}"}
         codigo = client.get("/referidos/mi-codigo", headers=h1).json()["codigo"]
 
+        from conftest import capturar_otp_envio
+        capturado2 = capturar_otp_envio(monkeypatch)
         r2 = client.post("/auth/register", json={
             **registro_payload("ref_amigo@example.com"),
             "codigo_referido": codigo,
         })
         assert r2.status_code == 201
+        v2 = client.post("/auth/verificar-email", json={"email": "ref_amigo@example.com", "otp": capturado2["otp"]})
+        assert v2.status_code == 200
 
         saldo1 = client.get("/creditos/saldo", headers=h1).json()["creditos_balance"]
         # 20 bono registro + 10 bono referidor
         assert saldo1 == 30.0
 
-        h2 = {"Authorization": f"Bearer {r2.json()['access_token']}"}
+        h2 = {"Authorization": f"Bearer {v2.json()['access_token']}"}
         saldo2 = client.get("/creditos/saldo", headers=h2).json()["creditos_balance"]
         # 20 bono registro + 10 bono referido
         assert saldo2 == 30.0

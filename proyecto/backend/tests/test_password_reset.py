@@ -1,14 +1,12 @@
 """Tests de recuperación de contraseña con OTP + enlace por correo (Semana 4)."""
-import pytest
 from fastapi import status
 
-from conftest import registro_payload
+from conftest import registrar_verificado
 
 
 def _registrar_y_obtener_token_reset(client, monkeypatch, email):
-    """Registra un usuario y captura el (otp, token) que se "enviaría" por correo,
-    interceptando `enviar_correo_recuperacion_password` en vez de mockear SMTP."""
-    client.post("/auth/register", json=registro_payload(email))
+    """Registra (verificado) y captura el (otp, token) de recuperación de contraseña."""
+    registrar_verificado(client, monkeypatch, email)
 
     capturado = {}
 
@@ -34,7 +32,6 @@ class TestForgotPassword:
         assert capturado["token"]
 
     def test_forgot_password_email_inexistente_mismo_mensaje(self, client):
-        """No debe revelar si el email existe o no (misma respuesta 200 + mensaje genérico)."""
         response_existente = client.post("/auth/forgot-password", json={"email": "noexiste999@example.com"})
 
         assert response_existente.status_code == status.HTTP_200_OK
@@ -53,14 +50,13 @@ class TestResetPassword:
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-        # La nueva contraseña debe funcionar para iniciar sesión
         login = client.post("/auth/login", json={
             "email": "reset2@example.com",
             "password": "nuevaPassword123"
         })
         assert login.status_code == status.HTTP_200_OK
+        assert login.json()["access_token"]
 
-        # La contraseña anterior ya no debe funcionar
         login_viejo = client.post("/auth/login", json={
             "email": "reset2@example.com",
             "password": "123456789"
@@ -126,7 +122,6 @@ class TestResetPassword:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_forgot_password_invalida_tokens_anteriores(self, client, monkeypatch):
-        """Un segundo forgot-password invalida el token/otp generado por el primero."""
         primero = _registrar_y_obtener_token_reset(client, monkeypatch, "reset6@example.com")
 
         segundo = {}
@@ -139,7 +134,6 @@ class TestResetPassword:
         monkeypatch.setattr("services.auth_service.enviar_correo_recuperacion_password", _fake_enviar)
         client.post("/auth/forgot-password", json={"email": "reset6@example.com"})
 
-        # El token del primer intento ya no debe funcionar
         response = client.post("/auth/reset-password", json={
             "token": primero["token"],
             "otp": primero["otp"],
@@ -147,7 +141,6 @@ class TestResetPassword:
         })
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-        # El segundo token sí debe funcionar
         response_ok = client.post("/auth/reset-password", json={
             "token": segundo["token"],
             "otp": segundo["otp"],
