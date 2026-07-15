@@ -128,10 +128,41 @@ def acreditar(
     if monto <= 0:
         raise ValueError("monto debe ser positivo")
 
+    # Idempotencia: una sola compra por pago_id
+    if pago_id and tipo == TipoMovimientoCredito.compra.value:
+        existente = db.query(MovimientoCredito).filter(
+            MovimientoCredito.pago_id == pago_id,
+            MovimientoCredito.tipo == TipoMovimientoCredito.compra.value,
+        ).first()
+        if existente:
+            return existente
+
     if wallet.organizacion is not None:
-        wallet.organizacion.creditos_balance = float(wallet.organizacion.creditos_balance or 0) + monto
+        resultado = (
+            db.query(OrganizacionSolicitante)
+            .filter(OrganizacionSolicitante.id == wallet.organizacion.id)
+            .update(
+                {
+                    OrganizacionSolicitante.creditos_balance: OrganizacionSolicitante.creditos_balance + monto
+                },
+                synchronize_session=False,
+            )
+        )
+        if resultado != 1:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organización no encontrada")
+        db.refresh(wallet.organizacion)
     else:
-        wallet.usuario.creditos_balance = float(wallet.usuario.creditos_balance or 0) + monto
+        resultado = (
+            db.query(Usuario)
+            .filter(Usuario.id == wallet.usuario.id)
+            .update(
+                {Usuario.creditos_balance: Usuario.creditos_balance + monto},
+                synchronize_session=False,
+            )
+        )
+        if resultado != 1:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+        db.refresh(wallet.usuario)
 
     mov = MovimientoCredito(
         id=str(uuid4()),

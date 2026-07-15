@@ -1,131 +1,94 @@
 import bcrypt
 import hashlib
+import hmac
 import secrets
-from jose import jwt, JWTError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from uuid import uuid4
+
+import jwt
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, PyJWTError
+
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE
+from utils.password_policy import password_cumple_politica  # re-export
+
+
+class JWTError(InvalidTokenError):
+    """Alias compatible con el código que esperaba jose.JWTError."""
+
 
 def hash_password(password: str) -> str:
-    """
-    Genera el hash bcrypt de una contraseña.
-    
-    Args:
-        password: Contraseña en texto plano
-        
-    Returns:
-        Hash bcrypt de la contraseña (60 caracteres, empieza con $2b$)
-        
-    Note:
-        bcrypt tiene un límite de 72 bytes. Si la contraseña es más larga,
-        se trunca automáticamente antes del hash.
-    """
-    # Truncar a 72 bytes para evitar ValueError de bcrypt
     if isinstance(password, str):
-        password_bytes = password.encode('utf-8')[:72]
+        password_bytes = password.encode("utf-8")[:72]
     elif isinstance(password, bytes):
         password_bytes = password[:72]
     else:
         raise TypeError("Password must be a string or bytes")
-    
-    # Generar salt y hash
+
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    Verifica si una contraseña en texto plano coincide con un hash bcrypt.
-    
-    Args:
-        plain_password: Contraseña en texto plano
-        hashed_password: Hash bcrypt de la contraseña
-        
-    Returns:
-        True si las contraseñas coinciden, False en caso contrario
-    """
-    # Truncar la contraseña antes de verificar para evitar ValueError
     if isinstance(plain_password, str):
-        password_bytes = plain_password.encode('utf-8')[:72]
+        password_bytes = plain_password.encode("utf-8")[:72]
     elif isinstance(plain_password, bytes):
         password_bytes = plain_password[:72]
     else:
         raise TypeError("Password must be a string or bytes")
-    
+
     if isinstance(hashed_password, str):
-        hashed_password_bytes = hashed_password.encode('utf-8')
+        hashed_password_bytes = hashed_password.encode("utf-8")
     elif isinstance(hashed_password, bytes):
         hashed_password_bytes = hashed_password
     else:
         raise TypeError("Hashed password must be a string or bytes")
-    
+
     return bcrypt.checkpw(password_bytes, hashed_password_bytes)
 
-def create_access_token(user_id: str, rol: str, expires_delta: timedelta = None, importador_id: str = None) -> str:
-    """
-    Genera un token JWT con los claims del usuario.
-    
-    Args:
-        user_id: ID del usuario (UUID como string)
-        rol: Rol del usuario ("solicitante", "importador", "asesor" o "admin")
-        expires_delta: Tiempo de expiración personalizado (opcional, usa el default si no se proporciona)
-        importador_id: ID de la empresa importadora a la que pertenece la cuenta
-            (solo para rol "importador"/"asesor"; None para solicitante/admin).
-            Se incluye en el token para no depender de que Usuario.id == Importador.id.
-        
-    Returns:
-        Token JWT codificado en base64
-    """
+
+def create_access_token(
+    user_id: str,
+    rol: str,
+    expires_delta: timedelta = None,
+    importador_id: str = None,
+) -> str:
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + ACCESS_TOKEN_EXPIRE
-    
-    # Payload del token JWT
+        expire = datetime.now(timezone.utc) + ACCESS_TOKEN_EXPIRE
+
     to_encode = {
-        "sub": user_id,      # Subject: ID del usuario
-        "rol": rol,          # Rol del usuario
-        "importador_id": importador_id,  # Empresa importadora asociada (si aplica)
-        "exp": expire,       # Fecha de expiración
-        "iat": datetime.utcnow()  # Fecha de emisión
+        "sub": user_id,
+        "rol": rol,
+        "importador_id": importador_id,
+        "jti": uuid4().hex,
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
     }
-    
-    # Codificar el token
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 def decode_access_token(token: str) -> dict:
-    """
-    Decodifica y valida un token JWT.
-    
-    Args:
-        token: Token JWT a decodificar
-        
-    Returns:
-        Diccionario con los claims del token (sub, rol, exp, iat)
-        
-    Raises:
-        JWTError: Si el token es inválido o está expirado
-    """
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except (ExpiredSignatureError, InvalidTokenError, PyJWTError) as e:
+        raise JWTError(str(e)) from e
 
 
 def generar_otp(digitos: int = 6) -> str:
-    """Genera un código OTP numérico criptográficamente seguro (ej. '048213')."""
     return "".join(str(secrets.randbelow(10)) for _ in range(digitos))
 
 
 def generar_token_seguro() -> str:
-    """Genera un token opaco de un solo uso (ej. para el enlace de recuperación de contraseña)."""
     return secrets.token_urlsafe(32)
 
 
 def hash_token(valor: str) -> str:
-    """
-    Hashea un token/OTP de un solo uso con SHA-256 para guardarlo en base de
-    datos. A diferencia de las contraseñas (bcrypt, con salt costoso a propósito),
-    estos valores son de un solo uso y de corta vida (minutos), generados con
-    alta entropía (`secrets`), por lo que un hash rápido y determinista es
-    suficiente y permite buscarlos en la base de datos por su hash sin
-    almacenar el valor en texto plano.
-    """
-    return hashlib.sha256(valor.encode("utf-8")).hexdigest()
+    """HMAC-SHA256 con SECRET_KEY como pepper (OTP/reset/challenge)."""
+    return hmac.new(
+        SECRET_KEY.encode("utf-8"),
+        valor.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()

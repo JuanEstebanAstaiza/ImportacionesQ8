@@ -10,6 +10,7 @@ from models.usuario import Usuario
 from models.pago import Pago, EstadoPago
 from models.credito import MovimientoCredito
 from utils.security import hash_password, create_access_token
+from conftest import crear_usuario_con_token
 
 
 def firmar_evento(data: dict, timestamp: int, properties: list[str], secret: str) -> str:
@@ -68,8 +69,9 @@ class TestComprarCreditos:
         assert pago.estado == EstadoPago.pendiente.value
         assert pago.usuario_id == test_solicitante.id
 
-    def test_comprar_creditos_requiere_rol_solicitante(self, client):
-        token = create_access_token(str(uuid4()), "admin")
+    def test_comprar_creditos_requiere_rol_solicitante(self, client, db_session):
+        _, _ah = crear_usuario_con_token(db_session, rol="admin")
+        token = _ah["Authorization"].split(" ", 1)[1]
         response = client.post(
             "/creditos/comprar",
             json={"monto_usd": 10.0},

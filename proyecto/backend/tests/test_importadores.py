@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from utils.security import hash_password, create_access_token
+from conftest import crear_usuario_con_token
 from conftest import crear_empresa_importadora, auth_headers_for, registro_payload
 
 
@@ -132,9 +133,9 @@ class TestCrearImportador:
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
     
-    def test_crear_importador_con_role_admin_deshabilitado(self, client):
+    def test_crear_importador_con_role_admin_deshabilitado(self, client, db_session):
         """POST /importadores sin dueño está deshabilitado; el alta oficial es /admin/importadores."""
-        token = create_access_token(str(uuid4()), "admin")
+        _, _ah = crear_usuario_con_token(db_session, rol="admin"); token = _ah["Authorization"].split(" ", 1)[1]
 
         response = client.post("/importadores", json={
             "nombre_empresa": "Importadora Test Admin",
@@ -148,9 +149,9 @@ class TestCrearImportador:
         assert response.status_code == status.HTTP_410_GONE
         assert "/admin/importadores" in response.json()["detail"]
 
-    def test_crear_importador_campos_requeridos(self, client):
+    def test_crear_importador_campos_requeridos(self, client, db_session):
         """Crear importador con campos requeridos faltantes (validación Pydantic antes del 410)"""
-        token = create_access_token(str(uuid4()), "admin")
+        _, _ah = crear_usuario_con_token(db_session, rol="admin"); token = _ah["Authorization"].split(" ", 1)[1]
 
         # Intentar crear sin campos requeridos - debería fallar
         response = client.post("/importadores", json={

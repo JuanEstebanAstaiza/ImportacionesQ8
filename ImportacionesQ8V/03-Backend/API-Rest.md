@@ -4,6 +4,9 @@
 
 La API REST es el motor central de la plataforma, construida con **FastAPI** en Python 3. Gestiona toda la lógica del negocio: autenticación, cotizaciones, órdenes, pagos y chat.
 
+> **Para el equipo frontend/fullstack:** la guía de integración con **todas las APIs**, ejemplos de body, WebSocket y plantillas `.env` está en **[[Indice-Integracion-API]]** (`02-Integracion-API/`).  
+> Catálogo tabular: [[Catalogo-Completo]]. Arranque local: [[00-Env-y-Arranque]].
+
 ---
 
 ## Endpoints principales

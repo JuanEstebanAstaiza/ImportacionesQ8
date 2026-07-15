@@ -4,7 +4,7 @@
 
 Integración de **Wompi** como pasarela de pagos para el mercado colombiano. Delega el cumplimiento de seguridad de pagos (PCI) al proveedor.
 
-> **Cambio de modelo (Semana 4):** el pago vía Wompi **ya NO es una comisión sobre la orden aceptada**. Ahora el solicitante **compra créditos** dentro de la plataforma, y esos créditos se consumen al **crear una cotización** (una cantidad fija por cotización abierta, otra por cotización dirigida, configurable). La **orden se crea automáticamente** cuando ambas partes se aceptan mutuamente (ver `Backend/API-Rest.md` y `Fases-Desarrollo/Semana-4-Asesores-Creditos-Registro/Tareas-Semana-4.md`), **sin ningún pago de por medio**: la plataforma solo conecta solicitantes con empresas importadoras, no se responsabiliza por el cumplimiento del negocio concretado entre las partes.
+> **Cambio de modelo (Semana 4):** el pago vía Wompi **ya NO es una comisión sobre la orden aceptada**. Ahora el solicitante **compra créditos** dentro de la plataforma, y esos créditos se consumen al **crear una cotización** (una cantidad fija por cotización abierta, otra por cotización dirigida, configurable). La **orden se crea automáticamente** cuando ambas partes se aceptan mutuamente (ver [[API-Rest]] y [[Tareas-Semana-4]]), **sin ningún pago de por medio**: la plataforma solo conecta solicitantes con empresas importadoras, no se responsabiliza por el cumplimiento del negocio concretado entre las partes.
 
 ---
 

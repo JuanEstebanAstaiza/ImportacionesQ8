@@ -8,6 +8,7 @@ from .campo_personalizado import CampoPersonalizado
 from .chat import ConversacionChat, MensajeChat, TipoMensajeChat
 from .password_reset import PasswordResetToken
 from .otp import CodigoOtp, PropositoOtp
+from .jwt_blacklist import JwtBlacklist
 from .credito import MovimientoCredito, TipoMovimientoCredito
 from .solicitud_recreacion import SolicitudRecreacion, ParteAtribuida, EstadoSolicitudRecreacion
 from .organizacion import OrganizacionSolicitante, MiembroOrganizacion, RolOrganizacion
@@ -40,6 +41,7 @@ __all__ = [
     "PasswordResetToken",
     "CodigoOtp",
     "PropositoOtp",
+    "JwtBlacklist",
     "MovimientoCredito",
     "TipoMovimientoCredito",
     "SolicitudRecreacion",

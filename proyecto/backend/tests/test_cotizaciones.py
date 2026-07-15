@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from fastapi import status
 
 from utils.security import create_access_token
-from conftest import registro_payload, registrar_verificado
+from conftest import registro_payload, registrar_verificado, crear_usuario_con_token
 
 class TestListarCotizaciones:
     """Tests para el endpoint GET /cotizaciones"""
@@ -41,13 +41,10 @@ class TestCrearCotizacion:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
     
-    def test_crear_cotizacion_sin_role_solicitante(self, client):
+    def test_crear_cotizacion_sin_role_solicitante(self, client, db_session):
         """Intentar crear cotización sin rol de solicitante"""
-        # El auto-registro público de "importador" está cerrado por seguridad; se
-        # genera el token directamente, como haría una cuenta creada por un admin.
-        token = create_access_token(str(uuid4()), "importador")
+        _, headers = crear_usuario_con_token(db_session, rol="importador")
         
-        # Intentar crear cotización - debería fallar por rol insuficiente
         response = client.post("/cotizaciones", json={
             "modalidad": "abierta",
             "pais_importacion": "China",
@@ -57,7 +54,7 @@ class TestCrearCotizacion:
             "tipo_calidad": "estandar",
             "cantidad_minima": 500,
             "incoterm": "FOB"
-        }, headers={"Authorization": f"Bearer {token}"})
+        }, headers=headers)
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
     
@@ -103,9 +100,9 @@ class TestCrearCotizacion:
         
         assert response.status_code == status.HTTP_404_NOT_FOUND
     
-    def test_crear_cotizacion_dirigida_exitosa(self, client, monkeypatch):
+    def test_crear_cotizacion_dirigida_exitosa(self, client, monkeypatch, db_session):
         """Crear cotización dirigida exitosamente"""
-        token_admin = create_access_token(str(uuid4()), "admin")
+        _, _admin_h = crear_usuario_con_token(db_session, rol="admin"); token_admin = _admin_h["Authorization"].split(" ", 1)[1]
 
         importador_response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Test",
@@ -113,7 +110,7 @@ class TestCrearCotizacion:
             "paises_origen": ["China"],
             "tiempo_respuesta_promedio": "24h",
             "email_dueño": "dueño_cotiz_dirigida@example.com",
-            "password_dueño": "123456789"
+            "password_dueño": "ClaveSegura1"
         }, headers={"Authorization": f"Bearer {token_admin}"})
 
         assert importador_response.status_code == status.HTTP_201_CREATED
@@ -140,9 +137,9 @@ class TestCrearCotizacion:
         assert data["modalidad"] == "dirigida"
         assert data["estado"] == "dirigida"
     
-    def test_crear_cotizacion_abierta_exitosa(self, client, monkeypatch):
+    def test_crear_cotizacion_abierta_exitosa(self, client, monkeypatch, db_session):
         """Crear cotización abierta exitosamente"""
-        token_admin = create_access_token(str(uuid4()), "admin")
+        _, _admin_h = crear_usuario_con_token(db_session, rol="admin"); token_admin = _admin_h["Authorization"].split(" ", 1)[1]
         
         importador_response = client.post("/importadores", json={
             "nombre_empresa": "China Textiles Co.",
@@ -277,10 +274,10 @@ class TestCotizacionSchemas:
 class TestCotizacionEndpointsIntegration:
     """Tests de integración para el flujo completo de cotizaciones"""
     
-    def test_flujo_completo_cotizacion_dirigida(self, client, monkeypatch):
+    def test_flujo_completo_cotizacion_dirigida(self, client, monkeypatch, db_session):
         """Probar el flujo completo de una cotización dirigida"""
         # 1. Generar token admin (el auto-registro de admin está cerrado) y crear importador
-        token_admin = create_access_token(str(uuid4()), "admin")
+        _, _admin_h = crear_usuario_con_token(db_session, rol="admin"); token_admin = _admin_h["Authorization"].split(" ", 1)[1]
         
         importador_response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Dirigida",
@@ -288,7 +285,7 @@ class TestCotizacionEndpointsIntegration:
             "paises_origen": ["China"],
             "tiempo_respuesta_promedio": "24h",
             "email_dueño": "dueño_flujo_dirigida@example.com",
-            "password_dueño": "123456789"
+            "password_dueño": "ClaveSegura1"
         }, headers={"Authorization": f"Bearer {token_admin}"})
 
         assert importador_response.status_code == status.HTTP_201_CREATED
@@ -331,10 +328,10 @@ class TestCotizacionEndpointsIntegration:
 class TestImportadoresEndpointsIntegration:
     """Tests de integración para el flujo completo de importadores"""
     
-    def test_flujo_completo_importador(self, client):
+    def test_flujo_completo_importador(self, client, db_session):
         """Probar el flujo completo de un importador"""
         # 1. Generar token admin (el auto-registro de admin está cerrado)
-        token_admin = create_access_token(str(uuid4()), "admin")
+        _, _admin_h = crear_usuario_con_token(db_session, rol="admin"); token_admin = _admin_h["Authorization"].split(" ", 1)[1]
         
         # 2. Crear importador + dueño (única vía oficial)
         response_crear = client.post("/admin/importadores", json={
@@ -345,7 +342,7 @@ class TestImportadoresEndpointsIntegration:
             "calificacion_promedio": 4.5,
             "capacidad_volumen": 50000,
             "email_dueño": "dueño_flujo_completo@example.com",
-            "password_dueño": "123456789"
+            "password_dueño": "ClaveSegura1"
         }, headers={"Authorization": f"Bearer {token_admin}"})
 
         assert response_crear.status_code == status.HTTP_201_CREATED

@@ -66,7 +66,7 @@ class TestRegisterUser:
 
         response2 = client.post("/auth/register", json=registro_payload("duplicado@example.com"))
         assert response2.status_code == status.HTTP_400_BAD_REQUEST
-        assert "email ya está registrado" in response2.json()["detail"]
+        assert "No se pudo completar el registro" in response2.json()["detail"]
 
     def test_register_password_too_short(self, client):
         response = client.post("/auth/register", json=registro_payload(
@@ -102,7 +102,7 @@ class TestVerificacionEmailOtp:
     def test_login_sin_verificar_email_prohibido(self, client, monkeypatch):
         capturar_otp_envio(monkeypatch)
         client.post("/auth/register", json=registro_payload("noverif@example.com"))
-        r = client.post("/auth/login", json={"email": "noverif@example.com", "password": "123456789"})
+        r = client.post("/auth/login", json={"email": "noverif@example.com", "password": "ClaveSegura1"})
         assert r.status_code == status.HTTP_403_FORBIDDEN
         assert "verificar" in r.json()["detail"].lower()
 
@@ -112,7 +112,7 @@ class TestLoginUser:
         registrar_verificado(client, monkeypatch, "login@example.com")
         response = client.post("/auth/login", json={
             "email": "login@example.com",
-            "password": "123456789"
+            "password": "ClaveSegura1"
         })
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -133,7 +133,7 @@ class TestLoginUser:
     def test_login_nonexistent_user(self, client):
         response = client.post("/auth/login", json={
             "email": "noexiste@example.com",
-            "password": "123456789"
+            "password": "ClaveSegura1"
         })
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Credenciales inválidas" in response.json()["detail"]
@@ -147,7 +147,7 @@ class TestLoginUser:
 
         response = client.post("/auth/login", json={
             "email": "desactivado@example.com",
-            "password": "123456789"
+            "password": "ClaveSegura1"
         })
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert "desactivada" in response.json()["detail"]
@@ -160,7 +160,7 @@ class TestLoginUser:
         db_session.commit()
 
         capturado = capturar_otp_envio(monkeypatch)
-        login = client.post("/auth/login", json={"email": "tardio@example.com", "password": "123456789"})
+        login = client.post("/auth/login", json={"email": "tardio@example.com", "password": "ClaveSegura1"})
         assert login.status_code == 200
         body = login.json()
         assert body["requiere_otp"] is True
@@ -248,7 +248,7 @@ class TestSecurityFunctions:
 
     def test_create_access_token_contains_claims(self):
         from utils.security import create_access_token
-        from jose import jwt
+        import jwt
         from config import SECRET_KEY
         user_id = "550e8400-e29b-41d4-a716-446655440000"
         rol = "solicitante"
@@ -258,6 +258,7 @@ class TestSecurityFunctions:
         assert payload["rol"] == rol
         assert "exp" in payload
         assert "iat" in payload
+        assert "jti" in payload
 
     def test_decode_access_token_valid(self):
         from utils.security import create_access_token, decode_access_token
@@ -294,18 +295,17 @@ class TestDependencies:
         }, headers={"Authorization": f"Bearer {data['access_token']}"})
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_require_admin_role_success(self, client):
-        from utils.security import create_access_token
-        from uuid import uuid4
-        token = create_access_token(str(uuid4()), "admin")
+    def test_require_admin_role_success(self, client, db_session):
+        from conftest import crear_usuario_con_token
+        _, headers = crear_usuario_con_token(db_session, rol="admin", email="admin_auth@example.com")
         response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Test",
             "especialidad_producto": ["Textiles"],
             "paises_origen": ["China"],
             "tiempo_respuesta_promedio": "24h",
             "email_dueño": "dueño_auth_admin@example.com",
-            "password_dueño": "123456789",
+            "password_dueño": "ClaveSegura1",
             "nombre_dueño": "Dueño Test"
-        }, headers={"Authorization": f"Bearer {token}"})
+        }, headers=headers)
         assert response.status_code == status.HTTP_201_CREATED
         assert response.json()["importador"]["nombre_empresa"] == "Importadora Test"

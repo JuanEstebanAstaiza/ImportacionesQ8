@@ -10,13 +10,13 @@ from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.orden import Orden, EstadoOrden
 from utils.security import hash_password, create_access_token
-from conftest import crear_empresa_importadora, auth_headers_for
+from conftest import crear_usuario_con_token, crear_empresa_importadora, auth_headers_for
 
 
 @pytest.fixture()
-def auth_headers_admin():
-    token = create_access_token(str(uuid4()), "admin")
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers_admin(db_session):
+    _, h = crear_usuario_con_token(db_session, rol="admin", email="admin_panel@example.com")
+    return h
 
 
 @pytest.fixture()
@@ -24,8 +24,9 @@ def solicitante(db_session):
     user = Usuario(
         id=str(uuid4()),
         email="solicitante_admin@example.com",
-        password_hash=hash_password("123456789"),
+        password_hash=hash_password("ClaveSegura1"),
         rol="solicitante",
+        email_verificado=True,
         perfil_completo=True,
         fecha_creacion=datetime.utcnow()
     )
@@ -50,7 +51,7 @@ class TestCrearImportadorConDueño:
                 "paises_origen": ["China"],
                 "tiempo_respuesta_promedio": "24h",
                 "email_dueño": "nuevo_dueño@example.com",
-                "password_dueño": "123456789",
+                "password_dueño": "ClaveSegura1",
                 "nombre_dueño": "Dueño Nuevo"
             },
             headers=auth_headers_admin
@@ -61,7 +62,7 @@ class TestCrearImportadorConDueño:
         assert data["email_dueño"] == "nuevo_dueño@example.com"
 
         # La cuenta dueña puede iniciar sesión de inmediato.
-        login = client.post("/auth/login", json={"email": "nuevo_dueño@example.com", "password": "123456789"})
+        login = client.post("/auth/login", json={"email": "nuevo_dueño@example.com", "password": "ClaveSegura1"})
         assert login.status_code == status.HTTP_200_OK
         assert login.json()["rol"] == "importador"
 
@@ -75,7 +76,7 @@ class TestCrearImportadorConDueño:
                 "paises_origen": ["China"],
                 "tiempo_respuesta_promedio": "24h",
                 "email_dueño": "no_autorizado@example.com",
-                "password_dueño": "123456789"
+                "password_dueño": "ClaveSegura1"
             },
             headers={"Authorization": f"Bearer {token}"}
         )
@@ -91,7 +92,7 @@ class TestCrearImportadorConDueño:
                 "paises_origen": ["China"],
                 "tiempo_respuesta_promedio": "24h",
                 "email_dueño": dueño.email,
-                "password_dueño": "123456789"
+                "password_dueño": "ClaveSegura1"
             },
             headers=auth_headers_admin
         )
@@ -138,7 +139,7 @@ class TestMonitoreoUsuarios:
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["activo"] is False
 
-        login = client.post("/auth/login", json={"email": dueño.email, "password": "123456789"})
+        login = client.post("/auth/login", json={"email": dueño.email, "password": "ClaveSegura1"})
         assert login.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_no_admin_no_puede_listar_usuarios(self, client, solicitante):
