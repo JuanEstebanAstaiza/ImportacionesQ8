@@ -5,7 +5,7 @@
 ## Archivo
 
 ```text
-ImportacionesQ8V/API-Frontend/ImportacionesQ8.postman_collection.json
+ImportacionesQ8V/02-Integracion-API/ImportacionesQ8.postman_collection.json
 ```
 
 - **94 requests** agrupados por tag OpenAPI (Auth, Cotizaciones, Chat, Admin, …).
@@ -40,6 +40,7 @@ Con el backend en marcha:
 curl.exe -s http://127.0.0.1:8000/openapi.json -o proyecto\backend\openapi_snapshot.json
 python proyecto\backend\scripts\generate_postman_collection.py
 python proyecto\backend\scripts\generate_frontend_api_docs.py
+# Salida: ImportacionesQ8V/02-Integracion-API/
 ```
 
 ## Ver también

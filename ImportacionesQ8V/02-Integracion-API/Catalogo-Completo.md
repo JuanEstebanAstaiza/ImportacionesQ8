@@ -102,7 +102,8 @@ Total: **94** operaciones REST exportadas desde OpenAPI.
 ## Colección HTTP
 
 - Postman/Insomnia: [[14-Postman-Insomnia]]
-- Archivo: `ImportacionesQ8.postman_collection.json` (en esta carpeta)
+- Archivo: `ImportacionesQ8.postman_collection.json` (en `02-Integracion-API/`)
+- Índice de la carpeta: [[Indice-Integracion-API]]
 
 ## Índice por módulo
 

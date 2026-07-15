@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 OPENAPI = Path(__file__).resolve().parents[1] / "openapi_snapshot.json"
-OUT_DIR = ROOT / "ImportacionesQ8V" / "API-Frontend"
+OUT_DIR = ROOT / "ImportacionesQ8V" / "02-Integracion-API"
 OUT = OUT_DIR / "ImportacionesQ8.postman_collection.json"
 
 PUBLIC_PREFIXES = (
@@ -251,7 +251,7 @@ def main() -> None:
                 "2. Variable base_url = http://localhost:8000\n"
                 "3. Tras login/verificar-email se guarda access_token automáticamente (Postman).\n"
                 "4. Completa path vars: cotizacion_id, conversacion_id, etc.\n\n"
-                "Docs: ImportacionesQ8V/API-Frontend/"
+                "Docs: ImportacionesQ8V/02-Integracion-API/"
             ),
             "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
         },

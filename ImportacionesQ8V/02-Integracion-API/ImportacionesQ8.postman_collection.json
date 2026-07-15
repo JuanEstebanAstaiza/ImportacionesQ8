@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ImportacionesQ8 API",
-    "description": "Colección generada desde OpenAPI del backend.\n\n1. Importa en Postman o Insomnia.\n2. Variable base_url = http://localhost:8000\n3. Tras login/verificar-email se guarda access_token automáticamente (Postman).\n4. Completa path vars: cotizacion_id, conversacion_id, etc.\n\nDocs: ImportacionesQ8V/API-Frontend/",
+    "description": "Colección generada desde OpenAPI del backend.\n\n1. Importa en Postman o Insomnia.\n2. Variable base_url = http://localhost:8000\n3. Tras login/verificar-email se guarda access_token automáticamente (Postman).\n4. Completa path vars: cotizacion_id, conversacion_id, etc.\n\nDocs: ImportacionesQ8V/02-Integracion-API/",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

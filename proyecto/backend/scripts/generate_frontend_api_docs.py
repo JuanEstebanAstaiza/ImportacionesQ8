@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]  # ImportacionesQ8
 OPENAPI = Path(__file__).resolve().parents[1] / "openapi_snapshot.json"
-OUT = ROOT / "ImportacionesQ8V" / "API-Frontend"
+OUT = ROOT / "ImportacionesQ8V" / "02-Integracion-API"
 
 TAG_FILES = {
     "Salud": "13-Legal-y-Salud.md",

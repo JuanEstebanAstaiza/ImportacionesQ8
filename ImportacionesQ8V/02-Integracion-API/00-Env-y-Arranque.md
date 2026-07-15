@@ -253,7 +253,8 @@ curl.exe -X POST http://localhost:8000/auth/register `
 
 ## Ver también
 
-- [[README|Índice API Frontend]]
+- [[Indice-Integracion-API]]
 - [[01-Convenciones-Auth-y-Cliente]]
 - [[Catalogo-Completo]]
 - Backend: `proyecto/backend/.env.example`, `proyecto/backend/docker-compose.yml`
+- [[Inicio]]

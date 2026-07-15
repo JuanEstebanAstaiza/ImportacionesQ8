@@ -1,9 +1,12 @@
-# API Frontend — Guía de integración (ImportacionesQ8)
+# Integración API — guía para frontend / fullstack
 
 Documentación **orientada al desarrollador frontend/fullstack** para conectar el cliente (Vite/React u otro) con el backend FastAPI.
 
-> Fuente de verdad en runtime: Swagger en development → `http://localhost:8000/docs` y OpenAPI → `http://localhost:8000/openapi.json`.  
-> Esta carpeta del vault resume **todas las rutas**, convenciones, `.env` y flujos listos para cablear.
+> Carpeta del vault: `02-Integracion-API/`  
+> Fuente de verdad en runtime: Swagger (`http://localhost:8000/docs`) y OpenAPI (`/openapi.json`) en development.  
+> Aquí están **todas las rutas**, convenciones, plantillas `.env` y Postman. **No** es código del frontend: solo documentación de integración.
+
+← [[Inicio]] · Pantallas UI → [[Indice-Frontend]] · Diseño backend → [[Indice-Backend]]
 
 ---
 
@@ -134,7 +137,7 @@ Detalle en [[08-Chat-y-WebSocket]].
 
 ## Colección HTTP
 
-Archivo: `ImportacionesQ8V/API-Frontend/ImportacionesQ8.postman_collection.json`  
+Archivo: `ImportacionesQ8V/02-Integracion-API/ImportacionesQ8.postman_collection.json`  
 Guía: [[14-Postman-Insomnia]].
 
 La integración del frontend (fetch/axios, stores, etc.) la implementa el equipo de UI; esta carpeta es **solo documentación + `.env` + Postman**.
@@ -143,6 +146,7 @@ La integración del frontend (fetch/axios, stores, etc.) la implementa el equipo
 
 ## Ver también
 
+- [[Inicio]] · [[Indice-Frontend]] · [[Indice-Backend]]
 - Backend técnico: [[API-Rest]], [[Autenticacion]], [[Pagos-Wompi]], [[Chat-WebSocket]], [[Seguridad]]
 - Pantallas: [[Pantallas-Solicitante]], [[Pantallas-Importador]], [[Pantallas-Admin]]
-- Auditoría: [[OWASP-Top10-Backend-2026-07-14]]
+- Calidad: [[OWASP-Top10-Backend-2026-07-14]] · [[Indice-Calidad]]

@@ -191,7 +191,7 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [x] Congruencia de categoría al enviar propuestas (evita respuestas fuera de especialidad)
 - [ ] HTTPS en producción — depende del despliegue, fuera del alcance del código del backend
 - [ ] Auditoría/logging estructurado de acciones administrativas críticas (activar/desactivar cuentas, resolver disputas) — recomendado para una futura iteración, no implementado aún
-- [ ] Revocación real de JWT / WS token fuera del query string / rate limits de negocio — ver sección 11 y [[Auditoria]]
+- [ ] Revocación real de JWT / WS token fuera del query string / rate limits de negocio — ver sección 11 y [[Indice-Calidad]]
 - [ ] Autenticación con Google (OAuth 2.0) — roadmap, ver sección 11
 - [ ] Migración de hashing de contraseñas a Argon2 — roadmap, ver sección 11
 
@@ -202,6 +202,6 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [[Autenticacion]] — JWT, claims, roles, rate limiting, registro extendido, recuperación de contraseña con OTP
 - [[Pagos-Wompi]] — verificación de firma de webhooks, idempotencia, sistema de créditos
 - [[Base-Datos]] — restricciones `UNIQUE` y claves foráneas que sustentan varias de estas protecciones
-- [[Auditoria]] · [[Auditoria-Backend-2026-07-13]] · [[Remediaciones-Backend-Jul-2026]] — campaña de auditoría y fixes
-- `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md` — Tarea 3.13 (refactor de identidad y cierre de auto-registro)
-- `Fases-Desarrollo/Semana-4-Asesores-Creditos-Registro/Tareas-Semana-4.md` — detalle de las fases de Semana 4
+- [[Indice-Calidad]] · [[Auditoria-Backend-2026-07-13]] · [[Remediaciones-Backend-Jul-2026]] — campaña de auditoría y fixes
+- [[Tareas-Semana-3]] — Tarea 3.13 (refactor de identidad y cierre de auto-registro)
+- [[Tareas-Semana-4]] — detalle de las fases de Semana 4

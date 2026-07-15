@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Auditoria/Remediaciones-Backend-Jul-2026.md",
+                "file": "03-Backend/Seguridad.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Remediaciones-Backend-Jul-2026"
+              "title": "Seguridad"
             }
           }
         ]
@@ -185,6 +185,7 @@
   },
   "active": "f459d60cd271d13b",
   "lastOpenFiles": [
+    "06-Historial/Tareas-Semana-1.md",
     "Backend/Features-Valor-Jul-2026.md",
     "Auditoria/README.md",
     "Auditoria/Pruebas-Carga-1000-Concurrentes.md",
@@ -219,7 +220,6 @@
     "Backend/Matching-Cotizaciones.md",
     "Backend/Chat-WebSocket.md",
     "Backend/Autenticacion.md",
-    "Backend/Base-Datos.md",
-    "Backend/API-Rest.md"
+    "Backend/Base-Datos.md"
   ]
 }
