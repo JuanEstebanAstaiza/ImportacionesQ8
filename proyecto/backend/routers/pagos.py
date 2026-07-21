@@ -73,9 +73,19 @@ async def comprar_creditos(
     """
     Genera un enlace de pago con Wompi para recargar créditos.
 
-    Los créditos se acreditan cuando Wompi confirma el pago vía webhook
-    (`POST /pagos/webhook/wompi`), no en este endpoint.
+    Deshabilitado por defecto: el modelo de negocio no cobra al solicitante
+    (quien cotiza). Solo se factura a empresas importadoras por contrato.
+    Reactivar con COBRO_A_SOLICITANTES=true.
     """
+    if not config.COBRO_A_SOLICITANTES:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "La compra de créditos para solicitantes está deshabilitada. "
+                "Crear cotizaciones no requiere pago. El cobro aplica a empresas importadoras."
+            ),
+        )
+
     user_id_str = str(PyUUID(current_user["user_id"]))
 
     creditos_a_acreditar = round(solicitud.monto_usd / config.CREDITO_USD_POR_UNIDAD, 2)

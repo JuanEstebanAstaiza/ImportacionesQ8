@@ -92,12 +92,12 @@ sequenceDiagram
 - Login OK → `{ access_token, user_id, rol, ... }`
 - Login tardío → `{ requiere_otp: true, challenge_token, mensaje }` → `POST /auth/login/verificar-otp`
 
-### 3) Cotización con créditos
+### 3) Cotización (sin cobro al solicitante)
 
-1. `GET /creditos/saldo`
-2. Si falta saldo → `POST /creditos/comprar` → redirigir a Wompi (o flujo simulado en dev)
-3. `POST /cotizaciones/` (`modalidad`: `abierta` | `dirigida`)
-4. Costos por defecto (configurables en backend): abierta **10**, dirigida **5** créditos
+1. `POST /cotizaciones/` (`modalidad`: `abierta` | `dirigida`) — **gratis** para natural/jurídica
+2. **No** pedir compra de créditos ni mostrar saldo como requisito
+3. `POST /creditos/comprar` está **deshabilitado** (410); el cobro de la plataforma es a importadoras por contrato
+4. Flag backend: `COBRO_A_SOLICITANTES=false` (ver [[07-Creditos-y-Pagos]])
 
 ### 4) Chat en tiempo real
 

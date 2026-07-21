@@ -24,7 +24,7 @@ Resumen ejecutivo del avance. Para el detalle de cada semana, ver [[Indice-Histo
 
 - **Stack:** FastAPI, MySQL, Redis, Docker Compose, Alembic, Wompi (créditos), WebSocket chat.
 - **Roles:** `solicitante`, `importador` (dueño), `asesor`, `admin`.
-- **Monetización en código:** créditos del **solicitante** al cotizar; importadoras entran por alta admin / contrato (no wallet de empresa).
+- **Monetización en código:** **no se cobra al solicitante** (natural/jurídica) por cotizar (`COBRO_A_SOLICITANTES=false`). El cobro de la plataforma es a **empresas importadoras** (contrato/suscripción). El wallet de créditos del cotizante queda desactivado (compra 410, costo 0, sin bonos).
 - **Tests:** suite en Docker (`docker compose run --rm tests`); históricamente 200+ tests verdes tras cada hito.
 - **Seguridad:** consolidada en [[Seguridad]]; remediaciones OWASP en [[OWASP-Top10-Backend-2026-07-14]] y [[Remediaciones-Backend-Jul-2026]].
 - **Carga:** [[Pruebas-Carga-1000-Concurrentes]] (1000 concurrentes, escenarios mixtos).
