@@ -62,6 +62,11 @@ OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))
 LOGIN_TARDIO_HORAS = int(os.getenv("LOGIN_TARDIO_HORAS", "72"))
 RATE_LIMIT_OTP = os.getenv("RATE_LIMIT_OTP", "10/minute")
 
+# Cobro a quien cotiza (solicitante natural/jurídica). Por defecto OFF:
+# el modelo actual cobra solo a empresas importadoras (contrato/suscripción),
+# no al usuario que crea cotizaciones. Poner true solo si se reactiva el wallet.
+COBRO_A_SOLICITANTES = os.getenv("COBRO_A_SOLICITANTES", "false").lower() == "true"
+
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))
 CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DIRIGIDA", "5"))
 CREDITO_USD_POR_UNIDAD = float(os.getenv("CREDITO_USD_POR_UNIDAD", "0.1"))

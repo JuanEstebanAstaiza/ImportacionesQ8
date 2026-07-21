@@ -101,7 +101,9 @@ PASSWORD_RESET_EXPIRE_MINUTES=15
 OTP_EXPIRE_MINUTES=15
 LOGIN_TARDIO_HORAS=72
 
-# Precios de créditos (solicitantes; no importadoras)
+# Cobro al cotizante DESACTIVADO (solo se cobra a importadoras por contrato)
+COBRO_A_SOLICITANTES=false
+# Solo aplican si COBRO_A_SOLICITANTES=true (legacy)
 CREDITO_COSTO_COTIZACION_ABIERTA=10
 CREDITO_COSTO_COTIZACION_DIRIGIDA=5
 CREDITO_USD_POR_UNIDAD=0.1

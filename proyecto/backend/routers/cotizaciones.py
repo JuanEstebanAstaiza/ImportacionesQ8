@@ -250,29 +250,35 @@ async def crear_cotizacion(
     """
     from uuid import uuid4
     from models.usuario import Usuario
-    from services.credito_wallet import obtener_wallet, debitar_atomico
 
     user_id_str = str(UUID(current_user["user_id"]))  # Convertir a string para SQLite
 
-    # Créditos: costo por modalidad. Wallet = org (jurídica/equipo) o personal (natural).
     solicitante = db.query(Usuario).filter(Usuario.id == user_id_str).first()
     if not solicitante:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
-    costo_creditos = (
-        config.CREDITO_COSTO_COTIZACION_ABIERTA if cotizacion_data.modalidad == "abierta"
-        else config.CREDITO_COSTO_COTIZACION_DIRIGIDA
-    )
-    wallet = obtener_wallet(db, solicitante)
-    if wallet.balance < costo_creditos:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=(
-                f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
-                f"cotización (saldo actual: {wallet.balance}). Compra créditos en "
-                f"POST /creditos/comprar"
-            )
+    # Modelo actual: no se cobra al solicitante (natural/jurídica).
+    # Si COBRO_A_SOLICITANTES=true, se restaura el débito de créditos al crear.
+    if config.COBRO_A_SOLICITANTES:
+        from services.credito_wallet import obtener_wallet, debitar_atomico
+
+        costo_creditos = (
+            config.CREDITO_COSTO_COTIZACION_ABIERTA if cotizacion_data.modalidad == "abierta"
+            else config.CREDITO_COSTO_COTIZACION_DIRIGIDA
         )
+        wallet = obtener_wallet(db, solicitante)
+        if wallet.balance < costo_creditos:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=(
+                    f"Créditos insuficientes: se necesitan {costo_creditos} créditos para crear esta "
+                    f"cotización (saldo actual: {wallet.balance}). Compra créditos en "
+                    f"POST /creditos/comprar"
+                )
+            )
+    else:
+        costo_creditos = 0.0
+        wallet = None
 
     # Validar modalidad dirigida
     if cotizacion_data.modalidad == "dirigida" and not cotizacion_data.importador_id:
@@ -345,13 +351,16 @@ async def crear_cotizacion(
     
     db.add(nuevo_cotizacion)
 
-    debitar_atomico(
-        db,
-        wallet,
-        costo_creditos,
-        cotizacion_id=nuevo_cotizacion.id,
-        descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
-    )
+    if config.COBRO_A_SOLICITANTES and wallet is not None and costo_creditos > 0:
+        from services.credito_wallet import debitar_atomico
+
+        debitar_atomico(
+            db,
+            wallet,
+            costo_creditos,
+            cotizacion_id=nuevo_cotizacion.id,
+            descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
+        )
 
     db.commit()
     db.refresh(nuevo_cotizacion)

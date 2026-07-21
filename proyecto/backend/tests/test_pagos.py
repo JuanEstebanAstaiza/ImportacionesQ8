@@ -51,7 +51,21 @@ def auth_headers_solicitante(test_solicitante):
 
 class TestComprarCreditos:
 
-    def test_comprar_creditos_exitoso(self, client, db_session, test_solicitante, auth_headers_solicitante):
+    def test_comprar_creditos_deshabilitado_por_defecto(self, client, auth_headers_solicitante):
+        """Modelo actual: no se vende créditos al solicitante."""
+        assert config.COBRO_A_SOLICITANTES is False
+        response = client.post(
+            "/creditos/comprar",
+            json={"monto_usd": 10.0},
+            headers=auth_headers_solicitante
+        )
+        assert response.status_code == 410
+        assert "deshabilitada" in response.json()["detail"].lower() or "importadora" in response.json()["detail"].lower()
+
+    def test_comprar_creditos_exitoso_si_flag_activo(
+        self, client, db_session, test_solicitante, auth_headers_solicitante, monkeypatch
+    ):
+        monkeypatch.setattr(config, "COBRO_A_SOLICITANTES", True)
         response = client.post(
             "/creditos/comprar",
             json={"monto_usd": 10.0},
@@ -69,7 +83,8 @@ class TestComprarCreditos:
         assert pago.estado == EstadoPago.pendiente.value
         assert pago.usuario_id == test_solicitante.id
 
-    def test_comprar_creditos_requiere_rol_solicitante(self, client, db_session):
+    def test_comprar_creditos_requiere_rol_solicitante(self, client, db_session, monkeypatch):
+        monkeypatch.setattr(config, "COBRO_A_SOLICITANTES", True)
         _, _ah = crear_usuario_con_token(db_session, rol="admin")
         token = _ah["Authorization"].split(" ", 1)[1]
         response = client.post(
@@ -79,7 +94,8 @@ class TestComprarCreditos:
         )
         assert response.status_code == 403
 
-    def test_comprar_creditos_monto_invalido(self, client, auth_headers_solicitante):
+    def test_comprar_creditos_monto_invalido_si_flag_activo(self, client, auth_headers_solicitante, monkeypatch):
+        monkeypatch.setattr(config, "COBRO_A_SOLICITANTES", True)
         response = client.post(
             "/creditos/comprar",
             json={"monto_usd": -5.0},
