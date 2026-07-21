@@ -1,4 +1,8 @@
-"""Tests de consumo de créditos al crear cotizaciones (Semana 4)."""
+"""Tests de cotización sin cobro al solicitante (modelo actual).
+
+COBRO_A_SOLICITANTES=false por defecto: crear cotización es gratis para
+natural/jurídica. Los tests de débito se mantienen solo si se reactiva el flag.
+"""
 from uuid import uuid4
 from datetime import datetime
 
@@ -8,6 +12,7 @@ from fastapi import status
 import config
 from models.usuario import Usuario
 from models.credito import MovimientoCredito
+from models.cotizacion import Cotizacion
 from utils.security import hash_password, create_access_token
 
 
@@ -63,9 +68,11 @@ def _payload_cotizacion_abierta():
     }
 
 
-class TestConsumoCreditosAlCrearCotizacion:
+class TestCotizacionSinCobroAlSolicitante:
+    """Modelo vigente: cotizar no descuenta créditos ni exige saldo."""
 
-    def test_crear_cotizacion_abierta_descuenta_creditos(self, client, db_session, solicitante_con_creditos):
+    def test_crear_cotizacion_gratis_sin_descontar(self, client, db_session, solicitante_con_creditos):
+        assert config.COBRO_A_SOLICITANTES is False
         saldo_inicial = solicitante_con_creditos.creditos_balance
 
         response = client.post(
@@ -74,31 +81,48 @@ class TestConsumoCreditosAlCrearCotizacion:
 
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
-        assert data["costo_creditos"] == config.CREDITO_COSTO_COTIZACION_ABIERTA
+        assert data["costo_creditos"] in (0, 0.0, None)
 
         db_session.refresh(solicitante_con_creditos)
-        assert solicitante_con_creditos.creditos_balance == saldo_inicial - config.CREDITO_COSTO_COTIZACION_ABIERTA
+        assert solicitante_con_creditos.creditos_balance == saldo_inicial
 
         movimiento = db_session.query(MovimientoCredito).filter(
             MovimientoCredito.cotizacion_id == data["id"]
         ).first()
-        assert movimiento is not None
-        assert movimiento.tipo == "consumo"
-        assert movimiento.monto == -config.CREDITO_COSTO_COTIZACION_ABIERTA
+        assert movimiento is None
 
-    def test_crear_cotizacion_sin_creditos_suficientes_falla_402(self, client, solicitante_sin_creditos):
+    def test_crear_cotizacion_con_saldo_cero_ok(self, client, solicitante_sin_creditos):
         response = client.post(
             "/cotizaciones", json=_payload_cotizacion_abierta(), headers=_auth_headers(solicitante_sin_creditos)
         )
+        assert response.status_code == status.HTTP_201_CREATED
 
+    def test_crear_cotizacion_con_saldo_cero_si_crea_fila(self, client, db_session, solicitante_sin_creditos):
+        antes = db_session.query(Cotizacion).count()
+        client.post(
+            "/cotizaciones", json=_payload_cotizacion_abierta(), headers=_auth_headers(solicitante_sin_creditos)
+        )
+        despues = db_session.query(Cotizacion).count()
+        assert despues == antes + 1
+
+
+class TestCobroSolicitanteOpcional:
+    """Si se reactiva COBRO_A_SOLICITANTES, vuelve el débito (regresión)."""
+
+    def test_con_flag_activo_exige_creditos(self, client, db_session, solicitante_sin_creditos, monkeypatch):
+        monkeypatch.setattr(config, "COBRO_A_SOLICITANTES", True)
+        response = client.post(
+            "/cotizaciones", json=_payload_cotizacion_abierta(), headers=_auth_headers(solicitante_sin_creditos)
+        )
         assert response.status_code == status.HTTP_402_PAYMENT_REQUIRED
 
-    def test_creditos_insuficientes_no_crea_cotizacion(self, client, db_session, solicitante_sin_creditos):
-        """Si no hay créditos, no debe quedar ninguna cotización creada a medias (ACID)"""
-        from models.cotizacion import Cotizacion
-
-        antes = db_session.query(Cotizacion).count()
-        client.post("/cotizaciones", json=_payload_cotizacion_abierta(), headers=_auth_headers(solicitante_sin_creditos))
-        despues = db_session.query(Cotizacion).count()
-
-        assert antes == despues
+    def test_con_flag_activo_descuenta(self, client, db_session, solicitante_con_creditos, monkeypatch):
+        monkeypatch.setattr(config, "COBRO_A_SOLICITANTES", True)
+        saldo_inicial = solicitante_con_creditos.creditos_balance
+        response = client.post(
+            "/cotizaciones", json=_payload_cotizacion_abierta(), headers=_auth_headers(solicitante_con_creditos)
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["costo_creditos"] == config.CREDITO_COSTO_COTIZACION_ABIERTA
+        db_session.refresh(solicitante_con_creditos)
+        assert solicitante_con_creditos.creditos_balance == saldo_inicial - config.CREDITO_COSTO_COTIZACION_ABIERTA

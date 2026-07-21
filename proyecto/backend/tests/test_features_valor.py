@@ -79,14 +79,15 @@ class TestOrganizacionCreditos:
 
         org = client.get("/organizaciones/me", headers=h)
         assert org.status_code == 200
-        assert org.json()["creditos_balance"] == 20.0
+        # Sin cobro a solicitantes: no hay bono de registro en créditos
+        assert org.json()["creditos_balance"] == 0.0
 
         saldo = client.get("/creditos/saldo", headers=h)
         assert saldo.status_code == 200
         assert saldo.json()["wallet_tipo"] == "organizacion"
-        assert saldo.json()["creditos_balance"] == 20.0
+        assert saldo.json()["creditos_balance"] == 0.0
 
-    def test_miembro_consume_wallet_org(self, client, db_session, monkeypatch):
+    def test_miembro_crea_cotizacion_sin_consumir_wallet(self, client, db_session, monkeypatch):
         from conftest import capturar_otp_envio
         capturado = capturar_otp_envio(monkeypatch)
         r = client.post("/auth/register", json={
@@ -127,9 +128,11 @@ class TestOrganizacionCreditos:
             "incoterm": "FOB",
         }, headers=member_h)
         assert cot.status_code == 201
+        assert cot.json().get("costo_creditos") in (0, 0.0, None)
 
         saldo = client.get("/creditos/saldo", headers=owner_h)
-        assert saldo.json()["creditos_balance"] == 15.0  # 20 - 5 dirigida
+        # Cotizar no descuenta créditos del solicitante / org
+        assert saldo.json()["creditos_balance"] == 0.0
 
 
 class TestDisputaRoom:
@@ -189,13 +192,19 @@ class TestReferidos:
         assert v2.status_code == 200
 
         saldo1 = client.get("/creditos/saldo", headers=h1).json()["creditos_balance"]
-        # 20 bono registro + 10 bono referidor
-        assert saldo1 == 30.0
+        # Sin cobro a solicitantes: referidos no otorgan bonos de créditos
+        assert saldo1 == 0.0
 
         h2 = {"Authorization": f"Bearer {v2.json()['access_token']}"}
         saldo2 = client.get("/creditos/saldo", headers=h2).json()["creditos_balance"]
-        # 20 bono registro + 10 bono referido
-        assert saldo2 == 30.0
+        assert saldo2 == 0.0
+
+        # El vínculo de referido sí se registra
+        from models.referido import ReferidoUso
+        usos = db_session.query(ReferidoUso).filter(
+            ReferidoUso.usuario_referido_id == v2.json()["user_id"]
+        ).all()
+        assert len(usos) == 1
 
 
 class TestTraduccion:

@@ -70,21 +70,24 @@ def aplicar_referido_si_aplica(db: Session, nuevo_usuario: Usuario, codigo: Opti
     if ya_usado:
         return
 
-    bono_ref = float(config.CREDITO_BONO_REFERIDO)
-    bono_dor = float(config.CREDITO_BONO_REFERIDOR)
+    # Bonos en créditos solo si el cobro a solicitantes está activo.
+    bono_ref = float(config.CREDITO_BONO_REFERIDO) if config.COBRO_A_SOLICITANTES else 0.0
+    bono_dor = float(config.CREDITO_BONO_REFERIDOR) if config.COBRO_A_SOLICITANTES else 0.0
 
-    wallet_nuevo = obtener_wallet(db, nuevo_usuario)
-    wallet_dor = obtener_wallet(db, referidor)
-    acreditar(
-        db, wallet_nuevo, bono_ref,
-        tipo=TipoMovimientoCredito.bono_referido.value,
-        descripcion=f"Bono por registro con código {codigo_row.codigo}",
-    )
-    acreditar(
-        db, wallet_dor, bono_dor,
-        tipo=TipoMovimientoCredito.bono_referidor.value,
-        descripcion=f"Bono por referir a {nuevo_usuario.email}",
-    )
+    if config.COBRO_A_SOLICITANTES and bono_ref > 0:
+        wallet_nuevo = obtener_wallet(db, nuevo_usuario)
+        acreditar(
+            db, wallet_nuevo, bono_ref,
+            tipo=TipoMovimientoCredito.bono_referido.value,
+            descripcion=f"Bono por registro con código {codigo_row.codigo}",
+        )
+    if config.COBRO_A_SOLICITANTES and bono_dor > 0:
+        wallet_dor = obtener_wallet(db, referidor)
+        acreditar(
+            db, wallet_dor, bono_dor,
+            tipo=TipoMovimientoCredito.bono_referidor.value,
+            descripcion=f"Bono por referir a {nuevo_usuario.email}",
+        )
     db.add(ReferidoUso(
         id=str(uuid4()),
         codigo_id=codigo_row.id,
@@ -126,9 +129,10 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
 
     password_hash = hash_password(registro.password)
     nombre_registro = registro.nombre if registro.tipo_persona == "natural" else registro.razon_social
-    bono = float(config.CREDITO_BONO_REGISTRO)
+    # Sin cobro a solicitantes no hay bono de créditos de bienvenida.
+    bono = float(config.CREDITO_BONO_REGISTRO) if config.COBRO_A_SOLICITANTES else 0.0
 
-    # Jurídica: bono va al wallet de la org; natural: al personal.
+    # Jurídica: bono (si aplica) va al wallet de la org; natural: al personal.
     saldo_personal_inicial = 0.0 if registro.tipo_persona == "juridica" else bono
 
     nuevo_usuario = Usuario(
@@ -173,14 +177,15 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
             rol_org=RolOrganizacion.owner.value,
             activo=True,
         ))
-        db.add(MovimientoCredito(
-            id=str(uuid4()),
-            usuario_id=nuevo_usuario.id,
-            organizacion_id=org.id,
-            tipo=TipoMovimientoCredito.bono_registro.value,
-            monto=bono,
-            descripcion="Bono de registro (organización)",
-        ))
+        if bono > 0:
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=nuevo_usuario.id,
+                organizacion_id=org.id,
+                tipo=TipoMovimientoCredito.bono_registro.value,
+                monto=bono,
+                descripcion="Bono de registro (organización)",
+            ))
     else:
         if bono > 0:
             db.add(MovimientoCredito(
