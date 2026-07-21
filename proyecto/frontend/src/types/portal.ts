@@ -58,4 +58,5 @@ export interface SidebarCtrl {
   onNotif?: () => void;
   notifCount?: number;
   onLogout?: () => void;
+  onProfile?: () => void;
 }
