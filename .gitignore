@@ -35,3 +35,8 @@ Thumbs.db
 # Obsidian (workspace de usuario, no compartir estado local)
 ImportacionesQ8V/.obsidian/workspace.json
 ImportacionesQ8V/.obsidian/workspace-mobile.json
+
+proyecto/frontend/node_modules/
+proyecto/frontend/guidelines/
+proyecto/frontend/src/imports/
+proyecto/frontend/ATTRIBUTIONS.md

@@ -17,6 +17,33 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 
+import { Quote } from "../types/quote";
+import type { ResponseFrom, ResponseStatus } from "../types/quote";
+import { Importer } from "../types/importer";
+import { SidebarCtrl } from "../types/portal";
+import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
+import { AuthScreen } from "@/features/auth/components/AuthScreen";
+import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
+import { useAuth } from "@/hooks/useAuth";
+import { authService } from "@/services/auth.service";
+import {
+  businessService,
+  type BackendAsesor,
+  type BackendCotizacion,
+  type BackendImporter,
+  type BackendOrder,
+  type BackendPropuesta,
+  type BackendUserProfile,
+  type CreateAsesorPayload,
+  type CreateCotizacionPayload,
+  type CreatePropuestaPayload,
+} from "@/services/business.service";
+import { getStoredRole, getStoredToken } from "@/services/api-client";
+import type { RegisterRequest } from "@/types/auth";
+
+const RESET_PASSWORD_PATH = "/restablecer-password";
+const SHOW_PAYMENTS_MODULE = false;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,9 +112,9 @@ function ContactBtn({type,size="sm",label,className}:{type:ContactType;size?:"sm
   return <Button variant="secondary" size={size} icon={<Icon className={iconSize}/>} className={clsx(c.cls,className)}>{label??c.defaultLabel}</Button>;
 }
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+type InputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>,"prefix"> & {
   label?:string;error?:string;hint?:string;prefix?:React.ReactNode;suffix?:React.ReactNode;rightLabel?:React.ReactNode;
-}
+};
 function Input({label,error,hint,prefix,suffix,rightLabel,className,id,...props}:InputProps) {
   const iid=id||label?.toLowerCase().replace(/\s+/g,"-");
   return (
@@ -216,13 +243,6 @@ function NotifIcon({icon,count=0}:{icon:React.ReactNode;count?:number}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────────────────────
-type QuoteStatus="created"|"directed"|"open"|"accepted"|"active-order";
-type QuoteMode="Dirigida"|"Abierta";
-type ResponseStatus="resp-nueva"|"resp-vista"|"resp-aceptada"|"resp-rechazada";
-type ResponseFrom="responses"|"quote-detail";
-
-interface Quote {id:string;code:string;date:string;product:string;importer:string;mode:QuoteMode;status:QuoteStatus;updatedAt:string;country:string;productLine:string;quality:string;minQuantity:string;targetPrice:string;incoterm:string;}
-
 const QUOTES:Quote[]=[
   {id:"q001",code:"COT-2025-0089",date:"12 Mar 2025",product:"Café Verde Colombiano Premium",importer:"FoodTrade SRL",       mode:"Abierta", status:"open",        updatedAt:"Hace 2 horas", country:"Colombia",       productLine:"Alimentos",    quality:"Premium",  minQuantity:"500",  targetPrice:"8.50 USD/kg",  incoterm:"FOB"},
   {id:"q002",code:"COT-2025-0081",date:"05 Mar 2025",product:"Telas Sintéticas 400 GSM",    importer:"TextilMax Corp.",      mode:"Dirigida",status:"directed",    updatedAt:"Hace 1 día",   country:"China",          productLine:"Textil",       quality:"Estándar", minQuantity:"1000", targetPrice:"3.20 USD/m",   incoterm:"CIF"},
@@ -233,13 +253,6 @@ const QUOTES:Quote[]=[
   {id:"q007",code:"COT-2025-0031",date:"20 Ene 2025",product:"Fertilizantes NPK 20-20-20", importer:"AgroSur Trading",      mode:"Abierta", status:"directed",    updatedAt:"Hace 18 días", country:"India",          productLine:"Agroindustria",quality:"Estándar", minQuantity:"5000", targetPrice:"0.45 USD/kg",  incoterm:"CFR"},
   {id:"q008",code:"COT-2025-0017",date:"08 Ene 2025",product:"Cámaras CCTV IP 4K Dahua",   importer:"SecureVision Corp",    mode:"Dirigida",status:"active-order",updatedAt:"Hace 26 días", country:"China",          productLine:"Tecnología",   quality:"Premium",  minQuantity:"30",   targetPrice:"180 USD/u",    incoterm:"CIF"},
 ];
-
-interface Importer {
-  id:string;name:string;specialty:string;rating:number;responseTime:string;
-  initials:string;color:string;memberSince:string;projects:number;verified:boolean;
-  country:string;categories:string[];
-  advisor:{name:string;role:string;initials:string;color:string;email:string};
-}
 
 const IMPORTERS:Importer[]=[
   {id:"nexus",     name:"Grupo Nexus S.A.",  specialty:"Tecnología & Electrónica",rating:4.8,responseTime:"~24h",initials:"GN",color:"bg-blue-600",   memberSince:"Ene 2020",projects:147,verified:true, country:"Colombia",      categories:["Tecnología","Electrónica"],  advisor:{name:"Carlos Mendoza", role:"Asesor Senior",     initials:"CM",color:"bg-blue-600",   email:"c.mendoza@nexus.co"}},
@@ -284,7 +297,7 @@ const RESPONSES:QuoteResponse[]=[
   {id:"r005",importerId:"secvision",quoteId:"q008",price:"165 USD/u",   deliveryTime:"35 días",incoterm:"CIF",date:"12 Ene 2025",status:"resp-aceptada", moq:"10 u",    origin:"China",   production:"Propia",     customization:"Marca blanca",             observations:"Certificación CE e IP67."},
 ];
 
-interface Order {id:string;code:string;quoteCode:string;product:string;importerId:string;created:string;estimated:string;quantity:string;unitPrice:string;totalValue:string;incoterm:string;originPort:string;destPort:string;}
+interface Order {id:string;code:string;quoteCode:string;product:string;importerId:string;created:string;estimated:string;quantity:string;unitPrice:string;totalValue:string;incoterm:string;originPort:string;destPort:string;conversationId?:string;}
 
 const MOCK_ORDERS:Order[]=[
   {id:"ord001",code:"ORD-2025-0042",quoteCode:"COT-2025-0068",product:"Laptops Dell Latitude 5540",importerId:"techimport",created:"20 Feb 2025",estimated:"15 Abr 2025",quantity:"20 unidades",unitPrice:"950 USD/u",totalValue:"$19,000 USD",incoterm:"FOB",originPort:"Port of Los Angeles, USA",destPort:"Puerto de Buenaventura, CO"},
@@ -342,42 +355,6 @@ interface ChatMsg {
   time:string;read:boolean;dateGroup?:string;
 }
 
-const CHAT_CONVS:ChatConv[]=[
-  {id:"c001",type:"orden",      refCode:"ORD-2025-0042",refId:"ord001",importerId:"techimport",status:"activa",   unread:3,lastMsg:"Cuando puedan confirmar el puerto de destino.",lastDate:"09:45"},
-  {id:"c002",type:"cotizacion", refCode:"COT-2025-0089",refId:"q001",  importerId:"nexus",     status:"activa",   unread:1,lastMsg:"Te enviamos muestras en 3 días hábiles.",       lastDate:"Hace 5h"},
-  {id:"c003",type:"orden",      refCode:"ORD-2025-0038",refId:"ord002",importerId:"secvision",  status:"activa",   unread:0,lastMsg:"El embarque fue confirmado para el lunes.",     lastDate:"Ayer"},
-  {id:"c004",type:"cotizacion", refCode:"COT-2025-0081",refId:"q002",  importerId:"textil",     status:"archivada",unread:0,lastMsg:"Recibimos tu solicitud, la revisaremos.",       lastDate:"08 Mar"},
-];
-
-const INIT_MSGS:Record<string,ChatMsg[]>={
-  c001:[
-    {id:"m1",sender:"provider",file:{name:"Packing List ORD-0042.pdf",type:"pdf",size:"142 KB"},time:"09:14",read:true,dateGroup:"12 Mar 2025"},
-    {id:"m2",sender:"provider",text:"Buenos días Ana, adjunto el packing list para revisión.",time:"09:14",read:true},
-    {id:"m3",sender:"client",  text:"Muchas gracias Raúl. Lo revisamos esta tarde.",time:"11:30",read:true},
-    {id:"m4",sender:"provider",text:"Recordarle que el embarque sale el próximo lunes 17.",time:"08:45",read:true,dateGroup:"13 Mar 2025"},
-    {id:"m5",sender:"client",  text:"Entendido. ¿Tienen el BL disponible?",time:"09:20",read:true},
-    {id:"m6",sender:"provider",text:"Lo tendremos listo el viernes antes del cierre.",time:"09:35",read:true},
-    {id:"m7",sender:"provider",file:{name:"Factura-Comercial-ORD0042.pdf",type:"pdf",size:"98 KB"},time:"08:10",read:false,dateGroup:"Hoy"},
-    {id:"m8",sender:"provider",text:"Adjunto la factura comercial actualizada.",time:"08:10",read:false},
-    {id:"m9",sender:"provider",text:"Por favor confirmar recepción.",time:"09:02",read:false},
-    {id:"m10",sender:"provider",text:"Cuando puedan confirmar el puerto de destino.",time:"09:45",read:false},
-  ],
-  c002:[
-    {id:"n1",sender:"provider",text:"Hola Ana, gracias por su cotización. Tenemos disponibilidad inmediata para café verde.",time:"10:00",read:true,dateGroup:"Ayer"},
-    {id:"n2",sender:"client",  text:"Perfecto. ¿Pueden enviarnos muestras antes de confirmar el pedido?",time:"10:45",read:true},
-    {id:"n3",sender:"provider",text:"Te enviamos muestras en 3 días hábiles.",time:"11:20",read:false,dateGroup:"Hoy"},
-  ],
-  c003:[
-    {id:"p1",sender:"client",  text:"Diego, ¿tienen confirmación del embarque?",time:"14:00",read:true,dateGroup:"Ayer"},
-    {id:"p2",sender:"provider",text:"El embarque fue confirmado para el lunes.",time:"14:30",read:true},
-    {id:"p3",sender:"provider",file:{name:"Booking-Confirmation.pdf",type:"pdf",size:"56 KB"},time:"14:31",read:true},
-  ],
-  c004:[
-    {id:"q1",sender:"client",  text:"Buenas, enviamos solicitud de cotización para telas 400 GSM.",time:"09:00",read:true,dateGroup:"08 Mar"},
-    {id:"q2",sender:"provider",text:"Recibimos tu solicitud, la revisaremos.",time:"09:45",read:true},
-  ],
-};
-
 const INCOTERMS=["EXW","FCA","FAS","FOB","CFR","CIF","CPT","CIP","DAP","DPU","DDP"];
 const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","Francia","España","Brasil","Corea del Sur","Turquía","México","Colombia"];
 const LINES=["Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Químicos","Automotriz","Construcción","Consumo masivo","Farmacéutico","Seguridad"];
@@ -413,7 +390,208 @@ const NAV_ASESOR=[
 ];
 
 // ─── Portal data ──────────────────────────────────────────────────────────────
-type UserRole="solicitante"|"importadora"|"asesor";
+type UserRole="solicitante"|"importadora"|"asesor"|"admin";
+
+const NAV_ADMIN=[
+  {icon:LayoutGrid,    label:"Dashboard",    key:"admin-dashboard"},
+  {icon:MessageSquare, label:"Chats",        key:"chats"},
+  {icon:FolderOpen,    label:"Documentos",   key:"documentos"},
+];
+
+type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin";
+
+function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
+  if (!role) {
+    return null;
+  }
+
+  if (role === "importador" || role === "importadora") {
+    return "importadora";
+  }
+
+  if (role === "solicitante" || role === "asesor" || role === "admin") {
+    return role;
+  }
+
+  return null;
+}
+
+function getHomeScreenForRole(role: UserRole | "admin"): "dashboard" | "imp-dashboard" | "adv-dashboard" | "admin-dashboard" {
+  if (role === "importadora") {
+    return "imp-dashboard";
+  }
+  if (role === "asesor") {
+    return "adv-dashboard";
+  }
+  if (role === "admin") {
+    return "admin-dashboard";
+  }
+  return "dashboard";
+}
+
+function formatShortDate(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return value;
+  }
+  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function initialsFromName(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "IM";
+}
+
+function importerColorFromId(id: string): string {
+  const palette = [
+    "bg-blue-600",
+    "bg-emerald-600",
+    "bg-cyan-600",
+    "bg-orange-600",
+    "bg-slate-600",
+    "bg-rose-600",
+    "bg-indigo-600",
+  ];
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash + id.charCodeAt(i)) % 997;
+  }
+  return palette[hash % palette.length];
+}
+
+function mapBackendImporterToUi(imp: BackendImporter): Importer {
+  const primaryCategory = imp.especialidad_producto[0] ?? "General";
+  const primaryCountry = imp.paises_origen[0] ?? "N/A";
+  const name = imp.nombre_empresa;
+  return {
+    id: imp.id,
+    name,
+    specialty: `${primaryCategory} internacional`,
+    rating: Number(imp.calificacion_promedio || 0),
+    responseTime: imp.tiempo_respuesta_promedio || "~48h",
+    initials: initialsFromName(name),
+    color: importerColorFromId(imp.id),
+    memberSince: formatShortDate(imp.fecha_registro),
+    projects: 0,
+    verified: Boolean(imp.verificado),
+    country: primaryCountry,
+    categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
+    advisor: {
+      name: "Asesor asignado",
+      role: "Asesor",
+      initials: "AS",
+      color: "bg-slate-600",
+      email: "asesor@importacionesq8.co",
+    },
+  };
+}
+
+function backendEstadoToUi(estado: string): Quote["status"] {
+  switch (estado) {
+    case "creada":
+      return "created";
+    case "dirigida":
+      return "directed";
+    case "abierta":
+      return "open";
+    case "aceptada":
+      return "accepted";
+    case "orden_activa":
+      return "active-order";
+    default:
+      return "created";
+  }
+}
+
+function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quote {
+  const importerName = cot.importador_id
+    ? importers.find((imp) => imp.id === cot.importador_id)?.name ?? "Importadora"
+    : "Red abierta";
+
+  return {
+    id: cot.id,
+    code: `COT-${cot.id.slice(0, 8).toUpperCase()}`,
+    date: formatShortDate(cot.fecha_creacion),
+    product: cot.nombre_producto,
+    importer: importerName,
+    mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
+    status: backendEstadoToUi(cot.estado),
+    updatedAt: formatShortDate(cot.fecha_actualizacion),
+    country: cot.pais_importacion,
+    productLine: cot.linea_producto,
+    quality: cot.tipo_calidad,
+    minQuantity: String(cot.cantidad_minima),
+    targetPrice: cot.precio_objetivo_usd ? `${cot.precio_objetivo_usd} USD` : "N/A",
+    incoterm: cot.incoterm,
+  };
+}
+
+function mapBackendAdvisorToUi(a: BackendAsesor): CompanyAdvisor {
+  const name = a.nombre || a.email;
+  return {
+    id: a.id,
+    name,
+    role: "Asesor",
+    email: a.email,
+    phone: a.telefono || "",
+    initials: initialsFromName(name),
+    color: "bg-slate-600",
+    status: a.activo ? "activo" : "inactivo",
+    availability: a.activo ? "media" : "baja",
+    activeQuotes: 0,
+    avgResponse: "~24h",
+    joinDate: formatShortDate(a.fecha_creacion),
+  };
+}
+
+function mapProposalEstadoToResponseStatus(estado: string): ResponseStatus {
+  if (estado === "aceptada") return "resp-aceptada";
+  if (estado === "rechazada") return "resp-rechazada";
+  if (estado === "enviada") return "resp-vista";
+  return "resp-nueva";
+}
+
+function mapBackendProposalToUiResponse(p: BackendPropuesta): QuoteResponse {
+  return {
+    id: p.id,
+    importerId: p.importador_id,
+    quoteId: p.cotizacion_id,
+    price: `${p.precio_ofrecido_usd} USD`,
+    deliveryTime: p.tiempo_estimado_entrega,
+    incoterm: p.incoterm,
+    date: formatShortDate(new Date().toISOString()),
+    status: mapProposalEstadoToResponseStatus(p.estado),
+    moq: "N/A",
+    origin: "N/A",
+    production: "N/A",
+    customization: p.condiciones_adicionales || "Sin personalización",
+    observations: p.condiciones_adicionales || "Sin observaciones",
+  };
+}
+
+function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
+  const code = `ORD-${order.id.slice(0, 8).toUpperCase()}`;
+  return {
+    id: order.id,
+    code,
+    quoteCode: quote?.code || `COT-${order.cotizacion_id.slice(0, 8).toUpperCase()}`,
+    product: quote?.product || "Producto no disponible",
+    importerId: order.importador_id,
+    created: formatShortDate(order.historial_estados?.[0]?.fecha || new Date().toISOString()),
+    estimated: order.tiempo_estimado_entrega || "N/D",
+    quantity: quote?.minQuantity ? `${quote.minQuantity} unidades` : "N/D",
+    unitPrice: `${order.precio_acordado_usd} USD/u`,
+    totalValue: `${order.precio_acordado_usd} USD`,
+    incoterm: quote?.incoterm || "N/D",
+    originPort: "N/D",
+    destPort: "N/D",
+    conversationId: order.conversacion_id || undefined,
+  };
+}
 
 interface CompanyAdvisor {
   id:string;name:string;role:string;email:string;phone:string;
@@ -443,22 +621,9 @@ const INIT_NOTIFICATIONS:AppNotification[]=[
   {id:"n7",type:"update",title:"Orden actualizada",body:"Nueva actualización en ORD-2025-0038",date:"Hace 3 días",read:true},
 ];
 
-interface AvailableQuote {
-  id:string;code:string;product:string;category:string;country:string;createdAgo:string;
-  priority:"alta"|"media"|"baja";claimedBy?:string;
-}
-
-const INIT_AVAILABLE:AvailableQuote[]=[
-  {id:"aq1",code:"COT-2025-0089",product:"Café Verde Colombiano Premium",category:"Alimentos",country:"Colombia",createdAgo:"Hace 2h",priority:"alta"},
-  {id:"aq2",code:"COT-2025-0081",product:"Telas Sintéticas 400 GSM",category:"Textil",country:"China",createdAgo:"Hace 5h",priority:"media"},
-  {id:"aq3",code:"COT-2025-0095",product:"Fertilizantes NPK 15-15-15",category:"Agroindustria",country:"India",createdAgo:"Hace 1 día",priority:"baja"},
-  {id:"aq4",code:"COT-2025-0101",product:"Cámaras CCTV 4K Hikvision",category:"Tecnología",country:"China",createdAgo:"Hace 3h",priority:"alta"},
-];
-
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
-interface SidebarCtrl {active:string;onNav:(k:string)=>void;pinned:boolean;onToggle:()=>void;navItems:NavItem[];onNotif?:()=>void;notifCount?:number;}
 
-function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
+function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
   const [hovered,setHovered]=useState(false);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
   const floating=!pinned&&hovered;
@@ -505,6 +670,23 @@ function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
             );
           })}
         </nav>
+
+        <div className="p-2 border-t border-border">
+          <button
+            onClick={onLogout}
+            className={clsx(
+              "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
+              "text-muted-foreground hover:text-foreground hover:bg-muted",
+              isExpanded ? "gap-2.5" : "justify-center gap-0",
+            )}
+            title={!isExpanded ? "Cerrar sesion" : undefined}
+          >
+            <LogIn className="w-4 h-4 flex-shrink-0 rotate-180"/>
+            <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+              <span className="whitespace-nowrap">Cerrar sesion</span>
+            </div>
+          </button>
+        </div>
       </div>
 
       <button
@@ -530,9 +712,15 @@ function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // APP HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function AppHeader({user,notifCount=0,onNotif,onLogout,sb}:{user:{name:string;company:string;initials:string};notifCount?:number;onNotif?:()=>void;onLogout?:()=>void;sb?:SidebarCtrl}) {
+function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
+  const { user: authUser } = useAuth();
   const count=sb?.notifCount??notifCount;
   const handler=sb?.onNotif??onNotif;
+  const profileHandler=sb?.onProfile??onProfile;
+  const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
+  const displayCompany = authUser?.email || user.company;
+  const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
+  const displayInitials = initialsFromName(initialsSource);
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
       <div/>
@@ -548,10 +736,10 @@ function AppHeader({user,notifCount=0,onNotif,onLogout,sb}:{user:{name:string;co
         <div className="w-px h-5 bg-border mx-2"/>
         <div className="flex items-center gap-2.5">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium text-foreground leading-tight">{user.name}</p>
-            <p className="text-xs text-muted-foreground leading-tight">{user.company}</p>
+            <p className="text-sm font-medium text-foreground leading-tight">{displayName}</p>
+            <p className="text-xs text-muted-foreground leading-tight">{displayCompany}</p>
           </div>
-          <button onClick={onLogout} title="Cerrar sesión"><Avatar initials={user.initials} size="md"/></button>
+          <button onClick={profileHandler} title="Editar perfil"><Avatar initials={displayInitials} size="md"/></button>
         </div>
       </div>
     </header>
@@ -624,13 +812,13 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
 // ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD SCREEN — importer marketplace catalog
 // ─────────────────────────────────────────────────────────────────────────────
-function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void}) {
+function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;importers:Importer[]}) {
   const [search,setSearch]=useState("");
   const [catFilter,setCatFilter]=useState<string>("Todas");
   const [ratingFilter,setRatingFilter]=useState("");
   const [countryFilter,setCountryFilter]=useState("");
 
-  const filtered=IMPORTERS.filter(imp=>{
+  const filtered=importers.filter(imp=>{
     const ms=!search||[imp.name,imp.specialty,...imp.categories].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mc=catFilter==="Todas"||imp.categories.some(c=>c.toLowerCase()===catFilter.toLowerCase());
     const mr=!ratingFilter||imp.rating>=parseFloat(ratingFilter);
@@ -638,7 +826,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
     return ms&&mc&&mr&&mco;
   });
 
-  const featured=IMPORTERS.filter(i=>i.verified&&i.rating>=4.7).slice(0,3);
+  const featured=importers.filter(i=>i.verified&&i.rating>=4.7).slice(0,3);
   const quickCats=["Todas","Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad"];
 
   return (
@@ -656,7 +844,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
                 <p className="text-sm text-muted-foreground mt-0.5">Encuentra y contacta empresas importadoras verificadas para tu negocio.</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{IMPORTERS.filter(i=>i.verified).length} verificadas · {IMPORTERS.length} en total</span>
+                <span className="text-xs text-muted-foreground">{importers.filter(i=>i.verified).length} verificadas · {importers.length} en total</span>
               </div>
             </div>
           </div>
@@ -664,8 +852,8 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
           {/* Stats bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              {label:"Importadoras activas",value:IMPORTERS.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
-              {label:"Verificadas",value:IMPORTERS.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
+              {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
+              {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
               {label:"Rating promedio",value:"4.6",icon:<Star className="w-4 h-4"/>,color:"text-amber-500"},
               {label:"Tiempo prom. respuesta",value:"~34h",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
             ].map(s=>(
@@ -710,7 +898,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
               <div className="w-40">
                 <Select value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
                   <option value="">País</option>
-                  {[...new Set(IMPORTERS.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}
+                  {[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}
                 </Select>
               </div>
               {(search||ratingFilter||countryFilter||catFilter!=="Todas")&&(
@@ -757,15 +945,15 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];
 }) {
-  const imp=IMPORTERS.find(i=>i.id===importerId)||IMPORTERS[0];
+  const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
   const desc=IMP_DESCRIPTIONS[imp.id]||"";
   const certs=IMP_CERTS[imp.id]||[];
   const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
   const relOrders=MOCK_ORDERS.filter(o=>o.importerId===imp.id);
-  const relChats=CHAT_CONVS.filter(c=>c.importerId===imp.id);
+  const relChats=chats.filter(c=>c.importerId===imp.id);
 
   const ADVISORS=[
     imp.advisor,
@@ -901,14 +1089,13 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb}:{
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,sb}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl}) {
+function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl;quotes:Quote[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
-  const lastQ=QUOTES[0];const advisor=IMPORTERS[0].advisor;
-  const respCount:Record<string,number>={"q001":2,"q002":0,"q003":1,"q004":0,"q005":1,"q006":0,"q007":0,"q008":1};
-  const filtered=QUOTES.filter(q=>{
+  const lastQ=quotes[0]??null;
+  const filtered=quotes.filter(q=>{
     const ms=!search||[q.code,q.product,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mst=!statusF||q.status===statusF;const mm=!modeF||q.mode===modeF;
-    const mr=!respF||(respF==="con"?(respCount[q.id]||0)>0:(respCount[q.id]||0)===0);
+    const mr=!respF||(respF==="sin");
     return ms&&mst&&mm&&mr;
   });
   return (
@@ -926,25 +1113,30 @@ function QuotesScreen({onNewQuote,onViewDetail,sb}:{onNewQuote:()=>void;onViewDe
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card padding="md">
-              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2><Badge variant={lastQ.status}/></div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
-                <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
-                <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
-                <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",lastQ.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
-                <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-primary">{respCount[lastQ.id]||0} recibidas</p></div>
-              </div>
-              <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(lastQ.id)}>Ver detalle</Button></div>
+              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ&&<Badge variant={lastQ.status}/>}</div>
+              {lastQ?(
+                <>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
+                    <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",lastQ.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">Sin datos</p></div>
+                  </div>
+                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(lastQ.id)}>Ver detalle</Button></div>
+                </>
+              ):(
+                <div className="py-8 text-center">
+                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/>
+                  <p className="text-sm text-muted-foreground">No hay cotizaciones registradas aún.</p>
+                </div>
+              )}
             </Card>
             <Card padding="md">
-              <h2 className="text-sm font-semibold mb-4">Asesor asignado</h2>
-              <div className="flex items-start gap-3 mb-4">
-                <Avatar initials={advisor.initials} size="lg" color={advisor.color}/>
-                <div><p className="font-semibold text-sm">{advisor.name}</p><p className="text-xs text-primary font-medium mt-0.5">ImportacionesQ8</p><p className="text-xs text-muted-foreground mt-0.5">{advisor.role}</p></div>
-              </div>
-              <div className="flex gap-2 pt-3 border-t border-border">
-                <ContactBtn type="whatsapp" className="flex-1 justify-center"/>
-                <ContactBtn type="chat" className="flex-1 justify-center"/>
+              <h2 className="text-sm font-semibold mb-4">Estado de respuestas</h2>
+              <div className="py-6 text-center">
+                <ClipboardList className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/>
+                <p className="text-sm text-muted-foreground">No hay endpoint de respuestas asociado a esta bandeja.</p>
               </div>
             </Card>
           </div>
@@ -973,7 +1165,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb}:{onNewQuote:()=>void;onViewDe
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
                         <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
                         <td className="px-4 py-3"><Badge variant={row.status}/></td>
-                        <td className="px-4 py-3 text-center">{(respCount[row.id]||0)>0?<span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold">{respCount[row.id]}</span>:<span className="text-xs text-muted-foreground">—</span>}</td>
+                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">—</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
                         <td className="px-4 py-3"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button></td>
                       </tr>
@@ -992,11 +1184,62 @@ function QuotesScreen({onNewQuote,onViewDetail,sb}:{onNewQuote:()=>void;onViewDe
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTE DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function QuoteDetailScreen({quoteId,onBack,onViewResponse,onOpenChat,sb}:{quoteId:string;onBack:()=>void;onViewResponse:(id:string,from:ResponseFrom,fromQuoteId:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl}) {
-  const quote=QUOTES.find(q=>q.id===quoteId)||QUOTES[0];
-  const relatedResponses=RESPONSES.filter(r=>r.quoteId===quoteId);
-  const importer=IMPORTERS.find(i=>i.name===quote.importer)||IMPORTERS[0];
-  const relChat=CHAT_CONVS.find(c=>c.refId===quoteId&&c.type==="cotizacion");
+function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[]}) {
+  const quote=quotes.find(q=>q.id===quoteId)??null;
+  const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
+  const [loadingProposals,setLoadingProposals]=useState(true);
+  const [actionMessage,setActionMessage]=useState("");
+
+  const loadProposals=useCallback(async()=>{
+    if(!quote){
+      setProposals([]);
+      setLoadingProposals(false);
+      return;
+    }
+    setLoadingProposals(true);
+    try{
+      const rows=await businessService.listQuoteProposals(quote.id);
+      setProposals(rows);
+    }finally{
+      setLoadingProposals(false);
+    }
+  },[quote]);
+
+  useEffect(()=>{void loadProposals();},[loadProposals]);
+
+  const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean)=>{
+    setActionMessage("");
+    await businessService.preAcceptProposal(propuestaId,aceptar);
+    await loadProposals();
+    if(onRefreshQuotes){
+      await onRefreshQuotes();
+    }
+    setActionMessage(aceptar?"Oferta aceptada." :"Oferta rechazada.");
+  },[loadProposals,onRefreshQuotes]);
+
+  if(!quote){
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active="quotes"/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AppHeader user={USER} sb={sb}/>
+          <main className="flex-1 overflow-y-auto px-6 py-6">
+            <Card padding="lg" className="max-w-xl mx-auto mt-10 text-center">
+              <ClipboardList className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3"/>
+              <p className="font-semibold">Cotización no encontrada</p>
+              <p className="text-sm text-muted-foreground mt-1">No se pudo cargar la cotización seleccionada desde la API.</p>
+              <Button variant="secondary" className="mt-4" onClick={onBack}>Volver</Button>
+            </Card>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  const activeProposal=proposals[0]??null;
+  const contactAsesor=proposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
+  const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
+
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="quotes"/>
@@ -1028,66 +1271,62 @@ function QuoteDetailScreen({quoteId,onBack,onViewResponse,onOpenChat,sb}:{quoteI
               </Card>
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary"/>Respuestas recibidas{relatedResponses.length>0&&<span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">{relatedResponses.length}</span>}</h3>
-                  {relatedResponses.length>1&&<Button variant="secondary" size="sm" icon={<GitCompare className="w-3.5 h-3.5"/>}>Comparar</Button>}
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary"/>Ofertas recibidas{proposals.length>0&&<span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">{proposals.length}</span>}</h3>
+                  {actionMessage&&<span className="text-xs text-emerald-600 font-medium">{actionMessage}</span>}
                 </div>
-                {relatedResponses.length===0?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Todavía no hay respuestas</p></div></Card>:(
-                  <div className="space-y-3">{relatedResponses.map(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId)||IMPORTERS[0];return(
-                    <Card key={r.id} padding="md" className="hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3"><Avatar initials={imp.initials} size="lg" color={imp.color}/><div><div className="flex items-center gap-2"><p className="font-semibold text-sm">{imp.name}</p><Badge variant={r.status}/></div><p className="text-xs text-muted-foreground mt-0.5">{imp.specialty}</p><div className="flex gap-4 mt-2">{[["Precio",r.price],["Plazo",r.deliveryTime],["Incoterm",r.incoterm]].map(([k,v])=><div key={k}><span className="text-xs text-muted-foreground">{k}: </span><span className="text-xs font-semibold">{v}</span></div>)}</div></div></div>
-                        <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewResponse(r.id,"quote-detail",quoteId)}>Ver detalle</Button>
-                      </div>
-                    </Card>
-                  );})}</div>
+                {loadingProposals?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><Loader2 className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2 animate-spin"/><p className="text-sm text-muted-foreground">Cargando ofertas...</p></div></Card>:proposals.length===0?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sin ofertas recibidas aún</p></div></Card>:(
+                  <div className="space-y-3">{proposals.map(p=>{
+                    const contactName=p.contacto_asesor?.nombre||"Asesor de la empresa";
+                    const companyName=quote.importer;
+                    return(
+                      <Card key={p.id} padding="md" className="hover:shadow-md transition-shadow">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-sm">{companyName}</p>
+                                <span className={clsx("px-2 py-0.5 rounded text-xs font-medium",p.estado==="aceptada"?"bg-emerald-50 text-emerald-700":p.estado==="rechazada"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-700")}>{p.estado}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">{contactName}</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><p className="text-sm font-semibold">{p.precio_ofrecido_usd} USD</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Entrega</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Incoterm</p><p className="text-sm font-semibold">{p.incoterm}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Contacto</p><p className="text-sm font-semibold">{p.contacto_asesor?.whatsapp||"—"}</p></div>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">{p.condiciones_adicionales||"Sin observaciones adicionales."}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                              {p.estado==="pendiente"?(
+                                <>
+                                  <Button variant="primary" size="sm" onClick={()=>void handleDecision(p.id,true)}>Aceptar</Button>
+                                  <Button variant="secondary" size="sm" onClick={()=>void handleDecision(p.id,false)}>Rechazar</Button>
+                                </>
+                              ):(
+                                <span className="text-xs text-muted-foreground">Acción registrada</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    );})}
+                  </div>
                 )}
               </div>
             </div>
             <div className="w-60 xl:w-64 flex-shrink-0 hidden lg:block space-y-4">
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Línea de tiempo</h3><Timeline stages={QUOTE_TIMELINE}/></Card>
-              {quote.mode==="Dirigida"&&(
-                relatedResponses.length===0
-                  ?<Card padding="md" className="border-amber-100 bg-amber-50/30">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Contacto</h3>
-                    <div className="flex flex-col items-center gap-2 py-2 text-center">
-                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"><Users className="w-4 h-4 text-muted-foreground/60"/></div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">Aún no hay asesor asignado ni respuesta recibida</p>
-                    </div>
-                  </Card>
-                  :<Card padding="md">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor asignado</h3>
-                    {relatedResponses.slice(0,1).map(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId)||IMPORTERS[0];return(
-                      <div key={r.id} className="flex flex-col gap-3">
-                        <div className="flex items-start gap-2.5"><Avatar initials={imp.advisor.initials} size="md" color={imp.advisor.color}/><div><p className="text-sm font-semibold">{imp.advisor.name}</p><p className="text-xs text-muted-foreground">{imp.advisor.role}</p><p className="text-xs text-muted-foreground">{imp.name}</p></div></div>
-                        <div className="flex flex-col gap-1.5">
-                          <ContactBtn type="chat" size="sm" className="w-full justify-center"/>
-                          <ContactBtn type="whatsapp" size="sm" className="w-full justify-center"/>
-                        </div>
-                      </div>
-                    );})}
-                  </Card>
-              )}
-              {quote.mode==="Abierta"&&(
-                relatedResponses.length===0
-                  ?<Card padding="md" className="border-orange-100 bg-orange-50/40">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Red de importadores</h3>
-                    <div className="space-y-2">{[["Empresas notif.","23"],["Respuestas","0"],["Tiempo restante","~18h"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-semibold">{v}</span></div>)}</div>
-                  </Card>
-                  :<Card padding="md">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesores respondiendo</h3>
-                    <div className="space-y-3">
-                      {relatedResponses.map(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId)||IMPORTERS[0];return(
-                        <div key={r.id} className="flex items-center gap-2 pb-2 border-b border-border last:border-0 last:pb-0">
-                          <Avatar initials={imp.advisor.initials} size="sm" color={imp.advisor.color}/>
-                          <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{imp.advisor.name}</p><p className="text-[10px] text-muted-foreground truncate">{imp.name}</p></div>
-                          <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3 h-3"/>}/>
-                        </div>
-                      );})}
-                    </div>
-                    <Button variant="primary" size="sm" fullWidth className="mt-3" onClick={()=>sb.onNav("responses")}>Ver respuestas</Button>
-                  </Card>
-              )}
-              {relChat&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat asociado</h3><p className="text-xs text-muted-foreground mb-3">{IMPORTERS.find(i=>i.id===relChat.importerId)?.name}</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Abrir chat</Button></Card>}
+              {contactAsesor?<Card padding="md">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor asignado</h3>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p><p className="text-xs text-muted-foreground">{contactAsesor.whatsapp||"Sin WhatsApp"}</p></div></div>
+                  <div className="flex flex-col gap-1.5">
+                    <ContactBtn type="chat" size="sm" className="w-full justify-center"/>
+                    <ContactBtn type="whatsapp" size="sm" className="w-full justify-center"/>
+                  </div>
+                </div>
+              </Card>:<Card padding="md" className="border-dashed"><div className="py-4 text-center"><p className="text-xs text-muted-foreground">Sin contacto de asesor todavía</p></div></Card>}
+              {relChat&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat asociado</h3><p className="text-xs text-muted-foreground mb-3">{quote.importer}</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Abrir chat</Button></Card>}
             </div>
           </div>
         </main>
@@ -1099,22 +1338,34 @@ function QuoteDetailScreen({quoteId,onBack,onViewResponse,onOpenChat,sb}:{quoteI
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONSE DETAIL — contextual back navigation
 // ─────────────────────────────────────────────────────────────────────────────
-function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb}:{
+function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb,responses,quotes,chats}:{
   responseId:string;from:ResponseFrom;fromQuoteId?:string;
-  onBack:()=>void;onBackToQuote:(id:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;
+  onBack:()=>void;onBackToQuote:(id:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;responses:QuoteResponse[];quotes:Quote[];chats:ChatConv[];
 }) {
-  const resp=RESPONSES.find(r=>r.id===responseId)||RESPONSES[0];
+  const resp=responses.find(r=>r.id===responseId)||responses[0];
+  if(!resp){
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active="responses"/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden"><AppHeader user={USER} sb={sb}/><main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Respuesta no disponible.</p></Card></main></div>
+      </div>
+    );
+  }
   const imp=IMPORTERS.find(i=>i.id===resp.importerId)||IMPORTERS[0];
-  const quote=QUOTES.find(q=>q.id===resp.quoteId)||QUOTES[0];
-  const relChat=CHAT_CONVS.find(c=>c.importerId===resp.importerId&&(c.refId===resp.quoteId||c.type==="cotizacion"));
+  const quote=quotes.find(q=>q.id===resp.quoteId)||quotes[0];
+  const relChat=chats.find(c=>c.importerId===resp.importerId&&(c.refId===resp.quoteId||c.type==="cotizacion"));
   const [accepting,setAccepting]=useState(false);
-  const [acceptedByMe,setAcceptedByMe]=useState(false);
-  const [acceptedByAdvisor,setAcceptedByAdvisor]=useState(false);
-  const [orderCreated,setOrderCreated]=useState(false);
+  const [acceptedByMe,setAcceptedByMe]=useState(resp.status==="resp-aceptada");
+  const [acceptedByAdvisor,setAcceptedByAdvisor]=useState(resp.status==="resp-aceptada");
+  const [orderCreated,setOrderCreated]=useState(resp.status==="resp-aceptada");
   async function handleAccept(){
-    setAccepting(true);await new Promise(r=>setTimeout(r,900));setAccepting(false);setAcceptedByMe(true);
-    await new Promise(r=>setTimeout(r,1200));setAcceptedByAdvisor(true);
-    await new Promise(r=>setTimeout(r,600));setOrderCreated(true);
+    setAccepting(true);
+    try{
+      await businessService.preAcceptProposal(resp.id,true);
+      setAcceptedByMe(true);
+    }finally{
+      setAccepting(false);
+    }
   }
   const negotiationStages=[
     {label:"Cotización enviada",status:"done" as const,icon:<Send className="w-3.5 h-3.5"/>},
@@ -1244,9 +1495,9 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONSES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function ResponsesScreen({onViewDetail,sb}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl}) {
+function ResponsesScreen({onViewDetail,sb,responses}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[empresaF,setEmpresaF]=useState("");
-  const filtered=RESPONSES.filter(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId);const q=QUOTES.find(q=>q.id===r.quoteId);
+  const filtered=responses.filter(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId);const q=QUOTES.find(q=>q.id===r.quoteId);
     const ms=!search||[imp?.name||"",q?.product||"",r.price].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     return ms&&(!statusF||r.status===statusF)&&(!empresaF||r.importerId===empresaF);
   });
@@ -1260,7 +1511,7 @@ function ResponsesScreen({onViewDetail,sb}:{onViewDetail:(id:string,from:Respons
             <Breadcrumb items={[{label:"Inicio"},{label:"Respuestas"}]}/>
             <div className="flex items-center justify-between mt-3">
               <div><h1 className="text-xl font-semibold tracking-tight">Respuestas</h1><p className="text-sm text-muted-foreground mt-0.5">Propuestas de importadores a tus cotizaciones.</p></div>
-              {RESPONSES.filter(r=>r.status==="resp-nueva").length>0&&<span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs font-medium text-orange-700"><Bell className="w-3.5 h-3.5"/>{RESPONSES.filter(r=>r.status==="resp-nueva").length} nuevas</span>}
+              {responses.filter(r=>r.status==="resp-nueva").length>0&&<span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs font-medium text-orange-700"><Bell className="w-3.5 h-3.5"/>{responses.filter(r=>r.status==="resp-nueva").length} nuevas</span>}
             </div>
           </div>
           <Card padding="sm"><div className="flex flex-wrap gap-3 items-end">
@@ -1271,7 +1522,7 @@ function ResponsesScreen({onViewDetail,sb}:{onViewDetail:(id:string,from:Respons
           </div></Card>
           <div>
             <p className="text-sm text-muted-foreground mb-3"><span className="font-medium text-foreground">{filtered.length}</span> respuestas</p>
-            {filtered.length===0?<Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ClipboardList className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin respuestas</p><p className="text-sm text-muted-foreground">Ajusta los filtros.</p></div></Card>:(
+            {filtered.length===0?<Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ClipboardList className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin respuestas</p><p className="text-sm text-muted-foreground">No hay propuestas registradas en backend para tus cotizaciones.</p></div></Card>:(
               <div className="space-y-3">{filtered.map(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId)||IMPORTERS[0];const q=QUOTES.find(q=>q.id===r.quoteId)||QUOTES[0];return(
                 <Card key={r.id} padding="md" className="hover:shadow-md transition-all">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -1299,7 +1550,7 @@ function ResponsesScreen({onViewDetail,sb}:{onViewDetail:(id:string,from:Respons
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDERS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function OrdersScreen({onViewOrder,sb}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl}) {
+function OrdersScreen({onViewOrder,sb,orders}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[]}) {
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="orders"/>
@@ -1307,7 +1558,10 @@ function OrdersScreen({onViewOrder,sb}:{onViewOrder:(id:string)=>void;sb:Sidebar
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div><Breadcrumb items={[{label:"Inicio"},{label:"Órdenes"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Órdenes</h1></div>
-          <div className="space-y-3">{MOCK_ORDERS.map(ord=>{const imp=IMPORTERS.find(i=>i.id===ord.importerId)||IMPORTERS[0];return(
+          {orders.length===0 ? (
+            <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin órdenes</p><p className="text-sm text-muted-foreground">No tienes órdenes activas en backend.</p></div></Card>
+          ) : (
+          <div className="space-y-3">{orders.map(ord=>{const imp=IMPORTERS.find(i=>i.id===ord.importerId)||IMPORTERS[0];return(
             <Card key={ord.id} padding="md" className="hover:shadow-md transition-all">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex items-start gap-3 flex-1">
@@ -1323,6 +1577,7 @@ function OrdersScreen({onViewOrder,sb}:{onViewOrder:(id:string)=>void;sb:Sidebar
               </div>
             </Card>
           );})}</div>
+          )}
         </main>
       </div>
     </div>
@@ -1332,12 +1587,22 @@ function OrdersScreen({onViewOrder,sb}:{onViewOrder:(id:string)=>void;sb:Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({orderId,onBack,onOpenChat,sb}:{orderId:string;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl}) {
-  const order=MOCK_ORDERS.find(o=>o.id===orderId)||MOCK_ORDERS[0];
+function OrderDetailScreen({orderId,onBack,onOpenChat,sb,orders}:{orderId:string;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;orders:Order[]}) {
+  const order=orders.find(o=>o.id===orderId)||orders[0];
+  if(!order){
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active="orders"/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AppHeader user={USER} sb={sb}/>
+          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Orden no disponible.</p></Card></main>
+        </div>
+      </div>
+    );
+  }
   const imp=IMPORTERS.find(i=>i.id===order.importerId)||IMPORTERS[0];
   const advisor=imp.advisor;
-  const relQuote=QUOTES.find(q=>q.code===order.quoteCode);
-  const relChat=CHAT_CONVS.find(c=>c.refId===orderId&&c.type==="orden");
+  const relChatId = order.conversationId;
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="orders"/>
@@ -1354,7 +1619,7 @@ function OrderDetailScreen({orderId,onBack,onOpenChat,sb}:{orderId:string;onBack
               <div className="flex gap-2 flex-wrap">
                 <ContactBtn type="whatsapp" label="Contactar asesor"/>
                 <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>}>Ver documentos</Button>
-                {relChat&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Chat</Button>}
+                {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
                 <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>}>Ver seguimiento</Button>
               </div>
             </div>
@@ -1365,7 +1630,7 @@ function OrderDetailScreen({orderId,onBack,onOpenChat,sb}:{orderId:string;onBack
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Producto",order.product],["Cantidad",order.quantity],["Precio final",order.unitPrice],["Incoterm",order.incoterm],["Puerto de origen",order.originPort],["Puerto de destino",order.destPort],["Valor total",order.totalValue]].map(([k,v])=>(
                   <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary font-semibold")}>{v}</p></div>
                 ))}</div>
-                {relQuote&&<div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{relQuote.code}</span></div>}
+                <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3><Timeline stages={ORDER_TIMELINE}/></Card>
               <Card padding="none">
@@ -1403,7 +1668,7 @@ function OrderDetailScreen({orderId,onBack,onOpenChat,sb}:{orderId:string;onBack
                 </div>
               </Card>
               <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">Carga en progreso</span></div><p className="text-xs text-muted-foreground">Última actualización: hace 3 horas</p></Card>
-              {relChat&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta orden</h3><p className="text-xs text-muted-foreground mb-3">{relChat.unread>0&&<span className="font-medium text-primary">{relChat.unread} mensajes sin leer</span>}{relChat.unread===0&&"Sin mensajes nuevos"}</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Abrir chat</Button></Card>}
+              {relChatId&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta orden</h3><p className="text-xs text-muted-foreground mb-3">Abrir conversación asociada a la orden.</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Abrir chat</Button></Card>}
             </div>
           </div>
         </main>
@@ -1436,19 +1701,30 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string}) {
-  const [selectedId,setSelectedId]=useState<string|null>(initialConvId||"c001");
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string)=>Promise<void>}) {
+  const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"no-leidas">("all");
   const [searchConv,setSearchConv]=useState("");
-  const [msgs,setMsgs]=useState<Record<string,ChatMsg[]>>(INIT_MSGS);
+  const [msgs,setMsgs]=useState<Record<string,ChatMsg[]>>(messagesByConversation);
   const [input,setInput]=useState("");
+  const [sending,setSending]=useState(false);
   const [showCtx,setShowCtx]=useState(true);
   const messagesEndRef=useRef<HTMLDivElement>(null);
 
-  const conv=selectedId?CHAT_CONVS.find(c=>c.id===selectedId)||null:null;
+  useEffect(()=>{
+    setMsgs(messagesByConversation);
+  },[messagesByConversation]);
+
+  useEffect(()=>{
+    if (!selectedId && conversations.length > 0) {
+      setSelectedId(initialConvId || conversations[0].id);
+    }
+  }, [selectedId, conversations, initialConvId]);
+
+  const conv=selectedId?conversations.find(c=>c.id===selectedId)||null:null;
   const imp=conv?IMPORTERS.find(i=>i.id===conv.importerId)||IMPORTERS[0]:null;
 
-  const filteredConvs=CHAT_CONVS.filter(c=>{
+  const filteredConvs=conversations.filter(c=>{
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
     if(filter==="no-leidas"&&c.unread===0)return false;
@@ -1462,11 +1738,18 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId}:{onViewQuote:(id
     return true;
   });
 
-  function sendMsg(){
+  async function sendMsg(){
     if(!input.trim()||!selectedId)return;
-    const newMsg:ChatMsg={id:`m${Date.now()}`,sender:"client",text:input.trim(),time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),read:true};
+    const content = input.trim();
+    const newMsg:ChatMsg={id:`pending-${Date.now()}`,sender:"client",text:content,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),read:true};
     setMsgs(prev=>({...prev,[selectedId]:[...(prev[selectedId]||[]),newMsg]}));
     setInput("");
+    setSending(true);
+    try{
+      await onSendMessage(selectedId,content);
+    }finally{
+      setSending(false);
+    }
     setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
   }
 
@@ -1475,7 +1758,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId}:{onViewQuote:(id
   const convMsgs=selectedId?msgs[selectedId]||[]:[];
 
   const refQuote=conv?.type==="cotizacion"?QUOTES.find(q=>q.id===conv.refId)||null:null;
-  const refOrder=conv?.type==="orden"?MOCK_ORDERS.find(o=>o.id===conv.refId)||null:null;
+  const refOrderId=conv?.type==="orden"?conv.refId:null;
 
   const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
 
@@ -1569,8 +1852,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId}:{onViewQuote:(id
                   {conv.type==="cotizacion"&&refQuote&&(
                     <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewQuote(refQuote.id)}>Ver cotización</Button>
                   )}
-                  {conv.type==="orden"&&refOrder&&(
-                    <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(refOrder.id)}>Ver orden</Button>
+                  {conv.type==="orden"&&refOrderId&&(
+                    <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(refOrderId)}>Ver orden</Button>
                   )}
                   <button onClick={()=>setShowCtx(v=>!v)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -1643,8 +1926,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId}:{onViewQuote:(id
                     />
                   </div>
                   <button
-                    onClick={sendMsg}
-                    disabled={!input.trim()}
+                    onClick={()=>{void sendMsg();}}
+                    disabled={!input.trim()||sending}
                     className={clsx("w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 mb-0.5",
                       input.trim()?"bg-primary text-white hover:bg-blue-700 shadow-sm":"bg-muted text-muted-foreground cursor-not-allowed")}>
                     <Send className="w-4 h-4"/>
@@ -1683,17 +1966,17 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId}:{onViewQuote:(id
                     <Button variant="secondary" size="sm" fullWidth className="mt-2 text-xs" onClick={()=>onViewQuote(refQuote.id)}>Ver cotización</Button>
                   </div>
                 </>)}
-                {conv.type==="orden"&&refOrder&&(<>
+                {conv.type==="orden"&&refOrderId&&(<>
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Orden</p>
-                    <div className="space-y-1.5">{[["Código",refOrder.code],["ETA",refOrder.estimated],["Incoterm",refOrder.incoterm],["Puerto orig.",refOrder.originPort.split(",")[0]],["Puerto dest.",refOrder.destPort.split(",")[0]]].map(([k,v])=>(
+                    <div className="space-y-1.5">{[["Código",`ORD-${refOrderId.slice(0, 8).toUpperCase()}`],["Estado","En seguimiento"],["Canal","Chat API"]].map(([k,v])=>(
                       <div key={k} className="flex justify-between items-start gap-1"><span className="text-[10px] text-muted-foreground">{k}</span><span className="text-[10px] font-medium text-foreground text-right">{v}</span></div>
                     ))}</div>
                     <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-50 border border-purple-100 rounded-lg">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse flex-shrink-0"/>
                       <span className="text-[10px] font-semibold text-purple-700">Carga en progreso</span>
                     </div>
-                    <Button variant="secondary" size="sm" fullWidth className="mt-2 text-xs" onClick={()=>onViewOrder(refOrder.id)}>Ver orden</Button>
+                    <Button variant="secondary" size="sm" fullWidth className="mt-2 text-xs" onClick={()=>onViewOrder(refOrderId)}>Ver orden</Button>
                   </div>
                 </>)}
               </div>
@@ -1723,6 +2006,20 @@ function DocumentosScreen({sb}:{sb:SidebarCtrl}) {
 }
 
 function PagosScreen({sb}:{sb:SidebarCtrl}) {
+  if (!SHOW_PAYMENTS_MODULE) {
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active="pagos"/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AppHeader user={USER} sb={sb}/>
+          <main className="flex-1 overflow-y-auto px-6 py-6"><Breadcrumb items={[{label:"Inicio"},{label:"Pagos"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3 mb-6">Pagos</h1>
+            <Card padding="lg" className="border-dashed max-w-lg"><div className="flex flex-col items-center text-center py-8 gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><CreditCard className="w-6 h-6 text-muted-foreground/50"/></div><div><p className="font-semibold">Módulo en construcción</p><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Próximamente habilitaremos pagos y conciliaciones para órdenes.</p></div><span className="px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">Próximamente</span></div></Card>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   const mp=[{id:"PAG-001",amount:"$4,600 USD",concept:"Orden #ORD-2025-0042",date:"10 Mar 2025",status:"Completado"},{id:"PAG-002",amount:"$3,200 USD",concept:"Orden #ORD-2025-0038",date:"02 Mar 2025",status:"Pendiente"},{id:"PAG-003",amount:"$8,900 USD",concept:"Orden #ORD-2025-0031",date:"22 Feb 2025",status:"Parcial"}];
   const sc:Record<string,string>={"Completado":"bg-emerald-50 text-emerald-700","Pendiente":"bg-orange-50 text-orange-700","Parcial":"bg-blue-50 text-blue-700"};
   return (
@@ -1766,9 +2063,9 @@ function Stepper({current}:{current:number}) {
 interface QuoteFormState {productName:string;description:string;referenceLink:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;}
 const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:""};
 
-function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string}) {
+function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
-  const fi=IMPORTERS.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||imp.rating>=parseFloat(cr);return ms&&mc&&mcat&&mr;});
+  const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||imp.rating>=parseFloat(cr);return ms&&mc&&mcat&&mr;});
   const hasF=cs||cc||ccat||cr;
   return (
     <div className="space-y-6">
@@ -1783,8 +2080,8 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId}:{
         <h3 className="text-sm font-semibold mb-3">Selecciona una importadora</h3>
         <Card padding="sm" className="mb-4"><div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-          <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(IMPORTERS.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
-          <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(IMPORTERS.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
+          <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
+          <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
           <div className="w-40"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Calificación mín.</option><option value="4.9">⭐ 4.9+</option><option value="4.7">⭐ 4.7+</option><option value="4.5">⭐ 4.5+</option></Select></div>
           {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
         </div></Card>
@@ -1878,7 +2175,7 @@ function Step3Abierta() {
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload)=>Promise<void>}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -1886,11 +2183,56 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId}:{onBack:()=>void;sb:Si
   const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
   const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
   const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
-  const si=IMPORTERS.find(i=>i.id===selectedId)??null;
+  const si=importers.find(i=>i.id===selectedId)??null;
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
   function goNext(){if(step===1){if(!modalidad){setStepError("Selecciona una modalidad.");return;}if(modalidad==="dirigida"&&!selectedId){setStepError("Selecciona una empresa importadora.");return;}}if(step===2&&!form.productName.trim()){setStepError("El nombre del producto es requerido.");return;}setStepError("");navigate(step+1,"fwd");}
-  async function handleSubmit(){if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}setSubmitting(true);await new Promise(r=>setTimeout(r,1400));setSubmitting(false);setSubmitted(true);}
+  async function handleSubmit(){
+    if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
+    if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+
+    const parsedMinQuantity=Number.parseInt(form.minQuantity,10);
+    if(Number.isNaN(parsedMinQuantity)||parsedMinQuantity<1){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
+
+    const quality=String(form.quality||"").toLowerCase();
+    const tipoCalidad:CreateCotizacionPayload["tipo_calidad"]=quality.includes("econ")
+      ?"economica"
+      :quality.includes("est")
+        ?"estandar"
+        :"premium";
+
+    const parsedTarget=form.targetPrice
+      ?Number.parseFloat(String(form.targetPrice).replace(/[^0-9.,]/g,"").replace(",","."))
+      :undefined;
+
+    const payload:CreateCotizacionPayload={
+      modalidad,
+      ...(modalidad==="dirigida"&&selectedId?{importador_id:selectedId}:{}),
+      pais_importacion:form.country,
+      nombre_producto:form.productName,
+      descripcion_cliente:(form.description||"").length>=10?form.description:`${form.description}...`,
+      link_referencia:form.referenceLink||undefined,
+      linea_producto:form.productLine,
+      tipo_calidad:tipoCalidad,
+      nivel_personalizacion:form.customization||undefined,
+      modalidad_importacion:form.purpose,
+      cantidad_minima:parsedMinQuantity,
+      precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
+      incoterm:form.incoterm,
+      notas_adicionales:form.notes||undefined,
+    };
+
+    try{
+      setSubmitting(true);
+      setStepError("");
+      await onSubmitQuote(payload);
+      setSubmitted(true);
+    }catch(error){
+      setStepError(error instanceof Error?error.message:"No se pudo crear la cotización.");
+    }finally{
+      setSubmitting(false);
+    }
+  }
   const slideStyle:React.CSSProperties={opacity:visible?1:0,transform:visible?"translateX(0)":direction==="fwd"?"translateX(12px)":"translateX(-12px)",transition:"opacity 180ms ease,transform 180ms ease"};
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -1904,7 +2246,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId}:{onBack:()=>void;sb:Si
             <div className="mb-8"><Stepper current={step}/></div>
             <div className="flex gap-6 items-start">
               <div className="flex-1 min-w-0">
-                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId}/>}{step===2&&<Step2 form={form} setForm={setForm}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
+                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
                 {stepError&&<div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"><AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/><p className="text-sm text-destructive">{stepError}</p></div>}
                 <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
                   <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>{step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>}</div>
@@ -1988,23 +2330,20 @@ function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:App
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterDashboardScreen({sb}:{sb:SidebarCtrl}) {
+function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[]}) {
+  const activeQuotesCount = quotes.filter(q=>q.status!=="active-order").length;
+  const assignedQuotesCount = quotes.filter(q=>q.mode==="Dirigida").length;
+  const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
   const metrics=[
-    {label:"Cotizaciones pendientes",value:"12",delta:"+3 esta semana",icon:<FileText className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Cotizaciones asignadas",value:"7",delta:"4 asesores activos",icon:<Users className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Respuestas enviadas",value:"24",delta:"Este mes",icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Órdenes activas",value:"5",delta:"2 en tránsito",icon:<ShoppingCart className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
-    {label:"Chats activos",value:"9",delta:"3 sin responder",icon:<MessageSquare className="w-5 h-5"/>,color:"text-rose-600",bg:"bg-rose-50"},
-    {label:"Tiempo prom. respuesta",value:"~24h",delta:"Bueno",icon:<Clock className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
-    {label:"Asesores conectados",value:`${COMPANY_ADVISORS.filter(a=>a.status==="activo").length}/${COMPANY_ADVISORS.length}`,delta:"2 en línea ahora",icon:<Zap className="w-5 h-5"/>,color:"text-lime-600",bg:"bg-lime-50"},
+    {label:"Cotizaciones pendientes",value:String(activeQuotesCount),delta:"Dato API",icon:<FileText className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
+    {label:"Cotizaciones asignadas",value:String(assignedQuotesCount),delta:"Dato API",icon:<Users className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
+    {label:"Respuestas enviadas",value:"N/D",delta:"Sin endpoint",icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
+    {label:"Órdenes activas",value:"N/D",delta:"Sin endpoint",icon:<ShoppingCart className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
+    {label:"Chats activos",value:"N/D",delta:"Sin endpoint",icon:<MessageSquare className="w-5 h-5"/>,color:"text-rose-600",bg:"bg-rose-50"},
+    {label:"Tiempo prom. respuesta",value:"N/D",delta:"Sin endpoint",icon:<Clock className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
+    {label:"Asesores conectados",value:`${activeAdvisors}/${advisors.length}`,delta:"Dato API",icon:<Zap className="w-5 h-5"/>,color:"text-lime-600",bg:"bg-lime-50"},
   ];
-  const recentActivity=[
-    {text:"Nueva cotización dirigida — COT-2025-0089 (Café Verde)",time:"Hace 2h",icon:<FileText className="w-3.5 h-3.5 text-blue-600"/>},
-    {text:"Carlos Mendoza respondió COT-2025-0081",time:"Hace 4h",icon:<Send className="w-3.5 h-3.5 text-emerald-600"/>},
-    {text:"Orden ORD-2025-0042 pasó a En tránsito",time:"Hace 6h",icon:<Ship className="w-3.5 h-3.5 text-amber-600"/>},
-    {text:"Nuevo mensaje en chat de ORD-2025-0038",time:"Ayer",icon:<MessageSquare className="w-3.5 h-3.5 text-purple-600"/>},
-    {text:"Juliana Ríos fue desactivada",time:"Ayer",icon:<Ban className="w-3.5 h-3.5 text-rose-600"/>},
-  ];
+  const recentActivity: {text:string;time:string;icon:React.ReactNode}[] = [];
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="imp-dashboard"/>
@@ -2036,7 +2375,7 @@ function ImporterDashboardScreen({sb}:{sb:SidebarCtrl}) {
                   <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver todas</Button>
                 </div>
                 <div className="divide-y divide-border">
-                  {QUOTES.slice(0,5).map(q=>(
+                  {quotes.slice(0,5).map(q=>(
                     <div key={q.id} className="flex items-center gap-4 px-5 py-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{q.product}</p>
@@ -2045,6 +2384,7 @@ function ImporterDashboardScreen({sb}:{sb:SidebarCtrl}) {
                       <Badge variant={q.status as BadgeVariant}/>
                     </div>
                   ))}
+                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin cotizaciones disponibles.</div>}
                 </div>
               </Card>
             </div>
@@ -2061,6 +2401,7 @@ function ImporterDashboardScreen({sb}:{sb:SidebarCtrl}) {
                       </div>
                     </div>
                   ))}
+                  {recentActivity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente disponible en API.</p>}
                 </div>
               </Card>
               <Card padding="md">
@@ -2082,17 +2423,67 @@ function ImporterDashboardScreen({sb}:{sb:SidebarCtrl}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — COMPANY PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterCompanyProfileScreen({sb}:{sb:SidebarCtrl}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;})=>Promise<void>}) {
   const [saved,setSaved]=useState(false);
+  const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({
-    razonSocial:"Grupo Nexus S.A.",description:IMP_DESCRIPTIONS.nexus,year:"2020",website:"www.nexus.co",email:"contacto@nexus.co",
+    razonSocial:"",description:"",year:"",website:"",email:"",
     phone:"+57 1 234 5678",address:"Calle 90 #15-20, Bogotá, Colombia",
-    categories:["Tecnología","Electrónica"],countries:["Colombia","Ecuador","Perú"],
+    categories:[] as string[],countries:[] as string[],
     industries:["Retail","Industrial"],avgResponse:"~24h",
     certs:["ISO 9001","CE"],banner:"",
   });
+  const [saveError,setSaveError]=useState("");
+
+  useEffect(()=>{
+    if(!company)return;
+    setForm((prev)=>(
+      {
+        ...prev,
+        razonSocial:company.nombre_empresa,
+        description:prev.description||"",
+        categories:company.especialidad_producto ?? [],
+        countries:company.paises_origen ?? [],
+        avgResponse:company.tiempo_respuesta_promedio || "~24h",
+      }
+    ));
+  },[company]);
+
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));setSaved(false);}
-  function save(){setSaved(true);setTimeout(()=>setSaved(false),3000);}
+  async function save(){
+    setSaveError("");
+    setSaving(true);
+    try{
+      await onSave({
+        nombre_empresa:form.razonSocial,
+        especialidad_producto:form.categories,
+        paises_origen:form.countries,
+        tiempo_respuesta_promedio:form.avgResponse,
+      });
+      setSaved(true);
+      setTimeout(()=>setSaved(false),3000);
+    }catch(err){
+      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
+    }finally{
+      setSaving(false);
+    }
+  }
+
+  if(!company){
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active="imp-profile"/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AppHeader user={USER_IMPORTADORA} sb={sb}/>
+          <main className="flex-1 overflow-y-auto px-6 py-6">
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Mi empresa"}]}/>
+            <Card padding="lg" className="border-dashed mt-4 max-w-xl"><div className="text-center py-8"><p className="font-semibold">No hay datos de empresa disponibles</p><p className="text-sm text-muted-foreground mt-1">Verifica que tu usuario tenga importador asociado en /usuarios/me.</p></div></Card>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="imp-profile"/>
@@ -2105,8 +2496,9 @@ function ImporterCompanyProfileScreen({sb}:{sb:SidebarCtrl}) {
               <h1 className="text-xl font-semibold mt-3">Perfil de la empresa</h1>
               <p className="text-sm text-muted-foreground mt-0.5">Esta información es visible para los solicitantes.</p>
             </div>
-            <Button variant="primary" icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={save}>{saved?"Guardado":"Guardar cambios"}</Button>
+            <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
           </div>
+          {saveError&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{saveError}</p></Card>}
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
               <Card padding="md">
@@ -2157,14 +2549,14 @@ function ImporterCompanyProfileScreen({sb}:{sb:SidebarCtrl}) {
               <Card padding="md">
                 <p className="font-semibold text-sm mb-4">Vista previa del logo</p>
                 <div className="flex flex-col items-center gap-3">
-                  <div className={clsx("w-20 h-20 rounded-xl flex items-center justify-center text-white text-2xl font-bold",IMPORTERS[0].color)}>{IMPORTERS[0].initials}</div>
+                  <div className={clsx("w-20 h-20 rounded-xl flex items-center justify-center text-white text-2xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
                   <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>}>Cambiar logo</Button>
                 </div>
                 <div className="mt-5 pt-5 border-t border-border space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Calificación</span><span className="font-semibold flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/>4.8</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos</span><span className="font-semibold">147</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Miembro desde</span><span className="font-semibold">Ene 2020</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Verificada</span><span className="font-semibold flex items-center gap-1 text-emerald-600"><BadgeCheck className="w-3 h-3"/>Sí</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Calificación</span><span className="font-semibold flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/>{company.calificacion_promedio || 0}</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos</span><span className="font-semibold">N/D</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Miembro desde</span><span className="font-semibold">{formatShortDate(company.fecha_registro)}</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Verificada</span><span className="font-semibold flex items-center gap-1 text-emerald-600"><BadgeCheck className="w-3 h-3"/>{company.verificado?"Sí":"No"}</span></div>
                 </div>
               </Card>
             </div>
@@ -2178,24 +2570,50 @@ function ImporterCompanyProfileScreen({sb}:{sb:SidebarCtrl}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — ADVISORS
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
-  const [advisors,setAdvisors]=useState(COMPANY_ADVISORS);
+function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onDeleteAdvisor}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onDeleteAdvisor:(advisorId:string)=>Promise<void>}) {
+  const [advisors,setAdvisors]=useState(initialAdvisors);
   const [search,setSearch]=useState("");
   const [showModal,setShowModal]=useState(false);
+  const [showPassword,setShowPassword]=useState(false);
   const [editAdv,setEditAdv]=useState<CompanyAdvisor|null>(null);
-  const [form,setForm]=useState({name:"",role:"",email:"",phone:"",status:"activo" as CompanyAdvisor["status"],availability:"alta" as CompanyAdvisor["availability"]});
+  const [form,setForm]=useState({name:"",role:"",email:"",phone:"",password:"",status:"activo" as CompanyAdvisor["status"],availability:"alta" as CompanyAdvisor["availability"]});
+  const [formError,setFormError]=useState("");
 
   const filtered=advisors.filter(a=>!search||[a.name,a.role,a.email].some(v=>v.toLowerCase().includes(search.toLowerCase())));
 
-  function openCreate(){setEditAdv(null);setForm({name:"",role:"",email:"",phone:"",status:"activo",availability:"alta"});setShowModal(true);}
-  function openEdit(a:CompanyAdvisor){setEditAdv(a);setForm({name:a.name,role:a.role,email:a.email,phone:a.phone,status:a.status,availability:a.availability});setShowModal(true);}
-  function save(){
-    if(editAdv){setAdvisors(prev=>prev.map(a=>a.id===editAdv.id?{...a,...form}:a));}
-    else{const nid="adv"+(advisors.length+1);const initials=form.name.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();setAdvisors(prev=>[...prev,{id:nid,initials,color:"bg-slate-600",activeQuotes:0,avgResponse:"—",joinDate:"Jul 2025",...form}]);}
+  useEffect(()=>{
+    setAdvisors(initialAdvisors);
+  },[initialAdvisors]);
+
+  function openCreate(){setEditAdv(null);setFormError("");setShowPassword(false);setForm({name:"",role:"",email:"",phone:"",password:"",status:"activo",availability:"alta"});setShowModal(true);}
+  function openEdit(a:CompanyAdvisor){setEditAdv(a);setFormError("");setForm({name:a.name,role:a.role,email:a.email,phone:a.phone,password:"",status:a.status,availability:a.availability});setShowModal(true);}
+  async function save(){
+    if(editAdv){
+      setAdvisors(prev=>prev.map(a=>a.id===editAdv.id?{...a,...form}:a));
+      setShowModal(false);
+      return;
+    }
+
+    if(form.password.trim().length<9){
+      setFormError("La contraseña del asesor debe tener mínimo 9 caracteres.");
+      return;
+    }
+
+    const created=await onCreateAdvisor({
+      email:form.email,
+      password:form.password.trim(),
+      nombre:form.name,
+      telefono:form.phone,
+    });
+    setAdvisors(prev=>[created,...prev]);
     setShowModal(false);
   }
   function toggle(id:string){setAdvisors(prev=>prev.map(a=>a.id===id?{...a,status:a.status==="activo"?"inactivo":"activo"}:a));}
-  function del(id:string){if(confirm("¿Eliminar asesor?"))setAdvisors(prev=>prev.filter(a=>a.id!==id));}
+  async function del(id:string){
+    if(!confirm("¿Eliminar asesor?"))return;
+    await onDeleteAdvisor(id);
+    setAdvisors(prev=>prev.filter(a=>a.id!==id));
+  }
 
   const STATUS_CLS:Record<CompanyAdvisor["status"],string>={activo:"bg-emerald-50 text-emerald-700",inactivo:"bg-slate-100 text-slate-600",ausente:"bg-amber-50 text-amber-700"};
   const AVAIL_CLS:Record<CompanyAdvisor["availability"],string>={alta:"text-emerald-600",media:"text-amber-600",baja:"text-rose-600"};
@@ -2250,7 +2668,7 @@ function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
                         <Button variant="ghost" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>openEdit(a)}/>
                         <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Reiniciar contraseña"/>
                         <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>toggle(a.id)}/>
-                        <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5 text-destructive"/>} onClick={()=>del(a.id)}/>
+                        <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5 text-destructive"/>} onClick={()=>{void del(a.id);}}/>
                       </div>
                     </td>
                   </tr>
@@ -2267,6 +2685,7 @@ function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
             <Input label="Cargo" value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))}/>
             <Input label="Correo" type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
             <Input label="Teléfono" value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))}/>
+            {!editAdv&&<Input label="Contraseña temporal" type={showPassword?"text":"password"} value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} hint="Mínimo 9 caracteres. Úsala para el primer login del asesor." suffix={<button type="button" onClick={()=>setShowPassword(v=>!v)} className="text-muted-foreground hover:text-foreground transition-colors">{showPassword?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button>}/>}
             <Select label="Estado" value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value as CompanyAdvisor["status"]}))}>
               <option value="activo">Activo</option><option value="inactivo">Inactivo</option><option value="ausente">Ausente</option>
             </Select>
@@ -2274,6 +2693,7 @@ function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
               <option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
             </Select>
           </div>
+          {formError&&<p className="text-xs text-destructive">{formError}</p>}
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button variant="secondary" onClick={()=>setShowModal(false)}>Cancelar</Button>
             <Button variant="primary" onClick={save}>{editAdv?"Guardar cambios":"Crear asesor"}</Button>
@@ -2287,11 +2707,11 @@ function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond}:{sb:SidebarCtrl;onRespond:(id:string)=>void}) {
+function ImporterQuotesScreen({sb,onRespond,quotes}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[]}) {
   const [filter,setFilter]=useState("todas");
   const [search,setSearch]=useState("");
   const tabs=["todas","disponibles","asignadas","respondidas","vencidas","abiertas","dirigidas"];
-  const filtered=QUOTES.filter(q=>{
+  const filtered=quotes.filter(q=>{
     const ms=!search||[q.product,q.code,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mf=filter==="todas"||
       (filter==="dirigidas"&&q.mode==="Dirigida")||
@@ -2361,19 +2781,18 @@ function ImporterQuotesScreen({sb,onRespond}:{sb:SidebarCtrl;onRespond:(id:strin
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorDashboardScreen({sb,availableCount}:{sb:SidebarCtrl;availableCount:number}) {
+function AdvisorDashboardScreen({sb,availableCount,quotes}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[]}) {
+  const myQuotesCount = quotes.length;
+  const activeOrdersCount = quotes.filter(q=>q.status==="active-order").length;
+  const recentQuotes = quotes.slice(0,3);
   const metrics=[
     {label:"Cotizaciones disponibles",value:availableCount.toString(),icon:<Zap className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
-    {label:"Cotizaciones aceptadas",value:"3",icon:<ClipboardList className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Respuestas enviadas",value:"8",icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Chats activos",value:"5",icon:<MessageSquare className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Órdenes en seguimiento",value:"2",icon:<ShoppingCart className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
+    {label:"Mis cotizaciones",value:myQuotesCount.toString(),icon:<ClipboardList className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
+    {label:"Respuestas enviadas",value:"N/D",icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
+    {label:"Chats activos",value:"N/D",icon:<MessageSquare className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
+    {label:"Órdenes en seguimiento",value:activeOrdersCount.toString(),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
   ];
-  const activity=[
-    {text:"Aceptaste COT-2025-0089 — Café Verde Colombiano",time:"Hace 2h"},
-    {text:"Enviaste respuesta a COT-2025-0081",time:"Hace 5h"},
-    {text:"Nuevo mensaje en ORD-2025-0042",time:"Ayer"},
-  ];
+  const activity:{text:string;time:string}[]=[];
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-dashboard"/>
@@ -2383,7 +2802,7 @@ function AdvisorDashboardScreen({sb,availableCount}:{sb:SidebarCtrl;availableCou
           <div>
             <Breadcrumb items={[{label:"Inicio"},{label:"Mi dashboard"}]}/>
             <h1 className="text-xl font-semibold mt-3">Panel del asesor</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Bienvenido, Carlos Mendoza</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Resumen de cotizaciones asignadas</p>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {metrics.map((m,i)=>(
@@ -2397,18 +2816,19 @@ function AdvisorDashboardScreen({sb,availableCount}:{sb:SidebarCtrl;availableCou
           <div className="grid lg:grid-cols-2 gap-6">
             <Card padding="none">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-semibold text-sm">Cotizaciones disponibles</h2>
-                <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("adv-available")}>Ver todas</Button>
+                <h2 className="font-semibold text-sm">Mis cotizaciones recientes</h2>
+                <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("adv-my-quotes")}>Ver todas</Button>
               </div>
-              {INIT_AVAILABLE.slice(0,3).map(q=>(
+              {recentQuotes.map(q=>(
                 <div key={q.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{q.product}</p>
-                    <p className="text-xs text-muted-foreground">{q.category} · {q.country} · {q.createdAgo}</p>
+                    <p className="text-xs text-muted-foreground">{q.code} · {q.date}</p>
                   </div>
-                  <span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium",q.priority==="alta"?"bg-rose-50 text-rose-700":q.priority==="media"?"bg-amber-50 text-amber-700":"bg-slate-100 text-slate-600")}>{q.priority}</span>
+                  <Badge variant={q.status as BadgeVariant}/>
                 </div>
               ))}
+              {recentQuotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin cotizaciones asignadas.</div>}
             </Card>
             <Card padding="none">
               <div className="px-5 py-4 border-b border-border"><h2 className="font-semibold text-sm">Actividad reciente</h2></div>
@@ -2419,6 +2839,7 @@ function AdvisorDashboardScreen({sb,availableCount}:{sb:SidebarCtrl;availableCou
                     <div><p className="text-sm">{a.text}</p><p className="text-xs text-muted-foreground">{a.time}</p></div>
                   </div>
                 ))}
+                {activity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente disponible en API.</p>}
               </div>
             </Card>
           </div>
@@ -2431,13 +2852,23 @@ function AdvisorDashboardScreen({sb,availableCount}:{sb:SidebarCtrl;availableCou
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available:AvailableQuote[];onClaim:(id:string)=>void}) {
-  const PRIO_CLS:Record<AvailableQuote["priority"],string>={
-    alta:"border-rose-200 bg-rose-50/30",media:"border-amber-200 bg-amber-50/30",baja:"border-border bg-white",
-  };
-  const PRIO_BADGE:Record<AvailableQuote["priority"],string>={
-    alta:"bg-rose-50 text-rose-700",media:"bg-amber-50 text-amber-700",baja:"bg-slate-100 text-slate-600",
-  };
+function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>}) {
+  const [claimingId,setClaimingId]=useState<string|null>(null);
+  const [claimError,setClaimError]=useState("");
+
+  async function handleClaim(quoteId: string){
+    try{
+      setClaimingId(quoteId);
+      setClaimError("");
+      await onClaim(quoteId);
+    }catch(error){
+      const message = error instanceof Error ? error.message : "No se pudo tomar la cotización.";
+      setClaimError(message);
+    }finally{
+      setClaimingId(null);
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-available"/>
@@ -2447,37 +2878,32 @@ function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Cotizaciones disponibles"}]}/>
             <h1 className="text-xl font-semibold mt-3">Cotizaciones disponibles</h1>
-            <p className="text-sm text-muted-foreground">{available.filter(q=>!q.claimedBy).length} esperando asignación · Las aceptadas desaparecen para otros asesores</p>
+            <p className="text-sm text-muted-foreground">{available.length} esperando asignación</p>
           </div>
+          {claimError&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{claimError}</p></Card>}
           {available.length===0&&(
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
               <CheckCircle2 className="w-12 h-12 text-emerald-400"/>
               <p className="font-semibold text-lg">¡Todo al día!</p>
-              <p className="text-sm text-muted-foreground">No hay cotizaciones disponibles en este momento.</p>
+              <p className="text-sm text-muted-foreground">No hay cotizaciones disponibles para asignar en este momento</p>
             </div>
           )}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {available.map(q=>(
-              <div key={q.id} className={clsx("border rounded-xl p-5 flex flex-col gap-4 transition-all duration-300",q.claimedBy?"border-emerald-200 bg-emerald-50/50":PRIO_CLS[q.priority])}>
+              <div key={q.id} className="border border-border rounded-xl p-5 flex flex-col gap-4 transition-all duration-300 bg-white">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-semibold text-sm leading-tight">{q.product}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{q.code}</p>
                   </div>
-                  {q.claimedBy
-                    ?<span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-md font-medium flex items-center gap-1 flex-shrink-0"><CheckCircle2 className="w-3 h-3"/>Asignada a mí</span>
-                    :<span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium flex-shrink-0",PRIO_BADGE[q.priority])}>Prioridad {q.priority}</span>
-                  }
+                  <span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium flex-shrink-0",q.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{q.mode}</span>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Tag className="w-3 h-3"/>{q.category}</span>
+                  <span className="flex items-center gap-1"><Tag className="w-3 h-3"/>{q.productLine}</span>
                   <span className="flex items-center gap-1"><Globe className="w-3 h-3"/>{q.country}</span>
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{q.createdAgo}</span>
+                  <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{q.updatedAt}</span>
                 </div>
-                {q.claimedBy
-                  ?<Button variant="secondary" size="sm" fullWidth icon={<Send className="w-3.5 h-3.5"/>}>Responder ahora</Button>
-                  :<Button variant="primary" size="sm" fullWidth icon={<Zap className="w-3.5 h-3.5"/>} onClick={()=>onClaim(q.id)}>Aceptar cotización</Button>
-                }
+                <Button variant="primary" size="sm" fullWidth icon={<Zap className="w-3.5 h-3.5"/>} loading={claimingId===q.id} onClick={()=>{void handleClaim(q.id);}}>Tomar cotización</Button>
               </div>
             ))}
           </div>
@@ -2490,8 +2916,8 @@ function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb}:{sb:SidebarCtrl}) {
-  const myQuotes=QUOTES.slice(0,4).map((q,i)=>({...q,responseStatus:i<2?"Enviada":i===2?"En negociación":"Borrador",timeLeft:i<2?"Respondida":i===2?"3 días":i===3?"5 días":"—"}));
+function AdvisorMyQuotesScreen({sb,quotes,onRespond}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void}) {
+  const myQuotes=quotes.slice(0,20);
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-my-quotes"/>
@@ -2507,9 +2933,9 @@ function AdvisorMyQuotesScreen({sb}:{sb:SidebarCtrl}) {
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
                   <th className="text-left px-5 py-3 font-medium">Producto</th>
+                  <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Código</th>
                   <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Estado cot.</th>
-                  <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Respuesta</th>
-                  <th className="text-left px-3 py-3 font-medium hidden lg:table-cell">Tiempo</th>
+                  <th className="text-left px-3 py-3 font-medium hidden lg:table-cell">Últ. act.</th>
                   <th className="text-right px-5 py-3 font-medium">Acciones</th>
                 </tr>
               </thead>
@@ -2518,27 +2944,23 @@ function AdvisorMyQuotesScreen({sb}:{sb:SidebarCtrl}) {
                   <tr key={q.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-5 py-3">
                       <p className="font-medium">{q.product}</p>
-                      <p className="text-xs text-muted-foreground">{q.code}</p>
+                      <p className="text-xs text-muted-foreground">{q.importer}</p>
                     </td>
+                    <td className="px-3 py-3 hidden md:table-cell text-xs font-mono">{q.code}</td>
                     <td className="px-3 py-3 hidden md:table-cell"><Badge variant={q.status as BadgeVariant}/></td>
-                    <td className="px-3 py-3 hidden md:table-cell">
-                      <span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium",
-                        q.responseStatus==="Enviada"?"bg-emerald-50 text-emerald-700":
-                        q.responseStatus==="En negociación"?"bg-blue-50 text-blue-700":
-                        "bg-slate-100 text-slate-600")}>{q.responseStatus}</span>
-                    </td>
-                    <td className="px-3 py-3 text-xs hidden lg:table-cell text-muted-foreground">{q.timeLeft}</td>
+                    <td className="px-3 py-3 text-xs hidden lg:table-cell text-muted-foreground">{q.updatedAt}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title="Abrir chat"/>
                         <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle"/>
-                        <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>}>Responder</Button>
+                        <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {myQuotes.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No tienes cotizaciones asignadas.</div>}
           </Card>
         </main>
       </div>
@@ -2549,11 +2971,12 @@ function AdvisorMyQuotesScreen({sb}:{sb:SidebarCtrl}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATE RESPONSE SCREEN — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
-function CreateResponseScreen({quoteId,onBack,sb,userRole}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole}) {
-  const quote=QUOTES.find(q=>q.id===quoteId)||QUOTES[0];
+function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>}) {
+  const quote=quotes.find(q=>q.id===quoteId)??null;
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
   const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
   const [form,setForm]=useState({
     unitPrice:"",moq:"",totalPrice:"",
     incoterm:"FOB",port:"",productionTime:"",shippingTime:"",totalTime:"",
@@ -2561,9 +2984,70 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole}:{quoteId:string;onBac
     files:[] as {name:string;type:string}[],
   });
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
-  async function submit(){setSaving(true);await new Promise(r=>setTimeout(r,900));setSaving(false);setSubmitted(true);}
+  async function submit(){
+    if(!quote){
+      setError("No se encontró la cotización seleccionada.");
+      return;
+    }
+
+    const sourceAmount = form.totalPrice.trim() || form.unitPrice.trim();
+    const parsedAmount = Number.parseFloat(sourceAmount.replace(/[^0-9.,]/g, "").replace(",", "."));
+    if(!Number.isFinite(parsedAmount) || parsedAmount <= 0){
+      setError("Ingresa un valor numérico válido para el costo de la propuesta.");
+      return;
+    }
+
+    const tiempoEstimado = form.totalTime.trim() || [form.productionTime.trim(), form.shippingTime.trim()].filter(Boolean).join(" + ") || "Por definir";
+    const observaciones = [form.description.trim(), form.advantages.trim(), form.recommendations.trim()].filter(Boolean).join("\n\n");
+
+    try{
+      setSaving(true);
+      setError("");
+      const payload:CreatePropuestaPayload = {
+        cotizacion_id: quote.id,
+        precio_ofrecido_usd: parsedAmount,
+        tiempo_estimado_entrega: tiempoEstimado,
+        incoterm: form.incoterm,
+        condiciones_adicionales: observaciones || undefined,
+      };
+
+      if(userRole==="asesor"){
+        const draft = await businessService.createProposalDraft(payload);
+        await businessService.sendProposal(draft.id);
+      }else{
+        await businessService.createProposal(payload);
+      }
+
+      if(onSubmitted){
+        await onSubmitted();
+      }
+      setSubmitted(true);
+    }catch(err){
+      setError(err instanceof Error ? err.message : "No se pudo enviar la propuesta.");
+    }finally{
+      setSaving(false);
+    }
+  }
   const activeNav=userRole==="importadora"?"imp-quotes":"adv-my-quotes";
   const steps=[{label:"Económica"},{label:"Logística"},{label:"Observaciones"}];
+  if(!quote){
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active={activeNav}/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AppHeader user={userRole==="asesor"?USER_ASESOR:USER_IMPORTADORA}/>
+          <main className="flex-1 flex items-center justify-center p-6">
+            <Card padding="lg" className="max-w-md w-full text-center border-dashed">
+              <ClipboardList className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3"/>
+              <p className="font-semibold">Cotización no disponible</p>
+              <p className="text-sm text-muted-foreground mt-1">Sin datos reales de API para responder.</p>
+              <Button variant="secondary" className="mt-4" onClick={onBack}>Volver</Button>
+            </Card>
+          </main>
+        </div>
+      </div>
+    );
+  }
   if(submitted)return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active={activeNav}/>
@@ -2654,21 +3138,22 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole}:{quoteId:string;onBac
                   <Button variant="secondary" size="sm" icon={<Save className="w-3.5 h-3.5"/>}>Guardar borrador</Button>
                   {step<3
                     ?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={()=>setStep(s=>s+1)}>Continuar</Button>
-                    :<Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={saving} onClick={submit}>Enviar respuesta</Button>
+                    :<Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={saving} onClick={submit}>Enviar propuesta</Button>
                   }
                 </div>
               </div>
+              {error&&<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-destructive">{error}</div>}
             </div>
             <div className="w-64 hidden lg:block">
               <Card padding="md">
                 <p className="font-semibold text-sm mb-3">Resumen de la cotización</p>
                 <div className="space-y-2 text-xs">
-                  <div><span className="text-muted-foreground">Producto:</span><p className="font-medium">{quote.product}</p></div>
-                  <div><span className="text-muted-foreground">Código:</span><p className="font-medium">{quote.code}</p></div>
-                  <div><span className="text-muted-foreground">País origen:</span><p className="font-medium">{quote.country}</p></div>
-                  <div><span className="text-muted-foreground">Incoterm deseado:</span><p className="font-medium">{quote.incoterm}</p></div>
-                  <div><span className="text-muted-foreground">Precio objetivo:</span><p className="font-medium">{quote.targetPrice}</p></div>
-                  <div><span className="text-muted-foreground">Cant. mínima:</span><p className="font-medium">{quote.minQuantity} u.</p></div>
+                  <div><span className="text-muted-foreground">Producto:</span><p className="font-medium">{quote?.product||"—"}</p></div>
+                  <div><span className="text-muted-foreground">Código:</span><p className="font-medium">{quote?.code||"—"}</p></div>
+                  <div><span className="text-muted-foreground">País origen:</span><p className="font-medium">{quote?.country||"—"}</p></div>
+                  <div><span className="text-muted-foreground">Incoterm deseado:</span><p className="font-medium">{quote?.incoterm||"—"}</p></div>
+                  <div><span className="text-muted-foreground">Precio objetivo:</span><p className="font-medium">{quote?.targetPrice||"—"}</p></div>
+                  <div><span className="text-muted-foreground">Cant. mínima:</span><p className="font-medium">{quote?.minQuantity?`${quote.minQuantity} u.`:"—"}</p></div>
                 </div>
               </Card>
             </div>
@@ -2890,28 +3375,166 @@ function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegiste
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
-function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:()=>void;onPolicy:(page:"data"|"terms")=>void}) {
+function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:"data"|"terms")=>void}) {
   const [userType,setUserType]=useState<RegUserType>("solicitante");
   const [personType,setPersonType]=useState<RegPersonType>("natural");
   const [accepted,setAccepted]=useState(false);
   const [loading,setLoading]=useState(false);
   const [success,setSuccess]=useState(false);
+  const [registeredEmail,setRegisteredEmail]=useState("");
+  const [otpCode,setOtpCode]=useState("");
+  const [otpLoading,setOtpLoading]=useState(false);
+  const [otpError,setOtpError]=useState("");
+  const [otpSuccess,setOtpSuccess]=useState(false);
+  const [submitError,setSubmitError]=useState("");
   const [form,setForm]=useState({
     email:"",docType:"CC",docNum:"",name:"",lastName:"",phone:"",country:"+57",
-    nit:"",razonSocial:"",repEmail:"",repPhone:"",repCountry:"+57",
+    nit:"",razonSocial:"",repEmail:"",repPhone:"",repCountry:"+57",password:"",confirmPassword:"",
   });
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
-  async function submit(e:React.FormEvent){e.preventDefault();if(!accepted)return;setLoading(true);await new Promise(r=>setTimeout(r,900));setLoading(false);setSuccess(true);}
+  function getErrorMessage(error: unknown){
+    if(error instanceof Error&&error.message){
+      return error.message;
+    }
+    if(typeof error==="string"&&error){
+      return error;
+    }
+    if(typeof error==="object"&&error!==null){
+      const response="response" in error?error.response:undefined;
+      if(typeof response==="object"&&response!==null&&"data" in response){
+        const data=response.data;
+        if(typeof data==="object"&&data!==null&&"detail" in data){
+          const detail=data.detail;
+          if(typeof detail==="string"&&detail){
+            return detail;
+          }
+        }
+      }
+    }
+    return "No se pudo completar el registro";
+  }
+  async function submit(e:React.FormEvent){
+    e.preventDefault();
+    if(!accepted||loading)return;
+
+    setSubmitError("");
+
+    const password=form.password;
+    if(password.length<9){
+      setSubmitError("La contrasena debe tener minimo 9 caracteres.");
+      return;
+    }
+    if(form.password!==form.confirmPassword){
+      setSubmitError("Las contrasenas no coinciden.");
+      return;
+    }
+
+    const email=(personType==="natural"?form.email:form.repEmail).trim();
+    const telefono=(personType==="natural"?form.phone:form.repPhone).trim();
+    const indicativo=(personType==="natural"?form.country:form.repCountry).trim();
+
+    const payload: RegisterRequest = personType === "natural"
+      ? {
+          email,
+          password,
+          rol: "solicitante",
+          tipo_persona: "natural",
+          tipo_documento: String(form.docType ?? "").trim(),
+          numero_documento: String(form.docNum ?? "").trim(),
+          nombre: String(form.name ?? "").trim(),
+          apellido: String(form.lastName ?? "").trim(),
+          indicativo_pais_telefono: indicativo,
+          telefono,
+          acepto_politica_datos: accepted,
+        }
+      : {
+          email,
+          password,
+          rol: "solicitante",
+          tipo_persona: "juridica",
+          nit: String(form.nit ?? "").trim(),
+          razon_social: String(form.razonSocial ?? "").trim(),
+          indicativo_pais_telefono: indicativo,
+          telefono,
+          acepto_politica_datos: accepted,
+        };
+
+    try{
+      setLoading(true);
+      await authService.register(payload);
+      setRegisteredEmail(email);
+      setSuccess(true);
+    }catch(error){
+      setSubmitError(getErrorMessage(error));
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  async function verifyOtp(e:React.FormEvent){
+    e.preventDefault();
+    if(otpLoading)return;
+
+    const normalizedOtp=String(otpCode??"").trim();
+    if(normalizedOtp.length!==6){
+      setOtpError("Ingresa un codigo OTP valido de 6 digitos.");
+      return;
+    }
+
+    if(!registeredEmail){
+      setOtpError("No se encontro el correo de registro para verificar la cuenta.");
+      return;
+    }
+
+    try{
+      setOtpLoading(true);
+      setOtpError("");
+      await authService.verifyEmail({ email: registeredEmail, otp: normalizedOtp });
+      setOtpSuccess(true);
+      setTimeout(()=>onSuccess(registeredEmail),1200);
+    }catch(error){
+      setOtpError(getErrorMessage(error));
+    }finally{
+      setOtpLoading(false);
+    }
+  }
   const countryPhones=["+57","+1","+52","+34","+44","+49","+55","+54","+56","+51"];
   const docTypes=["CC","CE","Pasaporte","NIT","DNI"];
 
   if(success)return(
     <div className="min-h-screen flex flex-col bg-[#F0F2F5] items-center justify-center px-4" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center">
-        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
-        <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
-        <p className="text-sm text-muted-foreground mb-6">Tu cuenta ha sido creada. Revisa tu correo para activarla.</p>
-        <Button variant="primary" fullWidth onClick={onBack}>Volver al inicio</Button>
+        {!otpSuccess?(
+          <>
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
+            <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
+            <p className="text-sm text-muted-foreground mb-4">Te enviamos un codigo OTP de 6 digitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>.</p>
+
+            <form onSubmit={verifyOtp} className="space-y-3 text-left">
+              <Input
+                label="Codigo OTP"
+                value={otpCode}
+                onChange={e=>setOtpCode(e.target.value)}
+                placeholder="123456"
+                inputMode="numeric"
+                maxLength={6}
+                required
+              />
+              {otpError&&<p className="text-xs text-destructive text-left">{otpError}</p>}
+              <Button type="submit" variant="primary" fullWidth loading={otpLoading}>
+                {!otpLoading&&"Activar cuenta"}
+              </Button>
+            </form>
+
+            <button type="button" onClick={onBack} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+          </>
+        ):(
+          <>
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
+            <h2 className="text-lg font-semibold mb-2">¡Cuenta activada con éxito!</h2>
+            <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesion...</p>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2964,6 +3587,8 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     {personType==="natural"?(
                       <>
                         <Input label="Correo electrónico" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
+                        <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
+                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contrasena" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
                         <div className="grid grid-cols-2 gap-3">
                           <Select label="Tipo de documento" value={form.docType} onChange={e=>f("docType",e.target.value)}>{docTypes.map(d=><option key={d}>{d}</option>)}</Select>
                           <Input label="Número de documento" placeholder="1234567890" value={form.docNum} onChange={e=>f("docNum",e.target.value)} required/>
@@ -2980,6 +3605,8 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     ):(
                       <>
                         <Input label="Correo del representante" type="email" placeholder="representante@empresa.com" value={form.repEmail} onChange={e=>f("repEmail",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
+                        <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
+                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contrasena" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
                         <Input label="NIT" placeholder="900.123.456-7" value={form.nit} onChange={e=>f("nit",e.target.value)} required/>
                         <Input label="Razón social" placeholder="Mi Empresa S.A.S." value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)} required/>
                         <div className="flex gap-2">
@@ -2988,6 +3615,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                         </div>
                       </>
                     )}
+                    {submitError&&<p className="text-xs text-destructive">{submitError}</p>}
                     <div className="flex items-start gap-2.5 mt-1">
                       <input type="checkbox" id="acepta" checked={accepted} onChange={e=>setAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary flex-shrink-0 cursor-pointer"/>
                       <label htmlFor="acepta" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
@@ -3050,63 +3678,107 @@ function PolicyScreen({page,onBack}:{page:"data"|"terms";onBack:()=>void}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────────────────────────────────────────
-type AuthView="login"|"forgot";
+function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void;initialEmail?:string}) {
+  return (
+    <AuthScreen
+      onLogin={onLogin}
+      onRegister={onRegister}
+      onLanding={onLanding}
+      onPolicy={onPolicy}
+      logo={<Logo />}
+      initialEmail={initialEmail}
+    />
+  );
+}
 
-function LoginScreen({onLogin,onRegister,onLanding,onPolicy}:{onLogin:(role:UserRole)=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void}) {
-  const [view,setView]=useState<AuthView>("login");
-  const [dark,setDark]=useState(false);const[showPw,setShowPw]=useState(false);const[loading,setLoading]=useState(false);const[success,setSuccess]=useState(false);
-  const [selectedRole,setSelectedRole]=useState<UserRole>("solicitante");
-  const [email,setEmail]=useState("");const[password,setPassword]=useState("");const[emailErr,setEmailErr]=useState("");const[pwErr,setPwErr]=useState("");
-  function validate(){let ok=true;if(!email){setEmailErr("El correo es requerido.");ok=false;}else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){setEmailErr("Ingresa un correo válido.");ok=false;}else setEmailErr("");if(view==="login"&&!password){setPwErr("La contraseña es requerida.");ok=false;}else setPwErr("");return ok;}
-  async function handleSubmit(e:React.FormEvent){e.preventDefault();if(!validate())return;setLoading(true);await new Promise(r=>setTimeout(r,900));setLoading(false);if(view==="forgot")setSuccess(true);else onLogin(selectedRole);}
-  function sw(next:AuthView){setView(next);setEmail("");setPassword("");setEmailErr("");setPwErr("");setSuccess(false);}
-  const ROLE_OPTS:[UserRole,React.ReactNode,string][]=[
-    ["solicitante",<UserRound className="w-5 h-5"/>,"Solicitante"],
-    ["importadora",<Building2 className="w-5 h-5"/>,"Importadora"],
-    ["asesor",<Users className="w-5 h-5"/>,"Asesor"],
-  ];
+function ResetPasswordScreen({ token, onBackToLogin }: { token: string; onBackToLogin: () => void }) {
   return (
     <div className="min-h-screen flex flex-col bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
-      <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-border">
-        <button onClick={onLanding}><Logo/></button>
-        <div className="flex items-center gap-1">
-          <button onClick={()=>setDark(d=>!d)} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">{dark?<Sun className="w-4 h-4"/>:<Moon className="w-4 h-4"/>}</button>
-        </div>
+      <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3.5">
+        <Logo/>
       </header>
-      <main className="flex-1 flex items-center justify-center px-4 py-10"><div className="w-full max-w-[420px]"><div className="bg-white rounded-2xl border border-border shadow-sm"><div className="px-8 py-8">
-        {view==="login"&&<>
-          <div className="text-center mb-6"><h1 className="text-xl font-semibold tracking-tight">Iniciar sesión</h1><p className="text-sm text-muted-foreground mt-1">Selecciona tu rol y accede a tu portal</p></div>
+
+      <main className="flex flex-1 items-center justify-center px-4 py-10">
+        <div className="w-full max-w-[420px]">
+          <ResetPasswordForm token={token} onBackToLogin={onBackToLogin} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function AdminDashboardScreen({sb}:{sb:SidebarCtrl}) {
+  return (
+    <div className="min-h-screen bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <Sidebar {...sb} active="admin-dashboard"/>
+      <main className={clsx("transition-all duration-300",sb.pinned?"ml-52":"ml-16")}>
+        <div className="px-6 py-6 max-w-6xl mx-auto">
           <div className="mb-5">
-            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Acceder como</p>
-            <div className="flex gap-2">
-              {ROLE_OPTS.map(([r,icon,label])=>(
-                <button key={r} onClick={()=>setSelectedRole(r)} className={clsx("flex-1 py-3 flex flex-col items-center gap-1.5 border rounded-xl text-xs font-semibold transition-all",selectedRole===r?"border-primary bg-primary/5 text-primary shadow-sm":"border-border text-muted-foreground hover:border-primary/40")}>
-                  {icon}<span>{label}</span>
-                </button>
-              ))}
+            <Breadcrumb items={[{label:"Inicio"},{label:"Dashboard Admin"}]}/>
+            <h1 className="text-2xl font-bold mt-1">Panel Administrativo</h1>
+            <p className="text-sm text-muted-foreground mt-1">Acceso administrativo autenticado correctamente.</p>
+          </div>
+          <Card padding="lg">
+            <p className="text-sm text-muted-foreground">Este rol ya redirige al dashboard de admin. Aquí puedes conectar los módulos administrativos.</p>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function UserProfileScreen({sb,profile,onSave,onBack}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string})=>Promise<void>;onBack:()=>void}) {
+  const [form,setForm]=useState(profile);
+  const [saving,setSaving]=useState(false);
+  const [saved,setSaved]=useState(false);
+  const [error,setError]=useState("");
+
+  useEffect(()=>{
+    setForm(profile);
+  },[profile]);
+
+  async function save(){
+    setSaving(true);
+    setError("");
+    try{
+      await onSave({
+        nombre:form.nombre,
+        telefono:form.telefono,
+        whatsapp:form.whatsapp,
+      });
+      setSaved(true);
+      setTimeout(()=>setSaved(false),3000);
+    }catch(err){
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el perfil.");
+    }finally{
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <Sidebar {...sb} active="dashboard"/>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <AppHeader user={USER} sb={sb}/>
+        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Editar perfil"}]}/>
+              <h1 className="text-xl font-semibold mt-3">Editar perfil</h1>
             </div>
+            <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
           </div>
-          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-            <Input label="Correo electrónico" type="email" placeholder="correo@empresa.com" autoComplete="username" value={email} onChange={e=>{setEmail(e.target.value);if(emailErr)setEmailErr("");}} error={emailErr} prefix={<Mail className="w-4 h-4"/>}/>
-            <Input label="Contraseña" type={showPw?"text":"password"} placeholder="••••••••" autoComplete="current-password" value={password} onChange={e=>{setPassword(e.target.value);if(pwErr)setPwErr("");}} error={pwErr} prefix={<Lock className="w-4 h-4"/>} suffix={<button type="button" onClick={()=>setShowPw(v=>!v)} className="focus:outline-none">{showPw?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button>} rightLabel={<button type="button" onClick={()=>sw("forgot")} className="text-xs text-primary hover:text-blue-700 font-medium transition-colors">¿Olvidaste tu contraseña?</button>}/>
-            <Button type="submit" variant="primary" fullWidth loading={loading} className="mt-1 h-10 uppercase tracking-wide text-[13px]">{!loading&&<><LogIn className="w-4 h-4"/><span>Ingresar</span></>}</Button>
-          </form>
-          <div className="mt-4 flex gap-2.5 bg-blue-50 border border-blue-100 rounded-lg px-3.5 py-3"><Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"/><p className="text-xs text-blue-700 leading-relaxed">Demostración: usa cualquier correo y contraseña para acceder.</p></div>
-          <div className="mt-5 flex flex-col gap-2 text-center">
-            <p className="text-xs text-muted-foreground">¿No tienes cuenta? <button type="button" onClick={onRegister} className="text-primary hover:text-blue-700 font-medium">Regístrate gratis</button></p>
-            <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Volver a la página principal</button>
-          </div>
-        </>}
-        {view==="forgot"&&!success&&<><div className="text-center mb-6"><h1 className="text-xl font-semibold tracking-tight">Recuperar acceso</h1><p className="text-sm text-accent mt-1">Te enviaremos un enlace a tu correo</p></div>
-          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4"><Input label="Correo electrónico" type="email" placeholder="correo@empresa.com" value={email} onChange={e=>{setEmail(e.target.value);if(emailErr)setEmailErr("");}} error={emailErr} prefix={<Mail className="w-4 h-4"/>}/><Button type="submit" variant="primary" fullWidth loading={loading} className="mt-1 h-10 uppercase tracking-wide text-[13px]">{!loading&&"Enviar enlace"}</Button></form>
-          <button type="button" onClick={()=>sw("login")} className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors">← Volver al inicio de sesión</button></>}
-        {view==="forgot"&&success&&<div className="flex flex-col items-center text-center gap-3 py-4"><CheckCircle2 className="w-10 h-10 text-emerald-500"/><div><p className="font-semibold">Correo enviado</p><p className="text-sm text-muted-foreground mt-1">Revisa tu bandeja en <span className="font-medium">{email}</span>.</p></div><Button variant="ghost" size="sm" onClick={()=>sw("login")}>Volver al inicio de sesión</Button></div>}
-      </div></div></div></main>
-      <footer className="py-4 flex items-center justify-center gap-4 text-center text-xs text-muted-foreground border-t border-border bg-white">
-        <span>© 2025 ImportacionesQ8</span>
-        <button onClick={()=>onPolicy("data")} className="hover:text-foreground transition-colors">Tratamiento de Datos</button>
-        <button onClick={()=>onPolicy("terms")} className="hover:text-foreground transition-colors">Términos</button>
-      </footer>
+          {error&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{error}</p></Card>}
+          <Card padding="md" className="max-w-2xl">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Nombre" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>
+              <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))}/>
+              <Input label="Email" value={form.email} disabled/>
+              <Input label="WhatsApp" value={form.whatsapp} onChange={e=>setForm(p=>({...p,whatsapp:e.target.value}))}/>
+            </div>
+          </Card>
+        </main>
+      </div>
     </div>
   );
 }
@@ -3114,11 +3786,25 @@ function LoginScreen({onLogin,onRegister,onLanding,onPolicy}:{onLogin:(role:User
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
-type Screen="landing"|"login"|"register"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"create-response"|"notifications";
+type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications"|"user-profile";
 
 export default function App() {
-  const [screen,setScreen]=useState<Screen>("landing");
-  const [userRole,setUserRole]=useState<UserRole>("solicitante");
+  const storedRole = normalizeStoredRole(getStoredRole());
+  const hasStoredSession = Boolean(getStoredToken() && storedRole);
+
+  const { isAuthenticated, isInitializing, appRole, signOut } = useAuth();
+  const [screen,setScreen]=useState<Screen>(() =>
+    window.location.pathname === RESET_PASSWORD_PATH
+      ? "reset-password"
+      : hasStoredSession
+        ? getHomeScreenForRole(storedRole!)
+        : "landing",
+  );
+  const [loginPrefillEmail,setLoginPrefillEmail]=useState("");
+  const [resetToken,setResetToken]=useState<string>(() =>
+    new URLSearchParams(window.location.search).get("token") ?? "",
+  );
+  const [userRole,setUserRole]=useState<UserRole|"admin">(storedRole ?? "solicitante");
   const [selectedQuoteId,setSelectedQuoteId]=useState("");
   const [selectedResponseId,setSelectedResponseId]=useState("");
   const [responseFrom,setResponseFrom]=useState<ResponseFrom>("responses");
@@ -3129,8 +3815,227 @@ export default function App() {
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>();
   const [sidebarPinned,setSidebarPinned]=useState(true);
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
-  const [availableQuotes,setAvailableQuotes]=useState<AvailableQuote[]>(INIT_AVAILABLE);
-  const [prevScreen,setPrevScreen]=useState<Screen>("dashboard");
+  const [availableQuotes,setAvailableQuotes]=useState<Quote[]>([]);
+  const [marketplaceImporters,setMarketplaceImporters]=useState<Importer[]>([]);
+  const [requesterQuotes,setRequesterQuotes]=useState<Quote[]>([]);
+  const [importerQuotes,setImporterQuotes]=useState<Quote[]>([]);
+  const [companyAdvisors,setCompanyAdvisors]=useState<CompanyAdvisor[]>([]);
+  const [advisorAssignedQuotes,setAdvisorAssignedQuotes]=useState<Quote[]>([]);
+  const [currentUserProfile,setCurrentUserProfile]=useState<BackendUserProfile|null>(null);
+  const [companyProfile,setCompanyProfile]=useState<BackendImporter|null>(null);
+  const [requesterResponses,setRequesterResponses]=useState<QuoteResponse[]>([]);
+  const [requesterOrders,setRequesterOrders]=useState<Order[]>([]);
+  const [chatConversations,setChatConversations]=useState<ChatConv[]>([]);
+  const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
+  const [prevScreen,setPrevScreen]=useState<Screen>(() =>
+    window.location.pathname === RESET_PASSWORD_PATH ? "login" : "dashboard",
+  );
+
+  const reloadImporters = useCallback(async () => {
+    const rows = await businessService.listImporters();
+    setMarketplaceImporters(rows.map(mapBackendImporterToUi));
+  }, []);
+
+  const reloadRequesterQuotes = useCallback(async () => {
+    const rows = await businessService.listQuotes();
+    setRequesterQuotes(rows.map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  const reloadImporterQuotes = useCallback(async () => {
+    const rows = await businessService.listQuotes();
+    setImporterQuotes(rows.map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  const reloadCompanyAdvisors = useCallback(async () => {
+    const rows = await businessService.listCompanyAdvisors();
+    setCompanyAdvisors(rows.map(mapBackendAdvisorToUi));
+  }, []);
+
+  const reloadCurrentUserProfile = useCallback(async () => {
+    const profile = await businessService.getMyUserProfile();
+    setCurrentUserProfile(profile);
+    if (profile.importador_id) {
+      const importer = await businessService.getImporterById(profile.importador_id);
+      setCompanyProfile(importer);
+    } else {
+      setCompanyProfile(null);
+    }
+  }, []);
+
+  const reloadRequesterResponses = useCallback(async () => {
+    const quotes = await businessService.listQuotes();
+    const proposalsByQuote = await Promise.all(
+      quotes.map(async (quote) => {
+        try {
+          return await businessService.listQuoteProposals(quote.id);
+        } catch {
+          return [] as BackendPropuesta[];
+        }
+      }),
+    );
+    const all = proposalsByQuote.flat().map(mapBackendProposalToUiResponse);
+    setRequesterResponses(all);
+  }, []);
+
+  const reloadRequesterOrders = useCallback(async () => {
+    const [orders, quotes] = await Promise.all([
+      businessService.listOrders(),
+      businessService.listQuotes(),
+    ]);
+    const quoteMap = new Map(quotes.map((q) => [q.id, mapBackendQuoteToUi(q, marketplaceImporters)]));
+    setRequesterOrders(orders.map((order) => mapBackendOrderToUiOrder(order, quoteMap.get(order.cotizacion_id))));
+  }, [marketplaceImporters]);
+
+  const reloadChatData = useCallback(async () => {
+    const rows = await businessService.listChatConversations();
+    const mappedConversations: ChatConv[] = rows.map((row) => ({
+      id: row.id,
+      type: row.orden_id ? "orden" : "cotizacion",
+      refCode: row.orden_id ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}` : `COT-${row.cotizacion_id.slice(0, 8).toUpperCase()}`,
+      refId: row.orden_id ?? row.cotizacion_id,
+      importerId: row.importador_usuario_id,
+      status: "activa",
+      unread: 0,
+      lastMsg: row.ultimo_mensaje?.contenido || "Sin mensajes",
+      lastDate: row.ultimo_mensaje?.fecha_envio ? formatShortDate(row.ultimo_mensaje.fecha_envio) : formatShortDate(row.fecha_creacion),
+    }));
+    setChatConversations(mappedConversations);
+
+    const messagePairs = await Promise.all(
+      mappedConversations.map(async (conversation) => {
+        const messages = await businessService.listChatMessages(conversation.id);
+        const mappedMessages: ChatMsg[] = messages.map((message) => ({
+          id: message.id,
+          sender: message.remitente_id === currentUserProfile?.id ? "client" : "provider",
+          text: message.contenido,
+          time: new Date(message.fecha_envio).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }),
+          read: true,
+        }));
+        return [conversation.id, mappedMessages] as const;
+      }),
+    );
+    setChatMessagesByConversation(Object.fromEntries(messagePairs));
+  }, [currentUserProfile?.id]);
+
+  const reloadAdvisorAssignedQuotes = useCallback(async () => {
+    const rows = await businessService.listMyAssignedQuotes();
+    const mapped: BackendCotizacion[] = rows.map((row: {
+      id: string;
+      modalidad: "dirigida" | "abierta";
+      nombre_producto: string;
+      cantidad_minima: number;
+      precio_objetivo_usd: number | null;
+      incoterm: string;
+      estado: string;
+      fecha_creacion: string;
+    }) => ({
+      id: row.id,
+      importador_id: null,
+      modalidad: row.modalidad,
+      pais_importacion: "N/A",
+      nombre_producto: row.nombre_producto,
+      descripcion_cliente: "",
+      linea_producto: "General",
+      tipo_calidad: "estandar",
+      cantidad_minima: row.cantidad_minima,
+      precio_objetivo_usd: row.precio_objetivo_usd,
+      incoterm: row.incoterm,
+      estado: row.estado,
+      fecha_creacion: row.fecha_creacion,
+      fecha_actualizacion: row.fecha_creacion,
+    }));
+    setAdvisorAssignedQuotes(mapped.map((row) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  const reloadAdvisorAvailableQuotes = useCallback(async () => {
+    const rows = await businessService.listAdvisorAvailableQuotes();
+    setAvailableQuotes(rows.map((row) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  useEffect(() => {
+    if (window.location.pathname !== RESET_PASSWORD_PATH) {
+      return;
+    }
+
+    setScreen("reset-password");
+    setResetToken(new URLSearchParams(window.location.search).get("token") ?? "");
+  }, []);
+
+  useEffect(() => {
+    if (!appRole) {
+      return;
+    }
+    setUserRole(appRole);
+  }, [appRole]);
+
+  useEffect(() => {
+    if (isInitializing || !isAuthenticated || !appRole) {
+      return;
+    }
+
+    const publicOrEntryScreens: Screen[] = [
+      "landing",
+      "login",
+      "register",
+      "policy-data",
+      "policy-terms",
+      "reset-password",
+    ];
+
+    if (publicOrEntryScreens.includes(screen)) {
+      setScreen(getHomeScreenForRole(appRole));
+    }
+  }, [isInitializing, isAuthenticated, appRole, screen]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing) {
+      return;
+    }
+    void reloadImporters();
+  }, [isAuthenticated, isInitializing, reloadImporters]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing) {
+      return;
+    }
+    void reloadCurrentUserProfile();
+    void reloadChatData();
+  }, [isAuthenticated, isInitializing, reloadCurrentUserProfile, reloadChatData]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing) {
+      return;
+    }
+
+    if (userRole === "solicitante") {
+      void reloadRequesterQuotes();
+      void reloadRequesterResponses();
+      void reloadRequesterOrders();
+      return;
+    }
+
+    if (userRole === "importadora") {
+      void reloadImporterQuotes();
+      void reloadCompanyAdvisors();
+      return;
+    }
+
+    if (userRole === "asesor") {
+      void reloadAdvisorAssignedQuotes();
+      void reloadAdvisorAvailableQuotes();
+    }
+  }, [
+    isAuthenticated,
+    isInitializing,
+    userRole,
+    reloadRequesterQuotes,
+    reloadRequesterResponses,
+    reloadRequesterOrders,
+    reloadImporterQuotes,
+    reloadCompanyAdvisors,
+    reloadAdvisorAssignedQuotes,
+    reloadAdvisorAvailableQuotes,
+  ]);
 
   const unreadCount=notifications.filter(n=>!n.read).length;
 
@@ -3138,7 +4043,7 @@ export default function App() {
 
   function handleNav(key:string){
     const all:Record<string,Screen>={
-      dashboard:"dashboard","imp-dashboard":"imp-dashboard","adv-dashboard":"adv-dashboard",
+      dashboard:"dashboard","imp-dashboard":"imp-dashboard","adv-dashboard":"adv-dashboard","admin-dashboard":"admin-dashboard",
       quotes:"quotes","imp-quotes":"imp-quotes","adv-available":"adv-available","adv-my-quotes":"adv-my-quotes",
       responses:"responses",chats:"chats",orders:"orders",documentos:"documentos",pagos:"pagos",
       "imp-advisors":"imp-advisors","imp-profile":"imp-profile",notifications:"notifications",
@@ -3147,12 +4052,24 @@ export default function App() {
   }
 
   function getNavItems():NavItem[]{
+    if(userRole==="admin")return NAV_ADMIN as NavItem[];
     if(userRole==="importadora")return NAV_IMPORTADORA as NavItem[];
     if(userRole==="asesor")return NAV_ASESOR as NavItem[];
     return NAV_ITEMS as NavItem[];
   }
 
-  const sb:SidebarCtrl={active:screen,onNav:handleNav,pinned:sidebarPinned,onToggle:()=>setSidebarPinned(p=>!p),navItems:getNavItems(),onNotif:()=>goTo("notifications"),notifCount:unreadCount};
+  function handleProfileClick(){
+    if(userRole==="importadora"){
+      goTo("imp-profile");
+      return;
+    }
+    if(userRole==="solicitante"||userRole==="asesor"){
+      goTo("user-profile");
+      return;
+    }
+  }
+
+  const sb:SidebarCtrl={active:screen,onNav:handleNav,pinned:sidebarPinned,onToggle:()=>setSidebarPinned(p=>!p),navItems:getNavItems(),onNotif:()=>goTo("notifications"),notifCount:unreadCount,onLogout:()=>{void handleLogout();},onProfile:handleProfileClick};
 
   function openResponse(id:string,from:ResponseFrom,fromQuoteId?:string){
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
@@ -3160,53 +4077,198 @@ export default function App() {
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
   function openNewQuote(importerId?:string){setPreselectedImporterId(importerId);goTo("new-quote");}
   function markNotif(id:string){setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));}
-  function claimQuote(id:string){setAvailableQuotes(prev=>prev.map(q=>q.id===id?{...q,claimedBy:"me"}:q));}
-
-  function handleLogin(role:UserRole){
-    setUserRole(role);
-    if(role==="importadora")goTo("imp-dashboard");
-    else if(role==="asesor")goTo("adv-dashboard");
-    else goTo("dashboard");
+  async function claimQuote(id:string){
+    await businessService.claimAdvisorQuote(id);
+    await Promise.all([reloadAdvisorAvailableQuotes(), reloadAdvisorAssignedQuotes()]);
   }
 
+  function handleLogin(role:UserRole|"admin"){
+    setUserRole(role);
+    goTo(getHomeScreenForRole(role));
+  }
+
+  async function handleLogout(){
+    await signOut();
+    setUserRole("solicitante");
+    setScreen("login");
+  }
+
+  async function handleCreateQuote(payload: CreateCotizacionPayload){
+    await businessService.createQuote(payload);
+    await reloadRequesterQuotes();
+    await reloadRequesterResponses();
+    await reloadRequesterOrders();
+    await reloadImporterQuotes();
+    await reloadAdvisorAssignedQuotes();
+  }
+
+  async function handleCreateAdvisor(payload: CreateAsesorPayload): Promise<CompanyAdvisor>{
+    const created = await businessService.createCompanyAdvisor(payload);
+    await reloadCompanyAdvisors();
+    return mapBackendAdvisorToUi(created);
+  }
+
+  async function handleDeleteAdvisor(advisorId: string): Promise<void> {
+    await businessService.deleteCompanyAdvisor(advisorId);
+    await reloadCompanyAdvisors();
+  }
+
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;}) {
+    if (!currentUserProfile?.importador_id) {
+      throw new Error("Tu usuario no tiene importador asociado.");
+    }
+    await businessService.updateImporterById(currentUserProfile.importador_id, payload);
+    await reloadCurrentUserProfile();
+    await reloadImporters();
+  }
+
+  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;whatsapp:string}) {
+    await businessService.updateMyUserProfile(payload);
+    await reloadCurrentUserProfile();
+  }
+
+  async function handleSendChatMessage(conversationId: string, contenido: string) {
+    await businessService.sendChatMessage(conversationId, { contenido, tipo: "texto" });
+    const messages = await businessService.listChatMessages(conversationId);
+    setChatMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: messages.map((message) => ({
+        id: message.id,
+        sender: message.remitente_id === currentUserProfile?.id ? "client" : "provider",
+        text: message.contenido,
+        time: new Date(message.fecha_envio).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }),
+        read: true,
+      })),
+    }));
+    await reloadChatData();
+  }
+
+  async function refreshQuoteLists(){
+    await Promise.all([
+      reloadRequesterQuotes(),
+      reloadRequesterResponses(),
+      reloadRequesterOrders(),
+      reloadImporterQuotes(),
+      reloadAdvisorAssignedQuotes(),
+      reloadAdvisorAvailableQuotes(),
+    ]);
+  }
+
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
+  const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
+    "imp-dashboard": ["importadora"],
+    "imp-profile": ["importadora"],
+    "imp-advisors": ["importadora"],
+    "imp-quotes": ["importadora"],
+    "adv-dashboard": ["asesor"],
+    "adv-available": ["asesor"],
+    "adv-my-quotes": ["asesor"],
+    "user-profile": ["solicitante", "asesor"],
+    "admin-dashboard": ["admin"],
+  };
+
+  const allowedRoles = screenAllowedByRole[screen];
+  const loadingFallback = (
+    <div className="min-h-screen flex items-center justify-center bg-[#F0F2F5]">
+      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Verificando sesion...
+      </div>
+    </div>
+  );
+
+  const unauthenticatedFallback = (
+    <LoginScreen
+      onLogin={handleLogin}
+      onRegister={()=>goTo("register")}
+      onLanding={()=>goTo("landing")}
+      onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}
+      initialEmail={loginPrefillEmail}
+    />
+  );
+
+  const unauthorizedFallback = (
+    <div className="min-h-screen bg-[#F0F2F5] flex items-center justify-center px-4">
+      <Card className="max-w-md w-full p-6">
+        <h2 className="text-lg font-semibold">Acceso restringido</h2>
+        <p className="text-sm text-muted-foreground mt-2">Tu rol no tiene permisos para esta vista.</p>
+        <Button
+          className="mt-4"
+          onClick={() => {
+            if (userRole === "importadora") {
+              goTo("imp-dashboard");
+              return;
+            }
+            if (userRole === "asesor") {
+              goTo("adv-dashboard");
+              return;
+            }
+            if (userRole === "admin") {
+              goTo("admin-dashboard");
+              return;
+            }
+            goTo("dashboard");
+          }}
+        >
+          Ir a mi panel
+        </Button>
+      </Card>
+    </div>
+  );
+
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
-  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={()=>goTo("login")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   if(screen==="policy-data")return <PolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
   if(screen==="policy-terms")return <PolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} initialEmail={loginPrefillEmail}/>;
 
-  // ── Importer portal ─────────────────────────────────────────────────────────
-  if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb}/>;
-  if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb}/>;
-  if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb}/>;
-  if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
+  const renderPrivateScreen = () => {
+    // ── Importer portal ───────────────────────────────────────────────────────
+    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors}/>;
+    if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
+    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onDeleteAdvisor={handleDeleteAdvisor}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
 
-  // ── Advisor portal ───────────────────────────────────────────────────────────
-  if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={availableQuotes.filter(q=>!q.claimedBy).length}/>;
-  if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={availableQuotes} onClaim={claimQuote}/>;
-  if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb}/>;
+    // ── Advisor portal ────────────────────────────────────────────────────────
+    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={availableQuotes.length} quotes={advisorAssignedQuotes}/>;
+    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={availableQuotes} onClaim={claimQuote}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
 
-  // ── Shared ───────────────────────────────────────────────────────────────────
-  if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole}/>;
-  if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
+    if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb}/>;
 
-  // ── Solicitante portal ───────────────────────────────────────────────────────
-  const headerUser=userRole==="importadora"?USER_IMPORTADORA:userRole==="asesor"?USER_ASESOR:USER;
-  const sbWithNotif=(Component:React.ReactElement)=>Component;
-  void sbWithNotif;
+    // ── Shared ────────────────────────────────────────────────────────────────
+    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists}/>;
+    if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
 
-  if(screen==="dashboard")return <DashboardScreen sb={sb} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-  if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="quotes")return <QuotesScreen onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
-  if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId}/>;
-  if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} onBack={()=>goTo("quotes")} onViewResponse={(id,from,fqid)=>openResponse(id,from,fqid)} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb}/>;
-  if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId}/>;
-  if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb}/>;
-  if(screen==="order-detail")return <OrderDetailScreen orderId={selectedOrderId} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb}/>;
-  if(screen==="documentos")return <DocumentosScreen sb={sb}/>;
-  if(screen==="pagos")return <PagosScreen sb={sb}/>;
-  void headerUser;
-  return null;
+    // ── Solicitante portal ────────────────────────────────────────────────────
+    if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
+    if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote}/>;
+    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
+    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses}/>;
+    if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage}/>;
+    if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={requesterOrders}/>;
+    if(screen==="order-detail")return <OrderDetailScreen orderId={selectedOrderId} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} orders={requesterOrders}/>;
+    if(screen==="documentos")return <DocumentosScreen sb={sb}/>;
+    if(screen==="pagos")return <PagosScreen sb={sb}/>;
+    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")}/>;
+    return null;
+  };
+
+  return (
+    <ProtectedRoute
+      isInitializing={isInitializing}
+      isAuthenticated={isAuthenticated}
+      currentRole={userRole}
+      allowedRoles={allowedRoles}
+      loadingFallback={loadingFallback}
+      unauthenticatedFallback={unauthenticatedFallback}
+      unauthorizedFallback={unauthorizedFallback}
+    >
+      {renderPrivateScreen()}
+    </ProtectedRoute>
+  );
 }
