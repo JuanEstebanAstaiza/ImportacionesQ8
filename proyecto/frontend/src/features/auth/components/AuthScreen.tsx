@@ -8,7 +8,7 @@ import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/au
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
 
 type AuthView = "login" | "forgot";
-export type PortalRole = "solicitante" | "importadora" | "asesor";
+export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin";
 
 interface AuthScreenProps {
   onLogin: (role: PortalRole) => void;
@@ -16,9 +16,10 @@ interface AuthScreenProps {
   onLanding: () => void;
   onPolicy: (page: "data" | "terms") => void;
   logo: React.ReactNode;
+  initialEmail?: string;
 }
 
-export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo }: AuthScreenProps) {
+export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, initialEmail }: AuthScreenProps) {
   const { signIn, requestPasswordReset } = useAuth();
   const [view, setView] = useState<AuthView>("login");
   const [dark, setDark] = useState(false);
@@ -29,9 +30,12 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo }: A
   const loginMutation = useMutation({
     mutationFn: (values: LoginFormValues) => signIn(values),
     onSuccess: (response) => {
+      if (!response.rol) {
+        setAuthError(response.mensaje || "Respuesta de login invalida: falta rol");
+        return;
+      }
       const appRole = mapBackendRoleToAppRole(response.rol);
-      const roleForNavigation: PortalRole = appRole === "admin" ? "importadora" : appRole;
-      onLogin(roleForNavigation);
+      onLogin(appRole);
     },
     onError: (error) => {
       setAuthError(error instanceof Error ? error.message : "No se pudo iniciar sesion");
@@ -91,6 +95,7 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo }: A
               onLanding={onLanding}
               isPending={loginMutation.isPending}
               errorMessage={authError}
+              initialEmail={initialEmail}
             />
           ) : (
             <ForgotPasswordForm

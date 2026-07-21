@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Eye, EyeOff, Info, Loader2, LogIn, Mail, Lock, UserRound, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -25,6 +25,7 @@ interface LoginFormProps {
   onLanding: () => void;
   isPending: boolean;
   errorMessage?: string;
+  initialEmail?: string;
 }
 
 const ROLE_OPTIONS: Array<{ role: PortalRole; label: string; icon: React.ReactNode }> = [
@@ -40,6 +41,7 @@ export function LoginForm({
   onLanding,
   isPending,
   errorMessage,
+  initialEmail,
 }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<PortalRole>("solicitante");
@@ -48,6 +50,21 @@ export function LoginForm({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
+
+  useEffect(() => {
+    if (!initialEmail) {
+      return;
+    }
+
+    form.setValue("email", initialEmail, { shouldDirty: true, shouldValidate: true });
+  }, [initialEmail, form]);
+
+  function handleSubmit(values: LoginFormValues) {
+    onSubmit({
+      email: String(values.email ?? "").trim(),
+      password: String(values.password ?? ""),
+    });
+  }
 
   return (
     <Card className="border-border shadow-sm">
@@ -78,7 +95,7 @@ export function LoginForm({
           </div>
         </div>
 
-        <form className="space-y-4" noValidate onSubmit={form.handleSubmit(onSubmit)}>
+        <form className="space-y-4" noValidate onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="space-y-2">
             <Label htmlFor="login-email">Correo electronico</Label>
             <div className="relative">

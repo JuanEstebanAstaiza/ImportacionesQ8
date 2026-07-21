@@ -6,6 +6,7 @@ import type {
 import {
   clearStoredToken,
   getStoredToken,
+  setStoredRole,
   setStoredToken,
 } from "@/services/api-client";
 import { authService as authApiService } from "@/services/auth.service";
@@ -28,7 +29,11 @@ export const authService = {
 
   async login(payload: LoginRequest): Promise<AuthResponse> {
     const data = await authApiService.login(payload);
+    if (!data.access_token || !data.rol) {
+      throw new Error(data.mensaje || "El login no devolvio access_token y rol");
+    }
     setStoredToken(data.access_token);
+    setStoredRole(data.rol);
     return data;
   },
 

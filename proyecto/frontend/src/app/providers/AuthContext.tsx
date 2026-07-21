@@ -16,6 +16,7 @@ import { authService } from "@/services/auth.service";
 import {
   clearStoredToken,
   getStoredToken,
+  setStoredRole,
   setStoredToken,
 } from "@/services/api-client";
 import { mapBackendRoleToAppRole, type AppUserRole } from "@/utils/auth-roles";
@@ -47,8 +48,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (payload: LoginRequest) => {
-      const loginResponse = await authService.login(payload);
+      const normalizedPayload: LoginRequest = {
+        email: String(payload.email ?? "").trim(),
+        password: String(payload.password ?? ""),
+      };
+
+      if (!normalizedPayload.email || !normalizedPayload.password) {
+        throw new Error("Email y contrasena son obligatorios");
+      }
+
+      const loginResponse = await authService.login(normalizedPayload);
+      if (!loginResponse.access_token || !loginResponse.rol) {
+        throw new Error(loginResponse.mensaje || "El login no devolvio access_token y rol");
+      }
+
       setStoredToken(loginResponse.access_token);
+      setStoredRole(loginResponse.rol);
       await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       await queryClient.refetchQueries({ queryKey: ["auth", "me"] });
       return loginResponse;

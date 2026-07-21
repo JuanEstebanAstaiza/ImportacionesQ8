@@ -18,11 +18,26 @@ import {
 import { clsx } from "clsx";
 
 import { Quote } from "../types/quote";
+import type { ResponseFrom, ResponseStatus } from "../types/quote";
 import { Importer } from "../types/importer";
 import { SidebarCtrl } from "../types/portal";
 import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
+import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { useAuth } from "@/hooks/useAuth";
+import { authService } from "@/services/auth.service";
+import {
+  businessService,
+  type BackendAsesor,
+  type BackendCotizacion,
+  type BackendImporter,
+  type CreateAsesorPayload,
+  type CreateCotizacionPayload,
+} from "@/services/business.service";
+import { getStoredRole, getStoredToken } from "@/services/api-client";
+import type { RegisterRequest } from "@/types/auth";
+
+const RESET_PASSWORD_PATH = "/restablecer-password";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM COMPONENTS
@@ -406,7 +421,163 @@ const NAV_ASESOR=[
 ];
 
 // ─── Portal data ──────────────────────────────────────────────────────────────
-type UserRole="solicitante"|"importadora"|"asesor";
+type UserRole="solicitante"|"importadora"|"asesor"|"admin";
+
+const NAV_ADMIN=[
+  {icon:LayoutGrid,    label:"Dashboard",    key:"admin-dashboard"},
+  {icon:MessageSquare, label:"Chats",        key:"chats"},
+  {icon:FolderOpen,    label:"Documentos",   key:"documentos"},
+];
+
+type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin";
+
+function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
+  if (!role) {
+    return null;
+  }
+
+  if (role === "importador" || role === "importadora") {
+    return "importadora";
+  }
+
+  if (role === "solicitante" || role === "asesor" || role === "admin") {
+    return role;
+  }
+
+  return null;
+}
+
+function getHomeScreenForRole(role: UserRole | "admin"): "dashboard" | "imp-dashboard" | "adv-dashboard" | "admin-dashboard" {
+  if (role === "importadora") {
+    return "imp-dashboard";
+  }
+  if (role === "asesor") {
+    return "adv-dashboard";
+  }
+  if (role === "admin") {
+    return "admin-dashboard";
+  }
+  return "dashboard";
+}
+
+function formatShortDate(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return value;
+  }
+  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function initialsFromName(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "IM";
+}
+
+function importerColorFromId(id: string): string {
+  const palette = [
+    "bg-blue-600",
+    "bg-emerald-600",
+    "bg-cyan-600",
+    "bg-orange-600",
+    "bg-slate-600",
+    "bg-rose-600",
+    "bg-indigo-600",
+  ];
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash + id.charCodeAt(i)) % 997;
+  }
+  return palette[hash % palette.length];
+}
+
+function mapBackendImporterToUi(imp: BackendImporter): Importer {
+  const primaryCategory = imp.especialidad_producto[0] ?? "General";
+  const primaryCountry = imp.paises_origen[0] ?? "N/A";
+  const name = imp.nombre_empresa;
+  return {
+    id: imp.id,
+    name,
+    specialty: `${primaryCategory} internacional`,
+    rating: Number(imp.calificacion_promedio || 0),
+    responseTime: imp.tiempo_respuesta_promedio || "~48h",
+    initials: initialsFromName(name),
+    color: importerColorFromId(imp.id),
+    memberSince: formatShortDate(imp.fecha_registro),
+    projects: 0,
+    verified: Boolean(imp.verificado),
+    country: primaryCountry,
+    categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
+    advisor: {
+      name: "Asesor asignado",
+      role: "Asesor",
+      initials: "AS",
+      color: "bg-slate-600",
+      email: "asesor@importacionesq8.co",
+    },
+  };
+}
+
+function backendEstadoToUi(estado: string): Quote["status"] {
+  switch (estado) {
+    case "creada":
+      return "created";
+    case "dirigida":
+      return "directed";
+    case "abierta":
+      return "open";
+    case "aceptada":
+      return "accepted";
+    case "orden_activa":
+      return "active-order";
+    default:
+      return "created";
+  }
+}
+
+function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quote {
+  const importerName = cot.importador_id
+    ? importers.find((imp) => imp.id === cot.importador_id)?.name ?? "Importadora"
+    : "Red abierta";
+
+  return {
+    id: cot.id,
+    code: `COT-${cot.id.slice(0, 8).toUpperCase()}`,
+    date: formatShortDate(cot.fecha_creacion),
+    product: cot.nombre_producto,
+    importer: importerName,
+    mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
+    status: backendEstadoToUi(cot.estado),
+    updatedAt: formatShortDate(cot.fecha_actualizacion),
+    country: cot.pais_importacion,
+    productLine: cot.linea_producto,
+    quality: cot.tipo_calidad,
+    minQuantity: String(cot.cantidad_minima),
+    targetPrice: cot.precio_objetivo_usd ? `${cot.precio_objetivo_usd} USD` : "N/A",
+    incoterm: cot.incoterm,
+  };
+}
+
+function mapBackendAdvisorToUi(a: BackendAsesor): CompanyAdvisor {
+  const name = a.nombre || a.email;
+  return {
+    id: a.id,
+    name,
+    role: "Asesor",
+    email: a.email,
+    phone: a.telefono || "",
+    initials: initialsFromName(name),
+    color: "bg-slate-600",
+    status: a.activo ? "activo" : "inactivo",
+    availability: a.activo ? "media" : "baja",
+    activeQuotes: 0,
+    avgResponse: "~24h",
+    joinDate: formatShortDate(a.fecha_creacion),
+  };
+}
 
 interface CompanyAdvisor {
   id:string;name:string;role:string;email:string;phone:string;
@@ -450,7 +621,7 @@ const INIT_AVAILABLE:AvailableQuote[]=[
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
-function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
+function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
   const [hovered,setHovered]=useState(false);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
   const floating=!pinned&&hovered;
@@ -497,6 +668,23 @@ function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
             );
           })}
         </nav>
+
+        <div className="p-2 border-t border-border">
+          <button
+            onClick={onLogout}
+            className={clsx(
+              "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
+              "text-muted-foreground hover:text-foreground hover:bg-muted",
+              isExpanded ? "gap-2.5" : "justify-center gap-0",
+            )}
+            title={!isExpanded ? "Cerrar sesion" : undefined}
+          >
+            <LogIn className="w-4 h-4 flex-shrink-0 rotate-180"/>
+            <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+              <span className="whitespace-nowrap">Cerrar sesion</span>
+            </div>
+          </button>
+        </div>
       </div>
 
       <button
@@ -525,6 +713,7 @@ function Sidebar({active,onNav,pinned,onToggle,navItems}:SidebarCtrl) {
 function AppHeader({user,notifCount=0,onNotif,onLogout,sb}:{user:{name:string;company:string;initials:string};notifCount?:number;onNotif?:()=>void;onLogout?:()=>void;sb?:SidebarCtrl}) {
   const count=sb?.notifCount??notifCount;
   const handler=sb?.onNotif??onNotif;
+  const logoutHandler=sb?.onLogout??onLogout;
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
       <div/>
@@ -543,7 +732,7 @@ function AppHeader({user,notifCount=0,onNotif,onLogout,sb}:{user:{name:string;co
             <p className="text-sm font-medium text-foreground leading-tight">{user.name}</p>
             <p className="text-xs text-muted-foreground leading-tight">{user.company}</p>
           </div>
-          <button onClick={onLogout} title="Cerrar sesión"><Avatar initials={user.initials} size="md"/></button>
+          <button onClick={logoutHandler} title="Cerrar sesión"><Avatar initials={user.initials} size="md"/></button>
         </div>
       </div>
     </header>
@@ -616,13 +805,13 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
 // ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD SCREEN — importer marketplace catalog
 // ─────────────────────────────────────────────────────────────────────────────
-function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void}) {
+function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;importers:Importer[]}) {
   const [search,setSearch]=useState("");
   const [catFilter,setCatFilter]=useState<string>("Todas");
   const [ratingFilter,setRatingFilter]=useState("");
   const [countryFilter,setCountryFilter]=useState("");
 
-  const filtered=IMPORTERS.filter(imp=>{
+  const filtered=importers.filter(imp=>{
     const ms=!search||[imp.name,imp.specialty,...imp.categories].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mc=catFilter==="Todas"||imp.categories.some(c=>c.toLowerCase()===catFilter.toLowerCase());
     const mr=!ratingFilter||imp.rating>=parseFloat(ratingFilter);
@@ -630,7 +819,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
     return ms&&mc&&mr&&mco;
   });
 
-  const featured=IMPORTERS.filter(i=>i.verified&&i.rating>=4.7).slice(0,3);
+  const featured=importers.filter(i=>i.verified&&i.rating>=4.7).slice(0,3);
   const quickCats=["Todas","Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad"];
 
   return (
@@ -648,7 +837,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
                 <p className="text-sm text-muted-foreground mt-0.5">Encuentra y contacta empresas importadoras verificadas para tu negocio.</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{IMPORTERS.filter(i=>i.verified).length} verificadas · {IMPORTERS.length} en total</span>
+                <span className="text-xs text-muted-foreground">{importers.filter(i=>i.verified).length} verificadas · {importers.length} en total</span>
               </div>
             </div>
           </div>
@@ -656,8 +845,8 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
           {/* Stats bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              {label:"Importadoras activas",value:IMPORTERS.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
-              {label:"Verificadas",value:IMPORTERS.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
+              {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
+              {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
               {label:"Rating promedio",value:"4.6",icon:<Star className="w-4 h-4"/>,color:"text-amber-500"},
               {label:"Tiempo prom. respuesta",value:"~34h",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
             ].map(s=>(
@@ -702,7 +891,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
               <div className="w-40">
                 <Select value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
                   <option value="">País</option>
-                  {[...new Set(IMPORTERS.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}
+                  {[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}
                 </Select>
               </div>
               {(search||ratingFilter||countryFilter||catFilter!=="Todas")&&(
@@ -749,10 +938,10 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onView
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];
 }) {
-  const imp=IMPORTERS.find(i=>i.id===importerId)||IMPORTERS[0];
+  const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
   const desc=IMP_DESCRIPTIONS[imp.id]||"";
   const certs=IMP_CERTS[imp.id]||[];
   const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
@@ -893,11 +1082,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb}:{
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,sb}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl}) {
+function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl;quotes:Quote[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
-  const lastQ=QUOTES[0];const advisor=IMPORTERS[0].advisor;
+  const lastQ=quotes[0]||QUOTES[0];const advisor=IMPORTERS[0].advisor;
   const respCount:Record<string,number>={"q001":2,"q002":0,"q003":1,"q004":0,"q005":1,"q006":0,"q007":0,"q008":1};
-  const filtered=QUOTES.filter(q=>{
+  const filtered=quotes.filter(q=>{
     const ms=!search||[q.code,q.product,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mst=!statusF||q.status===statusF;const mm=!modeF||q.mode===modeF;
     const mr=!respF||(respF==="con"?(respCount[q.id]||0)>0:(respCount[q.id]||0)===0);
@@ -1758,9 +1947,9 @@ function Stepper({current}:{current:number}) {
 interface QuoteFormState {productName:string;description:string;referenceLink:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;}
 const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:""};
 
-function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string}) {
+function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
-  const fi=IMPORTERS.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||imp.rating>=parseFloat(cr);return ms&&mc&&mcat&&mr;});
+  const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||imp.rating>=parseFloat(cr);return ms&&mc&&mcat&&mr;});
   const hasF=cs||cc||ccat||cr;
   return (
     <div className="space-y-6">
@@ -1775,8 +1964,8 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId}:{
         <h3 className="text-sm font-semibold mb-3">Selecciona una importadora</h3>
         <Card padding="sm" className="mb-4"><div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-          <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(IMPORTERS.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
-          <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(IMPORTERS.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
+          <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
+          <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
           <div className="w-40"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Calificación mín.</option><option value="4.9">⭐ 4.9+</option><option value="4.7">⭐ 4.7+</option><option value="4.5">⭐ 4.5+</option></Select></div>
           {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
         </div></Card>
@@ -1870,7 +2059,7 @@ function Step3Abierta() {
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload)=>Promise<void>}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -1878,11 +2067,56 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId}:{onBack:()=>void;sb:Si
   const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
   const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
   const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
-  const si=IMPORTERS.find(i=>i.id===selectedId)??null;
+  const si=importers.find(i=>i.id===selectedId)??null;
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
   function goNext(){if(step===1){if(!modalidad){setStepError("Selecciona una modalidad.");return;}if(modalidad==="dirigida"&&!selectedId){setStepError("Selecciona una empresa importadora.");return;}}if(step===2&&!form.productName.trim()){setStepError("El nombre del producto es requerido.");return;}setStepError("");navigate(step+1,"fwd");}
-  async function handleSubmit(){if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}setSubmitting(true);await new Promise(r=>setTimeout(r,1400));setSubmitting(false);setSubmitted(true);}
+  async function handleSubmit(){
+    if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
+    if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+
+    const parsedMinQuantity=Number.parseInt(form.minQuantity,10);
+    if(Number.isNaN(parsedMinQuantity)||parsedMinQuantity<1){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
+
+    const quality=String(form.quality||"").toLowerCase();
+    const tipoCalidad:CreateCotizacionPayload["tipo_calidad"]=quality.includes("econ")
+      ?"economica"
+      :quality.includes("est")
+        ?"estandar"
+        :"premium";
+
+    const parsedTarget=form.targetPrice
+      ?Number.parseFloat(String(form.targetPrice).replace(/[^0-9.,]/g,"").replace(",","."))
+      :undefined;
+
+    const payload:CreateCotizacionPayload={
+      modalidad,
+      ...(modalidad==="dirigida"&&selectedId?{importador_id:selectedId}:{}),
+      pais_importacion:form.country,
+      nombre_producto:form.productName,
+      descripcion_cliente:(form.description||"").length>=10?form.description:`${form.description}...`,
+      link_referencia:form.referenceLink||undefined,
+      linea_producto:form.productLine,
+      tipo_calidad:tipoCalidad,
+      nivel_personalizacion:form.customization||undefined,
+      modalidad_importacion:form.purpose,
+      cantidad_minima:parsedMinQuantity,
+      precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
+      incoterm:form.incoterm,
+      notas_adicionales:form.notes||undefined,
+    };
+
+    try{
+      setSubmitting(true);
+      setStepError("");
+      await onSubmitQuote(payload);
+      setSubmitted(true);
+    }catch(error){
+      setStepError(error instanceof Error?error.message:"No se pudo crear la cotización.");
+    }finally{
+      setSubmitting(false);
+    }
+  }
   const slideStyle:React.CSSProperties={opacity:visible?1:0,transform:visible?"translateX(0)":direction==="fwd"?"translateX(12px)":"translateX(-12px)",transition:"opacity 180ms ease,transform 180ms ease"};
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -1896,7 +2130,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId}:{onBack:()=>void;sb:Si
             <div className="mb-8"><Stepper current={step}/></div>
             <div className="flex gap-6 items-start">
               <div className="flex-1 min-w-0">
-                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId}/>}{step===2&&<Step2 form={form} setForm={setForm}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
+                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
                 {stepError&&<div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"><AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/><p className="text-sm text-destructive">{stepError}</p></div>}
                 <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
                   <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>{step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>}</div>
@@ -2170,8 +2404,8 @@ function ImporterCompanyProfileScreen({sb}:{sb:SidebarCtrl}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — ADVISORS
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
-  const [advisors,setAdvisors]=useState(COMPANY_ADVISORS);
+function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>}) {
+  const [advisors,setAdvisors]=useState(initialAdvisors.length>0?initialAdvisors:COMPANY_ADVISORS);
   const [search,setSearch]=useState("");
   const [showModal,setShowModal]=useState(false);
   const [editAdv,setEditAdv]=useState<CompanyAdvisor|null>(null);
@@ -2179,11 +2413,28 @@ function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
 
   const filtered=advisors.filter(a=>!search||[a.name,a.role,a.email].some(v=>v.toLowerCase().includes(search.toLowerCase())));
 
+  useEffect(()=>{
+    if(initialAdvisors.length>0){
+      setAdvisors(initialAdvisors);
+    }
+  },[initialAdvisors]);
+
   function openCreate(){setEditAdv(null);setForm({name:"",role:"",email:"",phone:"",status:"activo",availability:"alta"});setShowModal(true);}
   function openEdit(a:CompanyAdvisor){setEditAdv(a);setForm({name:a.name,role:a.role,email:a.email,phone:a.phone,status:a.status,availability:a.availability});setShowModal(true);}
-  function save(){
-    if(editAdv){setAdvisors(prev=>prev.map(a=>a.id===editAdv.id?{...a,...form}:a));}
-    else{const nid="adv"+(advisors.length+1);const initials=form.name.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();setAdvisors(prev=>[...prev,{id:nid,initials,color:"bg-slate-600",activeQuotes:0,avgResponse:"—",joinDate:"Jul 2025",...form}]);}
+  async function save(){
+    if(editAdv){
+      setAdvisors(prev=>prev.map(a=>a.id===editAdv.id?{...a,...form}:a));
+      setShowModal(false);
+      return;
+    }
+
+    const created=await onCreateAdvisor({
+      email:form.email,
+      password:"Temporal123*",
+      nombre:form.name,
+      telefono:form.phone,
+    });
+    setAdvisors(prev=>[created,...prev]);
     setShowModal(false);
   }
   function toggle(id:string){setAdvisors(prev=>prev.map(a=>a.id===id?{...a,status:a.status==="activo"?"inactivo":"activo"}:a));}
@@ -2279,11 +2530,11 @@ function ImporterAdvisorsScreen({sb}:{sb:SidebarCtrl}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond}:{sb:SidebarCtrl;onRespond:(id:string)=>void}) {
+function ImporterQuotesScreen({sb,onRespond,quotes}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[]}) {
   const [filter,setFilter]=useState("todas");
   const [search,setSearch]=useState("");
   const tabs=["todas","disponibles","asignadas","respondidas","vencidas","abiertas","dirigidas"];
-  const filtered=QUOTES.filter(q=>{
+  const filtered=quotes.filter(q=>{
     const ms=!search||[q.product,q.code,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mf=filter==="todas"||
       (filter==="dirigidas"&&q.mode==="Dirigida")||
@@ -2482,8 +2733,9 @@ function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb}:{sb:SidebarCtrl}) {
-  const myQuotes=QUOTES.slice(0,4).map((q,i)=>({...q,responseStatus:i<2?"Enviada":i===2?"En negociación":"Borrador",timeLeft:i<2?"Respondida":i===2?"3 días":i===3?"5 días":"—"}));
+function AdvisorMyQuotesScreen({sb,quotes}:{sb:SidebarCtrl;quotes:Quote[]}) {
+  const baseQuotes=quotes.length>0?quotes:QUOTES;
+  const myQuotes=baseQuotes.slice(0,4).map((q,i)=>({...q,responseStatus:i<2?"Enviada":i===2?"En negociación":"Borrador",timeLeft:i<2?"Respondida":i===2?"3 días":i===3?"5 días":"—"}));
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-my-quotes"/>
@@ -2882,28 +3134,166 @@ function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegiste
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
-function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:()=>void;onPolicy:(page:"data"|"terms")=>void}) {
+function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:"data"|"terms")=>void}) {
   const [userType,setUserType]=useState<RegUserType>("solicitante");
   const [personType,setPersonType]=useState<RegPersonType>("natural");
   const [accepted,setAccepted]=useState(false);
   const [loading,setLoading]=useState(false);
   const [success,setSuccess]=useState(false);
+  const [registeredEmail,setRegisteredEmail]=useState("");
+  const [otpCode,setOtpCode]=useState("");
+  const [otpLoading,setOtpLoading]=useState(false);
+  const [otpError,setOtpError]=useState("");
+  const [otpSuccess,setOtpSuccess]=useState(false);
+  const [submitError,setSubmitError]=useState("");
   const [form,setForm]=useState({
     email:"",docType:"CC",docNum:"",name:"",lastName:"",phone:"",country:"+57",
-    nit:"",razonSocial:"",repEmail:"",repPhone:"",repCountry:"+57",
+    nit:"",razonSocial:"",repEmail:"",repPhone:"",repCountry:"+57",password:"",confirmPassword:"",
   });
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
-  async function submit(e:React.FormEvent){e.preventDefault();if(!accepted)return;setLoading(true);await new Promise(r=>setTimeout(r,900));setLoading(false);setSuccess(true);}
+  function getErrorMessage(error: unknown){
+    if(error instanceof Error&&error.message){
+      return error.message;
+    }
+    if(typeof error==="string"&&error){
+      return error;
+    }
+    if(typeof error==="object"&&error!==null){
+      const response="response" in error?error.response:undefined;
+      if(typeof response==="object"&&response!==null&&"data" in response){
+        const data=response.data;
+        if(typeof data==="object"&&data!==null&&"detail" in data){
+          const detail=data.detail;
+          if(typeof detail==="string"&&detail){
+            return detail;
+          }
+        }
+      }
+    }
+    return "No se pudo completar el registro";
+  }
+  async function submit(e:React.FormEvent){
+    e.preventDefault();
+    if(!accepted||loading)return;
+
+    setSubmitError("");
+
+    const password=form.password;
+    if(password.length<9){
+      setSubmitError("La contrasena debe tener minimo 9 caracteres.");
+      return;
+    }
+    if(form.password!==form.confirmPassword){
+      setSubmitError("Las contrasenas no coinciden.");
+      return;
+    }
+
+    const email=(personType==="natural"?form.email:form.repEmail).trim();
+    const telefono=(personType==="natural"?form.phone:form.repPhone).trim();
+    const indicativo=(personType==="natural"?form.country:form.repCountry).trim();
+
+    const payload: RegisterRequest = personType === "natural"
+      ? {
+          email,
+          password,
+          rol: "solicitante",
+          tipo_persona: "natural",
+          tipo_documento: String(form.docType ?? "").trim(),
+          numero_documento: String(form.docNum ?? "").trim(),
+          nombre: String(form.name ?? "").trim(),
+          apellido: String(form.lastName ?? "").trim(),
+          indicativo_pais_telefono: indicativo,
+          telefono,
+          acepto_politica_datos: accepted,
+        }
+      : {
+          email,
+          password,
+          rol: "solicitante",
+          tipo_persona: "juridica",
+          nit: String(form.nit ?? "").trim(),
+          razon_social: String(form.razonSocial ?? "").trim(),
+          indicativo_pais_telefono: indicativo,
+          telefono,
+          acepto_politica_datos: accepted,
+        };
+
+    try{
+      setLoading(true);
+      await authService.register(payload);
+      setRegisteredEmail(email);
+      setSuccess(true);
+    }catch(error){
+      setSubmitError(getErrorMessage(error));
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  async function verifyOtp(e:React.FormEvent){
+    e.preventDefault();
+    if(otpLoading)return;
+
+    const normalizedOtp=String(otpCode??"").trim();
+    if(normalizedOtp.length!==6){
+      setOtpError("Ingresa un codigo OTP valido de 6 digitos.");
+      return;
+    }
+
+    if(!registeredEmail){
+      setOtpError("No se encontro el correo de registro para verificar la cuenta.");
+      return;
+    }
+
+    try{
+      setOtpLoading(true);
+      setOtpError("");
+      await authService.verifyEmail({ email: registeredEmail, otp: normalizedOtp });
+      setOtpSuccess(true);
+      setTimeout(()=>onSuccess(registeredEmail),1200);
+    }catch(error){
+      setOtpError(getErrorMessage(error));
+    }finally{
+      setOtpLoading(false);
+    }
+  }
   const countryPhones=["+57","+1","+52","+34","+44","+49","+55","+54","+56","+51"];
   const docTypes=["CC","CE","Pasaporte","NIT","DNI"];
 
   if(success)return(
     <div className="min-h-screen flex flex-col bg-[#F0F2F5] items-center justify-center px-4" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center">
-        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
-        <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
-        <p className="text-sm text-muted-foreground mb-6">Tu cuenta ha sido creada. Revisa tu correo para activarla.</p>
-        <Button variant="primary" fullWidth onClick={onBack}>Volver al inicio</Button>
+        {!otpSuccess?(
+          <>
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
+            <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
+            <p className="text-sm text-muted-foreground mb-4">Te enviamos un codigo OTP de 6 digitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>.</p>
+
+            <form onSubmit={verifyOtp} className="space-y-3 text-left">
+              <Input
+                label="Codigo OTP"
+                value={otpCode}
+                onChange={e=>setOtpCode(e.target.value)}
+                placeholder="123456"
+                inputMode="numeric"
+                maxLength={6}
+                required
+              />
+              {otpError&&<p className="text-xs text-destructive text-left">{otpError}</p>}
+              <Button type="submit" variant="primary" fullWidth loading={otpLoading}>
+                {!otpLoading&&"Activar cuenta"}
+              </Button>
+            </form>
+
+            <button type="button" onClick={onBack} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+          </>
+        ):(
+          <>
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
+            <h2 className="text-lg font-semibold mb-2">¡Cuenta activada con éxito!</h2>
+            <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesion...</p>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2956,6 +3346,8 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     {personType==="natural"?(
                       <>
                         <Input label="Correo electrónico" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
+                        <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
+                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contrasena" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
                         <div className="grid grid-cols-2 gap-3">
                           <Select label="Tipo de documento" value={form.docType} onChange={e=>f("docType",e.target.value)}>{docTypes.map(d=><option key={d}>{d}</option>)}</Select>
                           <Input label="Número de documento" placeholder="1234567890" value={form.docNum} onChange={e=>f("docNum",e.target.value)} required/>
@@ -2972,6 +3364,8 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     ):(
                       <>
                         <Input label="Correo del representante" type="email" placeholder="representante@empresa.com" value={form.repEmail} onChange={e=>f("repEmail",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
+                        <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
+                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contrasena" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
                         <Input label="NIT" placeholder="900.123.456-7" value={form.nit} onChange={e=>f("nit",e.target.value)} required/>
                         <Input label="Razón social" placeholder="Mi Empresa S.A.S." value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)} required/>
                         <div className="flex gap-2">
@@ -2980,6 +3374,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                         </div>
                       </>
                     )}
+                    {submitError&&<p className="text-xs text-destructive">{submitError}</p>}
                     <div className="flex items-start gap-2.5 mt-1">
                       <input type="checkbox" id="acepta" checked={accepted} onChange={e=>setAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary flex-shrink-0 cursor-pointer"/>
                       <label htmlFor="acepta" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
@@ -3042,7 +3437,7 @@ function PolicyScreen({page,onBack}:{page:"data"|"terms";onBack:()=>void}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────────────────────────────────────────
-function LoginScreen({onLogin,onRegister,onLanding,onPolicy}:{onLogin:(role:UserRole)=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void}) {
+function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void;initialEmail?:string}) {
   return (
     <AuthScreen
       onLogin={onLogin}
@@ -3050,19 +3445,69 @@ function LoginScreen({onLogin,onRegister,onLanding,onPolicy}:{onLogin:(role:User
       onLanding={onLanding}
       onPolicy={onPolicy}
       logo={<Logo />}
+      initialEmail={initialEmail}
     />
+  );
+}
+
+function ResetPasswordScreen({ token, onBackToLogin }: { token: string; onBackToLogin: () => void }) {
+  return (
+    <div className="min-h-screen flex flex-col bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3.5">
+        <Logo/>
+      </header>
+
+      <main className="flex flex-1 items-center justify-center px-4 py-10">
+        <div className="w-full max-w-[420px]">
+          <ResetPasswordForm token={token} onBackToLogin={onBackToLogin} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function AdminDashboardScreen({sb}:{sb:SidebarCtrl}) {
+  return (
+    <div className="min-h-screen bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <Sidebar {...sb} active="admin-dashboard"/>
+      <main className={clsx("transition-all duration-300",sb.pinned?"ml-52":"ml-16")}>
+        <div className="px-6 py-6 max-w-6xl mx-auto">
+          <div className="mb-5">
+            <Breadcrumb items={[{label:"Inicio"},{label:"Dashboard Admin"}]}/>
+            <h1 className="text-2xl font-bold mt-1">Panel Administrativo</h1>
+            <p className="text-sm text-muted-foreground mt-1">Acceso administrativo autenticado correctamente.</p>
+          </div>
+          <Card padding="lg">
+            <p className="text-sm text-muted-foreground">Este rol ya redirige al dashboard de admin. Aquí puedes conectar los módulos administrativos.</p>
+          </Card>
+        </div>
+      </main>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
-type Screen="landing"|"login"|"register"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"create-response"|"notifications";
+type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications";
 
 export default function App() {
-  const { isAuthenticated, isInitializing, appRole } = useAuth();
-  const [screen,setScreen]=useState<Screen>("landing");
-  const [userRole,setUserRole]=useState<UserRole>("solicitante");
+  const storedRole = normalizeStoredRole(getStoredRole());
+  const hasStoredSession = Boolean(getStoredToken() && storedRole);
+
+  const { isAuthenticated, isInitializing, appRole, signOut } = useAuth();
+  const [screen,setScreen]=useState<Screen>(() =>
+    window.location.pathname === RESET_PASSWORD_PATH
+      ? "reset-password"
+      : hasStoredSession
+        ? getHomeScreenForRole(storedRole!)
+        : "landing",
+  );
+  const [loginPrefillEmail,setLoginPrefillEmail]=useState("");
+  const [resetToken,setResetToken]=useState<string>(() =>
+    new URLSearchParams(window.location.search).get("token") ?? "",
+  );
+  const [userRole,setUserRole]=useState<UserRole|"admin">(storedRole ?? "solicitante");
   const [selectedQuoteId,setSelectedQuoteId]=useState("");
   const [selectedResponseId,setSelectedResponseId]=useState("");
   const [responseFrom,setResponseFrom]=useState<ResponseFrom>("responses");
@@ -3074,14 +3519,135 @@ export default function App() {
   const [sidebarPinned,setSidebarPinned]=useState(true);
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
   const [availableQuotes,setAvailableQuotes]=useState<AvailableQuote[]>(INIT_AVAILABLE);
-  const [prevScreen,setPrevScreen]=useState<Screen>("dashboard");
+  const [marketplaceImporters,setMarketplaceImporters]=useState<Importer[]>(IMPORTERS);
+  const [requesterQuotes,setRequesterQuotes]=useState<Quote[]>(QUOTES);
+  const [importerQuotes,setImporterQuotes]=useState<Quote[]>([]);
+  const [companyAdvisors,setCompanyAdvisors]=useState<CompanyAdvisor[]>(COMPANY_ADVISORS);
+  const [advisorAssignedQuotes,setAdvisorAssignedQuotes]=useState<Quote[]>([]);
+  const [prevScreen,setPrevScreen]=useState<Screen>(() =>
+    window.location.pathname === RESET_PASSWORD_PATH ? "login" : "dashboard",
+  );
+
+  const reloadImporters = useCallback(async () => {
+    const rows = await businessService.listImporters();
+    setMarketplaceImporters(rows.map(mapBackendImporterToUi));
+  }, []);
+
+  const reloadRequesterQuotes = useCallback(async () => {
+    const rows = await businessService.listQuotes();
+    setRequesterQuotes(rows.map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  const reloadImporterQuotes = useCallback(async () => {
+    const rows = await businessService.listQuotes();
+    setImporterQuotes(rows.map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  const reloadCompanyAdvisors = useCallback(async () => {
+    const rows = await businessService.listCompanyAdvisors();
+    setCompanyAdvisors(rows.map(mapBackendAdvisorToUi));
+  }, []);
+
+  const reloadAdvisorAssignedQuotes = useCallback(async () => {
+    const rows = await businessService.listMyAssignedQuotes();
+    const mapped: BackendCotizacion[] = rows.map((row: {
+      id: string;
+      modalidad: "dirigida" | "abierta";
+      nombre_producto: string;
+      cantidad_minima: number;
+      precio_objetivo_usd: number | null;
+      incoterm: string;
+      estado: string;
+      fecha_creacion: string;
+    }) => ({
+      id: row.id,
+      importador_id: null,
+      modalidad: row.modalidad,
+      pais_importacion: "N/A",
+      nombre_producto: row.nombre_producto,
+      descripcion_cliente: "",
+      linea_producto: "General",
+      tipo_calidad: "estandar",
+      cantidad_minima: row.cantidad_minima,
+      precio_objetivo_usd: row.precio_objetivo_usd,
+      incoterm: row.incoterm,
+      estado: row.estado,
+      fecha_creacion: row.fecha_creacion,
+      fecha_actualizacion: row.fecha_creacion,
+    }));
+    setAdvisorAssignedQuotes(mapped.map((row) => mapBackendQuoteToUi(row, marketplaceImporters)));
+  }, [marketplaceImporters]);
+
+  useEffect(() => {
+    if (window.location.pathname !== RESET_PASSWORD_PATH) {
+      return;
+    }
+
+    setScreen("reset-password");
+    setResetToken(new URLSearchParams(window.location.search).get("token") ?? "");
+  }, []);
 
   useEffect(() => {
     if (!appRole) {
       return;
     }
-    setUserRole(appRole === "admin" ? "importadora" : appRole);
+    setUserRole(appRole);
   }, [appRole]);
+
+  useEffect(() => {
+    if (isInitializing || !isAuthenticated || !appRole) {
+      return;
+    }
+
+    const publicOrEntryScreens: Screen[] = [
+      "landing",
+      "login",
+      "register",
+      "policy-data",
+      "policy-terms",
+      "reset-password",
+    ];
+
+    if (publicOrEntryScreens.includes(screen)) {
+      setScreen(getHomeScreenForRole(appRole));
+    }
+  }, [isInitializing, isAuthenticated, appRole, screen]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing) {
+      return;
+    }
+    void reloadImporters();
+  }, [isAuthenticated, isInitializing, reloadImporters]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing) {
+      return;
+    }
+
+    if (userRole === "solicitante") {
+      void reloadRequesterQuotes();
+      return;
+    }
+
+    if (userRole === "importadora") {
+      void reloadImporterQuotes();
+      void reloadCompanyAdvisors();
+      return;
+    }
+
+    if (userRole === "asesor") {
+      void reloadAdvisorAssignedQuotes();
+    }
+  }, [
+    isAuthenticated,
+    isInitializing,
+    userRole,
+    reloadRequesterQuotes,
+    reloadImporterQuotes,
+    reloadCompanyAdvisors,
+    reloadAdvisorAssignedQuotes,
+  ]);
 
   const unreadCount=notifications.filter(n=>!n.read).length;
 
@@ -3089,7 +3655,7 @@ export default function App() {
 
   function handleNav(key:string){
     const all:Record<string,Screen>={
-      dashboard:"dashboard","imp-dashboard":"imp-dashboard","adv-dashboard":"adv-dashboard",
+      dashboard:"dashboard","imp-dashboard":"imp-dashboard","adv-dashboard":"adv-dashboard","admin-dashboard":"admin-dashboard",
       quotes:"quotes","imp-quotes":"imp-quotes","adv-available":"adv-available","adv-my-quotes":"adv-my-quotes",
       responses:"responses",chats:"chats",orders:"orders",documentos:"documentos",pagos:"pagos",
       "imp-advisors":"imp-advisors","imp-profile":"imp-profile",notifications:"notifications",
@@ -3098,12 +3664,13 @@ export default function App() {
   }
 
   function getNavItems():NavItem[]{
+    if(userRole==="admin")return NAV_ADMIN as NavItem[];
     if(userRole==="importadora")return NAV_IMPORTADORA as NavItem[];
     if(userRole==="asesor")return NAV_ASESOR as NavItem[];
     return NAV_ITEMS as NavItem[];
   }
 
-  const sb:SidebarCtrl={active:screen,onNav:handleNav,pinned:sidebarPinned,onToggle:()=>setSidebarPinned(p=>!p),navItems:getNavItems(),onNotif:()=>goTo("notifications"),notifCount:unreadCount};
+  const sb:SidebarCtrl={active:screen,onNav:handleNav,pinned:sidebarPinned,onToggle:()=>setSidebarPinned(p=>!p),navItems:getNavItems(),onNotif:()=>goTo("notifications"),notifCount:unreadCount,onLogout:()=>{void handleLogout();}};
 
   function openResponse(id:string,from:ResponseFrom,fromQuoteId?:string){
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
@@ -3113,14 +3680,28 @@ export default function App() {
   function markNotif(id:string){setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));}
   function claimQuote(id:string){setAvailableQuotes(prev=>prev.map(q=>q.id===id?{...q,claimedBy:"me"}:q));}
 
-  function handleLogin(role:UserRole){
+  function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
-    if(role==="importadora")goTo("imp-dashboard");
-    else if(role==="asesor")goTo("adv-dashboard");
-    else goTo("dashboard");
+    goTo(getHomeScreenForRole(role));
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "policy-data", "policy-terms"];
+  async function handleLogout(){
+    await signOut();
+    setUserRole("solicitante");
+    setScreen("login");
+  }
+
+  async function handleCreateQuote(payload: CreateCotizacionPayload){
+    await businessService.createQuote(payload);
+    await reloadRequesterQuotes();
+  }
+
+  async function handleCreateAdvisor(payload: CreateAsesorPayload): Promise<CompanyAdvisor>{
+    const created = await businessService.createCompanyAdvisor(payload);
+    return mapBackendAdvisorToUi(created);
+  }
+
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "imp-dashboard": ["importadora"],
     "imp-profile": ["importadora"],
@@ -3129,6 +3710,7 @@ export default function App() {
     "adv-dashboard": ["asesor"],
     "adv-available": ["asesor"],
     "adv-my-quotes": ["asesor"],
+    "admin-dashboard": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -3147,6 +3729,7 @@ export default function App() {
       onRegister={()=>goTo("register")}
       onLanding={()=>goTo("landing")}
       onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}
+      initialEmail={loginPrefillEmail}
     />
   );
 
@@ -3166,6 +3749,10 @@ export default function App() {
               goTo("adv-dashboard");
               return;
             }
+            if (userRole === "admin") {
+              goTo("admin-dashboard");
+              return;
+            }
             goTo("dashboard");
           }}
         >
@@ -3176,32 +3763,35 @@ export default function App() {
   );
 
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
-  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={()=>goTo("login")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   if(screen==="policy-data")return <PolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
   if(screen==="policy-terms")return <PolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
     // ── Importer portal ───────────────────────────────────────────────────────
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb}/>;
-    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
+    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
     if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={availableQuotes.filter(q=>!q.claimedBy).length}/>;
     if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={availableQuotes} onClaim={claimQuote}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes}/>;
+
+    if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb}/>;
 
     // ── Shared ────────────────────────────────────────────────────────────────
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
 
     // ── Solicitante portal ────────────────────────────────────────────────────
-    if(screen==="dashboard")return <DashboardScreen sb={sb} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-    if(screen==="quotes")return <QuotesScreen onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId}/>;
+    if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
+    if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote}/>;
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} onBack={()=>goTo("quotes")} onViewResponse={(id,from,fqid)=>openResponse(id,from,fqid)} onOpenChat={openChat} sb={sb}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb}/>;

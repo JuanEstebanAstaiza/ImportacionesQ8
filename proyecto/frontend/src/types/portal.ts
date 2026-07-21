@@ -57,4 +57,5 @@ export interface SidebarCtrl {
   navItems: NavItem[];
   onNotif?: () => void;
   notifCount?: number;
+  onLogout?: () => void;
 }
