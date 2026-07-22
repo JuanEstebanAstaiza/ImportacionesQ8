@@ -15,6 +15,7 @@ Si solo necesitas **llamar la API desde el cliente**, usa [[Indice-Integracion-A
 | [[Matching-Cotizaciones]] | Pool abierto, matching, Redis |
 | [[Seguridad]] | Blindaje consolidado (IDOR, rate limits, ACID, etc.) |
 | [[Features-Valor-Jul-2026]] | Evidencias, orgs, disputas, referidos, traducción |
+| Academia (código) | `models/academia.py`, `routers/academia.py` — ver [[15-Academia]] |
 
 ## Orden recomendado (backend dev)
 

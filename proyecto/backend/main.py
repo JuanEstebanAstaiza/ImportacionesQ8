@@ -21,6 +21,7 @@ from routers.legal import router as legal_router
 from routers.organizaciones import router as organizaciones_router
 from routers.disputas import router as disputas_router
 from routers.referidos import router as referidos_router
+from routers.academia import router as academia_router
 from utils.limiter import limiter
 
 logger = logging.getLogger("importacionesq8")
@@ -117,6 +118,7 @@ app.include_router(legal_router)
 app.include_router(organizaciones_router)
 app.include_router(disputas_router)
 app.include_router(referidos_router)
+app.include_router(academia_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

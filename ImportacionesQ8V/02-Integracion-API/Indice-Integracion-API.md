@@ -30,6 +30,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[12-Admin]] | Endpoints solo `rol=admin` |
 | [[13-Legal-y-Salud]] | Legal, `/health`, `/health/ready` |
 | [[14-Postman-Insomnia]] | Cómo importar y usar la colección HTTP |
+| [[15-Academia]] | **Cursos de importadoras**: venta a solicitantes + progreso % |
 | `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia (94 requests) |
 
 ---
@@ -107,6 +108,12 @@ sequenceDiagram
 4. Fallback REST: `POST /chat/conversaciones/{id}/mensajes`
 
 Detalle en [[08-Chat-y-WebSocket]].
+
+### 5) Academia (cursos)
+
+1. Importadora: crear curso + lecciones + publicar → [[15-Academia]]
+2. Solicitante: catálogo → comprar → marcar videos completados
+3. Progreso: `progreso_pct = completadas / total * 100` (ej. 8/10 → 80%)
 
 ---
 

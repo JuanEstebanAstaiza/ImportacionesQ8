@@ -17,6 +17,7 @@ Resumen ejecutivo del avance. Para el detalle de cada semana, ver [[Indice-Histo
 | Auditoría + carga 1000 users | ✅ | — | [[Indice-Calidad]] |
 | OWASP Top 10 (score ~92) | ✅ | — | [[OWASP-Top10-Backend-2026-07-14]] |
 | Integración API documentada | ✅ docs | ⬜ código UI | [[Indice-Integracion-API]] |
+| Módulo Academia (cursos) | ✅ | ⬜ | Importadoras venden cursos; solo solicitante compra; progreso % — [[15-Academia]] |
 
 ---
 

@@ -19,6 +19,10 @@ from .disputa import (
 )
 from .referido import CodigoReferido, ReferidoUso
 from .traduccion import TraduccionCache
+from .academia import (
+    Curso, CursoLeccion, CompraCurso, ProgresoLeccion,
+    EstadoCurso, TipoLeccion, EstadoCompraCurso,
+)
 
 __all__ = [
     "Usuario",
@@ -62,4 +66,11 @@ __all__ = [
     "CodigoReferido",
     "ReferidoUso",
     "TraduccionCache",
+    "Curso",
+    "CursoLeccion",
+    "CompraCurso",
+    "ProgresoLeccion",
+    "EstadoCurso",
+    "TipoLeccion",
+    "EstadoCompraCurso",
 ]
