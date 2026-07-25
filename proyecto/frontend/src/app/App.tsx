@@ -12,7 +12,7 @@ import {
   Scale, HelpCircle, Download, Boxes, Ship, Factory,
   PackageCheck, Navigation2, MessageSquare, Paperclip, Smile,
   Image as ImageIcon, PanelRightClose, PanelRightOpen,
-  FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield,
+  FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -23,6 +23,7 @@ import { Importer } from "../types/importer";
 import { SidebarCtrl } from "../types/portal";
 import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
+import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth.service";
@@ -49,7 +50,7 @@ const SHOW_PAYMENTS_MODULE = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 type BadgeVariant = "created"|"directed"|"open"|"accepted"|"active-order"|"neutral"|
-  "resp-nueva"|"resp-vista"|"resp-aceptada"|"resp-rechazada"|"info"|"warning"|"success";
+  "rejected-importer"|"resp-nueva"|"resp-vista"|"resp-aceptada"|"resp-rechazada"|"info"|"warning"|"success";
 
 const BADGE_MAP: Record<BadgeVariant,{label:string;cls:string;dot:string}> = {
   "created":        {label:"Creada",       cls:"bg-slate-100 text-slate-600",    dot:"bg-slate-400"},
@@ -57,6 +58,7 @@ const BADGE_MAP: Record<BadgeVariant,{label:string;cls:string;dot:string}> = {
   "open":           {label:"Abierta",      cls:"bg-orange-50 text-orange-700",   dot:"bg-orange-500"},
   "accepted":       {label:"Aceptada",     cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
   "active-order":   {label:"Orden activa", cls:"bg-purple-50 text-purple-700",   dot:"bg-purple-500"},
+  "rejected-importer": {label:"Rechazada por importadora", cls:"bg-rose-50 text-rose-700", dot:"bg-rose-500"},
   "neutral":        {label:"",             cls:"bg-slate-100 text-slate-600",    dot:"bg-slate-400"},
   "resp-nueva":     {label:"Nueva",        cls:"bg-orange-50 text-orange-700",   dot:"bg-orange-500"},
   "resp-vista":     {label:"Vista",        cls:"bg-blue-50 text-blue-700",       dot:"bg-blue-500"},
@@ -297,23 +299,27 @@ const RESPONSES:QuoteResponse[]=[
   {id:"r005",importerId:"secvision",quoteId:"q008",price:"165 USD/u",   deliveryTime:"35 días",incoterm:"CIF",date:"12 Ene 2025",status:"resp-aceptada", moq:"10 u",    origin:"China",   production:"Propia",     customization:"Marca blanca",             observations:"Certificación CE e IP67."},
 ];
 
-interface Order {id:string;code:string;quoteCode:string;product:string;importerId:string;created:string;estimated:string;quantity:string;unitPrice:string;totalValue:string;incoterm:string;originPort:string;destPort:string;conversationId?:string;}
-
-const MOCK_ORDERS:Order[]=[
-  {id:"ord001",code:"ORD-2025-0042",quoteCode:"COT-2025-0068",product:"Laptops Dell Latitude 5540",importerId:"techimport",created:"20 Feb 2025",estimated:"15 Abr 2025",quantity:"20 unidades",unitPrice:"950 USD/u",totalValue:"$19,000 USD",incoterm:"FOB",originPort:"Port of Los Angeles, USA",destPort:"Puerto de Buenaventura, CO"},
-  {id:"ord002",code:"ORD-2025-0038",quoteCode:"COT-2025-0017",product:"Cámaras CCTV IP 4K Dahua",  importerId:"secvision", created:"12 Ene 2025",estimated:"20 Mar 2025",quantity:"30 unidades",unitPrice:"165 USD/u", totalValue:"$4,950 USD", incoterm:"CIF",originPort:"Shenzhen Port, China",         destPort:"Puerto de Cartagena, CO"},
-];
-
-const ORDER_TIMELINE:TimelineStage[]=[
-  {label:"Solicitud aceptada",  icon:<CheckCircle2 className="w-3.5 h-3.5"/>, status:"done",   date:"20 Feb 2025"},
-  {label:"Producción",          icon:<Factory className="w-3.5 h-3.5"/>,      status:"done",   date:"28 Feb 2025"},
-  {label:"Inspección",          icon:<PackageCheck className="w-3.5 h-3.5"/>, status:"done",   date:"05 Mar 2025"},
-  {label:"Carga",               icon:<Boxes className="w-3.5 h-3.5"/>,        status:"current",date:"12 Mar 2025"},
-  {label:"En tránsito",         icon:<Ship className="w-3.5 h-3.5"/>,         status:"pending",date:"~20 Mar 2025"},
-  {label:"En aduana",           icon:<Anchor className="w-3.5 h-3.5"/>,       status:"pending",date:"~25 Mar 2025"},
-  {label:"En bodega",           icon:<Warehouse className="w-3.5 h-3.5"/>,    status:"pending",date:"~01 Abr 2025"},
-  {label:"Entrega",             icon:<Navigation2 className="w-3.5 h-3.5"/>,  status:"pending",date:"~15 Abr 2025"},
-];
+interface OrderHistoryItem {estado:string;fecha:string;nota:string|null;}
+interface OrderDocumentItem {name:string;date:string;status:string;url:string;type:string;}
+interface Order {
+  id:string;
+  code:string;
+  quoteCode:string;
+  product:string;
+  importerId:string;
+  created:string;
+  estimated:string;
+  quantity:string;
+  unitPrice:string;
+  totalValue:string;
+  incoterm:string;
+  originPort:string;
+  destPort:string;
+  status:string;
+  history:OrderHistoryItem[];
+  documents:OrderDocumentItem[];
+  conversationId?:string;
+}
 
 const QUOTE_TIMELINE:TimelineStage[]=[
   {label:"Solicitud enviada",   icon:<Send className="w-3.5 h-3.5"/>,         status:"done"},
@@ -324,22 +330,6 @@ const QUOTE_TIMELINE:TimelineStage[]=[
   {label:"En aduana",           icon:<Anchor className="w-3.5 h-3.5"/>,       status:"pending"},
   {label:"En bodega",           icon:<Warehouse className="w-3.5 h-3.5"/>,    status:"pending"},
   {label:"Entrega final",       icon:<CheckCircle className="w-3.5 h-3.5"/>,  status:"pending"},
-];
-
-const MOCK_DOCS=[
-  {name:"Factura Comercial",          date:"20 Feb 2025",status:"Disponible"},
-  {name:"Packing List",               date:"05 Mar 2025",status:"Disponible"},
-  {name:"Bill of Lading (BL)",        date:"12 Mar 2025",status:"Pendiente"},
-  {name:"Certificado de Origen",      date:"05 Mar 2025",status:"Disponible"},
-  {name:"Declaración de Importación", date:"—",           status:"Pendiente"},
-];
-
-const ORDER_HISTORY=[
-  {label:"Orden creada",         date:"20 Feb 2025",icon:<Plus className="w-3 h-3"/>},
-  {label:"Proveedor aceptó",     date:"21 Feb 2025",icon:<CheckCircle2 className="w-3 h-3"/>},
-  {label:"Producción inició",    date:"28 Feb 2025",icon:<Factory className="w-3 h-3"/>},
-  {label:"Inspección completada",date:"05 Mar 2025",icon:<PackageCheck className="w-3 h-3"/>},
-  {label:"Carga realizada",      date:"12 Mar 2025",icon:<Boxes className="w-3 h-3"/>},
 ];
 
 // ─── Chat data ────────────────────────────────────────────────────────────────
@@ -369,6 +359,7 @@ const NAV_ITEMS=[
   {icon:ClipboardList,label:"Respuestas",   key:"responses"},
   {icon:MessageSquare,label:"Chats",        key:"chats"},
   {icon:ShoppingCart, label:"Órdenes",      key:"orders"},
+  {icon:BookOpen,     label:"Cursos",       key:"courses"},
   {icon:FolderOpen,   label:"Documentos",   key:"documentos"},
   {icon:CreditCard,   label:"Pagos",        key:"pagos"},
 ];
@@ -378,7 +369,9 @@ const NAV_IMPORTADORA=[
   {icon:FileText,      label:"Cotizaciones", key:"imp-quotes"},
   {icon:Users,         label:"Asesores",     key:"imp-advisors"},
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
+  {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
+  {icon:BookOpen,      label:"Cursos",       key:"courses"},
   {icon:FolderOpen,    label:"Documentos",   key:"documentos"},
 ];
 
@@ -518,6 +511,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     date: formatShortDate(cot.fecha_creacion),
     product: cot.nombre_producto,
     importer: importerName,
+    importadorId: cot.importador_id,
     mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
     status: backendEstadoToUi(cot.estado),
     updatedAt: formatShortDate(cot.fecha_actualizacion),
@@ -527,6 +521,159 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     minQuantity: String(cot.cantidad_minima),
     targetPrice: cot.precio_objetivo_usd ? `${cot.precio_objetivo_usd} USD` : "N/A",
     incoterm: cot.incoterm,
+    description: cot.descripcion_cliente,
+    notes: cot.notas_adicionales ?? "",
+    referenceLink: cot.link_referencia ?? "",
+    productPhotoUrl: cot.foto_producto ?? "",
+    personalizationLevel: cot.nivel_personalizacion ?? "",
+    importMode: cot.modalidad_importacion ?? "",
+    customFields: cot.campos_personalizados_valores ?? null,
+    requesterId: cot.solicitante_id,
+  };
+}
+
+function normalizeText(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function findCustomFieldValue(customFields: Record<string, unknown> | null | undefined, aliases: string[]): string {
+  if (!customFields) {
+    return "";
+  }
+
+  const entries = Object.entries(customFields);
+  const match = entries.find(([key, value]) => {
+    const normalizedKey = normalizeText(key);
+    if (aliases.some((alias) => normalizedKey.includes(alias))) {
+      return true;
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const nested = value as Record<string, unknown>;
+      const label = normalizeText(nested.label ?? nested.nombre ?? nested.name ?? "");
+      return aliases.some((alias) => label.includes(alias));
+    }
+
+    return false;
+  });
+
+  if (!match) {
+    return "";
+  }
+
+  const rawValue = match[1];
+  if (typeof rawValue === "string" || typeof rawValue === "number") {
+    return String(rawValue);
+  }
+
+  if (Array.isArray(rawValue)) {
+    return rawValue.map((item) => String(item)).join(", ");
+  }
+
+  if (rawValue && typeof rawValue === "object") {
+    const nested = rawValue as Record<string, unknown>;
+    const possible = nested.valor ?? nested.value ?? nested.url ?? nested.archivo ?? nested.adjunto;
+    if (possible) {
+      return String(possible);
+    }
+  }
+
+  return "";
+}
+
+function getQuoteAttachmentLinks(quote: Quote): string[] {
+  const links = new Set<string>();
+  const maybePushLink = (value: unknown) => {
+    const text = String(value ?? "").trim();
+    if (!text) {
+      return;
+    }
+    if (/^https?:\/\//i.test(text)) {
+      links.add(text);
+    }
+  };
+
+  maybePushLink(quote.productPhotoUrl);
+  maybePushLink(quote.referenceLink);
+
+  const custom = quote.customFields;
+  if (custom && typeof custom === "object") {
+    Object.entries(custom).forEach(([key, value]) => {
+      const normalizedKey = normalizeText(key);
+      if (!/(archivo|adjunto|file|url|imagen|foto|link)/.test(normalizedKey)) {
+        return;
+      }
+
+      if (typeof value === "string") {
+        maybePushLink(value);
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach((item) => maybePushLink(item));
+        return;
+      }
+
+      if (value && typeof value === "object") {
+        const nested = value as Record<string, unknown>;
+        maybePushLink(nested.url);
+        maybePushLink(nested.link);
+        maybePushLink(nested.archivo);
+        maybePushLink(nested.adjunto);
+        maybePushLink(nested.imagen);
+        maybePushLink(nested.foto);
+      }
+    });
+  }
+
+  return Array.from(links);
+}
+
+const LOCAL_HIDDEN_OPEN_QUOTES_KEY = "advisor_hidden_open_quotes_by_company";
+const LOCAL_QUOTE_STATUS_OVERRIDES_KEY = "quote_status_overrides";
+
+function loadHiddenOpenQuotesByCompany(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(LOCAL_HIDDEN_OPEN_QUOTES_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, string[]>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveHiddenOpenQuotesByCompany(payload: Record<string, string[]>): void {
+  localStorage.setItem(LOCAL_HIDDEN_OPEN_QUOTES_KEY, JSON.stringify(payload));
+}
+
+function loadQuoteStatusOverrides(): Record<string, Quote["status"]> {
+  try {
+    const raw = localStorage.getItem(LOCAL_QUOTE_STATUS_OVERRIDES_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, Quote["status"]>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveQuoteStatusOverrides(payload: Record<string, Quote["status"]>): void {
+  localStorage.setItem(LOCAL_QUOTE_STATUS_OVERRIDES_KEY, JSON.stringify(payload));
+}
+
+function applyQuoteStatusOverride(quote: Quote, overrides: Record<string, Quote["status"]>): Quote {
+  const override = overrides[quote.id];
+  if (!override) {
+    return quote;
+  }
+  return {
+    ...quote,
+    status: override,
   };
 }
 
@@ -575,6 +722,19 @@ function mapBackendProposalToUiResponse(p: BackendPropuesta): QuoteResponse {
 
 function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
   const code = `ORD-${order.id.slice(0, 8).toUpperCase()}`;
+  const history = (order.historial_estados ?? []).map((item) => ({
+    estado: item.estado,
+    fecha: item.fecha,
+    nota: item.nota ?? null,
+  }));
+  const documents = (order.documentos_adjuntos ?? []).map((doc) => ({
+    name: doc.nombre,
+    date: formatShortDate(doc.fecha_subida),
+    status: doc.url ? "Disponible" : "Pendiente",
+    url: doc.url,
+    type: doc.tipo,
+  }));
+
   return {
     id: order.id,
     code,
@@ -589,6 +749,9 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
     incoterm: quote?.incoterm || "N/D",
     originPort: "N/D",
     destPort: "N/D",
+    status: order.estado,
+    history,
+    documents,
     conversationId: order.conversacion_id || undefined,
   };
 }
@@ -611,15 +774,7 @@ interface AppNotification {
   title:string;body:string;date:string;read:boolean;
 }
 
-const INIT_NOTIFICATIONS:AppNotification[]=[
-  {id:"n1",type:"response",title:"Nueva respuesta recibida",body:"Grupo Nexus respondió tu cotización COT-2025-0089",date:"Hace 1h",read:false},
-  {id:"n2",type:"message",title:"Nuevo mensaje",body:"Carlos Mendoza: 'Adjunto la factura comercial actualizada.'",date:"Hace 2h",read:false},
-  {id:"n3",type:"status",title:"Estado actualizado",body:"Orden ORD-2025-0042 pasó a 'En tránsito'",date:"Hace 3h",read:false},
-  {id:"n4",type:"order",title:"Nueva orden creada",body:"Se creó la orden ORD-2025-0038 desde tu cotización",date:"Ayer",read:true},
-  {id:"n5",type:"document",title:"Documento agregado",body:"Packing List disponible en Orden ORD-2025-0042",date:"Ayer",read:true},
-  {id:"n6",type:"advisor",title:"Asesor asignado",body:"Carlos Mendoza fue asignado a COT-2025-0089",date:"Hace 2 días",read:true},
-  {id:"n7",type:"update",title:"Orden actualizada",body:"Nueva actualización en ORD-2025-0038",date:"Hace 3 días",read:true},
-];
+const INIT_NOTIFICATIONS:AppNotification[]=[];
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
@@ -718,7 +873,7 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const handler=sb?.onNotif??onNotif;
   const profileHandler=sb?.onProfile??onProfile;
   const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
-  const displayCompany = authUser?.email || user.company;
+  const displayCompany = user.company || authUser?.email || "";
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayInitials = initialsFromName(initialsSource);
   return (
@@ -749,6 +904,30 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
 const USER={name:"Ana García",company:"Importaciones del Norte S.A.",initials:"AG"};
 const USER_IMPORTADORA={name:"María López",company:"Grupo Nexus S.A.",initials:"ML"};
 const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. — Asesor",initials:"CM"};
+
+function CoursesPortalScreen({
+  sb,
+  role,
+  headerUser,
+  companyName,
+  onGoDashboard,
+}:{
+  sb: SidebarCtrl;
+  role: "solicitante" | "importadora";
+  headerUser: { name: string; company: string; initials: string };
+  companyName: string;
+  onGoDashboard: () => void;
+}) {
+  return (
+    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <Sidebar {...sb} active="courses"/>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <AppHeader user={headerUser} sb={sb}/>
+        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard}/>
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER CARD — used in Dashboard and profile screens
@@ -945,14 +1124,14 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];
 }) {
   const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
   const desc=IMP_DESCRIPTIONS[imp.id]||"";
   const certs=IMP_CERTS[imp.id]||[];
   const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
-  const relOrders=MOCK_ORDERS.filter(o=>o.importerId===imp.id);
+  const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
 
   const ADVISORS=[
@@ -1145,7 +1324,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;o
             <Card padding="sm" className="mb-4">
               <div className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-                <div className="w-32"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option></Select></div>
+                <div className="w-44"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
                 <div className="w-32"><Select value={modeF} onChange={e=>setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
                 <div className="w-44"><Select value={respF} onChange={e=>setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
                 {(search||statusF||modeF||respF)&&<Button variant="ghost" size="sm" onClick={()=>{setSearch("");setStatusF("");setModeF("");setRespF("");}}>Limpiar</Button>}
@@ -1209,13 +1388,22 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
 
   const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean)=>{
     setActionMessage("");
+    const targetProposal = proposals.find((proposal) => proposal.id === propuestaId);
+    if (!targetProposal) {
+      throw new Error("No se encontró la propuesta seleccionada.");
+    }
+
+    if (aceptar) {
+      await businessService.startProposalNegotiation(targetProposal.cotizacion_id, targetProposal.importador_id);
+    }
+
     await businessService.preAcceptProposal(propuestaId,aceptar);
     await loadProposals();
     if(onRefreshQuotes){
       await onRefreshQuotes();
     }
-    setActionMessage(aceptar?"Oferta aceptada." :"Oferta rechazada.");
-  },[loadProposals,onRefreshQuotes]);
+    setActionMessage(aceptar?"Oferta aceptada. Chat de negociación habilitado." :"Oferta rechazada.");
+  },[loadProposals,onRefreshQuotes,proposals]);
 
   if(!quote){
     return (
@@ -1236,8 +1424,11 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
     );
   }
 
-  const activeProposal=proposals[0]??null;
-  const contactAsesor=proposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
+  const visibleProposals = quote.mode === "Dirigida"
+    ? proposals.filter((proposal) => !quote.importadorId || proposal.importador_id === quote.importadorId)
+    : proposals;
+  const activeProposal=visibleProposals[0]??null;
+  const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
 
   return (
@@ -1271,11 +1462,41 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </Card>
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary"/>Ofertas recibidas{proposals.length>0&&<span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">{proposals.length}</span>}</h3>
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary"/>Ofertas recibidas{visibleProposals.length>0&&<span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">{visibleProposals.length}</span>}</h3>
                   {actionMessage&&<span className="text-xs text-emerald-600 font-medium">{actionMessage}</span>}
                 </div>
-                {loadingProposals?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><Loader2 className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2 animate-spin"/><p className="text-sm text-muted-foreground">Cargando ofertas...</p></div></Card>:proposals.length===0?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sin ofertas recibidas aún</p></div></Card>:(
-                  <div className="space-y-3">{proposals.map(p=>{
+                {loadingProposals?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><Loader2 className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2 animate-spin"/><p className="text-sm text-muted-foreground">Cargando ofertas...</p></div></Card>:visibleProposals.length===0?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sin ofertas visibles para esta cotización.</p></div></Card>:(
+                  <>
+                    {quote.mode === "Abierta" && visibleProposals.length > 1 && (
+                      <Card padding="md" className="mb-3">
+                        <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Comparador rápido de multi-ofertas</h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                                <th className="text-left py-2 pr-3">Empresa</th>
+                                <th className="text-left py-2 pr-3">Precio</th>
+                                <th className="text-left py-2 pr-3">Entrega</th>
+                                <th className="text-left py-2 pr-3">Incoterm</th>
+                                <th className="text-left py-2">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/60">
+                              {visibleProposals.map((proposal) => (
+                                <tr key={`cmp-${proposal.id}`}>
+                                  <td className="py-2 pr-3 text-xs">{proposal.importador_id.slice(0, 8).toUpperCase()}</td>
+                                  <td className="py-2 pr-3 font-semibold">{proposal.precio_ofrecido_usd} USD</td>
+                                  <td className="py-2 pr-3">{proposal.tiempo_estimado_entrega}</td>
+                                  <td className="py-2 pr-3">{proposal.incoterm}</td>
+                                  <td className="py-2">{proposal.estado}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    )}
+                  <div className="space-y-3">{visibleProposals.map(p=>{
                     const contactName=p.contacto_asesor?.nombre||"Asesor de la empresa";
                     const companyName=quote.importer;
                     return(
@@ -1305,12 +1526,14 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               ):(
                                 <span className="text-xs text-muted-foreground">Acción registrada</span>
                               )}
+                                {relChat && <Button variant="ghost" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Ir al chat</Button>}
                             </div>
                           </div>
                         </div>
                       </Card>
                     );})}
                   </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1361,6 +1584,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
   async function handleAccept(){
     setAccepting(true);
     try{
+      await businessService.startProposalNegotiation(resp.quoteId, resp.importerId);
       await businessService.preAcceptProposal(resp.id,true);
       setAcceptedByMe(true);
     }finally{
@@ -1550,7 +1774,7 @@ function ResponsesScreen({onViewDetail,sb,responses}:{onViewDetail:(id:string,fr
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDERS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function OrdersScreen({onViewOrder,sb,orders}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[]}) {
+function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[];importers:Importer[]}) {
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="orders"/>
@@ -1561,15 +1785,15 @@ function OrdersScreen({onViewOrder,sb,orders}:{onViewOrder:(id:string)=>void;sb:
           {orders.length===0 ? (
             <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin órdenes</p><p className="text-sm text-muted-foreground">No tienes órdenes activas en backend.</p></div></Card>
           ) : (
-          <div className="space-y-3">{orders.map(ord=>{const imp=IMPORTERS.find(i=>i.id===ord.importerId)||IMPORTERS[0];return(
+          <div className="space-y-3">{orders.map(ord=>{const imp=importers.find(i=>i.id===ord.importerId);return(
             <Card key={ord.id} padding="md" className="hover:shadow-md transition-all">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex items-start gap-3 flex-1">
-                  <Avatar initials={imp.initials} size="xl" color={imp.color}/>
+                  <Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap"><span className="font-mono font-semibold">{ord.code}</span><Badge variant="active-order"/></div>
                     <p className="text-sm font-medium mt-0.5">{ord.product}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{imp.name} · {ord.quantity}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{imp?.name || "Empresa importadora"} · {ord.quantity}</p>
                     <div className="flex gap-4 mt-2 flex-wrap">{[["Valor",ord.totalValue],["Creada",ord.created],["Estimada",ord.estimated]].map(([k,v])=><div key={k}><span className="text-xs text-muted-foreground">{k}: </span><span className="text-xs font-semibold">{v}</span></div>)}</div>
                   </div>
                 </div>
@@ -1587,8 +1811,19 @@ function OrdersScreen({onViewOrder,sb,orders}:{onViewOrder:(id:string)=>void;sb:
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({orderId,onBack,onOpenChat,sb,orders}:{orderId:string;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;orders:Order[]}) {
-  const order=orders.find(o=>o.id===orderId)||orders[0];
+function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[]}) {
+  if(isLoading){
+    return (
+      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+        <Sidebar {...sb} active="orders"/>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AppHeader user={USER} sb={sb}/>
+          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin"/>Cargando detalle de orden...</div></Card></main>
+        </div>
+      </div>
+    );
+  }
+
   if(!order){
     return (
       <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -1600,9 +1835,38 @@ function OrderDetailScreen({orderId,onBack,onOpenChat,sb,orders}:{orderId:string
       </div>
     );
   }
-  const imp=IMPORTERS.find(i=>i.id===order.importerId)||IMPORTERS[0];
-  const advisor=imp.advisor;
+
+  const imp=importers.find(i=>i.id===order.importerId);
+  const advisor=imp?.advisor;
   const relChatId = order.conversationId;
+  const history = order.history;
+  const documents = order.documents;
+
+  const mapOrderStateIcon = (state: string) => {
+    const normalized = String(state || "").toLowerCase();
+    if (normalized.includes("produ")) return <Factory className="w-3.5 h-3.5"/>;
+    if (normalized.includes("inspec")) return <PackageCheck className="w-3.5 h-3.5"/>;
+    if (normalized.includes("carg")) return <Boxes className="w-3.5 h-3.5"/>;
+    if (normalized.includes("transit") || normalized.includes("envio")) return <Ship className="w-3.5 h-3.5"/>;
+    if (normalized.includes("aduan")) return <Anchor className="w-3.5 h-3.5"/>;
+    if (normalized.includes("bodega")) return <Warehouse className="w-3.5 h-3.5"/>;
+    if (normalized.includes("entrega")) return <Navigation2 className="w-3.5 h-3.5"/>;
+    return <CheckCircle2 className="w-3.5 h-3.5"/>;
+  };
+
+  const timelineStages: TimelineStage[] = history.length > 0
+    ? history.map((event, index) => ({
+        label: event.estado,
+        icon: mapOrderStateIcon(event.estado),
+        status: index === history.length - 1 ? "current" : "done",
+        date: formatShortDate(event.fecha),
+      }))
+    : [{ label: order.status || "Sin estado", icon: <Clock className="w-3.5 h-3.5"/>, status: "current" }];
+
+  const historyEvents = history.length > 0
+    ? history
+    : [{ estado: order.status || "Sin estado", fecha: new Date().toISOString(), nota: null }];
+
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="orders"/>
@@ -1614,7 +1878,7 @@ function OrderDetailScreen({orderId,onBack,onOpenChat,sb,orders}:{orderId:string
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3 flex-wrap"><span className="font-mono text-lg font-semibold">{order.code}</span><Badge variant="active-order"/></div>
-                <div className="flex gap-6 flex-wrap">{[["Empresa",imp.name],["Asesor",advisor.name],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
+                <div className="flex gap-6 flex-wrap">{[["Empresa",imp?.name || "Empresa importadora"],["Asesor",advisor?.name || "Asesor"],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <ContactBtn type="whatsapp" label="Contactar asesor"/>
@@ -1632,42 +1896,43 @@ function OrderDetailScreen({orderId,onBack,onOpenChat,sb,orders}:{orderId:string
                 ))}</div>
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3><Timeline stages={ORDER_TIMELINE}/></Card>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3><Timeline stages={timelineStages}/></Card>
               <Card padding="none">
-                <div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{MOCK_DOCS.filter(d=>d.status==="Disponible").length} disponibles</span></div>
-                <div className="divide-y divide-border/60">{MOCK_DOCS.map(doc=>(
+                <div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
+                <div className="divide-y divide-border/60">{documents.map(doc=>(
                   <div key={doc.name} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date}</p></div></div>
                     <div className="flex items-center gap-2">
                       <span className={clsx("text-xs font-medium px-2 py-0.5 rounded",doc.status==="Disponible"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500")}>{doc.status}</span>
-                      {doc.status==="Disponible"&&<><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs">Ver</Button><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs">Descargar</Button></>}
+                      {doc.status==="Disponible"&&<><a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs">Ver</Button></a><a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs">Descargar</Button></a></>}
                     </div>
                   </div>
                 ))}</div>
+                {documents.length===0&&<div className="py-10 text-center text-sm text-muted-foreground">No hay documentos adjuntos para esta orden.</div>}
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary"/>Historial de eventos</h3>
                 <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
-                  <div className="space-y-1">{ORDER_HISTORY.map((ev,i)=>(
-                    <div key={i} className="flex items-start gap-3"><div className="w-6 h-6 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center flex-shrink-0 z-10 text-primary">{ev.icon}</div><div className="pb-4 flex-1 flex items-center justify-between"><p className="text-sm">{ev.label}</p><p className="text-xs text-muted-foreground">{ev.date}</p></div></div>
+                  <div className="space-y-1">{historyEvents.map((ev,i)=>(
+                    <div key={`${ev.estado}-${ev.fecha}-${i}`} className="flex items-start gap-3"><div className="w-6 h-6 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center flex-shrink-0 z-10 text-primary">{mapOrderStateIcon(ev.estado)}</div><div className="pb-4 flex-1"><div className="flex items-center justify-between"><p className="text-sm">{ev.estado}</p><p className="text-xs text-muted-foreground">{formatShortDate(ev.fecha)}</p></div>{ev.nota&&<p className="text-xs text-muted-foreground mt-1">{ev.nota}</p>}</div></div>
                   ))}</div>
                 </div>
               </Card>
             </div>
             <div className="w-64 flex-shrink-0 hidden lg:block space-y-4">
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa importadora</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp.initials} size="xl" color={imp.color}/><div><div className="flex items-start gap-1"><p className="font-semibold text-sm">{imp.name}</p>{imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5">{imp.specialty}</p><div className="flex items-center gap-1 mt-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/><span className="text-xs font-medium">{imp.rating}</span></div></div></div>
-                <div className="space-y-1.5 pt-3 border-t border-border mb-3">{[["Años en plataforma","5+"],["Proyectos",imp.projects.toString()],["Resp. prom.",imp.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div>
+                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/><div><div className="flex items-start gap-1"><p className="font-semibold text-sm">{imp?.name || "Empresa importadora"}</p>{imp?.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Sin especialidad"}</p><div className="flex items-center gap-1 mt-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/><span className="text-xs font-medium">{imp?.rating ?? "N/A"}</span></div></div></div>
+                <div className="space-y-1.5 pt-3 border-t border-border mb-3">{[["Años en plataforma","5+"],["Proyectos",imp?.projects?.toString() || "N/D"],["Resp. prom.",imp?.responseTime || "N/D"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div>
                 <Button variant="secondary" size="sm" fullWidth>Ver perfil</Button>
               </Card>
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
-                <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor.initials} size="lg" color={advisor.color}/><div><p className="font-semibold text-sm">{advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor.role}</p></div></div>
+                <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
                 <div className="flex gap-1.5">
                   <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center"/>
                   <ContactBtn type="chat" size="sm" className="flex-1 justify-center"/>
                   <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center"/>
                 </div>
               </Card>
-              <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">Carga en progreso</span></div><p className="text-xs text-muted-foreground">Última actualización: hace 3 horas</p></Card>
+              <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">{order.status || "En seguimiento"}</span></div><p className="text-xs text-muted-foreground">Última actualización: {history.length>0?formatShortDate(history[history.length-1].fecha):"Reciente"}</p></Card>
               {relChatId&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta orden</h3><p className="text-xs text-muted-foreground mb-3">Abrir conversación asociada a la orden.</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Abrir chat</Button></Card>}
             </div>
           </div>
@@ -1701,7 +1966,7 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string)=>Promise<void>}) {
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string)=>Promise<void>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"no-leidas">("all");
   const [searchConv,setSearchConv]=useState("");
@@ -1722,16 +1987,16 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   }, [selectedId, conversations, initialConvId]);
 
   const conv=selectedId?conversations.find(c=>c.id===selectedId)||null:null;
-  const imp=conv?IMPORTERS.find(i=>i.id===conv.importerId)||IMPORTERS[0]:null;
+  const imp=conv?importers.find(i=>i.id===conv.importerId)||null:null;
 
   const filteredConvs=conversations.filter(c=>{
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
     if(filter==="no-leidas"&&c.unread===0)return false;
     if(searchConv){
-      const cImp=IMPORTERS.find(i=>i.id===c.importerId);
-      const q=c.type==="cotizacion"?QUOTES.find(q=>q.id===c.refId):null;
-      const ord=c.type==="orden"?MOCK_ORDERS.find(o=>o.id===c.refId):null;
+      const cImp=importers.find(i=>i.id===c.importerId);
+      const q=c.type==="cotizacion"?quotes.find((quote)=>quote.id===c.refId):null;
+      const ord=c.type==="orden"?orders.find((order)=>order.id===c.refId):null;
       const terms=[c.refCode,cImp?.name||"",cImp?.advisor.name||"",q?.product||"",ord?.product||""];
       if(!terms.some(t=>t.toLowerCase().includes(searchConv.toLowerCase())))return false;
     }
@@ -1757,7 +2022,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   const convMsgs=selectedId?msgs[selectedId]||[]:[];
 
-  const refQuote=conv?.type==="cotizacion"?QUOTES.find(q=>q.id===conv.refId)||null:null;
+  const refQuote=conv?.type==="cotizacion"?quotes.find((quote)=>quote.id===conv.refId)||null:null;
   const refOrderId=conv?.type==="orden"?conv.refId:null;
 
   const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
@@ -1790,7 +2055,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   <p className="text-sm text-muted-foreground">No hay conversaciones</p>
                 </div>
               ):filteredConvs.map(c=>{
-                const cImp=IMPORTERS.find(i=>i.id===c.importerId)||IMPORTERS[0];
+                const cImp=importers.find(i=>i.id===c.importerId);
                 const isSelected=selectedId===c.id;
                 return (
                   <button key={c.id} onClick={()=>setSelectedId(c.id)}
@@ -1804,7 +2069,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
                           <p className={clsx("text-xs font-semibold truncate",isSelected?"text-primary":"text-foreground")}>{c.refCode}</p>
-                          <p className="text-xs text-muted-foreground truncate">{cImp.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{cImp?.name || "Empresa importadora"}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">{c.lastDate}</span>
@@ -1835,12 +2100,12 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
               {/* Chat header */}
               <div className="flex-shrink-0 border-b border-border bg-white px-4 py-3 flex items-center gap-3">
-                <Avatar initials={imp!.initials} size="md" color={imp!.color}/>
+                <Avatar initials={imp?.initials || "NA"} size="md" color={imp?.color || "bg-slate-500"}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-foreground">{imp!.advisor.name}</p>
+                    <p className="font-semibold text-sm text-foreground">{imp?.advisor.name || "Asesor"}</p>
                     <span className="text-muted-foreground/40 text-xs">·</span>
-                    <p className="text-xs text-muted-foreground">{imp!.name}</p>
+                    <p className="text-xs text-muted-foreground">{imp?.name || "Empresa importadora"}</p>
                     <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
                       conv.type==="orden"?"bg-purple-50 text-purple-700":"bg-blue-50 text-blue-700")}>
                       {conv.type==="orden"?"Orden":"Cotización"} · {conv.refCode}
@@ -1878,7 +2143,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         </div>
                       )}
                       <div className={clsx("flex gap-2 items-end mb-0.5",isClient?"justify-end":"justify-start")}>
-                        {!isClient&&<Avatar initials={imp!.advisor.initials} size="sm" color={imp!.color}/>}
+                        {!isClient&&<Avatar initials={imp?.advisor.initials || "AS"} size="sm" color={imp?.color || "bg-slate-500"}/>}
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
                           {msg.text&&(
@@ -1946,11 +2211,11 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               <div className="p-3 space-y-3 flex-1">
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
-                  <div className="flex items-center gap-2"><Avatar initials={imp!.initials} size="sm" color={imp!.color}/><div><p className="text-xs font-semibold">{imp!.name}</p><div className="flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400"/><span className="text-[10px] text-muted-foreground">{imp!.rating}</span></div></div></div>
+                  <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.name || "Empresa importadora"}</p><div className="flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400"/><span className="text-[10px] text-muted-foreground">{imp?.rating ?? "N/A"}</span></div></div></div>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
-                  <div className="flex items-center gap-2"><Avatar initials={imp!.advisor.initials} size="sm" color={imp!.advisor.color}/><div><p className="text-xs font-semibold">{imp!.advisor.name}</p><p className="text-[10px] text-muted-foreground">{imp!.advisor.role}</p></div></div>
+                  <div className="flex items-center gap-2"><Avatar initials={imp?.advisor.initials || "AS"} size="sm" color={imp?.advisor.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.advisor.name || "Asesor"}</p><p className="text-[10px] text-muted-foreground">{imp?.advisor.role || "Asesor"}</p></div></div>
                   <div className="flex gap-1 mt-2">
                     <button className="flex-1 h-7 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-emerald-100 transition-colors"><Phone className="w-2.5 h-2.5"/>WA</button>
                     <button className="flex-1 h-7 rounded-lg border border-border bg-white text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-muted transition-colors text-foreground"><MailIcon className="w-2.5 h-2.5"/>Email</button>
@@ -2307,6 +2572,13 @@ function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:App
             </div>
           </div>
           <Card padding="none" className="divide-y divide-border">
+            {notifications.length===0&&(
+              <div className="px-5 py-10 text-center">
+                <Bell className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/>
+                <p className="text-sm font-medium">No tienes notificaciones pendientes</p>
+                <p className="text-xs text-muted-foreground mt-1">Cuando haya cambios en cotizaciones, propuestas, chats u órdenes aparecerán aquí.</p>
+              </div>
+            )}
             {notifications.map(n=>(
               <div key={n.id} onClick={()=>onMark(n.id)} className={clsx("flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-muted/50 transition-colors",!n.read&&"bg-blue-50/40")}>
                 <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">{NOTIF_ICON[n.type]}</div>
@@ -2423,14 +2695,14 @@ function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quo
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — COMPANY PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;solo_cotizaciones_directas?:boolean;})=>Promise<void>}) {
   const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({
-    razonSocial:"",description:"",year:"",website:"",email:"",
+    razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
     phone:"+57 1 234 5678",address:"Calle 90 #15-20, Bogotá, Colombia",
     categories:[] as string[],countries:[] as string[],
-    industries:["Retail","Industrial"],avgResponse:"~24h",
+    industries:["Retail","Industrial"],avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
     certs:["ISO 9001","CE"],banner:"",
   });
   const [saveError,setSaveError]=useState("");
@@ -2441,10 +2713,13 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       {
         ...prev,
         razonSocial:company.nombre_empresa,
+        logoUrl:company.logo_url || "",
         description:prev.description||"",
         categories:company.especialidad_producto ?? [],
         countries:company.paises_origen ?? [],
         avgResponse:company.tiempo_respuesta_promedio || "~24h",
+        capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
+        soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
       }
     ));
   },[company]);
@@ -2456,9 +2731,12 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
     try{
       await onSave({
         nombre_empresa:form.razonSocial,
+        logo_url:form.logoUrl.trim() || undefined,
         especialidad_producto:form.categories,
         paises_origen:form.countries,
         tiempo_respuesta_promedio:form.avgResponse,
+        capacidad_volumen:form.capacityVolume.trim() ? Number.parseInt(form.capacityVolume, 10) : undefined,
+        solo_cotizaciones_directas:form.soloCotizacionesDirectas,
       });
       setSaved(true);
       setTimeout(()=>setSaved(false),3000);
@@ -2507,12 +2785,18 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Input label="Razón social" value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)}/>
                   <Input label="Año de fundación" type="number" value={form.year} onChange={e=>f("year",e.target.value)}/>
                   <Input label="Sitio web" value={form.website} onChange={e=>f("website",e.target.value)} prefix={<Globe className="w-4 h-4"/>}/>
+                  <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>f("logoUrl",e.target.value)} prefix={<ImageIcon className="w-4 h-4"/>}/>
                   <Input label="Correo de contacto" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<MailIcon className="w-4 h-4"/>}/>
                   <Input label="Teléfono" value={form.phone} onChange={e=>f("phone",e.target.value)} prefix={<Phone className="w-4 h-4"/>}/>
                   <Input label="Dirección" value={form.address} onChange={e=>f("address",e.target.value)} prefix={<MapPin className="w-4 h-4"/>}/>
+                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Opcional"/>
                 </div>
                 <div className="mt-4">
                   <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>setForm(p=>({...p,soloCotizacionesDirectas:e.target.checked}))} className="h-4 w-4 rounded border-border"/>
+                  <label htmlFor="solo-cotizaciones-directas" className="text-sm text-foreground">Solo cotizaciones dirigidas</label>
                 </div>
               </Card>
               <Card padding="md">
@@ -2570,7 +2854,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — ADVISORS
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onDeleteAdvisor}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onDeleteAdvisor:(advisorId:string)=>Promise<void>}) {
+function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<void>}) {
   const [advisors,setAdvisors]=useState(initialAdvisors);
   const [search,setSearch]=useState("");
   const [showModal,setShowModal]=useState(false);
@@ -2594,25 +2878,48 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onDeleteAdvi
       return;
     }
 
-    if(form.password.trim().length<9){
-      setFormError("La contraseña del asesor debe tener mínimo 9 caracteres.");
+    const password = form.password.trim();
+    if(password.length<9 || !/[A-Za-z]/.test(password) || !/\d/.test(password)){
+      setFormError("La contraseña debe tener mínimo 9 caracteres, al menos una letra y al menos un dígito.");
       return;
     }
 
     const created=await onCreateAdvisor({
       email:form.email,
-      password:form.password.trim(),
+      password,
       nombre:form.name,
       telefono:form.phone,
     });
     setAdvisors(prev=>[created,...prev]);
     setShowModal(false);
   }
-  function toggle(id:string){setAdvisors(prev=>prev.map(a=>a.id===id?{...a,status:a.status==="activo"?"inactivo":"activo"}:a));}
-  async function del(id:string){
-    if(!confirm("¿Eliminar asesor?"))return;
-    await onDeleteAdvisor(id);
-    setAdvisors(prev=>prev.filter(a=>a.id!==id));
+  async function toggle(id:string){
+    const target = advisors.find((advisor) => advisor.id === id);
+    if (!target) {
+      return;
+    }
+    const nextActivo = target.status !== "activo";
+    await onSetAdvisorActive(id, nextActivo);
+    setAdvisors((prev) => prev.map((advisor) => (
+      advisor.id === id
+        ? {
+            ...advisor,
+            status: nextActivo ? "activo" : "inactivo",
+          }
+        : advisor
+    )));
+  }
+  async function deactivate(id:string){
+    if(!confirm("¿Desactivar asesor?"))return;
+    await onSetAdvisorActive(id, false);
+    setAdvisors((prev) => prev.map((advisor) => (
+      advisor.id === id
+        ? {
+            ...advisor,
+            status: "inactivo",
+          }
+        : advisor
+    )));
   }
 
   const STATUS_CLS:Record<CompanyAdvisor["status"],string>={activo:"bg-emerald-50 text-emerald-700",inactivo:"bg-slate-100 text-slate-600",ausente:"bg-amber-50 text-amber-700"};
@@ -2667,8 +2974,8 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onDeleteAdvi
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>openEdit(a)}/>
                         <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Reiniciar contraseña"/>
-                        <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>toggle(a.id)}/>
-                        <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5 text-destructive"/>} onClick={()=>{void del(a.id);}}/>
+                        <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>{void toggle(a.id);}}/>
+                        <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5 text-destructive"/>} onClick={()=>{void deactivate(a.id);}}/>
                       </div>
                     </td>
                   </tr>
@@ -2778,10 +3085,86 @@ function ImporterQuotesScreen({sb,onRespond,quotes}:{sb:SidebarCtrl;onRespond:(i
   );
 }
 
+function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boolean;onClose:()=>void}) {
+  if (!quote) {
+    return null;
+  }
+
+  const custom = quote.customFields;
+  const peso = findCustomFieldValue(custom, ["peso", "weight"]);
+  const volumen = findCustomFieldValue(custom, ["volumen", "volume", "cbm", "m3"]);
+  const dimensiones = findCustomFieldValue(custom, ["dimension", "medida", "tamano", "size"]);
+  const origen = findCustomFieldValue(custom, ["origen", "origin", "puerto_origen"]);
+  const destino = findCustomFieldValue(custom, ["destino", "destination", "puerto_destino"]);
+  const adjuntos = getQuoteAttachmentLinks(quote);
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Detalle completo · ${quote.code}`} width="max-w-3xl">
+      <div className="space-y-5">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Card padding="sm">
+            <p className="text-xs text-muted-foreground">Producto</p>
+            <p className="text-sm font-semibold mt-1">{quote.product}</p>
+          </Card>
+          <Card padding="sm">
+            <p className="text-xs text-muted-foreground">Modalidad</p>
+            <p className="text-sm font-semibold mt-1">{quote.mode}</p>
+          </Card>
+        </div>
+
+        <Card padding="md">
+          <h3 className="text-sm font-semibold mb-3">Ficha técnica</h3>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+            <div><p className="text-xs text-muted-foreground">Peso</p><p className="font-medium">{peso || "No especificado"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Volumen</p><p className="font-medium">{volumen || "No especificado"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Dimensiones</p><p className="font-medium">{dimensiones || "No especificado"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Origen</p><p className="font-medium">{origen || quote.country || "No especificado"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Destino</p><p className="font-medium">{destino || "No especificado"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Incoterm</p><p className="font-medium">{quote.incoterm || "No especificado"}</p></div>
+          </div>
+        </Card>
+
+        <Card padding="md">
+          <h3 className="text-sm font-semibold mb-3">Información registrada por el solicitante</h3>
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Descripción</p>
+              <p className="mt-1 whitespace-pre-wrap">{quote.description || "Sin descripción"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Notas adicionales</p>
+              <p className="mt-1 whitespace-pre-wrap">{quote.notes || "Sin notas"}</p>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div><p className="text-xs text-muted-foreground">Nivel de personalización</p><p className="font-medium mt-1">{quote.personalizationLevel || "No especificado"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Modalidad de importación</p><p className="font-medium mt-1">{quote.importMode || "No especificado"}</p></div>
+            </div>
+          </div>
+        </Card>
+
+        <Card padding="md">
+          <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
+          {adjuntos.length===0 ? (
+            <p className="text-sm text-muted-foreground">No hay archivos o enlaces adjuntos en esta cotización.</p>
+          ) : (
+            <div className="space-y-2">
+              {adjuntos.map((link)=> (
+                <a key={link} href={link} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all inline-flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5"/>{link}
+                </a>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    </Modal>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorDashboardScreen({sb,availableCount,quotes}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[]}) {
+function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string}}) {
   const myQuotesCount = quotes.length;
   const activeOrdersCount = quotes.filter(q=>q.status==="active-order").length;
   const recentQuotes = quotes.slice(0,3);
@@ -2797,12 +3180,12 @@ function AdvisorDashboardScreen({sb,availableCount,quotes}:{sb:SidebarCtrl;avail
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_ASESOR} sb={sb}/>
+        <AppHeader user={headerUser} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
             <Breadcrumb items={[{label:"Inicio"},{label:"Mi dashboard"}]}/>
             <h1 className="text-xl font-semibold mt-3">Panel del asesor</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Resumen de cotizaciones asignadas</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{headerUser.company}</p>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {metrics.map((m,i)=>(
@@ -2852,9 +3235,11 @@ function AdvisorDashboardScreen({sb,availableCount,quotes}:{sb:SidebarCtrl;avail
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>}) {
+function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
   const [claimingId,setClaimingId]=useState<string|null>(null);
+  const [discardingId,setDiscardingId]=useState<string|null>(null);
   const [claimError,setClaimError]=useState("");
+  const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
 
   async function handleClaim(quoteId: string){
     try{
@@ -2869,11 +3254,24 @@ function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available
     }
   }
 
+  async function handleDiscard(quote: Quote){
+    try{
+      setDiscardingId(quote.id);
+      setClaimError("");
+      await onDiscard(quote);
+    }catch(error){
+      const message = error instanceof Error ? error.message : "No se pudo descartar la cotización.";
+      setClaimError(message);
+    }finally{
+      setDiscardingId(null);
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-available"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_ASESOR} sb={sb}/>
+        <AppHeader user={headerUser} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Cotizaciones disponibles"}]}/>
@@ -2903,12 +3301,19 @@ function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available
                   <span className="flex items-center gap-1"><Globe className="w-3 h-3"/>{q.country}</span>
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{q.updatedAt}</span>
                 </div>
-                <Button variant="primary" size="sm" fullWidth icon={<Zap className="w-3.5 h-3.5"/>} loading={claimingId===q.id} onClick={()=>{void handleClaim(q.id);}}>Tomar cotización</Button>
+                <div className="grid grid-cols-1 gap-2">
+                  <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Ver Detalle Completo</Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5"/>} loading={claimingId===q.id} onClick={()=>{void handleClaim(q.id);}}>Asignarme</Button>
+                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>{void handleDiscard(q);}}>{q.mode==="Abierta"?"Descartar":"Rechazar"}</Button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </main>
       </div>
+      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
     </div>
   );
 }
@@ -2916,13 +3321,14 @@ function AdvisorAvailableScreen({sb,available,onClaim}:{sb:SidebarCtrl;available
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb,quotes,onRespond}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void}) {
+function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>}) {
   const myQuotes=quotes.slice(0,20);
+  const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="adv-my-quotes"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_ASESOR} sb={sb}/>
+        <AppHeader user={headerUser} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Mis cotizaciones"}]}/>
@@ -2952,8 +3358,12 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond}:{sb:SidebarCtrl;quotes:Quot
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title="Abrir chat"/>
-                        <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle"/>
-                        <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
+                        <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Ver Detalle Completo</Button>
+                        {existingProposalByQuoteId[q.id] ? (
+                          <Button variant="secondary" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Ver/Editar Propuesta</Button>
+                        ) : (
+                          <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Crear Respuesta</Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -2964,6 +3374,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond}:{sb:SidebarCtrl;quotes:Quot
           </Card>
         </main>
       </div>
+      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
     </div>
   );
 }
@@ -2971,10 +3382,11 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond}:{sb:SidebarCtrl;quotes:Quot
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATE RESPONSE SCREEN — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
-function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>}) {
+function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,chatConversationId,onOpenChat}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};chatConversationId?:string;onOpenChat?:(conversationId:string)=>void}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
+  const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [form,setForm]=useState({
@@ -2984,6 +3396,22 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{q
     files:[] as {name:string;type:string}[],
   });
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
+
+  useEffect(()=>{
+    if(!existingProposal){
+      return;
+    }
+
+    setForm((prev)=>({
+      ...prev,
+      totalPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
+      unitPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
+      incoterm: existingProposal.incoterm || "FOB",
+      totalTime: existingProposal.tiempo_estimado_entrega || "",
+      description: existingProposal.condiciones_adicionales || "",
+    }));
+  },[existingProposal]);
+
   async function submit(){
     if(!quote){
       setError("No se encontró la cotización seleccionada.");
@@ -3011,11 +3439,15 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{q
         condiciones_adicionales: observaciones || undefined,
       };
 
-      if(userRole==="asesor"){
-        const draft = await businessService.createProposalDraft(payload);
-        await businessService.sendProposal(draft.id);
+      if(existingProposal?.id){
+        await businessService.updateProposal(existingProposal.id, payload);
+        setSubmittedTitle("Propuesta actualizada");
+      }else if(userRole==="asesor"){
+        await businessService.createProposalDraft(payload);
+        setSubmittedTitle("Borrador guardado");
       }else{
         await businessService.createProposal(payload);
+        setSubmittedTitle("Respuesta enviada");
       }
 
       if(onSubmitted){
@@ -3035,7 +3467,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{q
       <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
         <Sidebar {...sb} active={activeNav}/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={userRole==="asesor"?USER_ASESOR:USER_IMPORTADORA}/>
+            <AppHeader user={headerUser}/>
           <main className="flex-1 flex items-center justify-center p-6">
             <Card padding="lg" className="max-w-md w-full text-center border-dashed">
               <ClipboardList className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3"/>
@@ -3051,11 +3483,14 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{q
   if(submitted)return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active={activeNav}/>
-      <div className="flex-1 flex flex-col"><AppHeader user={userRole==="asesor"?USER_ASESOR:USER_IMPORTADORA}/>
+      <div className="flex-1 flex flex-col"><AppHeader user={headerUser}/>
         <div className="flex-1 flex items-center justify-center"><div className="flex flex-col items-center gap-4 text-center max-w-sm">
           <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500"/></div>
-          <div><h2 className="text-lg font-semibold">Respuesta enviada</h2><p className="text-sm text-muted-foreground mt-1">Tu propuesta fue registrada correctamente para {quote.product}.</p></div>
-          <Button variant="primary" onClick={onBack}>Volver a cotizaciones</Button>
+          <div><h2 className="text-lg font-semibold">{submittedTitle}</h2><p className="text-sm text-muted-foreground mt-1">Tu propuesta fue registrada correctamente para {quote.product}.</p></div>
+          <div className="flex gap-2 flex-wrap justify-center">
+            <Button variant="primary" onClick={onBack}>Volver a cotizaciones</Button>
+            {chatConversationId && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(chatConversationId)}>Ir al Chat</Button>}
+          </div>
         </div></div>
       </div>
     </div>
@@ -3064,7 +3499,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted}:{q
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active={activeNav}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={userRole==="asesor"?USER_ASESOR:USER_IMPORTADORA}/>
+        <AppHeader user={headerUser}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
@@ -3727,7 +4162,7 @@ function AdminDashboardScreen({sb}:{sb:SidebarCtrl}) {
   );
 }
 
-function UserProfileScreen({sb,profile,onSave,onBack}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string})=>Promise<void>;onBack:()=>void}) {
+function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
   const [form,setForm]=useState(profile);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
@@ -3759,7 +4194,7 @@ function UserProfileScreen({sb,profile,onSave,onBack}:{sb:SidebarCtrl;profile:{n
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
+        <AppHeader user={headerUser} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
           <div className="flex items-center justify-between">
             <div>
@@ -3786,7 +4221,7 @@ function UserProfileScreen({sb,profile,onSave,onBack}:{sb:SidebarCtrl;profile:{n
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
-type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications"|"user-profile";
+type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"courses"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications"|"user-profile";
 
 export default function App() {
   const storedRole = normalizeStoredRole(getStoredRole());
@@ -3810,21 +4245,27 @@ export default function App() {
   const [responseFrom,setResponseFrom]=useState<ResponseFrom>("responses");
   const [responseFromQuoteId,setResponseFromQuoteId]=useState("");
   const [selectedOrderId,setSelectedOrderId]=useState("");
+  const [selectedOrderDetail,setSelectedOrderDetail]=useState<Order|null>(null);
+  const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   const [selectedImporterId,setSelectedImporterId]=useState("");
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>();
   const [sidebarPinned,setSidebarPinned]=useState(true);
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
+  const [hiddenOpenQuotesByCompany,setHiddenOpenQuotesByCompany]=useState<Record<string, string[]>>(() => loadHiddenOpenQuotesByCompany());
+  const [quoteStatusOverrides,setQuoteStatusOverrides]=useState<Record<string, Quote["status"]>>(() => loadQuoteStatusOverrides());
   const [availableQuotes,setAvailableQuotes]=useState<Quote[]>([]);
   const [marketplaceImporters,setMarketplaceImporters]=useState<Importer[]>([]);
   const [requesterQuotes,setRequesterQuotes]=useState<Quote[]>([]);
   const [importerQuotes,setImporterQuotes]=useState<Quote[]>([]);
   const [companyAdvisors,setCompanyAdvisors]=useState<CompanyAdvisor[]>([]);
   const [advisorAssignedQuotes,setAdvisorAssignedQuotes]=useState<Quote[]>([]);
+  const [advisorProposalsByQuoteId,setAdvisorProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
   const [currentUserProfile,setCurrentUserProfile]=useState<BackendUserProfile|null>(null);
   const [companyProfile,setCompanyProfile]=useState<BackendImporter|null>(null);
   const [requesterResponses,setRequesterResponses]=useState<QuoteResponse[]>([]);
   const [requesterOrders,setRequesterOrders]=useState<Order[]>([]);
+  const [importerOrders,setImporterOrders]=useState<Order[]>([]);
   const [chatConversations,setChatConversations]=useState<ChatConv[]>([]);
   const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
   const [prevScreen,setPrevScreen]=useState<Screen>(() =>
@@ -3838,13 +4279,21 @@ export default function App() {
 
   const reloadRequesterQuotes = useCallback(async () => {
     const rows = await businessService.listQuotes();
-    setRequesterQuotes(rows.map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters)));
-  }, [marketplaceImporters]);
+    setRequesterQuotes(
+      rows
+        .map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters))
+        .map((quote) => applyQuoteStatusOverride(quote, quoteStatusOverrides)),
+    );
+  }, [marketplaceImporters, quoteStatusOverrides]);
 
   const reloadImporterQuotes = useCallback(async () => {
     const rows = await businessService.listQuotes();
-    setImporterQuotes(rows.map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters)));
-  }, [marketplaceImporters]);
+    setImporterQuotes(
+      rows
+        .map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters))
+        .map((quote) => applyQuoteStatusOverride(quote, quoteStatusOverrides)),
+    );
+  }, [marketplaceImporters, quoteStatusOverrides]);
 
   const reloadCompanyAdvisors = useCallback(async () => {
     const rows = await businessService.listCompanyAdvisors();
@@ -3886,14 +4335,46 @@ export default function App() {
     setRequesterOrders(orders.map((order) => mapBackendOrderToUiOrder(order, quoteMap.get(order.cotizacion_id))));
   }, [marketplaceImporters]);
 
+  const reloadImporterOrders = useCallback(async () => {
+    const [orders, quotes] = await Promise.all([
+      businessService.listOrders(),
+      businessService.listQuotes(),
+    ]);
+    const quoteMap = new Map(quotes.map((q) => [q.id, mapBackendQuoteToUi(q, marketplaceImporters)]));
+    setImporterOrders(orders.map((order) => mapBackendOrderToUiOrder(order, quoteMap.get(order.cotizacion_id))));
+  }, [marketplaceImporters]);
+
+  const loadOrderDetail = useCallback(async (orderId: string) => {
+    if (!orderId) {
+      setSelectedOrderDetail(null);
+      return;
+    }
+
+    setIsOrderDetailLoading(true);
+    try {
+      const [orderRow, quotes] = await Promise.all([
+        businessService.getOrderById(orderId),
+        businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
+      ]);
+      const quoteMap = new Map(quotes.map((quote) => [quote.id, mapBackendQuoteToUi(quote, marketplaceImporters)]));
+      setSelectedOrderDetail(mapBackendOrderToUiOrder(orderRow, quoteMap.get(orderRow.cotizacion_id)));
+    } finally {
+      setIsOrderDetailLoading(false);
+    }
+  }, [marketplaceImporters]);
+
   const reloadChatData = useCallback(async () => {
-    const rows = await businessService.listChatConversations();
+    const [rows, quotes] = await Promise.all([
+      businessService.listChatConversations(),
+      businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
+    ]);
+    const importerByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.importador_id]));
     const mappedConversations: ChatConv[] = rows.map((row) => ({
       id: row.id,
       type: row.orden_id ? "orden" : "cotizacion",
       refCode: row.orden_id ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}` : `COT-${row.cotizacion_id.slice(0, 8).toUpperCase()}`,
       refId: row.orden_id ?? row.cotizacion_id,
-      importerId: row.importador_usuario_id,
+      importerId: importerByQuoteId.get(row.cotizacion_id) || row.importador_usuario_id,
       status: "activa",
       unread: 0,
       lastMsg: row.ultimo_mensaje?.contenido || "Sin mensajes",
@@ -3919,38 +4400,152 @@ export default function App() {
 
   const reloadAdvisorAssignedQuotes = useCallback(async () => {
     const rows = await businessService.listMyAssignedQuotes();
-    const mapped: BackendCotizacion[] = rows.map((row: {
-      id: string;
-      modalidad: "dirigida" | "abierta";
-      nombre_producto: string;
-      cantidad_minima: number;
-      precio_objetivo_usd: number | null;
-      incoterm: string;
-      estado: string;
-      fecha_creacion: string;
-    }) => ({
-      id: row.id,
-      importador_id: null,
-      modalidad: row.modalidad,
-      pais_importacion: "N/A",
-      nombre_producto: row.nombre_producto,
-      descripcion_cliente: "",
-      linea_producto: "General",
-      tipo_calidad: "estandar",
-      cantidad_minima: row.cantidad_minima,
-      precio_objetivo_usd: row.precio_objetivo_usd,
-      incoterm: row.incoterm,
-      estado: row.estado,
-      fecha_creacion: row.fecha_creacion,
-      fecha_actualizacion: row.fecha_creacion,
-    }));
-    setAdvisorAssignedQuotes(mapped.map((row) => mapBackendQuoteToUi(row, marketplaceImporters)));
-  }, [marketplaceImporters]);
+    const detailedRows = await Promise.all(
+      rows.map(async (row) => {
+        try {
+          return await businessService.getQuoteById(row.id);
+        } catch {
+          return {
+            id: row.id,
+            solicitante_id: row.solicitante_id,
+            importador_id: null,
+            modalidad: row.modalidad,
+            foto_producto: null,
+            pais_importacion: "N/A",
+            nivel_personalizacion: null,
+            nombre_producto: row.nombre_producto,
+            descripcion_cliente: row.descripcion_cliente,
+            link_referencia: null,
+            linea_producto: "General",
+            tipo_calidad: "estandar",
+            modalidad_importacion: null,
+            cantidad_minima: row.cantidad_minima,
+            precio_objetivo_usd: row.precio_objetivo_usd,
+            incoterm: row.incoterm,
+            notas_adicionales: null,
+            campos_personalizados_valores: null,
+            asesor_asignado_id: row.asesor_asignado_id,
+            estado: row.estado,
+            fecha_creacion: row.fecha_creacion,
+            fecha_actualizacion: row.fecha_creacion,
+          } satisfies BackendCotizacion;
+        }
+      }),
+    );
+
+    setAdvisorAssignedQuotes(
+      detailedRows
+        .map((row) => mapBackendQuoteToUi(row, marketplaceImporters))
+        .map((quote) => applyQuoteStatusOverride(quote, quoteStatusOverrides)),
+    );
+  }, [marketplaceImporters, quoteStatusOverrides]);
 
   const reloadAdvisorAvailableQuotes = useCallback(async () => {
     const rows = await businessService.listAdvisorAvailableQuotes();
-    setAvailableQuotes(rows.map((row) => mapBackendQuoteToUi(row, marketplaceImporters)));
-  }, [marketplaceImporters]);
+    setAvailableQuotes(
+      rows
+        .map((row) => mapBackendQuoteToUi(row, marketplaceImporters))
+        .map((quote) => applyQuoteStatusOverride(quote, quoteStatusOverrides)),
+    );
+  }, [marketplaceImporters, quoteStatusOverrides]);
+
+  const reloadAdvisorProposalIndex = useCallback(async () => {
+    if (!currentUserProfile?.importador_id) {
+      setAdvisorProposalsByQuoteId({});
+      return;
+    }
+
+    const quoteIds = Array.from(new Set([...advisorAssignedQuotes, ...availableQuotes].map((quote) => quote.id)));
+    if (quoteIds.length === 0) {
+      setAdvisorProposalsByQuoteId({});
+      return;
+    }
+
+    const proposalRows = await Promise.all(
+      quoteIds.map(async (quoteId) => {
+        try {
+          return await businessService.listQuoteProposals(quoteId);
+        } catch {
+          return [] as BackendPropuesta[];
+        }
+      }),
+    );
+
+    const proposalByQuote: Record<string, BackendPropuesta> = {};
+    proposalRows.forEach((rows) => {
+      rows.forEach((proposal) => {
+        if (proposal.importador_id === currentUserProfile.importador_id) {
+          proposalByQuote[proposal.cotizacion_id] = proposal;
+        }
+      });
+    });
+
+    setAdvisorProposalsByQuoteId(proposalByQuote);
+  }, [advisorAssignedQuotes, availableQuotes, currentUserProfile?.importador_id]);
+
+  const reloadNotifications = useCallback(async () => {
+    const [chatRows, orderRows, quoteRows] = await Promise.all([
+      businessService.listChatConversations().catch(() => []),
+      businessService.listOrders().catch(() => [] as BackendOrder[]),
+      businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
+    ]);
+
+    const quoteMap = new Map(quoteRows.map((quote) => [quote.id, quote]));
+    const proposalRows = await Promise.all(
+      quoteRows.slice(0, 20).map(async (quote) => {
+        try {
+          return await businessService.listQuoteProposals(quote.id);
+        } catch {
+          return [] as BackendPropuesta[];
+        }
+      }),
+    );
+
+    const proposalNotifications = proposalRows
+      .flat()
+      .map((proposal) => {
+        const quote = quoteMap.get(proposal.cotizacion_id);
+        const quoteCode = proposal.cotizacion_id.slice(0, 8).toUpperCase();
+        return {
+          id: `proposal-${proposal.id}-${proposal.estado}`,
+          type: "response" as const,
+          title: "Actualización de propuesta",
+          body: `La cotización COT-${quoteCode} recibió una propuesta en estado ${proposal.estado}.`,
+          date: quote?.fecha_actualizacion ? formatShortDate(quote.fecha_actualizacion) : "Reciente",
+          read: false,
+        };
+      });
+
+    const chatNotifications = chatRows
+      .filter((chat) => Boolean(chat.ultimo_mensaje))
+      .map((chat) => ({
+        id: `chat-${chat.id}-${chat.ultimo_mensaje?.id}`,
+        type: "message" as const,
+        title: "Mensaje nuevo",
+        body: chat.ultimo_mensaje?.contenido || "Tienes actividad nueva en el chat.",
+        date: chat.ultimo_mensaje?.fecha_envio ? formatShortDate(chat.ultimo_mensaje.fecha_envio) : formatShortDate(chat.fecha_creacion),
+        read: false,
+      }));
+
+    const orderNotifications = orderRows.map((order) => {
+      const currentState = order.historial_estados?.[order.historial_estados.length - 1];
+      return {
+        id: `order-${order.id}-${currentState?.estado || order.estado}`,
+        type: "order" as const,
+        title: "Actualización de orden",
+        body: `La orden ORD-${order.id.slice(0, 8).toUpperCase()} está en estado ${currentState?.estado || order.estado}.`,
+        date: currentState?.fecha ? formatShortDate(currentState.fecha) : "Reciente",
+        read: false,
+      };
+    });
+
+    const merged = [...proposalNotifications, ...chatNotifications, ...orderNotifications].slice(0, 80);
+
+    setNotifications((prev) => {
+      const previousRead = new Set(prev.filter((item) => item.read).map((item) => item.id));
+      return merged.map((item) => ({ ...item, read: previousRead.has(item.id) }));
+    });
+  }, []);
 
   useEffect(() => {
     if (window.location.pathname !== RESET_PASSWORD_PATH) {
@@ -3967,6 +4562,16 @@ export default function App() {
     }
     setUserRole(appRole);
   }, [appRole]);
+
+  useEffect(() => {
+    if (isInitializing || isAuthenticated) {
+      return;
+    }
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
+    if (!publicScreens.includes(screen)) {
+      setScreen("login");
+    }
+  }, [isAuthenticated, isInitializing, screen]);
 
   useEffect(() => {
     if (isInitializing || !isAuthenticated || !appRole) {
@@ -4017,6 +4622,7 @@ export default function App() {
     if (userRole === "importadora") {
       void reloadImporterQuotes();
       void reloadCompanyAdvisors();
+      void reloadImporterOrders();
       return;
     }
 
@@ -4033,9 +4639,67 @@ export default function App() {
     reloadRequesterOrders,
     reloadImporterQuotes,
     reloadCompanyAdvisors,
+    reloadImporterOrders,
     reloadAdvisorAssignedQuotes,
     reloadAdvisorAvailableQuotes,
   ]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing || userRole !== "asesor") {
+      return;
+    }
+    void reloadAdvisorProposalIndex();
+  }, [isAuthenticated, isInitializing, userRole, reloadAdvisorProposalIndex]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing || screen !== "order-detail" || !selectedOrderId) {
+      return;
+    }
+    void loadOrderDetail(selectedOrderId);
+  }, [isAuthenticated, isInitializing, screen, selectedOrderId, loadOrderDetail]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing) {
+      return;
+    }
+    void reloadNotifications();
+  }, [
+    isAuthenticated,
+    isInitializing,
+    userRole,
+    advisorAssignedQuotes,
+    availableQuotes,
+    importerQuotes,
+    requesterQuotes,
+    requesterOrders,
+    reloadNotifications,
+  ]);
+
+  const advisorHeaderUser = {
+    name: currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_ASESOR.name,
+    company: companyProfile?.nombre_empresa
+      ? `${companyProfile.nombre_empresa} (Empresa Importadora Madre)`
+      : USER_ASESOR.company,
+    initials: initialsFromName(currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_ASESOR.name),
+  };
+
+  const importerHeaderUser = {
+    name: currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_IMPORTADORA.name,
+    company: companyProfile?.nombre_empresa || USER_IMPORTADORA.company,
+    initials: initialsFromName(currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_IMPORTADORA.name),
+  };
+
+  const companyIdForAdvisor = currentUserProfile?.importador_id || "unknown-company";
+  const hiddenOpenQuoteIds = new Set(hiddenOpenQuotesByCompany[companyIdForAdvisor] || []);
+  const visibleAvailableQuotes = availableQuotes.filter((quote) => {
+    if (quote.mode === "Abierta" && hiddenOpenQuoteIds.has(quote.id)) {
+      return false;
+    }
+    if (quoteStatusOverrides[quote.id] === "rejected-importer") {
+      return false;
+    }
+    return true;
+  });
 
   const unreadCount=notifications.filter(n=>!n.read).length;
 
@@ -4045,7 +4709,7 @@ export default function App() {
     const all:Record<string,Screen>={
       dashboard:"dashboard","imp-dashboard":"imp-dashboard","adv-dashboard":"adv-dashboard","admin-dashboard":"admin-dashboard",
       quotes:"quotes","imp-quotes":"imp-quotes","adv-available":"adv-available","adv-my-quotes":"adv-my-quotes",
-      responses:"responses",chats:"chats",orders:"orders",documentos:"documentos",pagos:"pagos",
+      responses:"responses",chats:"chats",orders:"orders",documentos:"documentos",pagos:"pagos",courses:"courses",
       "imp-advisors":"imp-advisors","imp-profile":"imp-profile",notifications:"notifications",
     };
     const s=all[key];if(s)goTo(s);
@@ -4082,6 +4746,29 @@ export default function App() {
     await Promise.all([reloadAdvisorAvailableQuotes(), reloadAdvisorAssignedQuotes()]);
   }
 
+  async function discardAdvisorQuote(quote: Quote){
+    const companyId = currentUserProfile?.importador_id || "unknown-company";
+    if (quote.mode === "Abierta") {
+      const current = hiddenOpenQuotesByCompany[companyId] || [];
+      const nextByCompany = {
+        ...hiddenOpenQuotesByCompany,
+        [companyId]: Array.from(new Set([...current, quote.id])),
+      };
+      setHiddenOpenQuotesByCompany(nextByCompany);
+      saveHiddenOpenQuotesByCompany(nextByCompany);
+      return;
+    }
+
+    const nextOverrides = {
+      ...quoteStatusOverrides,
+      [quote.id]: "rejected-importer" as Quote["status"],
+    };
+    setQuoteStatusOverrides(nextOverrides);
+    saveQuoteStatusOverrides(nextOverrides);
+
+    await refreshQuoteLists();
+  }
+
   function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
     goTo(getHomeScreenForRole(role));
@@ -4108,12 +4795,12 @@ export default function App() {
     return mapBackendAdvisorToUi(created);
   }
 
-  async function handleDeleteAdvisor(advisorId: string): Promise<void> {
-    await businessService.deleteCompanyAdvisor(advisorId);
+  async function handleSetAdvisorActive(advisorId: string, activo: boolean): Promise<void> {
+    await businessService.updateCompanyAdvisorStatus(advisorId, activo);
     await reloadCompanyAdvisors();
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;solo_cotizaciones_directas?:boolean;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }
@@ -4149,13 +4836,16 @@ export default function App() {
       reloadRequesterResponses(),
       reloadRequesterOrders(),
       reloadImporterQuotes(),
+      reloadImporterOrders(),
       reloadAdvisorAssignedQuotes(),
       reloadAdvisorAvailableQuotes(),
+      reloadChatData(),
     ]);
   }
 
   const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
+    "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
     "imp-profile": ["importadora"],
     "imp-advisors": ["importadora"],
@@ -4227,34 +4917,43 @@ export default function App() {
     // ── Importer portal ───────────────────────────────────────────────────────
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
-    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onDeleteAdvisor={handleDeleteAdvisor}/>;
+    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive}/>;
     if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
-    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={availableQuotes.length} quotes={advisorAssignedQuotes}/>;
-    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={availableQuotes} onClaim={claimQuote}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
+    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser}/>;
+    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId}/>;
 
     if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb}/>;
 
     // ── Shared ────────────────────────────────────────────────────────────────
-    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists}/>;
+    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
+    if(screen==="courses")return (
+      <CoursesPortalScreen
+        sb={sb}
+        role={userRole === "importadora" ? "importadora" : "solicitante"}
+        headerUser={userRole === "importadora" ? importerHeaderUser : USER}
+        companyName={userRole === "importadora" ? (companyProfile?.nombre_empresa || importerHeaderUser.company) : ""}
+        onGoDashboard={() => goTo(userRole === "importadora" ? "imp-dashboard" : "dashboard")}
+      />
+    );
 
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote}/>;
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage}/>;
-    if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={requesterOrders}/>;
-    if(screen==="order-detail")return <OrderDetailScreen orderId={selectedOrderId} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} orders={requesterOrders}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
+    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
-    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")}/>;
+    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
     return null;
   };
 

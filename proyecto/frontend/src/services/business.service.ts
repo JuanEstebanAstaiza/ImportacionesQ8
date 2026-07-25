@@ -3,26 +3,38 @@ import { apiRequest } from "@/services/api-client";
 export interface BackendImporter {
   id: string;
   nombre_empresa: string;
+  logo_url?: string | null;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;
   tiempo_respuesta_promedio: string;
+  capacidad_volumen?: number | null;
+  solo_cotizaciones_directas?: boolean;
   verificado: boolean;
   fecha_registro: string;
 }
 
 export interface BackendCotizacion {
   id: string;
+  solicitante_id?: string;
   importador_id: string | null;
   modalidad: "dirigida" | "abierta";
+  foto_producto?: string | null;
   pais_importacion: string;
+  nivel_personalizacion?: string | null;
   nombre_producto: string;
   descripcion_cliente: string;
+  link_referencia?: string | null;
   linea_producto: string;
   tipo_calidad: string;
+  modalidad_importacion?: string | null;
   cantidad_minima: number;
   precio_objetivo_usd: number | null;
   incoterm: string;
+  notas_adicionales?: string | null;
+  campos_personalizados_valores?: Record<string, unknown> | null;
+  asesor_asignado_id?: string | null;
+  conversacion_id?: string | null;
   estado: string;
   fecha_creacion: string;
   fecha_actualizacion: string;
@@ -54,6 +66,10 @@ export interface BackendAsesor {
   fecha_creacion: string;
 }
 
+export interface UpdateAsesorEstadoPayload {
+  activo: boolean;
+}
+
 export interface CreateAsesorPayload {
   email: string;
   password: string;
@@ -63,13 +79,16 @@ export interface CreateAsesorPayload {
 
 export interface BackendAsesorCotizacion {
   id: string;
+  solicitante_id: string;
   modalidad: "dirigida" | "abierta";
   nombre_producto: string;
+  descripcion_cliente: string;
   cantidad_minima: number;
   precio_objetivo_usd: number | null;
   incoterm: string;
   estado: string;
   fecha_creacion: string;
+  asesor_asignado_id: string | null;
 }
 
 export interface BackendContactoAsesor {
@@ -104,6 +123,10 @@ export interface CreatePropuestaPayload {
 
 export interface PreAceptarPropuestaPayload {
   aceptar: boolean;
+}
+
+export interface StartNegotiationPayload {
+  importador_id: string;
 }
 
 export interface BackendUserProfile {
@@ -196,6 +219,12 @@ export const businessService = {
     return apiRequest<BackendCotizacion[]>("/cotizaciones", { method: "GET" });
   },
 
+  getQuoteById(cotizacionId: string): Promise<BackendCotizacion> {
+    return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}`, {
+      method: "GET",
+    });
+  },
+
   createQuote(payload: CreateCotizacionPayload): Promise<BackendCotizacion> {
     return apiRequest<BackendCotizacion>("/cotizaciones", {
       method: "POST",
@@ -214,9 +243,10 @@ export const businessService = {
     });
   },
 
-  deleteCompanyAdvisor(asesorId: string): Promise<void> {
-    return apiRequest<void>(`/importadores/asesores/${asesorId}`, {
-      method: "DELETE",
+  updateCompanyAdvisorStatus(asesorId: string, activo: boolean): Promise<BackendAsesor> {
+    return apiRequest<BackendAsesor>(`/importadores/asesores/${asesorId}/estado`, {
+      method: "PUT",
+      body: { activo } satisfies UpdateAsesorEstadoPayload,
     });
   },
 
@@ -245,7 +275,7 @@ export const businessService = {
   },
 
   listOrders(): Promise<BackendOrder[]> {
-    return apiRequest<BackendOrder[]>("/ordenes/", { method: "GET" });
+    return apiRequest<BackendOrder[]>("/ordenes", { method: "GET" });
   },
 
   getOrderById(orderId: string): Promise<BackendOrder> {
@@ -298,7 +328,7 @@ export const businessService = {
   },
 
   createProposal(payload: CreatePropuestaPayload): Promise<BackendPropuesta> {
-    return apiRequest<BackendPropuesta>("/propuestas", {
+    return apiRequest<BackendPropuesta>("/propuestas/", {
       method: "POST",
       body: payload,
     });
@@ -328,6 +358,13 @@ export const businessService = {
     return apiRequest<BackendPropuesta>(`/propuestas/${propuestaId}/pre-aceptar`, {
       method: "POST",
       body: { aceptar } satisfies PreAceptarPropuestaPayload,
+    });
+  },
+
+  startProposalNegotiation(cotizacionId: string, importadorId: string): Promise<BackendCotizacion> {
+    return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}/propuestas/aceptar`, {
+      method: "PUT",
+      body: { importador_id: importadorId } satisfies StartNegotiationPayload,
     });
   },
 };
