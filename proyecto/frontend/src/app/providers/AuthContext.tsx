@@ -1,5 +1,6 @@
 import {
   createContext,
+  useEffect,
   useCallback,
   useContext,
   useMemo,
@@ -15,6 +16,7 @@ import type {
 } from "@/types/auth";
 import { authService } from "@/services/auth.service";
 import {
+  SESSION_EXPIRED_EVENT,
   clearStoredToken,
   getStoredToken,
   setStoredRole,
@@ -39,6 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [optimisticUser, setOptimisticUser] = useState<CurrentUserResponse | null>(null);
+
+  const clearSession = useCallback(async () => {
+    clearStoredToken();
+    setToken(null);
+    setOptimisticUser(null);
+    await queryClient.resetQueries({ queryKey: ["auth", "me"] });
+  }, [queryClient]);
 
   const meQuery = useQuery({
     queryKey: ["auth", "me", token],
@@ -93,11 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (activeToken) {
       await authService.logout(activeToken).catch(() => undefined);
     }
-    clearStoredToken();
-    setToken(null);
-    setOptimisticUser(null);
-    await queryClient.resetQueries({ queryKey: ["auth", "me"] });
-  }, [queryClient]);
+    await clearSession();
+  }, [clearSession]);
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      void clearSession();
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, [clearSession]);
 
   const requestPasswordReset = useCallback(async (email: string) => {
     await authService.forgotPassword({ email });

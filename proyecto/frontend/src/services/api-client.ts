@@ -1,8 +1,11 @@
 import type { AuthErrorResponse } from "@/types/auth";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL =
+  (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+    ?.VITE_API_URL || "http://localhost:8000";
 const TOKEN_STORAGE_KEY = "auth_token";
 const ROLE_STORAGE_KEY = "auth_role";
+export const SESSION_EXPIRED_EVENT = "auth:session-expired";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -60,6 +63,14 @@ export function clearStoredToken(): void {
   localStorage.removeItem(ROLE_STORAGE_KEY);
 }
 
+function notifySessionExpired(status: number): void {
+  window.dispatchEvent(
+    new CustomEvent(SESSION_EXPIRED_EVENT, {
+      detail: { status },
+    }),
+  );
+}
+
 export function setStoredRole(role: string): void {
   localStorage.setItem(ROLE_STORAGE_KEY, role);
 }
@@ -82,6 +93,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      clearStoredToken();
+      notifySessionExpired(response.status);
+    }
+
     const fallbackMessage = "Ocurrio un error al conectar con el servidor";
     const errorPayload = (await response.json().catch(() => ({}))) as AuthErrorResponse & {
       detail?: unknown;
