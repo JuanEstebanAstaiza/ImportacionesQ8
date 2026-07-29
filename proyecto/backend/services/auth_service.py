@@ -153,7 +153,8 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
         fecha_aceptacion_politica=datetime.utcnow(),
         creditos_balance=saldo_personal_inicial,
         perfil_completo=True,
-        email_verificado=False,
+        # LOAD_TEST_AUTO_VERIFY: campañas de carga en development/test (nunca prod).
+        email_verificado=bool(config.LOAD_TEST_AUTO_VERIFY),
     )
     db.add(nuevo_usuario)
     db.flush()
@@ -201,7 +202,10 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
     db.commit()
     db.refresh(nuevo_usuario)
 
-    emitir_otp(db, nuevo_usuario, PropositoOtp.verificacion_email.value)
+    if not config.LOAD_TEST_AUTO_VERIFY:
+        emitir_otp(db, nuevo_usuario, PropositoOtp.verificacion_email.value)
+    # Con LOAD_TEST_AUTO_VERIFY el usuario ya queda email_verificado=True y puede
+    # hacer POST /auth/login sin OTP (solo development/test; bloqueado en production).
 
     return RegistroPendienteResponse(
         user_id=str(nuevo_usuario.id),

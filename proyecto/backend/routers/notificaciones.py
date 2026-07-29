@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from models.notificacion import Notificacion
@@ -12,15 +12,18 @@ from schemas.notificacion import (
     MarcarLeidasResponse,
 )
 from utils.dependencies import get_db, get_current_user
+from utils.limiter import limiter, RATE_LIMIT_NOTIFICACIONES
 
 router = APIRouter(prefix="/notificaciones", tags=["Notificaciones"])
 
 
 @router.get("", response_model=NotificacionesListaResponse)
+@limiter.limit(RATE_LIMIT_NOTIFICACIONES)
 async def listar_notificaciones(
+    request: Request,
     solo_no_leidas: Optional[bool] = Query(False, description="Si true, solo no leídas"),
     limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=10_000),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):

@@ -47,6 +47,16 @@ Acepta UUID o `slug`. Con JWT, incluye:
 
 La primera lección se marca `es_preview=true` al publicar (vista previa del catálogo).
 
+### Paywall (seguridad)
+
+Sin compra (y sin ser dueño de la empresa publicadora):
+
+- Las lecciones **no** preview devuelven `video_url: ""` y `recursos: []`.
+- Sí se listan títulos/duración del temario (índice).
+- Tras `POST .../comprar`, el detalle con JWT del comprador devuelve media completa.
+
+`video_url`, `portada_url` y URLs de recursos solo aceptan esquemas `http`/`https`.
+
 ---
 
 ## `POST /cursos`
@@ -89,10 +99,11 @@ Tipos de recurso: `archivo` | `plantilla` | `checklist` | `guia`.
 
 ## `POST /cursos/{id}/comprar`
 
-- Registra inscripción + incrementa `estudiantes_count`.
-- **Idempotente:** si ya compró, devuelve la misma inscripción.
+- **Rol:** solo `solicitante`.
+- Registra inscripción + incrementa `estudiantes_count` (atómico).
+- **Idempotente:** si ya compró (o carrera concurrente), devuelve la misma inscripción.
 - Crea notificación tipo `curso` al comprador.
-- MVP: registro de compra en BD (sin pasarela de pago; el precio queda en `precio_pagado`).
+- **MVP / residual de seguridad:** sin pasarela de pago real; el precio queda en `precio_pagado` de forma informativa. Ver [[Auditoria-Seguridad-Modulos-2026-07-28]] (H6).
 
 ---
 

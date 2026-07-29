@@ -117,6 +117,35 @@ class TestCatalogoYCreacion:
         assert r.json()["id"] == created["id"]
         assert r.json()["comprado"] is False
 
+    def test_paywall_redacta_contenido_no_preview(self, client, empresa):
+        """A01: sin compra, solo lecciones es_preview exponen video/recursos."""
+        _, dueño = empresa
+        created = client.post("/cursos", json=CURSO_PAYLOAD, headers=auth_headers_for(dueño)).json()
+        r = client.get(f"/cursos/{created['id']}")
+        assert r.status_code == 200
+        lecciones = r.json()["modulos"][0]["lecciones"]
+        preview = next(l for l in lecciones if l["es_preview"])
+        locked = next(l for l in lecciones if not l["es_preview"])
+        assert preview["video_url"]
+        assert locked["video_url"] == ""
+        assert locked["recursos"] == []
+
+    def test_url_javascript_rechazada(self, client, empresa):
+        _, dueño = empresa
+        bad = {
+            **CURSO_PAYLOAD,
+            "modulos": [{
+                "titulo": "M",
+                "lecciones": [{
+                    "titulo": "L",
+                    "video_url": "javascript:alert(1)",
+                    "recursos": [],
+                }],
+            }],
+        }
+        r = client.post("/cursos", json=bad, headers=auth_headers_for(dueño))
+        assert r.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
 
 class TestCompraYProgreso:
     def test_comprar_y_mis_cursos(self, client, empresa, solicitante):
@@ -140,6 +169,18 @@ class TestCompraYProgreso:
         # estudiantes_count incrementado
         det = client.get(f"/cursos/{curso['id']}").json()
         assert det["estudiantes_count"] == 1
+
+        # Tras compra, el contenido completo es visible
+        det_auth = client.get(
+            f"/cursos/{curso['id']}", headers=auth_headers_for(solicitante)
+        ).json()
+        assert all(l["video_url"] for m in det_auth["modulos"] for l in m["lecciones"])
+
+    def test_solo_solicitante_compra(self, client, empresa):
+        _, dueño = empresa
+        curso = client.post("/cursos", json=CURSO_PAYLOAD, headers=auth_headers_for(dueño)).json()
+        r = client.post(f"/cursos/{curso['id']}/comprar", headers=auth_headers_for(dueño))
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_progreso_requiere_compra(self, client, empresa, solicitante):
         _, dueño = empresa

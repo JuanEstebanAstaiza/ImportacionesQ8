@@ -4,7 +4,7 @@ import logging
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 import config
@@ -21,6 +21,7 @@ from models.usuario import Usuario
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from pydantic import BaseModel
+from utils.limiter import limiter, RATE_LIMIT_CHAT_MESSAGE
 
 logger = logging.getLogger("importacionesq8")
 
@@ -115,15 +116,16 @@ async def iniciar_chat(
             ]),
         ).first()
         if not propuesta:
+            # 404 genérico: no revelar si la cotización existe a terceros (A01 enumeration)
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No hay propuesta enviada de tu empresa sobre esta cotización",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cotización no encontrada o sin propuesta de tu empresa",
             )
 
     if not cotizacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
 
-    # Autorización: asesor solo si está asignado o es dueño de la empresa
+    # Autorización: asesor solo si está asignado (o nadie asignado aún)
     user_id = current_user["user_id"]
     rol = current_user["rol"]
     if rol == "asesor":
@@ -132,6 +134,9 @@ async def iniciar_chat(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Solo el asesor asignado puede iniciar esta negociación",
             )
+        # Si nadie reclamó, el asesor que inicia queda como participante de empresa
+        if not cotizacion.asesor_asignado_id:
+            cotizacion.asesor_asignado_id = user_id
 
     conversacion = db.query(ConversacionChat).filter(
         ConversacionChat.cotizacion_id == cotizacion.id
@@ -161,13 +166,30 @@ async def iniciar_chat(
             },
         )
 
+    # Solo el participante de empresa de la conversación (o el dueño al crear) puede
+    # adjuntar mensaje_inicial — evita inyección de mensajes por cuentas no participantes.
+    puede_escribir = (
+        conversacion.importador_usuario_id == user_id
+        or (rol == "importador" and current_user.get("importador_id") == importador_id)
+    )
+    # Si el dueño escribe y no es el participante, traspasa el hilo al dueño
+    # (mismo patrón de supervisión que el pre-aceptar).
+    if rol == "importador" and conversacion.importador_usuario_id != user_id:
+        conversacion.importador_usuario_id = user_id
+        puede_escribir = True
+
     if datos.mensaje_inicial and datos.mensaje_inicial.strip():
+        if not puede_escribir:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No autorizado para escribir en esta conversación",
+            )
         db.flush()
         msg = MensajeChat(
             id=str(uuid4()),
             conversacion_id=conversacion.id,
             remitente_id=user_id,
-            contenido=datos.mensaje_inicial.strip(),
+            contenido=datos.mensaje_inicial.strip()[:2000],
             tipo=TipoMensajeChat.texto.value,
         )
         db.add(msg)
@@ -248,7 +270,9 @@ async def listar_mensajes(
 
 
 @router.post("/conversaciones/{conversacion_id}/mensajes", response_model=MensajeChatResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT_CHAT_MESSAGE)
 async def enviar_mensaje(
+    request: Request,
     conversacion_id: str,
     datos: MensajeChatCreate,
     db: Session = Depends(get_db),

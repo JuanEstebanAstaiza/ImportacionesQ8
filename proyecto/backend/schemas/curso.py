@@ -1,10 +1,27 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
+from urllib.parse import urlparse
 
 
 NivelCursoLiteral = Literal["Principiante", "Avanzado"]
 TipoRecursoLiteral = Literal["archivo", "plantilla", "checklist", "guia"]
+
+# Límites anti-DoS en payload de publicación
+MAX_MODULOS = 30
+MAX_LECCIONES_POR_MODULO = 50
+MAX_RECURSOS_POR_LECCION = 20
+
+
+def _validar_url_http(value: Optional[str], *, campo: str = "url") -> Optional[str]:
+    """Solo permite http/https (mitiga javascript:/data: y esquemas raros)."""
+    if value is None or value == "":
+        return value
+    raw = value.strip()
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"{campo} debe ser una URL http(s) absoluta válida")
+    return raw
 
 
 class RecursoLeccionCreate(BaseModel):
@@ -12,18 +29,28 @@ class RecursoLeccionCreate(BaseModel):
     url: str = Field(..., min_length=5, max_length=500)
     tipo: TipoRecursoLiteral = "archivo"
 
+    @field_validator("url")
+    @classmethod
+    def url_segura(cls, v: str) -> str:
+        return _validar_url_http(v, campo="url de recurso")  # type: ignore[return-value]
+
 
 class LeccionCreate(BaseModel):
     titulo: str = Field(..., min_length=1, max_length=255)
     duracion: str = Field(default="10 min", max_length=30)
     video_url: str = Field(..., min_length=5, max_length=500)
     es_preview: bool = False
-    recursos: List[RecursoLeccionCreate] = Field(default_factory=list)
+    recursos: List[RecursoLeccionCreate] = Field(default_factory=list, max_length=MAX_RECURSOS_POR_LECCION)
+
+    @field_validator("video_url")
+    @classmethod
+    def video_url_segura(cls, v: str) -> str:
+        return _validar_url_http(v, campo="video_url")  # type: ignore[return-value]
 
 
 class ModuloCreate(BaseModel):
     titulo: str = Field(..., min_length=1, max_length=255)
-    lecciones: List[LeccionCreate] = Field(default_factory=list)
+    lecciones: List[LeccionCreate] = Field(default_factory=list, max_length=MAX_LECCIONES_POR_MODULO)
 
     @field_validator("lecciones")
     @classmethod
@@ -37,10 +64,15 @@ class CursoCreate(BaseModel):
     titulo: str = Field(..., min_length=3, max_length=255)
     descripcion: str = Field(default="", max_length=5000)
     portada_url: Optional[str] = Field(default=None, max_length=500)
-    precio: float = Field(default=0.0, ge=0)
+    precio: float = Field(default=0.0, ge=0, le=1_000_000)
     nivel: NivelCursoLiteral = "Principiante"
     categoria: str = Field(default="General", min_length=1, max_length=120)
-    modulos: List[ModuloCreate] = Field(..., min_length=1)
+    modulos: List[ModuloCreate] = Field(..., min_length=1, max_length=MAX_MODULOS)
+
+    @field_validator("portada_url")
+    @classmethod
+    def portada_segura(cls, v: Optional[str]) -> Optional[str]:
+        return _validar_url_http(v, campo="portada_url")
 
     @field_validator("modulos")
     @classmethod

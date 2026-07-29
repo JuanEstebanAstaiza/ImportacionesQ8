@@ -85,6 +85,9 @@ def init_db():
     Inicializa la base de datos:
     - MySQL: crea DB si falta + Alembic upgrade head
     - SQLite (tests): create_all (conftest ya importa modelos)
+
+    Con varios workers Uvicorn solo un proceso ejecuta migraciones (lock Redis);
+    el resto espera. Evita carreras de Alembic al arrancar (OWASP A04/A05).
     """
     create_database_if_not_exists()
     import models  # noqa: F401 — registra metadata
@@ -93,22 +96,54 @@ def init_db():
         create_tables()
         return
 
+    lock_key = "lock:alembic_upgrade_head"
+    got_lock = False
     try:
-        run_migrations()
-    except Exception as e:
-        # Primera vez / imagen sin historial: fallback create_all + stamp
-        logger.warning("Alembic upgrade falló (%s); usando create_all + stamp", e)
-        create_tables()
+        from config import redis_client
+        if redis_client is not None:
+            # nx=True: solo el primer worker obtiene el lock (TTL 3 min)
+            got_lock = bool(redis_client.set(lock_key, "1", nx=True, ex=180))
+            if not got_lock:
+                # Esperar a que el worker líder termine migraciones
+                import time
+                for _ in range(90):
+                    if not redis_client.exists(lock_key):
+                        break
+                    time.sleep(1)
+                else:
+                    logger.warning("Timeout esperando lock Alembic; intentando upgrade de todos modos")
+                    got_lock = True
+        else:
+            got_lock = True
+    except Exception as lock_err:
+        logger.warning("No se pudo adquirir lock Redis para Alembic (%s); continuando", lock_err)
+        got_lock = True
+
+    if got_lock:
         try:
-            from pathlib import Path
-            from alembic.config import Config
-            from alembic import command
-            root = Path(__file__).resolve().parent
-            cfg = Config(str(root / "alembic.ini"))
-            cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
-            command.stamp(cfg, "head")
-        except Exception as stamp_err:
-            logger.warning("No se pudo hacer alembic stamp: %s", stamp_err)
+            try:
+                run_migrations()
+            except Exception as e:
+                # Primera vez / imagen sin historial: fallback create_all + stamp
+                logger.warning("Alembic upgrade falló (%s); usando create_all + stamp", e)
+                create_tables()
+                try:
+                    from pathlib import Path
+                    from alembic.config import Config
+                    from alembic import command
+                    root = Path(__file__).resolve().parent
+                    cfg = Config(str(root / "alembic.ini"))
+                    cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+                    command.stamp(cfg, "head")
+                except Exception as stamp_err:
+                    logger.warning("No se pudo hacer alembic stamp: %s", stamp_err)
+        finally:
+            try:
+                from config import redis_client
+                if redis_client is not None:
+                    redis_client.delete(lock_key)
+            except Exception:
+                pass
 
 def check_database() -> bool:
     """Ping SQL para readiness."""

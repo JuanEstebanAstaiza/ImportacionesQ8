@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 from typing import List, Optional
@@ -24,6 +24,8 @@ from models.campo_personalizado import CampoPersonalizado
 from models.orden import Orden
 from utils.dependencies import get_db, require_rol, require_rol_in, get_current_user
 from utils.security import hash_password
+from utils.limiter import limiter, RATE_LIMIT_PUBLIC_READ
+from utils.query_safety import clamp_str
 
 logger = logging.getLogger("importacionesq8")
 
@@ -38,15 +40,19 @@ def json_contains_column(column, value):
     return column.like(f'%"{value}"%')
 
 @router.get("/", response_model=List[ImportadorResponse])
+@limiter.limit(RATE_LIMIT_PUBLIC_READ)
 async def listar_importadores(
+    request: Request,
     especialidad: Optional[str] = Query(None, description="Filtrar por especialidad de producto"),
     pais: Optional[str] = Query(None, description="Filtrar por país de origen"),
     orden: Optional[str] = Query(None, description="'calificacion' o 'reciente'"),
     certificado: Optional[bool] = Query(None, description="Filtrar por empresas verificadas (true/false)"),
+    limit: int = Query(50, ge=1, le=200, description="Máximo de filas (paginación anti-DoS)"),
+    offset: int = Query(0, ge=0, le=10_000),
     db: Session = Depends(get_db)
 ):
     """
-    Lista todos los importadores activos con filtros opcionales.
+    Lista importadores activos con filtros y paginación (default 50, max 200).
     
     - **especialidad**: Filtrar por especialidad de producto (ej: "Textiles")
     - **pais**: Filtrar por país de origen (ej: "China")
@@ -55,6 +61,9 @@ async def listar_importadores(
     """
     query = db.query(Importador).filter(Importador.estado == "activo")
     
+    especialidad = clamp_str(especialidad, 80)
+    pais = clamp_str(pais, 80)
+
     if especialidad:
         # Buscar en JSON usando LIKE (compatible con MySQL y SQLite)
         query = query.filter(json_contains_column(Importador.especialidad_producto, especialidad))
@@ -69,9 +78,10 @@ async def listar_importadores(
         query = query.order_by(Importador.calificacion_promedio.desc())
     elif orden == "reciente":
         query = query.order_by(Importador.fecha_registro.desc())
+    else:
+        query = query.order_by(Importador.calificacion_promedio.desc())
 
-    importadores = query.all()
-    return importadores
+    return query.offset(offset).limit(limit).all()
 
 # ==================== Panel de empresa: asesores (Fase 1) ====================
 # NOTA: estas rutas de un solo segmento literal ("/asesores", "/campos-personalizados")
@@ -202,7 +212,10 @@ async def eliminar_asesor(
             ),
         )
 
-    from models.chat import ConversacionChat
+    from models.chat import ConversacionChat, MensajeChat
+    from models.propuesta import Propuesta as PropuestaModel
+    from sqlalchemy.exc import IntegrityError
+
     chats = db.query(ConversacionChat).filter(
         ConversacionChat.importador_usuario_id == asesor_id_str
     ).count()
@@ -215,8 +228,40 @@ async def eliminar_asesor(
             ),
         )
 
-    db.delete(asesor)
-    db.commit()
+    mensajes = db.query(MensajeChat).filter(MensajeChat.remitente_id == asesor_id_str).count()
+    if mensajes > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "El asesor tiene mensajes de chat históricos. "
+                "Usa soft-delete (PUT .../estado) para conservar la trazabilidad."
+            ),
+        )
+
+    propuestas_creadas = db.query(PropuestaModel).filter(
+        PropuestaModel.creado_por_usuario_id == asesor_id_str
+    ).count()
+    if propuestas_creadas > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "El asesor redactó propuestas. "
+                "Usa soft-delete (PUT .../estado); el hard delete borraría trazabilidad comercial."
+            ),
+        )
+
+    try:
+        db.delete(asesor)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "No se puede eliminar físicamente: hay referencias en otras tablas. "
+                "Usa soft-delete con PUT .../estado."
+            ),
+        )
     return None
 
 
@@ -228,18 +273,30 @@ async def metricas_importador(
     """
     Resumen comercial de la empresa: cotizaciones respondidas, tasa de aceptación,
     volumen cotizado y rendimiento (panel importadora).
+
+    Consultas agregadas (COUNT/SUM) — evita cargar todas las filas en memoria
+    (crítico con 100+ ops concurrentes).
     """
     importador_id = current_user.get("importador_id")
     if not importador_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sin empresa asociada")
 
-    propuestas = db.query(Propuesta).filter(Propuesta.importador_id == importador_id).all()
-    propuestas_enviadas = [p for p in propuestas if p.estado != EstadoPropuesta.borrador.value]
-    propuestas_aceptadas = [p for p in propuestas if p.estado == EstadoPropuesta.aceptada.value]
+    propuestas_enviadas = db.query(func.count(Propuesta.id)).filter(
+        Propuesta.importador_id == importador_id,
+        Propuesta.estado != EstadoPropuesta.borrador.value,
+    ).scalar() or 0
+    propuestas_aceptadas = db.query(func.count(Propuesta.id)).filter(
+        Propuesta.importador_id == importador_id,
+        Propuesta.estado == EstadoPropuesta.aceptada.value,
+    ).scalar() or 0
+    volumen = db.query(func.coalesce(func.sum(Propuesta.precio_ofrecido_usd), 0.0)).filter(
+        Propuesta.importador_id == importador_id,
+        Propuesta.estado != EstadoPropuesta.borrador.value,
+    ).scalar() or 0.0
 
-    cotizaciones_dirigidas = db.query(Cotizacion).filter(
+    cotizaciones_dirigidas = db.query(func.count(Cotizacion.id)).filter(
         Cotizacion.importador_id == importador_id
-    ).count()
+    ).scalar() or 0
     total_recibidas = cotizaciones_dirigidas
     cuentas_empresa = [
         row[0] for row in db.query(Usuario.id).filter(
@@ -248,48 +305,57 @@ async def metricas_importador(
         ).all()
     ]
     if cuentas_empresa:
-        reclamadas = db.query(Cotizacion).filter(
+        reclamadas = db.query(func.count(Cotizacion.id)).filter(
             Cotizacion.asesor_asignado_id.in_(cuentas_empresa)
-        ).count()
+        ).scalar() or 0
         total_recibidas = max(total_recibidas, reclamadas)
 
-    tasa = (
-        (len(propuestas_aceptadas) / len(propuestas_enviadas) * 100)
-        if propuestas_enviadas else 0.0
-    )
-    volumen = sum(float(p.precio_ofrecido_usd or 0) for p in propuestas_enviadas)
+    tasa = (propuestas_aceptadas / propuestas_enviadas * 100) if propuestas_enviadas else 0.0
 
-    ordenes = db.query(Orden).filter(Orden.importador_id == importador_id).all()
-    estados_cerrados = {"entregada", "cancelada", "completada"}
-    ordenes_activas = sum(
-        1 for o in ordenes
-        if (o.estado.value if hasattr(o.estado, "value") else str(o.estado)) not in estados_cerrados
-    )
+    ordenes_totales = db.query(func.count(Orden.id)).filter(
+        Orden.importador_id == importador_id
+    ).scalar() or 0
+    estados_cerrados = ("entregada", "cancelada", "completada")
+    ordenes_activas = db.query(func.count(Orden.id)).filter(
+        Orden.importador_id == importador_id,
+        Orden.estado.notin_(list(estados_cerrados)),
+    ).scalar() or 0
 
-    asesores_activos = db.query(Usuario).filter(
+    asesores_activos = db.query(func.count(Usuario.id)).filter(
         Usuario.importador_id == importador_id,
         Usuario.rol == "asesor",
         Usuario.activo.is_(True),
-    ).count()
+    ).scalar() or 0
 
+    # Muestra acotada (300) con JOIN — sin N+1 por propuesta
+    muestra = (
+        db.query(Propuesta.fecha_envio, Cotizacion.fecha_creacion)
+        .join(Cotizacion, Cotizacion.id == Propuesta.cotizacion_id)
+        .filter(
+            Propuesta.importador_id == importador_id,
+            Propuesta.estado != EstadoPropuesta.borrador.value,
+            Propuesta.fecha_envio.isnot(None),
+            Cotizacion.fecha_creacion.isnot(None),
+        )
+        .limit(300)
+        .all()
+    )
     tiempos = []
-    for p in propuestas_enviadas[:300]:
-        cot = db.query(Cotizacion).filter(Cotizacion.id == p.cotizacion_id).first()
-        if cot and cot.fecha_creacion and p.fecha_envio:
-            delta = p.fecha_envio - cot.fecha_creacion
-            tiempos.append(delta.total_seconds() / 3600)
+    for fecha_envio, fecha_creacion in muestra:
+        if fecha_envio and fecha_creacion:
+            tiempos.append((fecha_envio - fecha_creacion).total_seconds() / 3600)
     tiempo_prom = round(sum(tiempos) / len(tiempos), 2) if tiempos else None
 
     return MetricasImportadorResponse(
         importador_id=importador_id,
-        total_cotizaciones_recibidas=total_recibidas,
-        total_propuestas_enviadas=len(propuestas_enviadas),
-        total_propuestas_aceptadas=len(propuestas_aceptadas),
-        tasa_aceptacion_pct=round(tasa, 2),
-        volumen_cotizado_usd=round(volumen, 2),
-        ordenes_activas=ordenes_activas,
-        ordenes_totales=len(ordenes),
-        asesores_activos=asesores_activos,
+        total_cotizaciones_recibidas=int(total_recibidas),
+        total_propuestas_enviadas=int(propuestas_enviadas),
+        total_propuestas_aceptadas=int(propuestas_aceptadas),
+        tasa_aceptacion_pct=round(float(tasa), 2),
+        volumen_cotizado_usd=round(float(volumen), 2),
+        ordenes_activas=int(ordenes_activas),
+        ordenes_totales=int(ordenes_totales),
+        asesores_activos=int(asesores_activos),
         tiempo_promedio_respuesta_horas=tiempo_prom,
     )
 

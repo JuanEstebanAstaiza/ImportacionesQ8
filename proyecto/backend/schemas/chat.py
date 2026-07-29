@@ -4,8 +4,10 @@ from datetime import datetime
 
 
 class MensajeChatCreate(BaseModel):
-    contenido: str = Field(..., min_length=1)
-    tipo: str = "texto"  # "texto" o "archivo"
+    # Tope anti-DoS / flood de payloads enormes por mensaje
+    contenido: str = Field(..., min_length=1, max_length=4000)
+    # "sistema" solo lo genera el backend; el cliente no puede forjarlo
+    tipo: str = Field(default="texto", pattern="^(texto|archivo)$")
 
 
 class MensajeChatResponse(BaseModel):
