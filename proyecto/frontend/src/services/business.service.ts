@@ -43,6 +43,7 @@ export interface BackendCotizacion {
 export interface CreateCotizacionPayload {
   modalidad: "dirigida" | "abierta";
   importador_id?: string;
+  foto_producto?: string;
   pais_importacion: string;
   nombre_producto: string;
   descripcion_cliente: string;
@@ -55,6 +56,7 @@ export interface CreateCotizacionPayload {
   precio_objetivo_usd?: number;
   incoterm: string;
   notas_adicionales?: string;
+  campos_personalizados_valores?: Record<string, unknown>;
 }
 
 export interface BackendAsesor {
@@ -208,6 +210,29 @@ export interface BackendChatConversation {
   importador_usuario_id: string;
   fecha_creacion: string;
   ultimo_mensaje: BackendChatMessage | null;
+}
+
+export interface BackendNotification {
+  id: string;
+  usuario_id: string;
+  tipo: string;
+  titulo: string;
+  mensaje: string;
+  data: Record<string, unknown> | null;
+  leida: boolean;
+  fecha_creacion: string;
+  fecha_lectura: string | null;
+}
+
+export interface BackendNotificationsListResponse {
+  items: BackendNotification[];
+  total: number;
+  no_leidas: number;
+}
+
+export interface BackendMarkAllNotificationsReadResponse {
+  actualizadas: number;
+  mensaje: string;
 }
 
 export const businessService = {
@@ -365,6 +390,25 @@ export const businessService = {
     return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}/propuestas/aceptar`, {
       method: "PUT",
       body: { importador_id: importadorId } satisfies StartNegotiationPayload,
+    });
+  },
+
+  listNotifications(soloNoLeidas = false): Promise<BackendNotificationsListResponse> {
+    const query = soloNoLeidas ? "?solo_no_leidas=true" : "";
+    return apiRequest<BackendNotificationsListResponse>(`/notificaciones${query}`, {
+      method: "GET",
+    });
+  },
+
+  markNotificationAsRead(notificationId: string): Promise<BackendNotification> {
+    return apiRequest<BackendNotification>(`/notificaciones/${notificationId}/leer`, {
+      method: "PUT",
+    });
+  },
+
+  markAllNotificationsAsRead(): Promise<BackendMarkAllNotificationsReadResponse> {
+    return apiRequest<BackendMarkAllNotificationsReadResponse>("/notificaciones/leer-todas", {
+      method: "PUT",
     });
   },
 };

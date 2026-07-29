@@ -46,6 +46,21 @@ export interface VerifyEmailRequest {
 	otp: string;
 }
 
+export interface LoginOtpRequest {
+	challenge_token: string;
+	otp: string;
+}
+
+export interface ResendOtpRequest {
+	email: string;
+	proposito: "verificacion_email" | "login_tardio";
+}
+
+export interface ResendOtpResponse {
+	mensaje: string;
+	challenge_token?: string | null;
+}
+
 export interface ForgotPasswordRequest {
 	email: string;
 }

@@ -776,6 +776,26 @@ interface AppNotification {
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
 
+function mapBackendNotificationTypeToUi(type: string): AppNotification["type"] {
+  if (type === "chat") return "message";
+  if (type === "orden") return "order";
+  if (type === "cotizacion" || type === "propuesta" || type === "negociacion") return "response";
+  if (type === "curso") return "document";
+  if (type === "sistema") return "update";
+  return "status";
+}
+
+function mapBackendNotificationToUi(notification: { id: string; tipo: string; titulo: string; mensaje: string; fecha_creacion: string; leida: boolean; }): AppNotification {
+  return {
+    id: notification.id,
+    type: mapBackendNotificationTypeToUi(notification.tipo),
+    title: notification.titulo,
+    body: notification.mensaje,
+    date: formatShortDate(notification.fecha_creacion),
+    read: notification.leida,
+  };
+}
+
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
 function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
@@ -4484,67 +4504,12 @@ export default function App() {
   }, [advisorAssignedQuotes, availableQuotes, currentUserProfile?.importador_id]);
 
   const reloadNotifications = useCallback(async () => {
-    const [chatRows, orderRows, quoteRows] = await Promise.all([
-      businessService.listChatConversations().catch(() => []),
-      businessService.listOrders().catch(() => [] as BackendOrder[]),
-      businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
-    ]);
-
-    const quoteMap = new Map(quoteRows.map((quote) => [quote.id, quote]));
-    const proposalRows = await Promise.all(
-      quoteRows.slice(0, 20).map(async (quote) => {
-        try {
-          return await businessService.listQuoteProposals(quote.id);
-        } catch {
-          return [] as BackendPropuesta[];
-        }
-      }),
-    );
-
-    const proposalNotifications = proposalRows
-      .flat()
-      .map((proposal) => {
-        const quote = quoteMap.get(proposal.cotizacion_id);
-        const quoteCode = proposal.cotizacion_id.slice(0, 8).toUpperCase();
-        return {
-          id: `proposal-${proposal.id}-${proposal.estado}`,
-          type: "response" as const,
-          title: "Actualización de propuesta",
-          body: `La cotización COT-${quoteCode} recibió una propuesta en estado ${proposal.estado}.`,
-          date: quote?.fecha_actualizacion ? formatShortDate(quote.fecha_actualizacion) : "Reciente",
-          read: false,
-        };
-      });
-
-    const chatNotifications = chatRows
-      .filter((chat) => Boolean(chat.ultimo_mensaje))
-      .map((chat) => ({
-        id: `chat-${chat.id}-${chat.ultimo_mensaje?.id}`,
-        type: "message" as const,
-        title: "Mensaje nuevo",
-        body: chat.ultimo_mensaje?.contenido || "Tienes actividad nueva en el chat.",
-        date: chat.ultimo_mensaje?.fecha_envio ? formatShortDate(chat.ultimo_mensaje.fecha_envio) : formatShortDate(chat.fecha_creacion),
-        read: false,
-      }));
-
-    const orderNotifications = orderRows.map((order) => {
-      const currentState = order.historial_estados?.[order.historial_estados.length - 1];
-      return {
-        id: `order-${order.id}-${currentState?.estado || order.estado}`,
-        type: "order" as const,
-        title: "Actualización de orden",
-        body: `La orden ORD-${order.id.slice(0, 8).toUpperCase()} está en estado ${currentState?.estado || order.estado}.`,
-        date: currentState?.fecha ? formatShortDate(currentState.fecha) : "Reciente",
-        read: false,
-      };
-    });
-
-    const merged = [...proposalNotifications, ...chatNotifications, ...orderNotifications].slice(0, 80);
-
-    setNotifications((prev) => {
-      const previousRead = new Set(prev.filter((item) => item.read).map((item) => item.id));
-      return merged.map((item) => ({ ...item, read: previousRead.has(item.id) }));
-    });
+    try {
+      const response = await businessService.listNotifications();
+      setNotifications(response.items.map(mapBackendNotificationToUi));
+    } catch {
+      setNotifications([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -4740,7 +4705,10 @@ export default function App() {
   }
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
   function openNewQuote(importerId?:string){setPreselectedImporterId(importerId);goTo("new-quote");}
-  function markNotif(id:string){setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));}
+  function markNotif(id:string){
+    setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
+    void businessService.markNotificationAsRead(id).catch(() => undefined);
+  }
   async function claimQuote(id:string){
     await businessService.claimAdvisorQuote(id);
     await Promise.all([reloadAdvisorAvailableQuotes(), reloadAdvisorAssignedQuotes()]);

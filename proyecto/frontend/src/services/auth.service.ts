@@ -2,8 +2,11 @@ import type {
   CurrentUserResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  LoginOtpRequest,
   LoginRequest,
   LoginResponse,
+  ResendOtpRequest,
+  ResendOtpResponse,
   ResetPasswordRequest,
   RegisterRequest,
   RegisterResponse,
@@ -21,6 +24,20 @@ export const authService = {
 
   login(payload: LoginRequest): Promise<LoginResponse> {
     return apiRequest<LoginResponse>("/auth/login", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  verifyLoginOtp(payload: LoginOtpRequest): Promise<LoginResponse> {
+    return apiRequest<LoginResponse>("/auth/login/verificar-otp", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  resendOtp(payload: ResendOtpRequest): Promise<ResendOtpResponse> {
+    return apiRequest<ResendOtpResponse>("/auth/reenviar-otp", {
       method: "POST",
       body: payload,
     });

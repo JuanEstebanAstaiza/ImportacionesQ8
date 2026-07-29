@@ -13,26 +13,35 @@ export interface Lesson {
   titulo: string;
   duracion: string;
   video_url: string;
+  es_preview?: boolean;
+  orden?: number;
   recursos: LessonResource[];
 }
 
 export interface Module {
   id: string;
   titulo: string;
+  orden?: number;
   lecciones: Lesson[];
 }
 
 export interface Course {
   id: string;
+  slug?: string;
   titulo: string;
   descripcion: string;
-  portada_url: string;
+  portada_url?: string | null;
   precio: number;
   nivel: CourseLevel;
   categoria: string;
+  importador_id?: string;
   importadora_nombre: string;
   rating: number;
   estudiantes_count: number;
+  estado?: string;
+  fecha_creacion?: string | null;
+  comprado?: boolean;
+  progreso_pct?: number;
   modulos: Module[];
 }
 
@@ -46,6 +55,7 @@ export interface PublishLessonInput {
   titulo: string;
   duracion: string;
   video_url: string;
+  es_preview?: boolean;
   recursos: PublishLessonResourceInput[];
 }
 
@@ -57,11 +67,10 @@ export interface PublishModuleInput {
 export interface PublishCourseInput {
   titulo: string;
   descripcion: string;
-  portada_url: string;
+  portada_url?: string;
   precio: number;
   nivel: CourseLevel;
   categoria: string;
-  importadora_nombre: string;
   modulos: PublishModuleInput[];
 }
 

@@ -202,7 +202,7 @@ function isEmbeddableVideo(url: string): boolean {
   return isSafeEmbedUrl(url);
 }
 
-function toPublishInput(form: PublishFormState, companyName: string): { value: PublishCourseInput | null; error: string } {
+function toPublishInput(form: PublishFormState): { value: PublishCourseInput | null; error: string } {
   const precio = Number(form.precio);
 
   if (!form.titulo.trim() || !form.descripcion.trim() || !form.portada_url.trim() || !form.categoria.trim()) {
@@ -275,7 +275,6 @@ function toPublishInput(form: PublishFormState, companyName: string): { value: P
       precio,
       nivel: form.nivel,
       categoria: form.categoria.trim(),
-      importadora_nombre: companyName,
       modulos: modules,
     },
     error: "",
@@ -298,6 +297,11 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
     purchasedCourseIds,
     completedLessonsByCourse,
     learningState,
+    isLoading,
+    isFetchingDetail,
+    isSavingProgress,
+    error,
+    fetchCourseDetail,
     purchaseCourse,
     publishCourse,
     toggleLessonCompleted,
@@ -315,6 +319,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishForm, setPublishForm] = useState<PublishFormState>(INITIAL_PUBLISH_FORM);
   const [publishError, setPublishError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [pendingPurchaseCourseId, setPendingPurchaseCourseId] = useState<string | null>(null);
 
   const categories = useMemo(() => ["Todas", ...Array.from(new Set([...CATEGORY_SHORTCUTS, ...courses.map((course) => course.categoria)]))], [courses]);
 
@@ -396,26 +403,64 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
     }
   }
 
-  function handlePurchase(courseId: string): void {
-    purchaseCourse(courseId);
-    const course = courses.find((item) => item.id === courseId) || null;
-    setSelectedCourseId(null);
-    setMainTab("mine");
-    setActivePlayerCourseId(courseId);
-    setActiveLessonId(flattenLessons(course)[0]?.id ?? null);
+  async function handleOpenCourseDetail(courseId: string): Promise<void> {
+    const normalizedCourseId = courseId?.trim();
+    if (!normalizedCourseId) {
+      setActionError("No se pudo identificar el curso seleccionado.");
+      return;
+    }
+
+    setActionError("");
+    setSelectedCourseId(normalizedCourseId);
+
+    const target = courses.find((row) => row.id === normalizedCourseId) || null;
+    if (target?.modulos.length) {
+      return;
+    }
+
+    try {
+      await fetchCourseDetail(normalizedCourseId);
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : "No se pudo cargar la información del curso.");
+    }
   }
 
-  function handlePublish(): void {
-    const nextCourse = toPublishInput(publishForm, companyName || "Mi empresa importadora");
+  async function handlePurchase(courseId: string): Promise<void> {
+    setActionError("");
+    setPendingPurchaseCourseId(courseId);
+    try {
+      await purchaseCourse(courseId);
+      const course = courses.find((item) => item.id === courseId) || null;
+      setSelectedCourseId(null);
+      setMainTab("mine");
+      setActivePlayerCourseId(courseId);
+      setActiveLessonId(flattenLessons(course)[0]?.id ?? null);
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : "No se pudo completar la inscripción al curso.");
+    } finally {
+      setPendingPurchaseCourseId(null);
+    }
+  }
+
+  async function handlePublish(): Promise<void> {
+    const nextCourse = toPublishInput(publishForm);
     if (!nextCourse.value) {
       setPublishError(nextCourse.error);
       return;
     }
 
-    publishCourse(nextCourse.value);
-    setPublishForm({ ...INITIAL_PUBLISH_FORM, modulos: [createDraftModule()] });
-    setPublishError("");
-    setShowPublishModal(false);
+    setActionError("");
+    setIsPublishing(true);
+    try {
+      await publishCourse(nextCourse.value);
+      setPublishForm({ ...INITIAL_PUBLISH_FORM, modulos: [createDraftModule()] });
+      setPublishError("");
+      setShowPublishModal(false);
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : "No se pudo publicar el curso.");
+    } finally {
+      setIsPublishing(false);
+    }
   }
 
   function updateModule(moduleId: string, updater: (module: DraftModule) => DraftModule): void {
@@ -532,7 +577,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                 <p className="text-lg font-semibold">{formatCurrency(course.precio)}</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setSelectedCourseId(course.id)}>
+                <Button variant="outline" onClick={() => { void handleOpenCourseDetail(course.id); }}>
                   Ver detalle
                 </Button>
                 {isPurchased ? (
@@ -557,8 +602,8 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
             <h1 className="text-2xl font-semibold tracking-tight">Cursos y capacitacion</h1>
             <p className="text-sm text-muted-foreground">
               {role === "solicitante"
-                ? "Explora cursos, continua clases con progreso local y descarga recursos multimedia por leccion."
-                : "Publica cursos con modulos, videos y materiales descargables sin tocar el backend."}
+                ? "Explora cursos, inscríbete y continúa clases con progreso sincronizado al backend."
+                : "Publica cursos con módulos, videos y materiales descargables sobre la API real."}
             </p>
           </div>
         </div>
@@ -586,6 +631,20 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
           </Card>
         </div>
       </section>
+
+      {isLoading ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            Cargando catálogo de cursos...
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {error || actionError ? (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="py-4 text-sm text-destructive">{error || actionError}</CardContent>
+        </Card>
+      ) : null}
 
       {role === "solicitante" ? (
         <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as "all" | "mine")} className="space-y-6">
@@ -742,7 +801,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
             <section className="space-y-4">
               <div>
                 <h2 className="text-xl font-semibold">Vistos recientemente / En progreso</h2>
-                <p className="text-sm text-muted-foreground">Tus cursos iniciados se ordenan segun la ultima actividad guardada en localStorage.</p>
+                    <p className="text-sm text-muted-foreground">Tus cursos iniciados se ordenan por actividad reciente de la sesión.</p>
               </div>
               {inProgressCourses.length > 0 ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -859,7 +918,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                           <div className="h-2 overflow-hidden rounded-full bg-muted">
                             <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${playerProgress}%` }} />
                           </div>
-                          <p className="text-sm text-muted-foreground">Progreso guardado localmente: {playerProgress}%</p>
+                          <p className="text-sm text-muted-foreground">Progreso sincronizado: {playerProgress}%</p>
                         </div>
                       </div>
                     </>
@@ -896,8 +955,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                             >
                               <Checkbox
                                 checked={completed}
-                                onCheckedChange={(checked) => toggleLessonCompleted(playerCourse.id, lesson.id, checked === true)}
+                                onCheckedChange={(checked) => { void toggleLessonCompleted(playerCourse.id, lesson.id, checked === true); }}
                                 className="mt-1"
+                                disabled={isSavingProgress}
                               />
                               <button className="flex-1 text-left" onClick={() => setActiveLessonId(lesson.id)}>
                                 <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Leccion {index + 1}</p>
@@ -1099,6 +1159,19 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                     ))}
                   </Accordion>
 
+                  {!isFetchingDetail && selectedCourse.modulos.length === 0 ? (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      <p>No se pudo cargar la información del curso. Intenta nuevamente.</p>
+                      <Button
+                        variant="outline"
+                        className="mt-3"
+                        onClick={() => { void handleOpenCourseDetail(selectedCourse.id); }}
+                      >
+                        Reintentar
+                      </Button>
+                    </div>
+                  ) : null}
+
                   <div className="rounded-xl border bg-muted/20 p-4">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Precio del curso</p>
                     <p className="mt-2 text-2xl font-semibold">{formatCurrency(selectedCourse.precio)}</p>
@@ -1113,9 +1186,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                     Ir a mi curso
                   </Button>
                 ) : (
-                  <Button onClick={() => handlePurchase(selectedCourse.id)}>
+                  <Button disabled={pendingPurchaseCourseId === selectedCourse.id} onClick={() => { void handlePurchase(selectedCourse.id); }}>
                     <Coins className="size-4" />
-                    Comprar curso
+                    {pendingPurchaseCourseId === selectedCourse.id ? "Procesando..." : "Comprar curso"}
                   </Button>
                 )}
               </DialogFooter>
@@ -1129,7 +1202,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
           <DialogHeader>
             <DialogTitle>Publicar nuevo curso</DialogTitle>
             <DialogDescription>
-              Crea módulos, lecciones, enlaces multimedia y recursos descargables. Todo se guarda localmente.
+              Crea módulos, lecciones, enlaces multimedia y recursos descargables para publicarlos en backend.
             </DialogDescription>
           </DialogHeader>
 
@@ -1345,11 +1418,23 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
           </div>
 
           {publishError ? <p className="text-sm text-destructive">{publishError}</p> : null}
+          {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowPublishModal(false)}>Cancelar</Button>
-            <Button onClick={handlePublish}>Publicar curso</Button>
+            <Button disabled={isPublishing} onClick={() => { void handlePublish(); }}>
+              {isPublishing ? "Publicando..." : "Publicar curso"}
+            </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isFetchingDetail} onOpenChange={() => undefined}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cargando detalle</DialogTitle>
+            <DialogDescription>Consultando temario y recursos del curso seleccionado...</DialogDescription>
+          </DialogHeader>
         </DialogContent>
       </Dialog>
     </main>
