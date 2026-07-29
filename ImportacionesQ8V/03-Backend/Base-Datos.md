@@ -502,6 +502,20 @@ CREATE INDEX idx_ordenes_solicitante_estado ON ordenes(solicitante_id, estado);
 
 ---
 
+### Tablas LMS y notificaciones (2026-07-28, migración `20260728_0005`)
+
+| Tabla | Descripción |
+|-------|-------------|
+| `cursos` | Curso publicado por empresa (`importador_id`, `slug`, precio, nivel, categoría, rating, estudiantes) |
+| `modulos_curso` | Módulos del temario (`orden`) |
+| `lecciones_curso` | Lecciones con `video_url`, `duracion`, `es_preview` |
+| `recursos_leccion` | Adjuntos de lección (nombre, url, tipo) |
+| `compras_curso` | Inscripción usuario↔curso (unique) |
+| `progreso_lecciones` | Lección completada por usuario (unique usuario+lección) |
+| `notificaciones` | Bandeja in-app (`usuario_id`, tipo, título, mensaje, data JSON, leída) |
+
+---
+
 ## Notas de arquitectura de base de datos
 
 - **Arquitectura multi-tenant desde el inicio:** cada importador vinculado es una entidad independiente con su propio equipo de asesores

@@ -15,11 +15,13 @@ from schemas.campo_personalizado import (
     FormularioImportadorResponse
 )
 from schemas.features import EvidenciaImportadorCreate, EvidenciaImportadorResponse
+from schemas.metricas_empresa import MetricasImportadorResponse
 from models.importador import Importador
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.campo_personalizado import CampoPersonalizado
+from models.orden import Orden
 from utils.dependencies import get_db, require_rol, require_rol_in, get_current_user
 from utils.security import hash_password
 
@@ -159,6 +161,138 @@ async def actualizar_estado_asesor(
     db.refresh(asesor)
 
     return asesor
+
+
+@router.delete("/asesores/{asesor_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_asesor(
+    asesor_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    """
+    Eliminación física (hard delete) de un asesor de la empresa.
+
+    Preferible usar `PUT /importadores/asesores/{id}/estado` (soft delete) si el
+    asesor tiene historial de cotizaciones/chat. El hard delete solo se permite
+    cuando el asesor no tiene cotizaciones asignadas ni es participante de chats.
+    """
+    try:
+        asesor_id_str = str(UUID(asesor_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de asesor inválido")
+
+    importador_id_str = current_user.get("importador_id")
+    asesor = db.query(Usuario).filter(
+        Usuario.id == asesor_id_str,
+        Usuario.importador_id == importador_id_str,
+        Usuario.rol == "asesor",
+    ).first()
+    if not asesor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asesor no encontrado")
+
+    cotizaciones_asignadas = db.query(Cotizacion).filter(
+        Cotizacion.asesor_asignado_id == asesor_id_str
+    ).count()
+    if cotizaciones_asignadas > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "El asesor tiene cotizaciones asignadas. "
+                "Desactívalo con PUT .../estado o reasigna las cotizaciones antes de eliminarlo."
+            ),
+        )
+
+    from models.chat import ConversacionChat
+    chats = db.query(ConversacionChat).filter(
+        ConversacionChat.importador_usuario_id == asesor_id_str
+    ).count()
+    if chats > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "El asesor participa en conversaciones de chat. "
+                "Usa soft-delete (PUT .../estado) para conservar el historial."
+            ),
+        )
+
+    db.delete(asesor)
+    db.commit()
+    return None
+
+
+@router.get("/metricas", response_model=MetricasImportadorResponse)
+async def metricas_importador(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    """
+    Resumen comercial de la empresa: cotizaciones respondidas, tasa de aceptación,
+    volumen cotizado y rendimiento (panel importadora).
+    """
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sin empresa asociada")
+
+    propuestas = db.query(Propuesta).filter(Propuesta.importador_id == importador_id).all()
+    propuestas_enviadas = [p for p in propuestas if p.estado != EstadoPropuesta.borrador.value]
+    propuestas_aceptadas = [p for p in propuestas if p.estado == EstadoPropuesta.aceptada.value]
+
+    cotizaciones_dirigidas = db.query(Cotizacion).filter(
+        Cotizacion.importador_id == importador_id
+    ).count()
+    total_recibidas = cotizaciones_dirigidas
+    cuentas_empresa = [
+        row[0] for row in db.query(Usuario.id).filter(
+            Usuario.importador_id == importador_id,
+            Usuario.rol.in_(["asesor", "importador"]),
+        ).all()
+    ]
+    if cuentas_empresa:
+        reclamadas = db.query(Cotizacion).filter(
+            Cotizacion.asesor_asignado_id.in_(cuentas_empresa)
+        ).count()
+        total_recibidas = max(total_recibidas, reclamadas)
+
+    tasa = (
+        (len(propuestas_aceptadas) / len(propuestas_enviadas) * 100)
+        if propuestas_enviadas else 0.0
+    )
+    volumen = sum(float(p.precio_ofrecido_usd or 0) for p in propuestas_enviadas)
+
+    ordenes = db.query(Orden).filter(Orden.importador_id == importador_id).all()
+    estados_cerrados = {"entregada", "cancelada", "completada"}
+    ordenes_activas = sum(
+        1 for o in ordenes
+        if (o.estado.value if hasattr(o.estado, "value") else str(o.estado)) not in estados_cerrados
+    )
+
+    asesores_activos = db.query(Usuario).filter(
+        Usuario.importador_id == importador_id,
+        Usuario.rol == "asesor",
+        Usuario.activo.is_(True),
+    ).count()
+
+    tiempos = []
+    for p in propuestas_enviadas[:300]:
+        cot = db.query(Cotizacion).filter(Cotizacion.id == p.cotizacion_id).first()
+        if cot and cot.fecha_creacion and p.fecha_envio:
+            delta = p.fecha_envio - cot.fecha_creacion
+            tiempos.append(delta.total_seconds() / 3600)
+    tiempo_prom = round(sum(tiempos) / len(tiempos), 2) if tiempos else None
+
+    return MetricasImportadorResponse(
+        importador_id=importador_id,
+        total_cotizaciones_recibidas=total_recibidas,
+        total_propuestas_enviadas=len(propuestas_enviadas),
+        total_propuestas_aceptadas=len(propuestas_aceptadas),
+        tasa_aceptacion_pct=round(tasa, 2),
+        volumen_cotizado_usd=round(volumen, 2),
+        ordenes_activas=ordenes_activas,
+        ordenes_totales=len(ordenes),
+        asesores_activos=asesores_activos,
+        tiempo_promedio_respuesta_horas=tiempo_prom,
+    )
+
 
 # ==================== Formulario de cotización personalizable (Fase 3) ====================
 

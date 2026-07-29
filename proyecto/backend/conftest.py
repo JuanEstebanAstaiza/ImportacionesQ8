@@ -74,6 +74,10 @@ from models.credito import MovimientoCredito
 from models.solicitud_recreacion import SolicitudRecreacion
 from models.jwt_blacklist import JwtBlacklist  # noqa: F401 — registra metadata
 from models.otp import CodigoOtp  # noqa: F401
+from models.curso import (  # noqa: F401 — registra metadata LMS
+    Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
+)
+from models.notificacion import Notificacion  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)

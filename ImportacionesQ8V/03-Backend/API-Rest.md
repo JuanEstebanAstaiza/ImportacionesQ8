@@ -127,11 +127,31 @@ Registro: body opcional `codigo_referido` en `POST /auth/register`. Persona jur�
 | PUT | `/usuarios/me` | Cualquiera autenticado | Personalizar perfil (nombre, teléfono, foto, WhatsApp) |
 | POST | `/importadores/asesores` | Dueño (importador) | Crear cuenta de asesor de la empresa (persona natural, suscrita a la empresa) |
 | GET | `/importadores/asesores` | Dueño | Listar asesores de la empresa |
-| PUT | `/importadores/asesores/{id}/estado` | Dueño | Activar/desactivar un asesor |
+| PUT | `/importadores/asesores/{id}/estado` | Dueño | Activar/desactivar un asesor (soft delete) |
+| DELETE | `/importadores/asesores/{id}` | Dueño | Hard delete (solo si no tiene cotizaciones/chats; si no → 409, usar soft delete) |
+| GET | `/importadores/metricas` | Dueño | Dashboard comercial: propuestas, tasa de aceptación, volumen cotizado, órdenes |
 | GET | `/cotizaciones/pool-empresa` | Dueño + asesor | Cotizaciones de la empresa sin reclamar (estilo "Uber": el primero en reclamar la atiende) |
 | POST | `/cotizaciones/{id}/reclamar` | Dueño + asesor | Reclamo atómico del pool (el dueño es jefe de operadores; cualquiera de los dos puede tomar la cotización) |
 | GET | `/asesores/me/cotizaciones` | Asesor | Cotizaciones asignadas al asesor autenticado |
+| GET | `/asesores/dashboard/stats` | Asesor | Métricas de rendimiento del asesor |
 | PUT | `/importadores/{id}` | Dueño | Autoservicio del perfil de la empresa |
+
+### Cursos LMS, notificaciones y chat proactivo (2026-07-28)
+
+> Cierra los gaps reportados por Frontend (antes: cursos en `localStorage`, notificaciones derivadas en cliente, chat solo al aceptar propuesta).
+
+| Método | Endpoint | Rol | Descripción |
+|--------|----------|-----|-------------|
+| GET | `/cursos` | Público | Catálogo filtrable (categoría, nivel, recomendaciones) |
+| GET | `/cursos/{id_o_slug}` | Público (+ JWT opcional) | Detalle con temario, módulos, preview; con JWT: compra y progreso |
+| POST | `/cursos` | Dueño importador | Publicar curso con módulos, lecciones, videos y adjuntos |
+| POST | `/cursos/{id}/comprar` | Autenticado | Inscripción/compra (idempotente) |
+| GET | `/mis-cursos` | Autenticado | Cursos comprados con progreso |
+| POST | `/cursos/{id}/lecciones/{leccion_id}/progreso` | Autenticado | Marcar lección completada |
+| GET | `/notificaciones` | Autenticado | Bandeja de notificaciones reales (BD) |
+| PUT | `/notificaciones/{id}/leer` | Autenticado | Marcar una leída |
+| PUT | `/notificaciones/leer-todas` | Autenticado | Marcar todas leídas |
+| POST | `/chat/iniciar` | Dueño o asesor | Abrir negociación al enviar propuesta (sin esperar al solicitante) |
 
 ### Propuestas: redacción, envío y doble aceptación (Semana 4)
 

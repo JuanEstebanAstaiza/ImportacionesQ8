@@ -46,3 +46,20 @@ class ConversacionChatResponse(BaseModel):
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class IniciarChatRequest(BaseModel):
+    """Abre (o reutiliza) la conversación de negociación desde el lado de la empresa.
+
+    El asesor/dueño puede iniciar el chat al enviar la propuesta, sin esperar
+    a que el solicitante acepte o invoque PUT .../propuestas/aceptar.
+    """
+    cotizacion_id: Optional[str] = None
+    propuesta_id: Optional[str] = None
+    mensaje_inicial: Optional[str] = Field(None, max_length=2000)
+
+    @model_validator(mode="after")
+    def requiere_referencia(self):
+        if not self.cotizacion_id and not self.propuesta_id:
+            raise ValueError("Debes indicar cotizacion_id o propuesta_id")
+        return self

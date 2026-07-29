@@ -64,6 +64,30 @@ Si el WebSocket no está disponible, usa:
 
 ## Endpoints REST de chat
 
+### `POST /chat/iniciar` (recomendado para asesores)
+
+Permite al **asesor o dueño** abrir (o reutilizar) la conversación de negociación **en el momento de enviar la propuesta**, sin esperar a que el solicitante llame a `PUT /cotizaciones/{id}/propuestas/aceptar`.
+
+> Nota de naming: el gap del frontend citaba `POST /chats/iniciar`. En este API el prefijo del módulo es `/chat` (singular), coherente con el resto de rutas.
+
+- **Auth:** JWT rol `importador` o `asesor`
+- **Body:**
+
+```json
+{
+  "propuesta_id": "uuid-opcional",
+  "cotizacion_id": "uuid-opcional",
+  "mensaje_inicial": "Hola, te dejo la propuesta y quedo atento."
+}
+```
+
+Debes enviar `propuesta_id` **o** `cotizacion_id`. La propuesta debe estar enviada (`pendiente`/`aceptada`, no `borrador`). Un asesor solo puede iniciar si es el asignado de la cotización (o si aún no hay asignado).
+
+- **Respuesta:** `ConversacionChatResponse` (201). Idempotente si ya existía la conversación.
+- **Efecto colateral:** notificación in-app al solicitante (`tipo: negociacion`).
+
+---
+
 ### `GET /chat/conversaciones`
 
 - **Resumen:** Listar Mis Conversaciones

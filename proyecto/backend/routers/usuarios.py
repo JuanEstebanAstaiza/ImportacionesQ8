@@ -93,3 +93,61 @@ async def listar_mis_cotizaciones_asignadas(
         )
         for c in cotizaciones
     ]
+
+
+@asesores_router.get("/dashboard/stats")
+async def dashboard_stats_asesor(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("asesor")),
+):
+    """
+    Métricas de rendimiento del asesor: cotizaciones respondidas, tasa de
+    aceptación, volumen cotizado y órdenes asociadas.
+    """
+    from schemas.metricas_empresa import MetricasAsesorResponse
+    from models.propuesta import Propuesta, EstadoPropuesta
+    from models.orden import Orden
+
+    asesor_id = str(PyUUID(current_user["user_id"]))
+
+    cotizaciones_asignadas = db.query(Cotizacion).filter(
+        Cotizacion.asesor_asignado_id == asesor_id
+    ).count()
+
+    propuestas = db.query(Propuesta).filter(
+        Propuesta.creado_por_usuario_id == asesor_id
+    ).all()
+    enviadas = [p for p in propuestas if p.estado != EstadoPropuesta.borrador.value]
+    aceptadas = [p for p in propuestas if p.estado == EstadoPropuesta.aceptada.value]
+
+    # Cotizaciones asignadas que ya tienen al menos una propuesta de la empresa
+    importador_id = current_user.get("importador_id")
+    cot_asignadas = db.query(Cotizacion).filter(
+        Cotizacion.asesor_asignado_id == asesor_id
+    ).all()
+    respondidas = 0
+    if importador_id:
+        for c in cot_asignadas:
+            tiene = db.query(Propuesta).filter(
+                Propuesta.cotizacion_id == c.id,
+                Propuesta.importador_id == importador_id,
+                Propuesta.estado != EstadoPropuesta.borrador.value,
+            ).first()
+            if tiene:
+                respondidas += 1
+
+    tasa = (len(aceptadas) / len(enviadas) * 100) if enviadas else 0.0
+    volumen = sum(float(p.precio_ofrecido_usd or 0) for p in enviadas)
+
+    ordenes = db.query(Orden).filter(Orden.asesor_asignado_id == asesor_id).count()
+
+    return MetricasAsesorResponse(
+        asesor_id=asesor_id,
+        cotizaciones_asignadas=cotizaciones_asignadas,
+        cotizaciones_respondidas=respondidas,
+        propuestas_enviadas=len(enviadas),
+        propuestas_aceptadas=len(aceptadas),
+        tasa_aceptacion_pct=round(tasa, 2),
+        volumen_cotizado_usd=round(volumen, 2),
+        ordenes_asociadas=ordenes,
+    )
