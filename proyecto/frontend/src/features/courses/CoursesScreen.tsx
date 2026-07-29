@@ -60,6 +60,7 @@ import type {
   PublishLessonResourceInput,
   ResourceType,
 } from "./types";
+import { isSafeEmbedUrl, isSafeHttpUrl, safeHttpUrl } from "@/utils/safe-url";
 
 type CoursesScreenProps = {
   role: "solicitante" | "importadora";
@@ -196,8 +197,9 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/** Solo YouTube/Vimeo https en iframe (anti-XSS / javascript:). */
 function isEmbeddableVideo(url: string): boolean {
-  return !/\.mp4($|\?)/i.test(url);
+  return isSafeEmbedUrl(url);
 }
 
 function toPublishInput(form: PublishFormState, companyName: string): { value: PublishCourseInput | null; error: string } {
@@ -485,7 +487,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
           <Card key={course.id} className="overflow-hidden gap-0">
             <div className="aspect-[16/10] overflow-hidden bg-muted">
               <img
-                src={course.portada_url}
+                src={safeHttpUrl(course.portada_url, IMAGE_FALLBACK)}
                 alt={course.titulo}
                 className="h-full w-full object-cover"
                 onError={(event) => {
@@ -747,7 +749,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                   {inProgressCourses.map((course) => (
                     <Card key={course.id} className="gap-0 overflow-hidden">
                       <div className="aspect-[16/9] overflow-hidden bg-muted">
-                        <img src={course.portada_url} alt={course.titulo} className="h-full w-full object-cover" onError={(event) => { event.currentTarget.src = IMAGE_FALLBACK; }} />
+                        <img src={safeHttpUrl(course.portada_url, IMAGE_FALLBACK)} alt={course.titulo} className="h-full w-full object-cover" onError={(event) => { event.currentTarget.src = IMAGE_FALLBACK; }} />
                       </div>
                       <CardHeader>
                         <div className="flex items-start justify-between gap-3">
@@ -834,9 +836,14 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                               className="h-full w-full"
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                               allowFullScreen
+                              sandbox="allow-scripts allow-same-origin allow-presentation"
                             />
-                          ) : (
+                          ) : isSafeHttpUrl(activeLesson.video_url) ? (
                             <video src={activeLesson.video_url} controls className="h-full w-full" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                              Video no disponible o URL no segura
+                            </div>
                           )}
                         </div>
                       </div>
@@ -911,7 +918,14 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                           <div className="space-y-2">
                             {activeLesson.recursos.map((resource) => (
                               <Button key={resource.id} variant="outline" className="w-full justify-between" asChild>
-                                <a href={resource.url} target="_blank" rel="noreferrer">
+                                <a
+                                  href={isSafeHttpUrl(resource.url) ? resource.url : undefined}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => {
+                                    if (!isSafeHttpUrl(resource.url)) e.preventDefault();
+                                  }}
+                                >
                                   <span className="flex items-center gap-2 truncate">
                                     <FileDown className="size-4" />
                                     <span className="truncate">{resource.nombre}</span>
@@ -1021,17 +1035,29 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                 <div className="space-y-4">
                   <div className="overflow-hidden rounded-xl border bg-slate-950">
                     <div className="aspect-video">
-                      {isEmbeddableVideo(flattenLessons(selectedCourse)[0]?.video_url || "") ? (
-                        <iframe
-                          src={flattenLessons(selectedCourse)[0]?.video_url}
-                          title={`Trailer de ${selectedCourse.titulo}`}
-                          className="h-full w-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      ) : (
-                        <video src={flattenLessons(selectedCourse)[0]?.video_url} controls className="h-full w-full" />
-                      )}
+                      {(() => {
+                        const trailer = flattenLessons(selectedCourse)[0]?.video_url || "";
+                        if (isEmbeddableVideo(trailer)) {
+                          return (
+                            <iframe
+                              src={trailer}
+                              title={`Trailer de ${selectedCourse.titulo}`}
+                              className="h-full w-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              sandbox="allow-scripts allow-same-origin allow-presentation"
+                            />
+                          );
+                        }
+                        if (isSafeHttpUrl(trailer)) {
+                          return <video src={trailer} controls className="h-full w-full" />;
+                        }
+                        return (
+                          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                            Vista previa no disponible
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground">{selectedCourse.descripcion}</p>

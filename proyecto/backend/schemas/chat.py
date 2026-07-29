@@ -4,8 +4,10 @@ from datetime import datetime
 
 
 class MensajeChatCreate(BaseModel):
-    contenido: str = Field(..., min_length=1)
-    tipo: str = "texto"  # "texto" o "archivo"
+    # Tope anti-DoS / flood de payloads enormes por mensaje
+    contenido: str = Field(..., min_length=1, max_length=4000)
+    # "sistema" solo lo genera el backend; el cliente no puede forjarlo
+    tipo: str = Field(default="texto", pattern="^(texto|archivo)$")
 
 
 class MensajeChatResponse(BaseModel):
@@ -46,3 +48,20 @@ class ConversacionChatResponse(BaseModel):
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class IniciarChatRequest(BaseModel):
+    """Abre (o reutiliza) la conversación de negociación desde el lado de la empresa.
+
+    El asesor/dueño puede iniciar el chat al enviar la propuesta, sin esperar
+    a que el solicitante acepte o invoque PUT .../propuestas/aceptar.
+    """
+    cotizacion_id: Optional[str] = None
+    propuesta_id: Optional[str] = None
+    mensaje_inicial: Optional[str] = Field(None, max_length=2000)
+
+    @model_validator(mode="after")
+    def requiere_referencia(self):
+        if not self.cotizacion_id and not self.propuesta_id:
+            raise ValueError("Debes indicar cotizacion_id o propuesta_id")
+        return self

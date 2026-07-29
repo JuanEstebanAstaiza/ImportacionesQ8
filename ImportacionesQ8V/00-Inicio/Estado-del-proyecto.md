@@ -2,7 +2,7 @@
 
 Resumen ejecutivo del avance. Para el detalle de cada semana, ver [[Indice-Historial]].
 
-**Última actualización de este resumen:** 2026-07-14 (post OWASP + docs de integración API).
+**Última actualización de este resumen:** 2026-07-29 (auditoría XSS/SQLi/DDoS + capacidad 1000/100 ops; pagos de cursos aplazados).
 
 ---
 
@@ -17,6 +17,8 @@ Resumen ejecutivo del avance. Para el detalle de cada semana, ver [[Indice-Histo
 | Auditoría + carga 1000 users | ✅ | — | [[Indice-Calidad]] |
 | OWASP Top 10 (score ~92) | ✅ | — | [[OWASP-Top10-Backend-2026-07-14]] |
 | Integración API documentada | ✅ docs | ⬜ código UI | [[Indice-Integracion-API]] |
+| LMS cursos + notificaciones + métricas FE gaps | ✅ | ⬜ cablear UI | [[15-Cursos-LMS]] · [[16-Notificaciones]] |
+| Seguridad XSS/SQLi/DDoS + capacidad 1000/100 | ✅ | partial FE safe-url | [[Auditoria-Seguridad-Capacidad-2026-07-29]] |
 
 ---
 

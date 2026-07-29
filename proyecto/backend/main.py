@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
@@ -21,7 +22,10 @@ from routers.legal import router as legal_router
 from routers.organizaciones import router as organizaciones_router
 from routers.disputas import router as disputas_router
 from routers.referidos import router as referidos_router
+from routers.cursos import router as cursos_router
+from routers.notificaciones import router as notificaciones_router
 from utils.limiter import limiter
+from utils.security_middleware import SecurityHeadersMiddleware, RequestSizeLimitMiddleware
 
 logger = logging.getLogger("importacionesq8")
 
@@ -61,6 +65,14 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
+
+# Comprime respuestas JSON grandes (catálogos, temarios, listas) → menos ancho de banda
+# bajo 100–1000 clientes concurrentes. Umbral 500 bytes.
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# Blindaje HTTP (orden: size limit antes de handlers pesados; headers al final de la cadena de salida)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Configurar rate limiting (fuerza bruta en /auth/login, abuso en /auth/register)
 app.state.limiter = limiter
@@ -117,6 +129,8 @@ app.include_router(legal_router)
 app.include_router(organizaciones_router)
 app.include_router(disputas_router)
 app.include_router(referidos_router)
+app.include_router(cursos_router)
+app.include_router(notificaciones_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

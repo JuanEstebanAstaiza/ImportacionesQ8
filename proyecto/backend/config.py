@@ -8,6 +8,13 @@ load_dotenv()
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 
+# Solo development/test: auto-verificar email en registro (campañas de carga).
+# En production se ignora siempre aunque la env esté en true.
+LOAD_TEST_AUTO_VERIFY = (
+    APP_ENV != "production"
+    and os.getenv("LOAD_TEST_AUTO_VERIFY", "false").lower() == "true"
+)
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -49,6 +56,11 @@ WOMPI_SIMULATE = os.getenv("WOMPI_SIMULATE", "true" if APP_ENV != "production" e
 RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "5/minute")
 RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "10/minute")
 RATE_LIMIT_FORGOT_PASSWORD = os.getenv("RATE_LIMIT_FORGOT_PASSWORD", "5/minute")
+# Catálogo / escritura general (anti-DDoS de lectura y spam de writes)
+RATE_LIMIT_PUBLIC_READ = os.getenv("RATE_LIMIT_PUBLIC_READ", "120/minute")
+RATE_LIMIT_PUBLIC_WRITE = os.getenv("RATE_LIMIT_PUBLIC_WRITE", "30/minute")
+RATE_LIMIT_CHAT_MESSAGE = os.getenv("RATE_LIMIT_CHAT_MESSAGE", "60/minute")
+RATE_LIMIT_NOTIFICACIONES = os.getenv("RATE_LIMIT_NOTIFICACIONES", "90/minute")
 
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

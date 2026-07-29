@@ -4,6 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
@@ -93,3 +94,73 @@ async def listar_mis_cotizaciones_asignadas(
         )
         for c in cotizaciones
     ]
+
+
+@asesores_router.get("/dashboard/stats")
+async def dashboard_stats_asesor(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("asesor")),
+):
+    """
+    Métricas de rendimiento del asesor: cotizaciones respondidas, tasa de
+    aceptación, volumen cotizado y órdenes asociadas.
+    """
+    from schemas.metricas_empresa import MetricasAsesorResponse
+    from models.propuesta import Propuesta, EstadoPropuesta
+    from models.orden import Orden
+
+    from sqlalchemy import func
+
+    asesor_id = str(PyUUID(current_user["user_id"]))
+    importador_id = current_user.get("importador_id")
+
+    cotizaciones_asignadas = db.query(func.count(Cotizacion.id)).filter(
+        Cotizacion.asesor_asignado_id == asesor_id
+    ).scalar() or 0
+
+    enviadas = db.query(func.count(Propuesta.id)).filter(
+        Propuesta.creado_por_usuario_id == asesor_id,
+        Propuesta.estado != EstadoPropuesta.borrador.value,
+    ).scalar() or 0
+    aceptadas = db.query(func.count(Propuesta.id)).filter(
+        Propuesta.creado_por_usuario_id == asesor_id,
+        Propuesta.estado == EstadoPropuesta.aceptada.value,
+    ).scalar() or 0
+    volumen = db.query(func.coalesce(func.sum(Propuesta.precio_ofrecido_usd), 0.0)).filter(
+        Propuesta.creado_por_usuario_id == asesor_id,
+        Propuesta.estado != EstadoPropuesta.borrador.value,
+    ).scalar() or 0.0
+
+    # Cotizaciones asignadas con al menos una propuesta enviada de la empresa (sin N+1)
+    respondidas = 0
+    if importador_id:
+        respondidas = (
+            db.query(func.count(func.distinct(Cotizacion.id)))
+            .join(
+                Propuesta,
+                and_(
+                    Propuesta.cotizacion_id == Cotizacion.id,
+                    Propuesta.importador_id == importador_id,
+                    Propuesta.estado != EstadoPropuesta.borrador.value,
+                ),
+            )
+            .filter(Cotizacion.asesor_asignado_id == asesor_id)
+            .scalar()
+            or 0
+        )
+
+    tasa = (aceptadas / enviadas * 100) if enviadas else 0.0
+    ordenes = db.query(func.count(Orden.id)).filter(
+        Orden.asesor_asignado_id == asesor_id
+    ).scalar() or 0
+
+    return MetricasAsesorResponse(
+        asesor_id=asesor_id,
+        cotizaciones_asignadas=int(cotizaciones_asignadas),
+        cotizaciones_respondidas=int(respondidas),
+        propuestas_enviadas=int(enviadas),
+        propuestas_aceptadas=int(aceptadas),
+        tasa_aceptacion_pct=round(float(tasa), 2),
+        volumen_cotizado_usd=round(float(volumen), 2),
+        ordenes_asociadas=int(ordenes),
+    )

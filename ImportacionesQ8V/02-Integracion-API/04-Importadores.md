@@ -164,6 +164,38 @@ Array de `AsesorResponse`:
 
 ---
 
+### `DELETE /importadores/asesores/{asesor_id}`
+
+- **Resumen:** Hard delete de un asesor (solo dueño). Preferir soft delete con `PUT .../estado`.
+- **Auth:** Bearer JWT rol `importador`
+- **Códigos:** 204, 404, 409
+- **409:** el asesor tiene cotizaciones asignadas o conversaciones de chat (conservar historial con soft delete).
+
+---
+
+### `GET /importadores/metricas`
+
+- **Resumen:** Dashboard comercial de la empresa (propuestas, tasa de aceptación, volumen USD, órdenes, asesores activos).
+- **Auth:** Bearer JWT rol `importador`
+- **Códigos:** 200
+
+**Respuesta (`MetricasImportadorResponse`)**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `importador_id` | string |  |
+| `total_cotizaciones_recibidas` | int |  |
+| `total_propuestas_enviadas` | int |  |
+| `total_propuestas_aceptadas` | int |  |
+| `tasa_aceptacion_pct` | number |  |
+| `volumen_cotizado_usd` | number | Suma de precios ofrecidos |
+| `ordenes_activas` | int |  |
+| `ordenes_totales` | int |  |
+| `asesores_activos` | int |  |
+| `tiempo_promedio_respuesta_horas` | number\|null |  |
+
+---
+
 ### `GET /importadores/campos-personalizados`
 
 - **Resumen:** Listar Mis Campos Personalizados

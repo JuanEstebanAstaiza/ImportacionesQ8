@@ -320,8 +320,21 @@ async def actualizar_estado_orden(
     )
     db.add(nuevo_historial)
     
-    # Notificar al solicitante vía WebSocket/Redis Pub/Sub (best-effort: si Redis no
-    # está disponible, no debe impedir que la actualización de estado se confirme).
+    # Notificación persistente in-app + Redis Pub/Sub (best-effort).
+    from services.notificacion_service import crear_notificacion_best_effort
+    crear_notificacion_best_effort(
+        db,
+        usuario_id=orden.solicitante_id,
+        tipo="orden",
+        titulo="Actualización de tu orden",
+        mensaje=f"La orden pasó de {estado_actual} a {nuevo_estado_valor}.",
+        data={
+            "orden_id": orden_id_str,
+            "estado_anterior": estado_actual,
+            "estado_nuevo": nuevo_estado_valor,
+        },
+    )
+
     if config.redis_client:
         try:
             config.redis_client.publish(

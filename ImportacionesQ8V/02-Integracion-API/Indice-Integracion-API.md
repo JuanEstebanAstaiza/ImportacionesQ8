@@ -30,7 +30,9 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[12-Admin]] | Endpoints solo `rol=admin` |
 | [[13-Legal-y-Salud]] | Legal, `/health`, `/health/ready` |
 | [[14-Postman-Insomnia]] | Cómo importar y usar la colección HTTP |
-| `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia (94 requests) |
+| [[15-Cursos-LMS]] | Catálogo, compra, progreso (reemplaza localStorage FE) |
+| [[16-Notificaciones]] | Bandeja real en BD + marcar leídas |
+| `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---
 
@@ -121,7 +123,11 @@ Detalle en [[08-Chat-y-WebSocket]].
 | Inbox importadora | `GET /cotizaciones/pool-empresa`, `POST .../reclamar` |
 | Propuestas | `POST /propuestas/`, borrador, enviar, pre-aceptar |
 | Órdenes | `GET /ordenes/`, actualizar estado, documentos |
-| Chat | `GET /chat/conversaciones`, WS ticket |
+| Chat | `GET /chat/conversaciones`, `POST /chat/iniciar`, WS ticket |
+| Cursos / LMS | [[15-Cursos-LMS]] — `GET/POST /cursos`, `/mis-cursos`, progreso |
+| Notificaciones | [[16-Notificaciones]] — `GET /notificaciones`, marcar leídas |
+| Métricas importadora | `GET /importadores/metricas` |
+| Dashboard asesor | `GET /asesores/dashboard/stats` |
 | Admin panel | [[12-Admin]] |
 | Referidos | `GET /referidos/mi-codigo` |
 

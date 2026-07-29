@@ -1,6 +1,6 @@
 # Catálogo completo de endpoints
 
-Total: **94** operaciones REST exportadas desde OpenAPI.
+Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notificaciones, chat iniciar, métricas, hard-delete asesor). Fuente runtime: `/openapi.json` en development.
 
 | Método | Ruta | Tag | Auth | Resumen |
 |--------|------|-----|------|---------|
@@ -28,12 +28,22 @@ Total: **94** operaciones REST exportadas desde OpenAPI.
 | `POST` | `/auth/register` | Autenticación | Público | Registrar Usuario |
 | `POST` | `/auth/reset-password` | Autenticación | Público | Restablecer Password |
 | `POST` | `/auth/verificar-email` | Autenticación | Público | Verificar Correo |
+| `POST` | `/chat/iniciar` | Chat | JWT | Iniciar negociación (asesor/dueño) |
 | `GET` | `/chat/conversaciones` | Chat | JWT | Listar Mis Conversaciones |
 | `GET` | `/chat/conversaciones/{conversacion_id}/mensajes` | Chat | JWT | Listar Mensajes |
 | `POST` | `/chat/conversaciones/{conversacion_id}/mensajes` | Chat | JWT | Enviar Mensaje |
 | `POST` | `/chat/mensajes/{mensaje_id}/traducir` | Chat | JWT | Traducir Mensaje |
 | `POST` | `/chat/traducir` | Chat | JWT | Traducir Preview |
 | `POST` | `/chat/ws-ticket` | Chat | JWT | Emitir Ticket Ws |
+| `GET` | `/cursos` | Cursos | Público | Catálogo de cursos |
+| `POST` | `/cursos` | Cursos | JWT | Publicar curso (importador) |
+| `GET` | `/cursos/{id_o_slug}` | Cursos | Público | Detalle / temario |
+| `POST` | `/cursos/{curso_id}/comprar` | Cursos | JWT | Comprar / inscribirse |
+| `POST` | `/cursos/{curso_id}/lecciones/{leccion_id}/progreso` | Cursos | JWT | Progreso de lección |
+| `GET` | `/mis-cursos` | Cursos | JWT | Cursos del usuario |
+| `GET` | `/notificaciones` | Notificaciones | JWT | Listar notificaciones |
+| `PUT` | `/notificaciones/leer-todas` | Notificaciones | JWT | Marcar todas leídas |
+| `PUT` | `/notificaciones/{id}/leer` | Notificaciones | JWT | Marcar una leída |
 | `GET` | `/cotizaciones/` | Cotizaciones | JWT | Listar Cotizaciones |
 | `POST` | `/cotizaciones/` | Cotizaciones | JWT | Crear Cotizacion |
 | `GET` | `/cotizaciones/pool-empresa` | Cotizaciones | JWT | Listar Pool Empresa |
@@ -57,6 +67,9 @@ Total: **94** operaciones REST exportadas desde OpenAPI.
 | `GET` | `/importadores/asesores` | Importadores | JWT | Listar Asesores |
 | `POST` | `/importadores/asesores` | Importadores | JWT | Crear Asesor |
 | `PUT` | `/importadores/asesores/{asesor_id}/estado` | Importadores | JWT | Actualizar Estado Asesor |
+| `DELETE` | `/importadores/asesores/{asesor_id}` | Importadores | JWT | Hard delete asesor |
+| `GET` | `/importadores/metricas` | Importadores | JWT | Métricas comerciales empresa |
+| `GET` | `/asesores/dashboard/stats` | Asesores | JWT | Stats dashboard asesor |
 | `GET` | `/importadores/campos-personalizados` | Importadores | JWT | Listar Mis Campos Personalizados |
 | `POST` | `/importadores/campos-personalizados` | Importadores | JWT | Crear Campo Personalizado |
 | `DELETE` | `/importadores/campos-personalizados/{campo_id}` | Importadores | JWT | Eliminar Campo Personalizado |

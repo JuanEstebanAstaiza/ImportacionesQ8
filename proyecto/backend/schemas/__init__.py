@@ -24,7 +24,13 @@ from .campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
     FormularioImportadorResponse
 )
-from .chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse
+from .chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest
+from .curso import (
+    CursoCreate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
+    ProgresoLeccionRequest, ProgresoLeccionResponse,
+)
+from .notificacion import NotificacionResponse, NotificacionesListaResponse, MarcarLeidasResponse
+from .metricas_empresa import MetricasImportadorResponse, MetricasAsesorResponse
 from .admin import UsuarioAdminResponse, UsuarioEstadoUpdate, DisputaOrdenResponse, MetricasResponse
 from .pago import (
     ComprarCreditosRequest, ComprarCreditosResponse, PagoResponse,

@@ -26,6 +26,7 @@ def main() -> None:
             rol="admin",
             nombre="Admin Load",
             activo=True,
+            email_verificado=True,  # requerido para login sin OTP
             perfil_completo=True,
             acepto_politica_datos=True,
             fecha_aceptacion_politica=datetime.utcnow(),

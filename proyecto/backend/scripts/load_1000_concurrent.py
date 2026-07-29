@@ -158,6 +158,10 @@ def ensure_bootstrap(base_url: str, admin_email: str, admin_password: str, compa
 
 
 def register_user(base_url: str, user_index: int, run_id: str) -> Dict[str, Any]:
+    """
+    Registro + login.
+    Requiere LOAD_TEST_AUTO_VERIFY=true en el backend (development) para omitir OTP.
+    """
     email = f"u{user_index}_{run_id}@load.example.com"
     doc = f"{run_id[:4]}{user_index:08d}"[-12:]
     tel = f"3{user_index:09d}"[-10:]
@@ -182,11 +186,27 @@ def register_user(base_url: str, user_index: int, run_id: str) -> Dict[str, Any]
         )
         if not t.ok:
             return {"ok": False, "timing": t, "email": email, "token": None, "user_index": user_index}
+
+        # Login para obtener JWT (register ya no devuelve access_token tras OTP)
+        login, t_login = timed_sync(
+            client,
+            "POST",
+            "/auth/login",
+            json={"email": email, "password": PASSWORD},
+        )
+        # Sumar latencias de register+login en el timing principal de provision
+        t.ms = t.ms + t_login.ms
+        if not t_login.ok or not login.json().get("access_token"):
+            t.ok = False
+            t.status = t_login.status
+            t.error = (t_login.error or login.text)[:240]
+            return {"ok": False, "timing": t, "email": email, "token": None, "user_index": user_index}
+
         return {
             "ok": True,
             "timing": t,
             "email": email,
-            "token": r.json()["access_token"],
+            "token": login.json()["access_token"],
             "user_index": user_index,
         }
 
@@ -449,7 +469,10 @@ async def scenario_auth_refresh(client: httpx.AsyncClient, email: str, idx: int)
     if not t.ok:
         result.stage_failed = "refresh"
         return result
-    r, t = await timed_async(client, "GET", "/usuarios/me", headers=h)
+    # refresh revoca el jti anterior: hay que usar el token nuevo
+    refreshed = r.json().get("access_token") or new_token
+    h2 = {"Authorization": f"Bearer {refreshed}"}
+    r, t = await timed_async(client, "GET", "/usuarios/me", headers=h2)
     result.timings.append(t)
     result.success = t.ok
     if not t.ok:

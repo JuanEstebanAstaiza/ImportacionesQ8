@@ -48,7 +48,20 @@ Script: `proyecto/backend/scripts/load_1000_concurrent.py`
 
 ---
 
-## Resultados (run `c7e99b84`)
+## Resultados 2026-07-29 (Docker Compose, run `3cff049f`)
+
+| Fase | Resultado |
+|------|-----------|
+| Burst 100 ops | **100/100 OK** |
+| Provision 1000 | **1000/1000 OK** |
+| Peak mixto | **898/1000 (89.8%)** en harness; **~99.8% de negocio** tras descontar bug de `auth_refresh` (token viejo post-refresh) |
+| p95 peak | ~19.8 s (calientes: `POST /cotizaciones/`, `GET /usuarios/me`) |
+
+Detalle y blindajes: [[Auditoria-Post-Carga-Docker-2026-07-29]]. JSON: `scripts/load_results_1000_20260729.json`.
+
+---
+
+## Resultados históricos (run `c7e99b84`)
 
 ### Provision
 
@@ -109,6 +122,7 @@ JSON completo: `proyecto/backend/scripts/load_results_1000.json`
 cd proyecto/backend
 # Stack listo + admin seed (scripts/seed_load_admin.py)
 # Rate limits / workers elevados para la corrida (env Compose)
+# Defaults post 2026-07-29: WEB_CONCURRENCY=4, DB_POOL_SIZE=15, DB_MAX_OVERFLOW=30
 
 python -u scripts/load_1000_concurrent.py \
   --base-url http://127.0.0.1:8000 \
@@ -118,6 +132,14 @@ python -u scripts/load_1000_concurrent.py \
   --companies 5 \
   --output scripts/load_results_1000.json
 ```
+
+### Smoke de 100 operaciones concurrentes (rápido)
+
+```bash
+python -u scripts/load_100_ops_burst.py --base-url http://127.0.0.1:8000 --ops 100
+```
+
+Ver también [[Auditoria-Seguridad-Capacidad-2026-07-29]] (paginación de catálogos, métricas agregadas, GZip, rate limits).
 
 ---
 

@@ -921,10 +921,21 @@ async def aceptar_propuesta(
             detail="Propuesta no encontrada o ya fue aceptada/rechazada"
         )
 
-    # Notificar (best-effort) al asesor que reclamó la cotización de que el
-    # solicitante quiere negociar, para que empiece la conversación por chat. Si
-    # nadie la reclamó, no hay a quién notificar por este canal (la cuenta dueña
-    # ya lo sabe porque fue quien recibió la respuesta del solicitante).
+    # Notificación persistente + Redis (best-effort) al asesor asignado.
+    if cotizacion.asesor_asignado_id:
+        from services.notificacion_service import crear_notificacion_best_effort
+        crear_notificacion_best_effort(
+            db,
+            usuario_id=cotizacion.asesor_asignado_id,
+            tipo="negociacion",
+            titulo="El solicitante quiere negociar",
+            mensaje="Se abrió el canal de chat de una cotización que reclamaste.",
+            data={
+                "tipo": "negociacion_iniciada",
+                "cotizacion_id": cotizacion_id_str,
+                "importador_id": importador_id_str,
+            },
+        )
     if config.redis_client and cotizacion.asesor_asignado_id:
         try:
             config.redis_client.publish(

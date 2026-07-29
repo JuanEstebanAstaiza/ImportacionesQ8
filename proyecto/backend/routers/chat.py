@@ -4,18 +4,24 @@ import logging
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 import config
-from models.chat import ConversacionChat, MensajeChat
-from schemas.chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse
+from models.chat import ConversacionChat, MensajeChat, TipoMensajeChat
+from schemas.chat import (
+    MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
+)
 from schemas.features import TraducirRequest, TraducirResponse
-from utils.dependencies import get_db, get_current_user
+from utils.dependencies import get_db, get_current_user, require_rol_in
 from utils.security import decode_access_token, JWTError
 from services.token_revocation import crear_ticket_ws, consumir_ticket_ws, jti_revocado
+from services.notificacion_service import crear_notificacion_best_effort
 from models.usuario import Usuario
+from models.cotizacion import Cotizacion
+from models.propuesta import Propuesta, EstadoPropuesta
 from pydantic import BaseModel
+from utils.limiter import limiter, RATE_LIMIT_CHAT_MESSAGE
 
 logger = logging.getLogger("importacionesq8")
 
@@ -59,6 +65,151 @@ def _verificar_acceso_conversacion(conversacion: ConversacionChat, current_user:
     if current_user["rol"] in ("importador", "asesor"):
         return conversacion.importador_usuario_id == user_id
     return current_user["rol"] == "admin"
+
+
+@router.post("/iniciar", response_model=ConversacionChatResponse, status_code=status.HTTP_201_CREATED)
+async def iniciar_chat(
+    datos: IniciarChatRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """
+    Inicia (o reutiliza) la conversación de negociación desde el lado de la empresa.
+
+    Pensado para que el asesor abra el chat al enviar su propuesta, sin esperar
+    a que el solicitante invoque `PUT /cotizaciones/{id}/propuestas/aceptar`.
+
+    Alias conceptual del gap frontend: `POST /chats/iniciar` → implementado como
+    `POST /chat/iniciar` (prefijo REST existente del módulo).
+    """
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no está asociada a ninguna empresa importadora",
+        )
+
+    propuesta = None
+    cotizacion = None
+
+    if datos.propuesta_id:
+        propuesta = db.query(Propuesta).filter(Propuesta.id == datos.propuesta_id).first()
+        if not propuesta or propuesta.importador_id != importador_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Propuesta no encontrada")
+        if propuesta.estado == EstadoPropuesta.borrador.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Envía la propuesta al solicitante antes de iniciar el chat",
+            )
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == propuesta.cotizacion_id).first()
+    else:
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == datos.cotizacion_id).first()
+        if not cotizacion:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+        # Debe existir una propuesta enviada de esta empresa
+        propuesta = db.query(Propuesta).filter(
+            Propuesta.cotizacion_id == cotizacion.id,
+            Propuesta.importador_id == importador_id,
+            Propuesta.estado.in_([
+                EstadoPropuesta.pendiente.value,
+                EstadoPropuesta.aceptada.value,
+            ]),
+        ).first()
+        if not propuesta:
+            # 404 genérico: no revelar si la cotización existe a terceros (A01 enumeration)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cotización no encontrada o sin propuesta de tu empresa",
+            )
+
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+
+    # Autorización: asesor solo si está asignado (o nadie asignado aún)
+    user_id = current_user["user_id"]
+    rol = current_user["rol"]
+    if rol == "asesor":
+        if cotizacion.asesor_asignado_id and cotizacion.asesor_asignado_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el asesor asignado puede iniciar esta negociación",
+            )
+        # Si nadie reclamó, el asesor que inicia queda como participante de empresa
+        if not cotizacion.asesor_asignado_id:
+            cotizacion.asesor_asignado_id = user_id
+
+    conversacion = db.query(ConversacionChat).filter(
+        ConversacionChat.cotizacion_id == cotizacion.id
+    ).first()
+
+    if not conversacion:
+        # Preferir asesor asignado; si no, el usuario que inicia (dueño o asesor)
+        importador_usuario_id = cotizacion.asesor_asignado_id or user_id
+        conversacion = ConversacionChat(
+            id=str(uuid4()),
+            cotizacion_id=cotizacion.id,
+            solicitante_id=cotizacion.solicitante_id,
+            importador_usuario_id=importador_usuario_id,
+        )
+        db.add(conversacion)
+
+        crear_notificacion_best_effort(
+            db,
+            usuario_id=cotizacion.solicitante_id,
+            tipo="negociacion",
+            titulo="Nueva conversación de negociación",
+            mensaje="Un asesor abrió el chat de tu cotización.",
+            data={
+                "cotizacion_id": str(cotizacion.id),
+                "conversacion_id": str(conversacion.id),
+                "propuesta_id": str(propuesta.id) if propuesta else None,
+            },
+        )
+
+    # Solo el participante de empresa de la conversación (o el dueño al crear) puede
+    # adjuntar mensaje_inicial — evita inyección de mensajes por cuentas no participantes.
+    puede_escribir = (
+        conversacion.importador_usuario_id == user_id
+        or (rol == "importador" and current_user.get("importador_id") == importador_id)
+    )
+    # Si el dueño escribe y no es el participante, traspasa el hilo al dueño
+    # (mismo patrón de supervisión que el pre-aceptar).
+    if rol == "importador" and conversacion.importador_usuario_id != user_id:
+        conversacion.importador_usuario_id = user_id
+        puede_escribir = True
+
+    if datos.mensaje_inicial and datos.mensaje_inicial.strip():
+        if not puede_escribir:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No autorizado para escribir en esta conversación",
+            )
+        db.flush()
+        msg = MensajeChat(
+            id=str(uuid4()),
+            conversacion_id=conversacion.id,
+            remitente_id=user_id,
+            contenido=datos.mensaje_inicial.strip()[:2000],
+            tipo=TipoMensajeChat.texto.value,
+        )
+        db.add(msg)
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+
+    return ConversacionChatResponse(
+        id=str(conversacion.id),
+        cotizacion_id=conversacion.cotizacion_id,
+        orden_id=conversacion.orden_id,
+        solicitante_id=conversacion.solicitante_id,
+        importador_usuario_id=conversacion.importador_usuario_id,
+        fecha_creacion=conversacion.fecha_creacion,
+        ultimo_mensaje=ultimo,
+    )
 
 
 @router.get("/conversaciones", response_model=List[ConversacionChatResponse])
@@ -119,7 +270,9 @@ async def listar_mensajes(
 
 
 @router.post("/conversaciones/{conversacion_id}/mensajes", response_model=MensajeChatResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT_CHAT_MESSAGE)
 async def enviar_mensaje(
+    request: Request,
     conversacion_id: str,
     datos: MensajeChatCreate,
     db: Session = Depends(get_db),
