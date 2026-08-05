@@ -9,6 +9,12 @@ from utils.security import hash_password
 from conftest import crear_empresa_importadora, auth_headers_for
 
 
+# Los videos y recursos de un curso salen de gestión documental, no de YouTube.
+# Se referencian por su ruta canónica del backend, sin host ni prefijo de proxy.
+VIDEO_LECCION_1 = "/documentos/archivos/11111111-1111-4111-8111-111111111111/descargar"
+VIDEO_LECCION_2 = "/documentos/archivos/22222222-2222-4222-8222-222222222222/descargar"
+RECURSO_MATRIZ = "/documentos/archivos/33333333-3333-4333-8333-333333333333/descargar"
+
 CURSO_PAYLOAD = {
     "titulo": "Incoterms 2020 para importar",
     "descripcion": "Aprende a negociar Incoterms sin sobrecostos.",
@@ -23,11 +29,11 @@ CURSO_PAYLOAD = {
                 {
                     "titulo": "Qué cubren los Incoterms",
                     "duracion": "12 min",
-                    "video_url": "https://www.youtube.com/embed/abc123",
+                    "video_url": VIDEO_LECCION_1,
                     "recursos": [
                         {
                             "nombre": "Matriz.xlsx",
-                            "url": "https://example.com/matriz.xlsx",
+                            "url": RECURSO_MATRIZ,
                             "tipo": "plantilla",
                         }
                     ],
@@ -35,7 +41,7 @@ CURSO_PAYLOAD = {
                 {
                     "titulo": "Errores frecuentes FOB vs CIF",
                     "duracion": "16 min",
-                    "video_url": "https://www.youtube.com/embed/def456",
+                    "video_url": VIDEO_LECCION_2,
                     "recursos": [],
                 },
             ],
@@ -145,6 +151,57 @@ class TestCatalogoYCreacion:
         }
         r = client.post("/cursos", json=bad, headers=auth_headers_for(dueño))
         assert r.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_video_de_youtube_rechazado(self, client, empresa):
+        """El contenido debe venir de gestión documental, no de enlaces externos de video."""
+        _, dueño = empresa
+        bad = {
+            **CURSO_PAYLOAD,
+            "modulos": [{
+                "titulo": "M",
+                "lecciones": [{
+                    "titulo": "L",
+                    "video_url": "https://www.youtube.com/embed/abc123",
+                    "recursos": [],
+                }],
+            }],
+        }
+        r = client.post("/cursos", json=bad, headers=auth_headers_for(dueño))
+        assert r.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_urls_se_guardan_canonicas(self, client, empresa):
+        """Una URL atada al entorno donde se publicó se reduce a la ruta del backend."""
+        _, dueño = empresa
+        legacy = {
+            **CURSO_PAYLOAD,
+            "titulo": f"Curso legacy {uuid4().hex[:6]}",
+            "modulos": [{
+                "titulo": "M",
+                "lecciones": [{
+                    "titulo": "L",
+                    "duracion": "5 min",
+                    "video_url": f"http://localhost:5173/api{VIDEO_LECCION_1}",
+                    "recursos": [{
+                        "nombre": "Matriz.xlsx",
+                        "url": f"/api/api{RECURSO_MATRIZ}",
+                        "tipo": "plantilla",
+                    }],
+                }],
+            }],
+        }
+
+        created = client.post("/cursos", json=legacy, headers=auth_headers_for(dueño))
+        assert created.status_code == status.HTTP_201_CREATED
+
+        leccion = created.json()["modulos"][0]["lecciones"][0]
+        assert leccion["video_url"] == VIDEO_LECCION_1
+        assert leccion["recursos"][0]["url"] == RECURSO_MATRIZ
+
+    def test_portada_externa_se_conserva(self, client, empresa):
+        _, dueño = empresa
+        created = client.post("/cursos", json=CURSO_PAYLOAD, headers=auth_headers_for(dueño))
+        assert created.status_code == status.HTTP_201_CREATED
+        assert created.json()["portada_url"] == CURSO_PAYLOAD["portada_url"]
 
 
 class TestCompraYProgreso:
