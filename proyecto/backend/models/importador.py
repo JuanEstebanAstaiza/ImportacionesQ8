@@ -20,6 +20,7 @@ class Importador(Base):
     calificacion_promedio = Column(Float, default=0.0)
     tiempo_respuesta_promedio = Column(String(10), nullable=False)  # "24h"
     capacidad_volumen = Column(Integer, nullable=True)
+    perfil_publico = Column(JSON, nullable=True)
     estado = Column(String(20), default="activo")  # Usar String en lugar de Enum para compatibilidad con SQLite
     # Empresas que optan por un formulario de cotización propio (campos personalizados)
     # quedan fuera del motor de matching de cotizaciones abiertas: solo pueden recibir

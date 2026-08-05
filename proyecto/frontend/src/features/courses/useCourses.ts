@@ -137,6 +137,23 @@ export function useCourses() {
     return created;
   }
 
+  async function updateCourse(courseId: string, input: PublishCourseInput): Promise<Course> {
+    const updated = await coursesService.updateCourse(courseId, input);
+    setCatalogCourses((current) => current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+    return updated;
+  }
+
+  async function deleteCourse(courseId: string): Promise<void> {
+    await coursesService.deleteCourse(courseId);
+    setCatalogCourses((current) => current.filter((row) => row.id !== courseId));
+    setPurchasedCourseIds((current) => current.filter((id) => id !== courseId));
+    setCompletedLessonsByCourse((current) => {
+      const next = { ...current };
+      delete next[courseId];
+      return next;
+    });
+  }
+
   async function toggleLessonCompleted(courseId: string, lessonId: string, completed: boolean): Promise<void> {
     setIsSavingProgress(true);
     try {
@@ -184,6 +201,8 @@ export function useCourses() {
     fetchCourseDetail,
     purchaseCourse,
     publishCourse,
+    updateCourse,
+    deleteCourse,
     toggleLessonCompleted,
     markLessonViewed,
   };

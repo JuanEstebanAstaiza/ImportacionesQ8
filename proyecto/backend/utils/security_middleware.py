@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import logging
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger("importacionesq8")
 
@@ -13,58 +13,82 @@ logger = logging.getLogger("importacionesq8")
 MAX_BODY_BYTES = 2 * 1024 * 1024
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+class SecurityHeadersMiddleware:
     """Añade headers defensivos (OWASP A05)."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("Referrer-Policy", "no-referrer")
-        response.headers.setdefault(
-            "Permissions-Policy",
-            "geolocation=(), microphone=(), camera=()",
-        )
-        response.headers.setdefault("X-XSS-Protection", "0")  # desactivado a favor de CSP
-        response.headers.setdefault("Cache-Control", "no-store")
-        # CSP estricta solo en API JSON (sin HTML servido); no rompe /docs en dev
-        if not request.url.path.startswith(("/docs", "/redoc", "/openapi")):
-            response.headers.setdefault(
-                "Content-Security-Policy",
-                "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-            )
-        # HSTS solo detrás de TLS real (producción)
-        try:
-            from config import APP_ENV
-            if APP_ENV == "production":
-                response.headers.setdefault(
-                    "Strict-Transport-Security",
-                    "max-age=31536000; includeSubDomains",
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("X-Frame-Options", "DENY")
+                headers.setdefault("Referrer-Policy", "no-referrer")
+                headers.setdefault(
+                    "Permissions-Policy",
+                    "geolocation=(), microphone=(), camera=()",
                 )
-        except Exception:
-            pass
-        return response
+                headers.setdefault("X-XSS-Protection", "0")  # desactivado a favor de CSP
+                headers.setdefault("Cache-Control", "no-store")
+
+                path = scope.get("path", "")
+                if not path.startswith(("/docs", "/redoc", "/openapi")):
+                    headers.setdefault(
+                        "Content-Security-Policy",
+                        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+                    )
+
+                try:
+                    from config import APP_ENV
+                    if APP_ENV == "production":
+                        headers.setdefault(
+                            "Strict-Transport-Security",
+                            "max-age=31536000; includeSubDomains",
+                        )
+                except Exception:
+                    pass
+
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+class RequestSizeLimitMiddleware:
     """Rechaza bodies > MAX_BODY_BYTES (anti DoS)."""
 
-    def __init__(self, app, max_bytes: int = MAX_BODY_BYTES):
-        super().__init__(app)
+    def __init__(self, app: ASGIApp, max_bytes: int = MAX_BODY_BYTES):
+        self.app = app
         self.max_bytes = max_bytes
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        cl = request.headers.get("content-length")
-        if cl is not None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = {
+            key.decode("latin1").lower(): value.decode("latin1")
+            for key, value in scope.get("headers", [])
+        }
+        cl = headers.get("content-length")
+        if cl:
             try:
                 if int(cl) > self.max_bytes:
-                    return JSONResponse(
+                    response = JSONResponse(
                         status_code=413,
                         content={
                             "success": False,
                             "error": "Payload demasiado grande",
                         },
                     )
+                    await response(scope, receive, send)
+                    return
             except ValueError:
                 pass
-        return await call_next(request)
+
+        await self.app(scope, receive, send)

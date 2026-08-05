@@ -24,6 +24,7 @@ from routers.disputas import router as disputas_router
 from routers.referidos import router as referidos_router
 from routers.cursos import router as cursos_router
 from routers.notificaciones import router as notificaciones_router
+from routers.documentos import router as documentos_router
 from utils.limiter import limiter
 from utils.security_middleware import SecurityHeadersMiddleware, RequestSizeLimitMiddleware
 
@@ -52,18 +53,45 @@ app = FastAPI(
     description="API REST para la plataforma de importaciones Q8",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,
     docs_url=_docs,
     redoc_url=_redoc,
     openapi_url=_openapi,
 )
 
-# Configurar CORS (métodos/headers acotados — no wildcard)
+# Refuerza el comportamiento también en el router raíz para evitar 307 automáticos.
+app.router.redirect_slashes = False
+
+# Configurar CORS (métodos/headers acotados — sin wildcard inseguro con credenciales)
+default_dev_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+]
+configured_origins = [o.strip() for o in CORS_ORIGINS if o.strip() and o.strip() != "*"]
+allow_origins = sorted(set(default_dev_origins + configured_origins))
+
+# Permite DevTunnels y LAN de desarrollo sin abrir todos los orígenes.
+allow_origin_regex = r"^https?://((localhost|127\.0\.0\.1)(:\d+)?|192\.168\.\d{1,3}\.\d{1,3}(:\d+)?|[a-z0-9-]+\.devtunnels\.ms)$"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip() and o.strip() != "*"],
+    allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "Cache-Control",
+        "Pragma",
+        "X-Requested-With",
+    ],
+    expose_headers=["WWW-Authenticate", "Content-Disposition"],
 )
 
 # Comprime respuestas JSON grandes (catálogos, temarios, listas) → menos ancho de banda
@@ -131,6 +159,7 @@ app.include_router(disputas_router)
 app.include_router(referidos_router)
 app.include_router(cursos_router)
 app.include_router(notificaciones_router)
+app.include_router(documentos_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

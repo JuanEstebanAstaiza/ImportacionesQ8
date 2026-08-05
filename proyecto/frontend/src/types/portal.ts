@@ -57,6 +57,11 @@ export interface SidebarCtrl {
   navItems: NavItem[];
   onNotif?: () => void;
   notifCount?: number;
+  onChat?: () => void;
+  chatCount?: number;
+  onHelp?: () => void;
+  showHelp?: boolean;
+  profileSubtitle?: string;
   onLogout?: () => void;
   onProfile?: () => void;
 }

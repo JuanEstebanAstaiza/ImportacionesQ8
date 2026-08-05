@@ -24,6 +24,16 @@ from .curso import (
     NivelCurso, TipoRecursoLeccion, EstadoCurso,
 )
 from .notificacion import Notificacion, TipoNotificacion
+from .documental import (
+    Carpeta,
+    Archivo,
+    Etiqueta,
+    ArchivoEtiqueta,
+    Favorito,
+    CursoRecurso,
+    MensajeAdjunto,
+    OrdenDocumento,
+)
 
 __all__ = [
     "Usuario",
@@ -78,4 +88,12 @@ __all__ = [
     "EstadoCurso",
     "Notificacion",
     "TipoNotificacion",
+    "Carpeta",
+    "Archivo",
+    "Etiqueta",
+    "ArchivoEtiqueta",
+    "Favorito",
+    "CursoRecurso",
+    "MensajeAdjunto",
+    "OrdenDocumento",
 ]

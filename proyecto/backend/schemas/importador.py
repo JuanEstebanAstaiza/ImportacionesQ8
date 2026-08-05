@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 class ImportadorCreate(BaseModel):
@@ -10,6 +10,7 @@ class ImportadorCreate(BaseModel):
     calificacion_promedio: float = 0.0
     tiempo_respuesta_promedio: str = Field(..., min_length=1, description="Tiempo promedio de respuesta (ej: '24h')")
     capacidad_volumen: Optional[int] = None
+    perfil_publico: Optional[Dict[str, Any]] = None
 
 class ImportadorResponse(BaseModel):
     id: str
@@ -20,6 +21,7 @@ class ImportadorResponse(BaseModel):
     calificacion_promedio: float
     tiempo_respuesta_promedio: str
     capacidad_volumen: Optional[int]
+    perfil_publico: Optional[Dict[str, Any]] = None
     estado: str  # "activo" o "inactivo"
     solo_cotizaciones_directas: bool = False
     verificado: bool = False
@@ -35,6 +37,7 @@ class ImportadorUpdate(BaseModel):
     paises_origen: Optional[List[str]] = None
     tiempo_respuesta_promedio: Optional[str] = Field(None, min_length=1)
     capacidad_volumen: Optional[int] = None
+    perfil_publico: Optional[Dict[str, Any]] = None
     solo_cotizaciones_directas: Optional[bool] = None
 
 class AdminCrearImportadorRequest(BaseModel):
@@ -46,6 +49,7 @@ class AdminCrearImportadorRequest(BaseModel):
     calificacion_promedio: float = 0.0
     tiempo_respuesta_promedio: str = Field(..., min_length=1)
     capacidad_volumen: Optional[int] = None
+    perfil_publico: Optional[Dict[str, Any]] = None
     solo_cotizaciones_directas: bool = False
     email_dueño: EmailStr = Field(..., description="Email de la cuenta dueña de la empresa")
     password_dueño: str = Field(..., min_length=9, description="Contraseña inicial de la cuenta dueña")

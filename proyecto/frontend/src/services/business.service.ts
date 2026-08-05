@@ -9,7 +9,9 @@ export interface BackendImporter {
   calificacion_promedio: number;
   tiempo_respuesta_promedio: string;
   capacidad_volumen?: number | null;
+  perfil_publico?: Record<string, unknown> | null;
   solo_cotizaciones_directas?: boolean;
+  estado?: string;
   verificado: boolean;
   fecha_registro: string;
 }
@@ -159,6 +161,7 @@ export interface UpdateImporterPayload {
   paises_origen?: string[];
   tiempo_respuesta_promedio?: string;
   capacidad_volumen?: number;
+  perfil_publico?: Record<string, unknown>;
   solo_cotizaciones_directas?: boolean;
 }
 
@@ -192,6 +195,16 @@ export interface BackendOrder {
   documentos_adjuntos: BackendDocumentoOrdenItem[];
 }
 
+export interface UpdateOrderStatusPayload {
+  estado: string;
+}
+
+export interface AddOrderDocumentPayload {
+  nombre: string;
+  url: string;
+  tipo: string;
+}
+
 export interface BackendChatMessage {
   id: string;
   conversacion_id: string;
@@ -210,6 +223,89 @@ export interface BackendChatConversation {
   importador_usuario_id: string;
   fecha_creacion: string;
   ultimo_mensaje: BackendChatMessage | null;
+}
+
+export interface BackendEtiquetaItem {
+  id: string;
+  owner_user_id: string;
+  nombre: string;
+  color: string | null;
+  created_at: string;
+}
+
+export interface BackendCarpetaItem {
+  id: string;
+  owner_user_id: string;
+  parent_id: string | null;
+  nombre: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendArchivoItem {
+  id: string;
+  owner_user_id: string;
+  carpeta_id: string | null;
+  nombre: string;
+  extension: string;
+  mime_type: string;
+  tipo_recurso: string;
+  size_bytes: number | null;
+  storage_url: string | null;
+  origen: string;
+  created_at: string;
+  updated_at: string;
+  favorito: boolean;
+  etiquetas: BackendEtiquetaItem[];
+}
+
+export interface BackendExplorerResponse {
+  carpetas: BackendCarpetaItem[];
+  archivos: BackendArchivoItem[];
+}
+
+export interface CreateDocumentFolderPayload {
+  nombre: string;
+  parent_id?: string | null;
+}
+
+export interface UpdateDocumentFolderPayload {
+  nombre?: string;
+  parent_id?: string | null;
+}
+
+export interface CreateDocumentFilePayload {
+  nombre: string;
+  carpeta_id?: string | null;
+  mime_type?: string;
+  extension?: string;
+  size_bytes?: number;
+  storage_url?: string;
+  origen?: string;
+}
+
+export interface UpdateDocumentFilePayload {
+  nombre?: string;
+  carpeta_id?: string | null;
+  favorito?: boolean;
+}
+
+export interface ShareDocumentsToChatPayload {
+  conversacion_ids: string[];
+  archivo_ids: string[];
+  mensaje?: string;
+}
+
+export interface BackendChatAttachmentItem {
+  archivo_id: string;
+  mensaje_id: string;
+  conversacion_id: string;
+  nombre: string;
+  mime_type: string;
+  extension: string;
+  tipo_recurso: string;
+  storage_url: string | null;
+  created_at: string;
 }
 
 export interface BackendNotification {
@@ -237,11 +333,11 @@ export interface BackendMarkAllNotificationsReadResponse {
 
 export const businessService = {
   listImporters(): Promise<BackendImporter[]> {
-    return apiRequest<BackendImporter[]>("/importadores", { method: "GET" });
+    return apiRequest<BackendImporter[]>("/importadores/", { method: "GET" });
   },
 
   listQuotes(): Promise<BackendCotizacion[]> {
-    return apiRequest<BackendCotizacion[]>("/cotizaciones", { method: "GET" });
+    return apiRequest<BackendCotizacion[]>("/cotizaciones/", { method: "GET" });
   },
 
   getQuoteById(cotizacionId: string): Promise<BackendCotizacion> {
@@ -251,7 +347,7 @@ export const businessService = {
   },
 
   createQuote(payload: CreateCotizacionPayload): Promise<BackendCotizacion> {
-    return apiRequest<BackendCotizacion>("/cotizaciones", {
+    return apiRequest<BackendCotizacion>("/cotizaciones/", {
       method: "POST",
       body: payload,
     });
@@ -300,12 +396,26 @@ export const businessService = {
   },
 
   listOrders(): Promise<BackendOrder[]> {
-    return apiRequest<BackendOrder[]>("/ordenes", { method: "GET" });
+    return apiRequest<BackendOrder[]>("/ordenes/", { method: "GET" });
   },
 
   getOrderById(orderId: string): Promise<BackendOrder> {
     return apiRequest<BackendOrder>(`/ordenes/${orderId}`, {
       method: "GET",
+    });
+  },
+
+  updateOrderStatus(orderId: string, payload: UpdateOrderStatusPayload): Promise<Record<string, unknown>> {
+    return apiRequest<Record<string, unknown>>(`/ordenes/${orderId}/estado`, {
+      method: "PUT",
+      body: payload,
+    });
+  },
+
+  addOrderDocument(orderId: string, payload: AddOrderDocumentPayload): Promise<BackendDocumentoOrdenItem> {
+    return apiRequest<BackendDocumentoOrdenItem>(`/ordenes/${orderId}/documentos`, {
+      method: "POST",
+      body: payload,
     });
   },
 
@@ -321,10 +431,89 @@ export const businessService = {
     });
   },
 
-  sendChatMessage(conversationId: string, payload: { contenido: string; tipo?: string }): Promise<BackendChatMessage> {
+  sendChatMessage(conversationId: string, payload: { contenido: string; tipo?: string; metadata?: Record<string, unknown> | null }): Promise<BackendChatMessage> {
     return apiRequest<BackendChatMessage>(`/chat/conversaciones/${conversationId}/mensajes`, {
       method: "POST",
       body: payload,
+    });
+  },
+
+  listDocumentExplorer(parentId?: string | null): Promise<BackendExplorerResponse> {
+    const query = parentId ? `?parent_id=${encodeURIComponent(parentId)}` : "";
+    return apiRequest<BackendExplorerResponse>(`/documentos/explorador${query}`, {
+      method: "GET",
+    });
+  },
+
+  createDocumentFolder(payload: CreateDocumentFolderPayload): Promise<BackendCarpetaItem> {
+    return apiRequest<BackendCarpetaItem>("/documentos/carpetas", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  updateDocumentFolder(folderId: string, payload: UpdateDocumentFolderPayload): Promise<BackendCarpetaItem> {
+    return apiRequest<BackendCarpetaItem>(`/documentos/carpetas/${folderId}`, {
+      method: "PATCH",
+      body: payload,
+    });
+  },
+
+  deleteDocumentFolder(folderId: string): Promise<{ success?: boolean }> {
+    return apiRequest<{ success?: boolean }>(`/documentos/carpetas/${folderId}`, {
+      method: "DELETE",
+    });
+  },
+
+  createDocumentFile(payload: CreateDocumentFilePayload): Promise<BackendArchivoItem> {
+    return apiRequest<BackendArchivoItem>("/documentos/archivos", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  uploadDocumentFile(file: File, carpetaId?: string | null, origen = "manual"): Promise<BackendArchivoItem> {
+    const formData = new FormData();
+    formData.append("archivo", file);
+    formData.append("origen", origen);
+    if (carpetaId) {
+      formData.append("carpeta_id", carpetaId);
+    }
+    return apiRequest<BackendArchivoItem>("/documentos/archivos/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  updateDocumentFile(fileId: string, payload: UpdateDocumentFilePayload): Promise<BackendArchivoItem> {
+    return apiRequest<BackendArchivoItem>(`/documentos/archivos/${fileId}`, {
+      method: "PATCH",
+      body: payload,
+    });
+  },
+
+  deleteDocumentFile(fileId: string): Promise<{ success?: boolean }> {
+    return apiRequest<{ success?: boolean }>(`/documentos/archivos/${fileId}`, {
+      method: "DELETE",
+    });
+  },
+
+  searchDocumentFiles(query: string): Promise<BackendArchivoItem[]> {
+    return apiRequest<BackendArchivoItem[]>(`/documentos/buscar?q=${encodeURIComponent(query)}`, {
+      method: "GET",
+    });
+  },
+
+  shareDocumentsToChat(payload: ShareDocumentsToChatPayload): Promise<{ success: boolean; mensajes_creados: number }> {
+    return apiRequest<{ success: boolean; mensajes_creados: number }>("/documentos/compartir-chat", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  listChatAttachments(conversationId: string): Promise<BackendChatAttachmentItem[]> {
+    return apiRequest<BackendChatAttachmentItem[]>(`/documentos/chats/${conversationId}/adjuntos`, {
+      method: "GET",
     });
   },
 

@@ -8,6 +8,7 @@ class MensajeChatCreate(BaseModel):
     contenido: str = Field(..., min_length=1, max_length=4000)
     # "sistema" solo lo genera el backend; el cliente no puede forjarlo
     tipo: str = Field(default="texto", pattern="^(texto|archivo)$")
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class MensajeChatResponse(BaseModel):

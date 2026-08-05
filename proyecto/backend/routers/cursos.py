@@ -15,14 +15,16 @@ from models.curso import (
     Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
     EstadoCurso,
 )
+from models.documental import Archivo, CursoRecurso
 from models.importador import Importador
 from models.usuario import Usuario
 from schemas.curso import (
-    CursoCreate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
+    CursoCreate, CursoUpdate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
     ProgresoLeccionRequest, ProgresoLeccionResponse, ModuloResponse, LeccionResponse,
     RecursoLeccionResponse,
 )
 from services.notificacion_service import crear_notificacion_best_effort
+from services.documental_service import extract_document_file_id_from_url
 from services.token_revocation import jti_revocado
 from utils.dependencies import get_db, get_current_user, require_rol, security
 from utils.security import decode_access_token, JWTError
@@ -192,6 +194,43 @@ def _puede_ver_contenido_completo(curso: Curso, current_user: Optional[dict], co
     return False
 
 
+def _vincular_recurso_documental(
+    db: Session,
+    *,
+    curso_id: str,
+    leccion_id: Optional[str],
+    recurso_url: str,
+    tipo: str,
+) -> None:
+    archivo_id = extract_document_file_id_from_url(recurso_url)
+    if not archivo_id:
+        return
+    archivo = db.query(Archivo).filter(Archivo.id == archivo_id, Archivo.deleted_at.is_(None)).first()
+    if not archivo:
+        return
+    exists = (
+        db.query(CursoRecurso)
+        .filter(
+            CursoRecurso.curso_id == curso_id,
+            CursoRecurso.leccion_id == leccion_id,
+            CursoRecurso.archivo_id == archivo_id,
+            CursoRecurso.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if exists:
+        return
+    db.add(
+        CursoRecurso(
+            id=str(uuid4()),
+            curso_id=curso_id,
+            leccion_id=leccion_id,
+            archivo_id=archivo_id,
+            tipo=tipo,
+        )
+    )
+
+
 @router.get("/cursos", response_model=List[CursoListItem])
 @limiter.limit(RATE_LIMIT_PUBLIC_READ)
 async def listar_cursos(
@@ -207,6 +246,7 @@ async def listar_cursos(
 ):
     """Catálogo público de cursos publicados con filtros y recomendaciones."""
     query = db.query(Curso).filter(Curso.estado == EstadoCurso.publicado.value)
+    query = query.filter(Curso.deleted_at.is_(None))
 
     categoria = clamp_str(categoria, 120)
     q = clamp_str(q, 120)
@@ -241,7 +281,7 @@ async def obtener_curso(
 ):
     """Detalle del curso con temario, vista previa y módulos."""
     curso = _cargar_curso_detalle(db, id_o_slug)
-    if not curso or curso.estado == EstadoCurso.archivado.value:
+    if not curso or curso.estado == EstadoCurso.archivado.value or curso.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
     if curso.estado == EstadoCurso.borrador.value:
@@ -313,6 +353,7 @@ async def crear_curso(
         estudiantes_count=0,
         estado=EstadoCurso.publicado.value,
         fecha_creacion=datetime.utcnow(),
+        deleted_at=None,
     )
     db.add(curso)
 
@@ -341,6 +382,13 @@ async def crear_curso(
             db.add(lec)
             db.flush()
             primera_leccion = False
+            _vincular_recurso_documental(
+                db,
+                curso_id=curso_id,
+                leccion_id=lec.id,
+                recurso_url=lec_in.video_url,
+                tipo="video",
+            )
             for rec_in in lec_in.recursos:
                 db.add(RecursoLeccion(
                     id=str(uuid4()),
@@ -349,6 +397,13 @@ async def crear_curso(
                     url=rec_in.url.strip(),
                     tipo=rec_in.tipo,
                 ))
+                _vincular_recurso_documental(
+                    db,
+                    curso_id=curso_id,
+                    leccion_id=lec.id,
+                    recurso_url=rec_in.url,
+                    tipo="material",
+                )
 
     db.commit()
     curso = _cargar_curso_detalle(db, curso_id)
@@ -382,12 +437,14 @@ async def comprar_curso(
     curso = db.query(Curso).filter(
         Curso.id == curso_id,
         Curso.estado == EstadoCurso.publicado.value,
+        Curso.deleted_at.is_(None),
     ).first()
     if not curso:
         # También aceptar slug
         curso = db.query(Curso).filter(
             Curso.slug == curso_id,
             Curso.estado == EstadoCurso.publicado.value,
+            Curso.deleted_at.is_(None),
         ).first()
     if not curso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
@@ -481,6 +538,8 @@ async def mis_cursos(
         curso = _cargar_curso_detalle(db, compra.curso_id)
         if not curso:
             continue
+        if curso.deleted_at is not None:
+            continue
         item = _to_list_item(curso, db=db)
         lecciones_completadas, _, progreso_pct = _progreso_usuario(db, usuario_id, curso.id)
         resultado.append(CursoDetailResponse(
@@ -508,7 +567,7 @@ async def marcar_progreso_leccion(
     usuario_id = current_user["user_id"]
 
     curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id)).first()
-    if not curso:
+    if not curso or curso.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
     compra = db.query(CompraCurso).filter(
@@ -565,3 +624,75 @@ async def marcar_progreso_leccion(
         progreso_pct=pct,
         fecha_completado=progreso.fecha_completado,
     )
+
+
+@router.put("/cursos/{curso_id}", response_model=CursoDetailResponse)
+@limiter.limit(RATE_LIMIT_PUBLIC_WRITE)
+async def actualizar_curso(
+    request: Request,
+    curso_id: str,
+    datos: CursoUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id), Curso.deleted_at.is_(None)).first()
+    if not curso:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+
+    if curso.importador_id != current_user.get("importador_id"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para actualizar este curso")
+
+    if datos.titulo is not None:
+        curso.titulo = datos.titulo.strip()
+        if curso.slug != _slugify(curso.titulo):
+            curso.slug = _slug_unico(db, curso.titulo)
+    if datos.descripcion is not None:
+        curso.descripcion = datos.descripcion
+    if datos.portada_url is not None:
+        curso.portada_url = datos.portada_url
+    if datos.precio is not None:
+        curso.precio = float(datos.precio)
+    if datos.nivel is not None:
+        curso.nivel = datos.nivel
+    if datos.categoria is not None:
+        curso.categoria = datos.categoria.strip()
+    if datos.estado is not None:
+        curso.estado = datos.estado
+
+    curso.fecha_actualizacion = datetime.utcnow()
+    db.commit()
+
+    refreshed = _cargar_curso_detalle(db, str(curso.id))
+    item = _to_list_item(refreshed, db=db)
+    return CursoDetailResponse(
+        **item.model_dump(),
+        modulos=_modulos_response(refreshed, acceso_completo=True),
+        comprado=False,
+        lecciones_completadas=[],
+        progreso_pct=0.0,
+    )
+
+
+@router.delete("/cursos/{curso_id}", response_model=dict)
+@limiter.limit(RATE_LIMIT_PUBLIC_WRITE)
+async def eliminar_curso(
+    request: Request,
+    curso_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id), Curso.deleted_at.is_(None)).first()
+    if not curso:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+
+    if curso.importador_id != current_user.get("importador_id"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para eliminar este curso")
+
+    now = datetime.utcnow()
+    curso.deleted_at = now
+    curso.estado = EstadoCurso.archivado.value
+    db.query(CursoRecurso).filter(CursoRecurso.curso_id == curso.id, CursoRecurso.deleted_at.is_(None)).update(
+        {CursoRecurso.deleted_at: now}, synchronize_session=False
+    )
+    db.commit()
+    return {"success": True}

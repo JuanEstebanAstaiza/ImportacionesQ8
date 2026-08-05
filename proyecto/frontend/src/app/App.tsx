@@ -13,24 +13,34 @@ import {
   PackageCheck, Navigation2, MessageSquare, Paperclip, Smile,
   Image as ImageIcon, PanelRightClose, PanelRightOpen,
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
-  Zap, Filter, AtSign, ChevronDown as ChevDown,
+  Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
+  MoveRight, MoreHorizontal, Video,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { toast } from "sonner";
 
 import { Quote } from "../types/quote";
 import type { ResponseFrom, ResponseStatus } from "../types/quote";
 import { Importer } from "../types/importer";
 import { SidebarCtrl } from "../types/portal";
 import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
+import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
+import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
+import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth.service";
+import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
+import { HELP_SUPPORT_CONTENT, filterFaq, normalizeHelpRole } from "@/features/help/help-support-content";
 import {
   businessService,
+  type BackendArchivoItem,
   type BackendAsesor,
+  type BackendChatAttachmentItem,
   type BackendCotizacion,
+  type BackendExplorerResponse,
   type BackendImporter,
   type BackendOrder,
   type BackendPropuesta,
@@ -39,7 +49,7 @@ import {
   type CreateCotizacionPayload,
   type CreatePropuestaPayload,
 } from "@/services/business.service";
-import { getStoredRole, getStoredToken } from "@/services/api-client";
+import { getStoredRole, getStoredToken, resolveApiUrl } from "@/services/api-client";
 import type { RegisterRequest } from "@/types/auth";
 
 const RESET_PASSWORD_PATH = "/restablecer-password";
@@ -172,21 +182,6 @@ function Avatar({initials,size="md",color="bg-primary"}:{initials:string;size?:"
   return <div className={clsx("rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0",color,s[size])}>{initials}</div>;
 }
 
-function Breadcrumb({items}:{items:{label:string;onClick?:()=>void}[]}) {
-  return (
-    <nav className="flex items-center gap-1 text-sm">
-      {items.map((item,i)=>(
-        <span key={i} className="flex items-center gap-1">
-          {i>0&&<ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40"/>}
-          <span onClick={item.onClick} className={clsx(i===items.length-1?"text-foreground font-medium":"text-muted-foreground",item.onClick&&"cursor-pointer hover:text-foreground transition-colors")}>
-            {item.label}
-          </span>
-        </span>
-      ))}
-    </nav>
-  );
-}
-
 function Logo() {
   return (
     <div className="flex items-center gap-2.5 overflow-hidden">
@@ -227,10 +222,14 @@ function Timeline({stages}:{stages:TimelineStage[]}) {
 }
 
 // ─── Notification icon with badge ─────────────────────────────────────────────
-function NotifIcon({icon,count=0}:{icon:React.ReactNode;count?:number}) {
+function NotifIcon({icon,count=0,onClick,title}:{icon:React.ReactNode;count?:number;onClick?:()=>void;title?:string}) {
   return (
     <div className="relative">
-      <button className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+      <button
+        onClick={onClick}
+        title={title}
+        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
         {icon}
       </button>
       {count>0&&(
@@ -301,6 +300,7 @@ const RESPONSES:QuoteResponse[]=[
 
 interface OrderHistoryItem {estado:string;fecha:string;nota:string|null;}
 interface OrderDocumentItem {name:string;date:string;status:string;url:string;type:string;}
+interface LifecycleDocItem {label:string;name:string;status:string;url:string|null;source:string;}
 interface Order {
   id:string;
   code:string;
@@ -386,7 +386,7 @@ const NAV_ASESOR=[
 type UserRole="solicitante"|"importadora"|"asesor"|"admin";
 
 const NAV_ADMIN=[
-  {icon:LayoutGrid,    label:"Dashboard",    key:"admin-dashboard"},
+  {icon:LayoutGrid,    label:"Panel de administracion", key:"admin-dashboard"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
   {icon:FolderOpen,    label:"Documentos",   key:"documentos"},
 ];
@@ -398,12 +398,27 @@ function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
     return null;
   }
 
-  if (role === "importador" || role === "importadora") {
+  const normalizedRole = role
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (normalizedRole === "importador" || normalizedRole === "importadora") {
     return "importadora";
   }
 
-  if (role === "solicitante" || role === "asesor" || role === "admin") {
-    return role;
+  if (
+    normalizedRole === "admin"
+    || normalizedRole === "administrador"
+    || normalizedRole === "superadmin"
+    || normalizedRole === "admin_role"
+  ) {
+    return "admin";
+  }
+
+  if (normalizedRole === "solicitante" || normalizedRole === "asesor") {
+    return normalizedRole;
   }
 
   return null;
@@ -756,6 +771,20 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
   };
 }
 
+function extractFirstNumber(value: string | null | undefined): number {
+  const match = String(value ?? "").match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) {
+    return 0;
+  }
+
+  const parsed = Number.parseFloat(match[1].replace(",", "."));
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+
+  return Math.round(parsed);
+}
+
 interface CompanyAdvisor {
   id:string;name:string;role:string;email:string;phone:string;
   initials:string;color:string;status:"activo"|"inactivo"|"ausente";
@@ -892,8 +921,12 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const count=sb?.notifCount??notifCount;
   const handler=sb?.onNotif??onNotif;
   const profileHandler=sb?.onProfile??onProfile;
+  const chatHandler=sb?.onChat;
+  const helpHandler=sb?.onHelp;
+  const chatCount=sb?.chatCount??0;
+  const showHelp=sb?.showHelp??true;
   const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
-  const displayCompany = user.company || authUser?.email || "";
+  const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayInitials = initialsFromName(initialsSource);
   return (
@@ -906,8 +939,8 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
           </button>
           {count>0&&<span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">{count>9?"9+":count}</span>}
         </div>
-        <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={1}/>
-        <NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0}/>
+        <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
+        {showHelp&&<NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
         <div className="w-px h-5 bg-border mx-2"/>
         <div className="flex items-center gap-2.5">
           <div className="text-right hidden sm:block">
@@ -1036,7 +1069,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {/* Page header */}
           <div>
-            <Breadcrumb items={[{label:"Inicio"},{label:"Dashboard"}]}/>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Dashboard"}]}/>
             <div className="mt-3 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
               <div>
                 <h1 className="text-xl font-semibold tracking-tight">Marketplace de importadores</h1>
@@ -1165,7 +1198,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio"},{label:"Dashboard",onClick:onBack},{label:imp.name}]}/>
+          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Dashboard",onClick:onBack},{label:imp.name}]}/>
 
           {/* Hero card */}
           <Card padding="md" className="mt-4 mb-5">
@@ -1304,7 +1337,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;o
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio"},{label:"Cotizaciones"}]}/>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
             <div className="flex items-center justify-between mt-3">
               <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
               <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
@@ -1383,7 +1416,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;o
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTE DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[]}) {
+function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[]}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;
   const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
   const [loadingProposals,setLoadingProposals]=useState(true);
@@ -1450,6 +1483,41 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const activeProposal=visibleProposals[0]??null;
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
+  const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
+
+  const orderDocByType = (matchers: string[]) => {
+    if (!relatedOrder) return null;
+    const matcher = matchers.map((value) => value.toLowerCase());
+    return relatedOrder.documents.find((doc) => matcher.some((item) => (doc.type || "").toLowerCase().includes(item))) ?? null;
+  };
+
+  const solicitudDoc = orderDocByType(["cotizacion", "solicitud"]);
+  const propuestaDoc = orderDocByType(["propuesta"]);
+  const ordenDoc = orderDocByType(["orden"]);
+
+  const lifecycleDocs: LifecycleDocItem[] = [
+    {
+      label: "Solicitud",
+      name: solicitudDoc?.name || `Solicitud-${quote.code}.pdf`,
+      status: solicitudDoc?.url ? "Disponible" : "Pendiente",
+      url: solicitudDoc?.url || null,
+      source: solicitudDoc ? "Orden" : "Pendiente de generación",
+    },
+    {
+      label: "Propuesta",
+      name: propuestaDoc?.name || `Propuesta-${quote.code}.pdf`,
+      status: propuestaDoc?.url ? "Disponible" : "Pendiente",
+      url: propuestaDoc?.url || null,
+      source: propuestaDoc ? "Orden" : (activeProposal ? "Negociación" : "Sin propuesta aceptada"),
+    },
+    {
+      label: "Orden",
+      name: ordenDoc?.name || `Orden-${quote.code}.pdf`,
+      status: ordenDoc?.url ? "Disponible" : "Pendiente",
+      url: ordenDoc?.url || null,
+      source: relatedOrder ? "Orden activa" : "Aún no creada",
+    },
+  ];
 
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -1457,7 +1525,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio"},{label:"Cotizaciones",onClick:onBack},{label:quote.code}]}/>
+          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Cotizaciones",onClick:onBack},{label:quote.code}]}/>
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex flex-col gap-3">
@@ -1479,6 +1547,32 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información comercial</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["MOQ",quote.minQuantity+" u"],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas","Entrega en destino final preferida."]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
+              </Card>
+              <Card padding="md">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos del ciclo</h3>
+                  <span className="text-xs text-muted-foreground">Solicitud · Propuesta · Orden</span>
+                </div>
+                <div className="space-y-2">
+                  {lifecycleDocs.map((doc) => (
+                    <div key={doc.label} className="rounded-xl border border-border px-3 py-2.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">{doc.label}</p>
+                        <p className="text-sm font-semibold truncate">{doc.name}</p>
+                        <p className="text-xs text-muted-foreground">{doc.source}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={clsx("text-[11px] font-medium px-2 py-0.5 rounded",doc.url?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-700")}>{doc.status}</span>
+                        {doc.url && (
+                          <>
+                            <a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>}>Ver PDF</Button></a>
+                            <a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>}>Descargar</Button></a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </Card>
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -1661,7 +1755,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio"},...crumbs]}/>
+          <Breadcrumb items={[{label:"Inicio",onClick:onBack},...crumbs]}/>
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-4 flex-1">
@@ -1752,7 +1846,7 @@ function ResponsesScreen({onViewDetail,sb,responses}:{onViewDetail:(id:string,fr
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio"},{label:"Respuestas"}]}/>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Respuestas"}]}/>
             <div className="flex items-center justify-between mt-3">
               <div><h1 className="text-xl font-semibold tracking-tight">Respuestas</h1><p className="text-sm text-muted-foreground mt-0.5">Propuestas de importadores a tus cotizaciones.</p></div>
               {responses.filter(r=>r.status==="resp-nueva").length>0&&<span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs font-medium text-orange-700"><Bell className="w-3.5 h-3.5"/>{responses.filter(r=>r.status==="resp-nueva").length} nuevas</span>}
@@ -1801,7 +1895,7 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio"},{label:"Órdenes"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Órdenes</h1></div>
+          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Órdenes"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Órdenes</h1></div>
           {orders.length===0 ? (
             <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin órdenes</p><p className="text-sm text-muted-foreground">No tienes órdenes activas en backend.</p></div></Card>
           ) : (
@@ -1893,7 +1987,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio"},{label:"Órdenes",onClick:onBack},{label:order.code}]}/>
+          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Órdenes",onClick:onBack},{label:order.code}]}/>
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex flex-col gap-3">
@@ -1986,7 +2080,7 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string)=>Promise<void>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"no-leidas">("all");
   const [searchConv,setSearchConv]=useState("");
@@ -1994,7 +2088,32 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [input,setInput]=useState("");
   const [sending,setSending]=useState(false);
   const [showCtx,setShowCtx]=useState(true);
+  const [showEmojiMenu,setShowEmojiMenu]=useState(false);
+  const [transferTo,setTransferTo]=useState("");
+  const [isTransferring,setIsTransferring]=useState(false);
+  const [transferMessage,setTransferMessage]=useState("");
+  const [orderStatusDraft,setOrderStatusDraft]=useState("");
+  const [isUpdatingOrderStatus,setIsUpdatingOrderStatus]=useState(false);
+  const [isAttachingOrderDoc,setIsAttachingOrderDoc]=useState(false);
+  const [orderActionMessage,setOrderActionMessage]=useState("");
+  const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
+  const [isResourcePickerOpen,setIsResourcePickerOpen]=useState(false);
+  const [resourceExplorer,setResourceExplorer]=useState<BackendExplorerResponse>({ carpetas: [], archivos: [] });
+  const [resourceCurrentFolderId,setResourceCurrentFolderId]=useState<string|null>(null);
+  const [resourceFolderTrail,setResourceFolderTrail]=useState<Array<{id:string|null;name:string}>>([{ id: null, name: "Raiz" }]);
+  const [resourceLoading,setResourceLoading]=useState(false);
+  const [resourceSearch,setResourceSearch]=useState("");
+  const [resourceSearching,setResourceSearching]=useState(false);
+  const [resourceSearchResults,setResourceSearchResults]=useState<BackendArchivoItem[]|null>(null);
+  const [resourceTargetConversationId,setResourceTargetConversationId]=useState("");
+  const [resourcePreviewUrls,setResourcePreviewUrls]=useState<Record<string,string>>({});
+  const fileInputRef=useRef<HTMLInputElement>(null);
+  const imageInputRef=useRef<HTMLInputElement>(null);
+  const orderDocumentInputRef=useRef<HTMLInputElement>(null);
   const messagesEndRef=useRef<HTMLDivElement>(null);
+  const resourcePreviewLoadingRef=useRef<Record<string,boolean>>({});
+  const resourcePreviewRegistryRef=useRef<Record<string,string>>({});
+  const emojiOptions=["😀","😎","👍","✅","📦","🚢","💬","📌","🎯","🤝","🙏","🔥"];
 
   useEffect(()=>{
     setMsgs(messagesByConversation);
@@ -2005,6 +2124,12 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
       setSelectedId(initialConvId || conversations[0].id);
     }
   }, [selectedId, conversations, initialConvId]);
+
+  useEffect(() => {
+    if (selectedId) {
+      setResourceTargetConversationId(selectedId);
+    }
+  }, [selectedId]);
 
   const conv=selectedId?conversations.find(c=>c.id===selectedId)||null:null;
   const imp=conv?importers.find(i=>i.id===conv.importerId)||null:null;
@@ -2038,14 +2163,332 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
   }
 
+  function getReadableFileSize(bytes:number):string{
+    if(bytes<=0)return "0 B";
+    if(bytes<1024)return `${bytes} B`;
+    const kb=bytes/1024;
+    if(kb<1024)return `${kb.toFixed(1)} KB`;
+    const mb=kb/1024;
+    return `${mb.toFixed(1)} MB`;
+  }
+
+  function mapFileType(file:File):MsgFileType{
+    if(file.type.startsWith("image/"))return "image";
+    if(file.type.includes("pdf"))return "pdf";
+    if(file.type.includes("sheet")||file.type.includes("excel")||/\.(xlsx|xls|csv)$/i.test(file.name))return "excel";
+    return "word";
+  }
+
+  async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>,isImage:boolean){
+    const file=event.target.files?.[0];
+    if(!file||!selectedId)return;
+
+    const contentLabel=isImage?"Imagen":"Archivo";
+    const localMsg:ChatMsg={
+      id:`pending-file-${Date.now()}`,
+      sender:"client",
+      text:`${contentLabel} adjunto: ${file.name}`,
+      file:{name:file.name,size:getReadableFileSize(file.size),type:mapFileType(file)},
+      time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),
+      read:true,
+    };
+
+    setMsgs(prev=>({...prev,[selectedId]:[...(prev[selectedId]||[]),localMsg]}));
+    try{
+      await onShareLocalAttachment(selectedId,file);
+    }catch{
+      // Mantener feedback visual local aunque falle el registro remoto.
+    }
+
+    event.target.value="";
+    setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+  }
+
+  function insertEmoji(emoji:string){
+    setInput(prev=>`${prev}${emoji}`);
+    setShowEmojiMenu(false);
+  }
+
   function handleKey(e:React.KeyboardEvent){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}
 
   const convMsgs=selectedId?msgs[selectedId]||[]:[];
+  const convAttachments=selectedId?chatAttachmentsByConversation[selectedId]||[]:[];
+  const advisorOptions = Array.from(
+    new Set(importers.map((row) => row.advisor.email).filter((email) => Boolean(email && email.trim()))),
+  );
 
   const refQuote=conv?.type==="cotizacion"?quotes.find((quote)=>quote.id===conv.refId)||null:null;
   const refOrderId=conv?.type==="orden"?conv.refId:null;
+  const refOrder=conv?.type==="orden"?orders.find((order)=>order.id===conv.refId)||null:null;
+  const canManageOrder = currentUserRole === "importadora";
+  const orderStatusOptions = [
+    { value: "en_proceso", label: "En proceso" },
+    { value: "enviada", label: "Enviada" },
+    { value: "entregada", label: "Entregada" },
+    { value: "cancelada", label: "Cancelada" },
+  ];
+
+  useEffect(() => {
+    if (!refOrder) {
+      setOrderStatusDraft("");
+      setOrderActionMessage("");
+      return;
+    }
+    setOrderStatusDraft(refOrder.status || "");
+    setOrderActionMessage("");
+  }, [refOrder?.id, refOrder?.status]);
+
+  async function handleTransferConversation() {
+    if (!conv || !transferTo.trim()) return;
+    setTransferMessage("");
+    setIsTransferring(true);
+    try {
+      await onTransferConversation(conv.id, transferTo.trim());
+      setTransferMessage(`Transferencia solicitada a ${transferTo.trim()}`);
+      setTransferTo("");
+    } finally {
+      setIsTransferring(false);
+    }
+  }
+
+  async function handleOrderStatusUpdate() {
+    if (!refOrderId || !orderStatusDraft.trim()) return;
+    setOrderActionMessage("");
+    setIsUpdatingOrderStatus(true);
+    try {
+      await onUpdateOrderStatus(refOrderId, orderStatusDraft.trim());
+      setOrderActionMessage("Estado actualizado correctamente.");
+    } finally {
+      setIsUpdatingOrderStatus(false);
+    }
+  }
+
+  async function handleOrderDocumentPick(event:React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !refOrderId) return;
+    setOrderActionMessage("");
+    setIsAttachingOrderDoc(true);
+    try {
+      await onAttachOrderDocument(refOrderId, file);
+      setOrderActionMessage(`Documento adjuntado: ${file.name}`);
+    } finally {
+      setIsAttachingOrderDoc(false);
+      event.target.value = "";
+    }
+  }
+
+  function absoluteResourceUrl(url: string | null): string {
+    return resolveApiUrl(url);
+  }
+
+  async function fetchProtectedBlob(url: string | null): Promise<Blob | null> {
+    const target = absoluteResourceUrl(url);
+    const token = getStoredToken();
+    if (!target || !token) {
+      return null;
+    }
+
+    const response = await fetch(target, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error(`No se pudo cargar el recurso (${response.status})`);
+    }
+    return response.blob();
+  }
+
+  async function handleDownloadResource(url: string | null, fileName: string) {
+    try {
+      const blob = await fetchProtectedBlob(url);
+      if (!blob) {
+        toast.error("No hay recurso disponible para descargar");
+        return;
+      }
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error("Error descargando recurso desde chat:", error);
+      toast.error(`No se pudo descargar ${fileName}`);
+    }
+  }
+
+  async function handleOpenResource(url: string | null, fileName: string) {
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      popup.document.title = `Abriendo ${fileName}...`;
+      popup.document.body.innerHTML = "<p style=\"font-family: system-ui, sans-serif; padding: 16px;\">Cargando recurso...</p>";
+    }
+
+    try {
+      const blob = await fetchProtectedBlob(url);
+      if (!blob) {
+        popup?.close();
+        toast.error("No hay recurso disponible para abrir");
+        return;
+      }
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      if (popup) {
+        popup.location.replace(objectUrl);
+      } else {
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+      }
+
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(objectUrl);
+      }, 120000);
+    } catch (error) {
+      popup?.close();
+      console.error("Error abriendo recurso desde chat:", error);
+      toast.error(`No se pudo abrir ${fileName}`);
+    }
+  }
+
+  async function loadResourceFolder(parentId: string | null) {
+    setResourceLoading(true);
+    try {
+      const explorer = await businessService.listDocumentExplorer(parentId);
+      setResourceExplorer(explorer);
+      setResourceCurrentFolderId(parentId);
+    } finally {
+      setResourceLoading(false);
+    }
+  }
+
+  async function handleSearchResources() {
+    if (!resourceSearch.trim()) {
+      setResourceSearchResults(null);
+      return;
+    }
+    setResourceSearching(true);
+    try {
+      const rows = await businessService.searchDocumentFiles(resourceSearch.trim());
+      setResourceSearchResults(rows);
+    } finally {
+      setResourceSearching(false);
+    }
+  }
+
+  async function openResourcePicker() {
+    setIsResourcePickerOpen(true);
+    setResourceSearch("");
+    setResourceSearchResults(null);
+    setResourceFolderTrail([{ id: null, name: "Raiz" }]);
+    setResourceTargetConversationId(selectedId || "");
+    await loadResourceFolder(null);
+  }
+
+  async function openResourceFolder(folder: { id: string; nombre: string }) {
+    setResourceSearch("");
+    setResourceSearchResults(null);
+    setResourceFolderTrail((prev) => [...prev, { id: folder.id, name: folder.nombre }]);
+    await loadResourceFolder(folder.id);
+  }
+
+  async function jumpResourceTrail(index: number) {
+    const node = resourceFolderTrail[index];
+    setResourceSearch("");
+    setResourceSearchResults(null);
+    setResourceFolderTrail((prev) => prev.slice(0, index + 1));
+    await loadResourceFolder(node.id);
+  }
+
+  async function handleShareExistingResourceToChat(file: BackendArchivoItem) {
+    const targetConversationId = resourceTargetConversationId.trim();
+    if (!targetConversationId) {
+      toast.error("Selecciona el chat destino");
+      return;
+    }
+    await onShareExistingResource([targetConversationId], file.id, `Recurso compartido: ${file.nombre}`);
+    toast.success("Recurso enviado al chat");
+    setIsResourcePickerOpen(false);
+  }
+
+  function resourcePreviewThumb(file: BackendArchivoItem): string | null {
+    const mime = String(file.mime_type || "").toLowerCase();
+    if (mime.startsWith("image/") && file.storage_url && resourcePreviewUrls[file.id]) {
+      return resourcePreviewUrls[file.id];
+    }
+    return null;
+  }
+
+  function previewType(attachment: BackendChatAttachmentItem): "image" | "pdf" | "video" | "other" {
+    const mime = String(attachment.mime_type || "").toLowerCase();
+    if (mime.startsWith("image/")) return "image";
+    if (mime.includes("pdf")) return "pdf";
+    if (mime.startsWith("video/")) return "video";
+    return "other";
+  }
 
   const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
+  const pickerVisibleFiles = resourceSearchResults ?? resourceExplorer.archivos;
+  const pickerVisibleFolders = resourceSearchResults ? [] : resourceExplorer.carpetas;
+
+  useEffect(() => {
+    if (!isResourcePickerOpen) {
+      return;
+    }
+
+    const fileIds = new Set(pickerVisibleFiles.map((file) => file.id));
+    Object.entries(resourcePreviewRegistryRef.current).forEach(([fileId, objectUrl]) => {
+      if (!fileIds.has(fileId)) {
+        window.URL.revokeObjectURL(objectUrl);
+        delete resourcePreviewRegistryRef.current[fileId];
+        delete resourcePreviewLoadingRef.current[fileId];
+      }
+    });
+
+    setResourcePreviewUrls((current) => {
+      const next: Record<string,string> = {};
+      pickerVisibleFiles.forEach((file) => {
+        if (current[file.id]) {
+          next[file.id] = current[file.id];
+        }
+      });
+      return next;
+    });
+
+    pickerVisibleFiles.forEach((file) => {
+      const mime = String(file.mime_type || "").toLowerCase();
+      if (!mime.startsWith("image/") || !file.storage_url) {
+        return;
+      }
+      if (resourcePreviewRegistryRef.current[file.id] || resourcePreviewLoadingRef.current[file.id]) {
+        return;
+      }
+
+      resourcePreviewLoadingRef.current[file.id] = true;
+      void fetchProtectedBlob(file.storage_url)
+        .then((blob) => {
+          if (!blob) return;
+          const objectUrl = window.URL.createObjectURL(blob);
+          resourcePreviewRegistryRef.current[file.id] = objectUrl;
+          setResourcePreviewUrls((current) => ({ ...current, [file.id]: objectUrl }));
+        })
+        .catch(() => {
+          // Si falla la miniatura, se mantiene icono fallback.
+        })
+        .finally(() => {
+          delete resourcePreviewLoadingRef.current[file.id];
+        });
+    });
+  }, [isResourcePickerOpen, pickerVisibleFiles]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(resourcePreviewRegistryRef.current).forEach((objectUrl) => {
+        window.URL.revokeObjectURL(objectUrl);
+      });
+      resourcePreviewRegistryRef.current = {};
+      resourcePreviewLoadingRef.current = {};
+    };
+  }, []);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -2193,11 +2636,68 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
               {/* Input */}
               <div className="flex-shrink-0 border-t border-border bg-white px-4 py-3">
-                <div className="flex items-end gap-2">
-                  <div className="flex gap-1 pb-1">
-                    <button className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Adjuntar archivo"><Paperclip className="w-4 h-4"/></button>
-                    <button className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Adjuntar imagen"><ImageIcon className="w-4 h-4"/></button>
-                    <button className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Emoji"><Smile className="w-4 h-4"/></button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(event)=>{void handleAttachFileChange(event,false);}}
+                />
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event)=>{void handleAttachFileChange(event,true);}}
+                />
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1 items-center">
+                    <button
+                      onClick={()=>fileInputRef.current?.click()}
+                      className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      title="Adjuntar archivo"
+                    >
+                      <Paperclip className="w-4 h-4"/>
+                    </button>
+                    <button
+                      onClick={()=>imageInputRef.current?.click()}
+                      className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      title="Adjuntar imagen"
+                    >
+                      <ImageIcon className="w-4 h-4"/>
+                    </button>
+                    <button
+                      onClick={()=>{void openResourcePicker();}}
+                      className="h-9 px-2.5 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      title="Elegir recurso desde carpetas"
+                    >
+                      <FolderOpen className="w-4 h-4"/>
+                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={()=>setShowEmojiMenu(v=>!v)}
+                        className={clsx("w-9 h-9 flex items-center justify-center rounded-lg transition-colors",showEmojiMenu?"bg-muted text-foreground":"text-muted-foreground hover:text-foreground hover:bg-muted")}
+                        title="Emoji"
+                      >
+                        <Smile className="w-4 h-4"/>
+                      </button>
+                      {showEmojiMenu&&(
+                        <div className="absolute bottom-11 left-0 z-20 w-52 rounded-xl border border-border bg-white p-2 shadow-lg">
+                          <p className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Emoji rápido</p>
+                          <div className="grid grid-cols-6 gap-1">
+                            {emojiOptions.map((emoji)=> (
+                              <button
+                                key={emoji}
+                                onClick={()=>insertEmoji(emoji)}
+                                className="rounded-md p-1 text-base hover:bg-muted"
+                                title={`Insertar ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="flex-1">
                     <textarea
@@ -2213,7 +2713,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   <button
                     onClick={()=>{void sendMsg();}}
                     disabled={!input.trim()||sending}
-                    className={clsx("w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 mb-0.5",
+                    className={clsx("w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0",
                       input.trim()?"bg-primary text-white hover:bg-blue-700 shadow-sm":"bg-muted text-muted-foreground cursor-not-allowed")}>
                     <Send className="w-4 h-4"/>
                   </button>
@@ -2242,6 +2742,48 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   </div>
                 </div>
                 <div className="border-t border-border"/>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Adjuntos</p>
+                    <span className="text-[10px] text-muted-foreground">{convAttachments.length}</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {convAttachments.slice(0, 12).map((attachment)=>(
+                      <button
+                        key={attachment.mensaje_id + attachment.archivo_id}
+                        onClick={()=>setPreviewAttachment(attachment)}
+                        className="w-full text-left block rounded-lg border border-border px-2 py-1.5 hover:bg-muted transition-colors"
+                      >
+                        <p className="text-[11px] font-medium truncate">{attachment.nombre}</p>
+                        <p className="text-[10px] text-muted-foreground">{attachment.extension.toUpperCase()} · {new Date(attachment.created_at).toLocaleDateString("es-CO")}</p>
+                      </button>
+                    ))}
+                    {convAttachments.length===0&&<p className="text-[10px] text-muted-foreground">Sin adjuntos todavía.</p>}
+                  </div>
+                </div>
+                <div className="border-t border-border"/>
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
+                  <div className="space-y-2">
+                    <Select value={transferTo} onChange={(event)=>setTransferTo(event.target.value)}>
+                      <option value="">Selecciona asesor destino</option>
+                      {advisorOptions.map((email)=><option key={email} value={email}>{email}</option>)}
+                    </Select>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      fullWidth
+                      icon={<MoveRight className="w-3.5 h-3.5"/>}
+                      onClick={()=>{void handleTransferConversation();}}
+                      loading={isTransferring}
+                      disabled={!transferTo.trim()}
+                    >
+                      Solicitar transferencia
+                    </Button>
+                    {transferMessage&&<p className="text-[10px] text-emerald-600">{transferMessage}</p>}
+                  </div>
+                </div>
+                <div className="border-t border-border"/>
                 {conv.type==="cotizacion"&&refQuote&&(<>
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cotización</p>
@@ -2253,14 +2795,40 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 </>)}
                 {conv.type==="orden"&&refOrderId&&(<>
                   <div>
+                    <input ref={orderDocumentInputRef} type="file" className="hidden" onChange={(event)=>{void handleOrderDocumentPick(event);}}/>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Orden</p>
-                    <div className="space-y-1.5">{[["Código",`ORD-${refOrderId.slice(0, 8).toUpperCase()}`],["Estado","En seguimiento"],["Canal","Chat API"]].map(([k,v])=>(
+                    <div className="space-y-1.5">{[["Código",`ORD-${refOrderId.slice(0, 8).toUpperCase()}`],["Estado",refOrder?.status || orderStatusDraft || "En seguimiento"],["Canal","Chat API"]].map(([k,v])=>(
                       <div key={k} className="flex justify-between items-start gap-1"><span className="text-[10px] text-muted-foreground">{k}</span><span className="text-[10px] font-medium text-foreground text-right">{v}</span></div>
                     ))}</div>
-                    <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-50 border border-purple-100 rounded-lg">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse flex-shrink-0"/>
-                      <span className="text-[10px] font-semibold text-purple-700">Carga en progreso</span>
+
+                    {canManageOrder && (
+                      <div className="mt-3 space-y-2">
+                        <Select value={orderStatusDraft} onChange={(event)=>setOrderStatusDraft(event.target.value)}>
+                          <option value="">Selecciona estado manual</option>
+                          {orderStatusOptions.map((row)=><option key={row.value} value={row.value}>{row.label}</option>)}
+                        </Select>
+                        <Button variant="secondary" size="sm" fullWidth loading={isUpdatingOrderStatus} disabled={!orderStatusDraft.trim()} onClick={()=>{void handleOrderStatusUpdate();}}>
+                          Actualizar estado
+                        </Button>
+                        <Button variant="secondary" size="sm" fullWidth loading={isAttachingOrderDoc} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>orderDocumentInputRef.current?.click()}>
+                          Adjuntar documento
+                        </Button>
+                      </div>
+                    )}
+
+                    {orderActionMessage&&<p className="text-[10px] text-emerald-600 mt-2">{orderActionMessage}</p>}
+
+                    <div className="mt-3 space-y-1.5">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos de la orden</p>
+                      {(refOrder?.documents || []).slice(0,6).map((doc)=>(
+                        <a key={`${doc.name}-${doc.date}-${doc.url}`} href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer" className="block rounded-lg border border-border px-2 py-1.5 hover:bg-muted transition-colors">
+                          <p className="text-[11px] font-medium truncate">{doc.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{doc.type || "documento"} · {doc.date}</p>
+                        </a>
+                      ))}
+                      {(!refOrder?.documents || refOrder.documents.length===0)&&<p className="text-[10px] text-muted-foreground">Sin documentos adicionales.</p>}
                     </div>
+
                     <Button variant="secondary" size="sm" fullWidth className="mt-2 text-xs" onClick={()=>onViewOrder(refOrderId)}>Ver orden</Button>
                   </div>
                 </>)}
@@ -2268,6 +2836,109 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
             </div>
           )}
         </div>
+
+        {previewAttachment && (
+          <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl border border-border w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{previewAttachment.nombre}</p>
+                  <p className="text-xs text-muted-foreground">{previewAttachment.extension.toUpperCase()} · {new Date(previewAttachment.created_at).toLocaleString("es-CO")}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {previewAttachment.storage_url && <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadResource(previewAttachment.storage_url, previewAttachment.nombre);}}>Descargar</Button>}
+                  {previewAttachment.storage_url && <Button variant="secondary" size="sm" onClick={()=>{void handleOpenResource(previewAttachment.storage_url, previewAttachment.nombre);}}>Abrir</Button>}
+                  <button onClick={()=>setPreviewAttachment(null)} className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"><X className="w-4 h-4"/></button>
+                </div>
+              </div>
+              <div className="p-4 overflow-auto bg-slate-50/60 flex-1">
+                {previewAttachment.storage_url && previewType(previewAttachment)==="image" && (
+                  <img src={previewAttachment.storage_url} alt={previewAttachment.nombre} className="max-h-[70vh] w-auto mx-auto rounded-lg border border-border"/>
+                )}
+                {previewAttachment.storage_url && previewType(previewAttachment)==="pdf" && (
+                  <iframe src={previewAttachment.storage_url} title={previewAttachment.nombre} className="w-full h-[70vh] rounded-lg border border-border bg-white"/>
+                )}
+                {previewAttachment.storage_url && previewType(previewAttachment)==="video" && (
+                  <video src={previewAttachment.storage_url} controls className="w-full max-h-[70vh] rounded-lg border border-border bg-black"/>
+                )}
+                {(!previewAttachment.storage_url || previewType(previewAttachment)==="other") && (
+                  <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
+                    <Video className="w-8 h-8 text-muted-foreground/40"/>
+                    <p className="text-sm text-muted-foreground">Vista previa no disponible para este tipo de archivo.</p>
+                    {previewAttachment.storage_url && <Button variant="secondary" size="sm" onClick={()=>{void handleOpenResource(previewAttachment.storage_url, previewAttachment.nombre);}}>Abrir en nueva pestaña</Button>}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Modal
+          open={isResourcePickerOpen}
+          onClose={()=>setIsResourcePickerOpen(false)}
+          title="Compartir recurso desde carpetas"
+          width="max-w-5xl"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2 flex gap-2">
+                <Input value={resourceSearch} onChange={(event)=>setResourceSearch(event.target.value)} placeholder="Buscar recurso por nombre" prefix={<Search className="w-3.5 h-3.5"/>}/>
+                <Button size="sm" onClick={()=>{void handleSearchResources();}} loading={resourceSearching}>Buscar</Button>
+                {resourceSearchResults&&<Button size="sm" variant="ghost" onClick={()=>{setResourceSearch("");setResourceSearchResults(null);}}>Limpiar</Button>}
+              </div>
+              <Select value={resourceTargetConversationId} onChange={(event)=>setResourceTargetConversationId(event.target.value)}>
+                <option value="">Selecciona chat destino</option>
+                {conversations.map((conversation)=>{
+                  const importer = importers.find((row)=>row.id===conversation.importerId);
+                  return <option key={conversation.id} value={conversation.id}>{conversation.refCode} · {importer?.name || "Chat"}</option>;
+                })}
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {resourceFolderTrail.map((node,index)=>(
+                <button
+                  key={`${node.id || "root"}-${index}`}
+                  onClick={()=>{void jumpResourceTrail(index);}}
+                  className={clsx("text-xs px-2 py-1 rounded-md border",index===resourceFolderTrail.length-1?"bg-primary/10 text-primary border-primary/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
+                >
+                  {node.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[58vh] overflow-y-auto pr-1">
+              {resourceLoading&&<p className="text-sm text-muted-foreground">Cargando recursos...</p>}
+
+              {!resourceLoading&&pickerVisibleFolders.map((folder)=>(
+                <button key={folder.id} onClick={()=>{void openResourceFolder(folder);}} className="rounded-xl border border-border bg-sky-50/40 p-4 text-left hover:bg-sky-50 transition-colors">
+                  <FolderTree className="w-8 h-8 text-sky-600 mb-2"/>
+                  <p className="text-sm font-semibold truncate">{folder.nombre}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Carpeta</p>
+                </button>
+              ))}
+
+              {!resourceLoading&&pickerVisibleFiles.map((file)=>(
+                <div key={file.id} className="rounded-xl border border-border p-3 bg-white">
+                  <div className="h-24 w-full rounded-lg border border-border bg-slate-50 mb-2 overflow-hidden flex items-center justify-center">
+                    {resourcePreviewThumb(file)
+                      ? <img src={resourcePreviewThumb(file) || ""} alt={file.nombre} className="w-full h-full object-cover"/>
+                      : <FileIcon className="w-10 h-10 text-muted-foreground/40"/>}
+                  </div>
+                  <p className="text-sm font-semibold truncate">{file.nombre}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {new Date(file.created_at).toLocaleDateString("es-CO")}</p>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <Button size="sm" variant="secondary" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadResource(file.storage_url, file.nombre);}}>Descargar</Button>
+                    <Button size="sm" variant="secondary" onClick={()=>{void handleOpenResource(file.storage_url, file.nombre);}}>Abrir</Button>
+                    <Button size="sm" onClick={()=>{void handleShareExistingResourceToChat(file);}}>Compartir</Button>
+                  </div>
+                </div>
+              ))}
+
+              {!resourceLoading&&pickerVisibleFolders.length===0&&pickerVisibleFiles.length===0&&<p className="text-sm text-muted-foreground">No se encontraron recursos.</p>}
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );
@@ -2276,14 +2947,575 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTOS + PAGOS placeholders
 // ─────────────────────────────────────────────────────────────────────────────
-function DocumentosScreen({sb}:{sb:SidebarCtrl}) {
+function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,onCreateFolder,onRegisterFile,onSearch,onMoveFile,onMoveFolder,onRenameFile,onRenameFolder,onDeleteFile,onDeleteFolder}:{sb:SidebarCtrl;explorer:BackendExplorerResponse;isLoading:boolean;currentFolderId:string|null;onLoadFolder:(parentId:string|null)=>Promise<void>;onCreateFolder:(name:string,parentId:string|null)=>Promise<void>;onRegisterFile:(file:File,parentId:string|null)=>Promise<void>;onSearch:(query:string)=>Promise<BackendArchivoItem[]>;onMoveFile:(fileId:string,targetFolderId:string|null)=>Promise<void>;onMoveFolder:(folderId:string,targetParentId:string|null)=>Promise<void>;onRenameFile:(fileId:string,newName:string)=>Promise<void>;onRenameFolder:(folderId:string,newName:string)=>Promise<void>;onDeleteFile:(fileId:string)=>Promise<void>;onDeleteFolder:(folderId:string)=>Promise<void>;}) {
+  const [folderName,setFolderName]=useState("");
+  const [search,setSearch]=useState("");
+  const [searching,setSearching]=useState(false);
+  const [isSubmitting,setIsSubmitting]=useState(false);
+  const [isDragOverUpload,setIsDragOverUpload]=useState(false);
+  const [dragFileId,setDragFileId]=useState<string|null>(null);
+  const [dragFolderId,setDragFolderId]=useState<string|null>(null);
+  const [searchResults,setSearchResults]=useState<BackendArchivoItem[]|null>(null);
+  const [folderTrail,setFolderTrail]=useState<Array<{id:string|null;name:string}>>([{ id: null, name: "Raíz" }]);
+  const [viewMode,setViewMode]=useState<"list"|"grid">("list");
+  const [gridPreviewUrls,setGridPreviewUrls]=useState<Record<string,string>>({});
+  const [menuState,setMenuState]=useState<{
+    kind:"file"|"folder";
+    id:string;
+    x:number;
+    y:number;
+    file?:BackendArchivoItem;
+    folder?:BackendExplorerResponse["carpetas"][number];
+  }|null>(null);
+  const fileInputRef=useRef<HTMLInputElement>(null);
+  const gridPreviewLoadingRef=useRef<Record<string,boolean>>({});
+  const gridPreviewRegistryRef=useRef<Record<string,string>>({});
+
+  const visibleFiles = searchResults ?? explorer.archivos;
+  const visibleFolders = searchResults ? [] : explorer.carpetas;
+
+  useEffect(() => {
+    if (currentFolderId === null) {
+      setFolderTrail([{ id: null, name: "Raíz" }]);
+    }
+  }, [currentFolderId]);
+
+  useEffect(() => {
+    if (!menuState) return;
+    const onWindowEvent = () => setMenuState(null);
+    window.addEventListener("scroll", onWindowEvent, true);
+    window.addEventListener("resize", onWindowEvent);
+    return () => {
+      window.removeEventListener("scroll", onWindowEvent, true);
+      window.removeEventListener("resize", onWindowEvent);
+    };
+  }, [menuState]);
+
+  async function handleCreateFolder(){
+    if(!folderName.trim())return;
+    setIsSubmitting(true);
+    try{
+      await onCreateFolder(folderName.trim(), currentFolderId);
+      setFolderName("");
+    }finally{
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleFilePick(event:React.ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0];
+    if(!file)return;
+    setIsSubmitting(true);
+    try{
+      await onRegisterFile(file, currentFolderId);
+    }finally{
+      setIsSubmitting(false);
+      event.target.value="";
+    }
+  }
+
+  async function handleDropUpload(event:React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragOverUpload(false);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    setIsSubmitting(true);
+    try {
+      await onRegisterFile(file, currentFolderId);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleSearch(){
+    if(!search.trim()){
+      setSearchResults(null);
+      return;
+    }
+    setSearching(true);
+    try{
+      const rows=await onSearch(search.trim());
+      setSearchResults(rows);
+    }finally{
+      setSearching(false);
+    }
+  }
+
+  async function openFolder(folder: { id: string; nombre: string }) {
+    setSearchResults(null);
+    setSearch("");
+    setFolderTrail((prev) => [...prev, { id: folder.id, name: folder.nombre }]);
+    await onLoadFolder(folder.id);
+  }
+
+  async function jumpToTrail(index: number) {
+    const node = folderTrail[index];
+    setSearchResults(null);
+    setSearch("");
+    setFolderTrail((prev) => prev.slice(0, index + 1));
+    await onLoadFolder(node.id);
+  }
+
+  async function moveFileTo(fileId: string, targetFolderId: string | null) {
+    setMenuState(null);
+    await onMoveFile(fileId, targetFolderId);
+    if (targetFolderId === null) {
+      setFolderTrail([{ id: null, name: "Raíz" }]);
+      setSearch("");
+      setSearchResults(null);
+      await onLoadFolder(null);
+    }
+  }
+
+  async function moveFolderTo(folderId: string, targetFolderId: string | null) {
+    setMenuState(null);
+    await onMoveFolder(folderId, targetFolderId);
+    if (targetFolderId === null) {
+      setFolderTrail([{ id: null, name: "Raíz" }]);
+      setSearch("");
+      setSearchResults(null);
+      await onLoadFolder(null);
+    }
+  }
+
+  async function handleDeleteFile(fileId: string) {
+    setMenuState(null);
+    await onDeleteFile(fileId);
+  }
+
+  async function handleDeleteFolder(folderId: string) {
+    setMenuState(null);
+    await onDeleteFolder(folderId);
+  }
+
+  async function handleRenameFile(file: BackendArchivoItem) {
+    const splitName = (name: string) => {
+      const trimmed = name.trim();
+      const lastDot = trimmed.lastIndexOf(".");
+      if (lastDot <= 0 || lastDot === trimmed.length - 1) {
+        return { base: trimmed, ext: "" };
+      }
+      return {
+        base: trimmed.slice(0, lastDot),
+        ext: trimmed.slice(lastDot + 1),
+      };
+    };
+
+    const { base, ext } = splitName(file.nombre);
+    const nextBase = window.prompt(
+      ext ? `Nuevo nombre del archivo (sin .${ext})` : "Nuevo nombre del archivo",
+      base,
+    ) ?? "";
+    const normalizedBase = nextBase.trim();
+
+    if (!normalizedBase) {
+      setMenuState(null);
+      return;
+    }
+
+    const nextFullName = ext ? `${normalizedBase}.${ext}` : normalizedBase;
+    if (nextFullName === file.nombre) {
+      setMenuState(null);
+      return;
+    }
+
+    await onRenameFile(file.id, nextFullName);
+    setMenuState(null);
+  }
+
+  async function handleRenameFolder(folder: BackendExplorerResponse["carpetas"][number]) {
+    const nextName = window.prompt("Nuevo nombre para la carpeta", folder.nombre) ?? "";
+    const normalized = nextName.trim();
+    if (!normalized || normalized === folder.nombre) {
+      setMenuState(null);
+      return;
+    }
+    await onRenameFolder(folder.id, normalized);
+    setMenuState(null);
+  }
+
+  function fmtBytes(bytes:number|null):string{
+    if(!bytes||bytes<=0)return "0 B";
+    if(bytes<1024)return `${bytes} B`;
+    const kb=bytes/1024;
+    if(kb<1024)return `${kb.toFixed(1)} KB`;
+    return `${(kb/1024).toFixed(1)} MB`;
+  }
+
+  function absoluteResourceUrl(url: string | null): string {
+    return resolveApiUrl(url);
+  }
+
+  async function fetchProtectedBlob(url: string | null): Promise<Blob | null> {
+    const target = absoluteResourceUrl(url);
+    const token = getStoredToken();
+    if (!target || !token) {
+      return null;
+    }
+
+    const response = await fetch(target, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error(`No se pudo cargar el recurso (${response.status})`);
+    }
+    return response.blob();
+  }
+
+  async function handleCopyLink(url: string | null) {
+    const shareable = absoluteResourceUrl(url);
+    if (!shareable) {
+      toast.error("No hay enlace disponible para copiar");
+      setMenuState(null);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareable);
+      toast.success("Enlace copiado al portapapeles");
+    } catch (error) {
+      console.error("No se pudo copiar el enlace:", error);
+      toast.error("No se pudo copiar el enlace");
+    } finally {
+      setMenuState(null);
+    }
+  }
+
+  async function handleDownload(url: string | null, fileName: string) {
+    try {
+      const blob = await fetchProtectedBlob(url);
+      if (!blob) return;
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error("Error descargando archivo:", error);
+      const message = error instanceof Error ? error.message : "Error desconocido";
+      if (message.includes("(404)")) {
+        toast.error(`No se encontró el archivo en el servidor: ${fileName}`);
+      } else {
+        toast.error(`No se pudo descargar ${fileName}`);
+      }
+    } finally {
+      setMenuState(null);
+    }
+  }
+
+  async function handleOpenResource(url: string | null, fileName: string) {
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      popup.document.title = `Abriendo ${fileName}...`;
+      popup.document.body.innerHTML = "<p style=\"font-family: system-ui, sans-serif; padding: 16px;\">Cargando recurso...</p>";
+    }
+    try {
+      const blob = await fetchProtectedBlob(url);
+      if (!blob) {
+        popup?.close();
+        return;
+      }
+      const objectUrl = window.URL.createObjectURL(blob);
+      if (popup) {
+        popup.location.replace(objectUrl);
+      } else {
+        const fallback = document.createElement("a");
+        fallback.href = objectUrl;
+        fallback.target = "_blank";
+        fallback.rel = "noopener noreferrer";
+        document.body.appendChild(fallback);
+        fallback.click();
+        fallback.remove();
+      }
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(objectUrl);
+      }, 120000);
+    } catch (error) {
+      popup?.close();
+      console.error(`Error abriendo archivo ${fileName}:`, error);
+      const message = error instanceof Error ? error.message : "Error desconocido";
+      if (message.includes("(404)")) {
+        toast.error(`No se encontró el archivo en el servidor: ${fileName}`);
+      } else {
+        toast.error(`No se pudo abrir ${fileName}`);
+      }
+    } finally {
+      setMenuState(null);
+    }
+  }
+
+  function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>, payload: { kind: "file"|"folder"; id: string; file?: BackendArchivoItem; folder?: BackendExplorerResponse["carpetas"][number]; }) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 176;
+    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+    setMenuState({
+      ...payload,
+      x: left,
+      y: rect.bottom + 6,
+    });
+  }
+
+  function previewThumb(file: BackendArchivoItem): string | null {
+    const mime = String(file.mime_type || "").toLowerCase();
+    if (mime.startsWith("image/") && file.storage_url && gridPreviewUrls[file.id]) {
+      return gridPreviewUrls[file.id];
+    }
+    return null;
+  }
+
+  useEffect(() => {
+    const fileIds = new Set(visibleFiles.map((file) => file.id));
+    Object.entries(gridPreviewRegistryRef.current).forEach(([fileId, objectUrl]) => {
+      if (!fileIds.has(fileId)) {
+        window.URL.revokeObjectURL(objectUrl);
+        delete gridPreviewRegistryRef.current[fileId];
+        delete gridPreviewLoadingRef.current[fileId];
+      }
+    });
+
+    setGridPreviewUrls((current) => {
+      const next: Record<string,string> = {};
+      visibleFiles.forEach((file) => {
+        if (current[file.id]) {
+          next[file.id] = current[file.id];
+        }
+      });
+      return next;
+    });
+
+    if (viewMode !== "grid") {
+      return;
+    }
+
+    visibleFiles.forEach((file) => {
+      const mime = String(file.mime_type || "").toLowerCase();
+      if (!mime.startsWith("image/") || !file.storage_url) {
+        return;
+      }
+      if (gridPreviewRegistryRef.current[file.id] || gridPreviewLoadingRef.current[file.id]) {
+        return;
+      }
+
+      gridPreviewLoadingRef.current[file.id] = true;
+      void fetchProtectedBlob(file.storage_url)
+        .then((blob) => {
+          if (!blob) return;
+          const objectUrl = window.URL.createObjectURL(blob);
+          gridPreviewRegistryRef.current[file.id] = objectUrl;
+          setGridPreviewUrls((current) => ({ ...current, [file.id]: objectUrl }));
+        })
+        .catch(() => {
+          // Si falla la miniatura, se mantiene fallback de icono.
+        })
+        .finally(() => {
+          delete gridPreviewLoadingRef.current[file.id];
+        });
+    });
+  }, [viewMode, visibleFiles]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(gridPreviewRegistryRef.current).forEach((objectUrl) => {
+        window.URL.revokeObjectURL(objectUrl);
+      });
+      gridPreviewRegistryRef.current = {};
+      gridPreviewLoadingRef.current = {};
+    };
+  }, []);
+
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="documentos"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6"><Breadcrumb items={[{label:"Inicio"},{label:"Documentos"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3 mb-6">Documentos</h1>
-          <Card padding="lg" className="border-dashed max-w-lg"><div className="flex flex-col items-center text-center py-8 gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><FolderOpen className="w-6 h-6 text-muted-foreground/50"/></div><div><p className="font-semibold">Módulo en construcción</p><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Facturas, certificados y documentos aduaneros próximamente.</p></div><span className="px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">Próximamente</span></div></Card>
+        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5" onClick={()=>setMenuState(null)}>
+          <div>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Documentos"}]}/>
+            <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+              <h1 className="text-xl font-semibold tracking-tight">Gestión Documental</h1>
+              <div className="flex items-center gap-2">
+                <Button variant={viewMode==="list"?"secondary":"ghost"} size="sm" onClick={()=>setViewMode("list")}>Lista</Button>
+                <Button variant={viewMode==="grid"?"secondary":"ghost"} size="sm" icon={<LayoutGrid className="w-3.5 h-3.5"/>} onClick={()=>setViewMode("grid")}>Cuadrícula</Button>
+                <Button variant="secondary" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{void onLoadFolder(currentFolderId);}}>Actualizar</Button>
+                <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>fileInputRef.current?.click()} disabled={isSubmitting}>Registrar archivo</Button>
+              </div>
+            </div>
+          </div>
+
+          <input ref={fileInputRef} type="file" className="hidden" onChange={(event)=>{void handleFilePick(event);}}/>
+
+          <Card padding="md" className="border-dashed">
+            <div
+              onDragOver={(event)=>{event.preventDefault();setIsDragOverUpload(true);}}
+              onDragLeave={()=>setIsDragOverUpload(false)}
+              onDrop={(event)=>{void handleDropUpload(event);}}
+              className={clsx("rounded-xl border-2 border-dashed px-5 py-6 transition-colors",isDragOverUpload?"border-primary bg-primary/5":"border-border")}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><Upload className="w-5 h-5"/></div>
+                <div>
+                  <p className="text-sm font-semibold">Arrastra y suelta archivos aquí</p>
+                  <p className="text-xs text-muted-foreground">Soporta documentos, imágenes y video MP4. También puedes usar "Registrar archivo".</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <Card padding="md" className="xl:col-span-2 overflow-visible">
+              <div className="flex items-center gap-2 mb-3">
+                <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar por nombre de archivo" prefix={<Search className="w-3.5 h-3.5"/>}/>
+                <Button size="sm" onClick={()=>{void handleSearch();}} loading={searching}>Buscar</Button>
+                {searchResults&&<Button size="sm" variant="ghost" onClick={()=>{setSearch("");setSearchResults(null);}}>Limpiar</Button>}
+              </div>
+
+              <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                {folderTrail.map((node,index)=>(
+                  <button
+                    key={`${node.id || "root"}-${index}`}
+                    onClick={()=>{void jumpToTrail(index);}}
+                    onDragOver={(event)=>event.preventDefault()}
+                    onDrop={(event)=>{
+                      event.preventDefault();
+                      if (dragFileId) {
+                        void moveFileTo(dragFileId, node.id);
+                      }
+                      if (dragFolderId) {
+                        void moveFolderTo(dragFolderId, node.id);
+                      }
+                      setDragFileId(null);
+                      setDragFolderId(null);
+                    }}
+                    className={clsx("text-xs px-2 py-1 rounded-md border",index===folderTrail.length-1?"bg-primary/10 text-primary border-primary/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
+                  >
+                    {node.name}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className={clsx("max-h-[60vh] overflow-y-auto overflow-x-visible pr-1", viewMode==="grid"?"grid grid-cols-2 lg:grid-cols-3 gap-3":"space-y-2")}
+                onDragOver={(event)=>event.preventDefault()}
+                onDrop={(event)=>{
+                  event.preventDefault();
+                  if (dragFileId) {
+                    void moveFileTo(dragFileId, null);
+                  }
+                  if (dragFolderId) {
+                    void moveFolderTo(dragFolderId, null);
+                  }
+                  setDragFileId(null);
+                  setDragFolderId(null);
+                }}
+              >
+                {isLoading&&<p className="text-sm text-muted-foreground">Cargando documentos...</p>}
+
+                {!isLoading&&visibleFolders.map((folder)=>(
+                  <div
+                    key={folder.id}
+                    draggable
+                    onDragStart={()=>setDragFolderId(folder.id)}
+                    onDragEnd={()=>setDragFolderId(null)}
+                    onDragOver={(event)=>event.preventDefault()}
+                    onDrop={(event)=>{
+                      event.preventDefault();
+                      if (dragFileId) {
+                        void moveFileTo(dragFileId, folder.id);
+                      }
+                      if (dragFolderId && dragFolderId !== folder.id) {
+                        void moveFolderTo(dragFolderId, folder.id);
+                      }
+                      setDragFileId(null);
+                      setDragFolderId(null);
+                    }}
+                    className={clsx(
+                      "rounded-xl border border-border bg-sky-50/40",
+                      viewMode==="grid"
+                        ? "relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
+                        : "px-3 py-2.5 flex items-center justify-between gap-3",
+                    )}
+                  >
+                    <button className={clsx("min-w-0",viewMode==="grid"?"w-full h-full flex flex-col items-center justify-center text-center":"text-left w-full")} onClick={()=>{void openFolder(folder);}}>
+                      <FolderTree className={clsx("text-sky-600",viewMode==="grid"?"w-12 h-12 mb-3":"w-4 h-4")}/>
+                      <p className={clsx("text-sm font-semibold truncate",viewMode==="grid"?"max-w-full":"flex items-center gap-1.5")}>{folder.nombre}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Carpeta · {new Date(folder.created_at).toLocaleDateString("es-CO")}</p>
+                    </button>
+                    <div className={clsx("flex justify-end",viewMode==="grid"?"absolute top-2 right-2":"") }>
+                      <button onClick={(event)=>{event.stopPropagation();handleOpenMenu(event,{kind:"folder",id:folder.id,folder});}} className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"><MoreHorizontal className="w-4 h-4"/></button>
+                    </div>
+                  </div>
+                ))}
+
+                {!isLoading&&visibleFiles.map((file)=>(
+                  <div key={file.id} draggable onDragStart={()=>setDragFileId(file.id)} onDragEnd={()=>setDragFileId(null)} className={clsx("rounded-xl border border-border",viewMode==="grid"?"relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center":"px-3 py-2.5 flex items-start justify-between gap-3")}>
+                    {viewMode==="grid" && (
+                      <div className="h-24 w-full rounded-lg border border-border bg-slate-50 mb-3 overflow-hidden flex items-center justify-center">
+                        {previewThumb(file)
+                          ? <img src={previewThumb(file) || ""} alt={file.nombre} className="w-full h-full object-cover"/>
+                          : <FileIcon className="w-12 h-12 text-muted-foreground/40"/>}
+                      </div>
+                    )}
+                    <div className={clsx("min-w-0",viewMode==="grid"?"w-full text-center":"flex-1")}>
+                      <p className="text-sm font-semibold truncate">{file.nombre}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {fmtBytes(file.size_bytes)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{new Date(file.created_at).toLocaleDateString("es-CO")}</p>
+                    </div>
+                    <div className={clsx("flex items-center gap-1",viewMode==="grid"?"absolute top-2 right-2":"")}>
+                      {viewMode!=="grid"&&file.storage_url&&<button onClick={()=>{void handleOpenResource(file.storage_url,file.nombre);}} className="text-xs text-primary hover:underline whitespace-nowrap">Abrir</button>}
+                      <button onClick={(event)=>{event.stopPropagation();handleOpenMenu(event,{kind:"file",id:file.id,file});}} className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"><MoreHorizontal className="w-4 h-4"/></button>
+                    </div>
+                  </div>
+                ))}
+
+                {!isLoading&&visibleFolders.length===0&&visibleFiles.length===0&&<p className="text-sm text-muted-foreground">No hay elementos en esta carpeta.</p>}
+              </div>
+            </Card>
+
+            <Card padding="md">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Crear carpeta</p>
+              <div className="flex gap-2">
+                <Input value={folderName} onChange={(e)=>setFolderName(e.target.value)} placeholder="Nombre de carpeta"/>
+                <Button size="sm" onClick={()=>{void handleCreateFolder();}} loading={isSubmitting}>Crear</Button>
+              </div>
+              <div className="mt-4 border-t border-border pt-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ayuda rápida</p>
+                <ul className="text-xs text-muted-foreground space-y-2">
+                  <li>Arrastra un archivo sobre una carpeta para moverlo.</li>
+                  <li>Arrastra una carpeta sobre otra para anidarla.</li>
+                  <li>Arrastra recursos a la miga de pan para moverlos entre niveles.</li>
+                  <li>Usa el menú de 3 puntos para descargar/copiar/mover/eliminar.</li>
+                </ul>
+              </div>
+            </Card>
+          </div>
+
+          {menuState&&(
+            <div className="fixed inset-0 z-[70]" onClick={()=>setMenuState(null)}>
+              <div className="absolute w-44 rounded-lg border border-border bg-white shadow-lg p-1" style={{left:menuState.x,top:menuState.y}} onClick={(event)=>event.stopPropagation()}>
+                {menuState.kind==="folder"&&menuState.folder&&(
+                  <>
+                    <button onClick={()=>{void openFolder(menuState.folder!);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Abrir</button>
+                    <button onClick={()=>{void handleRenameFolder(menuState.folder!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>
+                    <button onClick={()=>{void moveFolderTo(menuState.folder!.id,null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Mover a raíz</button>
+                    <button onClick={()=>{void handleDeleteFolder(menuState.folder!.id);}} className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded">Eliminar</button>
+                  </>
+                )}
+                {menuState.kind==="file"&&menuState.file&&(
+                  <>
+                    {menuState.file.storage_url&&<button onClick={()=>{void handleOpenResource(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Abrir</button>}
+                    {menuState.file.storage_url&&<button onClick={()=>{void handleDownload(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Descargar</button>}
+                    <button onClick={()=>handleCopyLink(menuState.file!.storage_url)} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Copiar enlace</button>
+                    <button onClick={()=>{void handleRenameFile(menuState.file!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>
+                    <button onClick={()=>{void moveFileTo(menuState.file!.id,null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Mover a raíz</button>
+                    <button onClick={()=>{void handleDeleteFile(menuState.file!.id);}} className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded">Eliminar</button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
@@ -2297,7 +3529,7 @@ function PagosScreen({sb}:{sb:SidebarCtrl}) {
         <Sidebar {...sb} active="pagos"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Breadcrumb items={[{label:"Inicio"},{label:"Pagos"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3 mb-6">Pagos</h1>
+          <main className="flex-1 overflow-y-auto px-6 py-6"><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3 mb-6">Pagos</h1>
             <Card padding="lg" className="border-dashed max-w-lg"><div className="flex flex-col items-center text-center py-8 gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><CreditCard className="w-6 h-6 text-muted-foreground/50"/></div><div><p className="font-semibold">Módulo en construcción</p><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Próximamente habilitaremos pagos y conciliaciones para órdenes.</p></div><span className="px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">Próximamente</span></div></Card>
           </main>
         </div>
@@ -2313,7 +3545,7 @@ function PagosScreen({sb}:{sb:SidebarCtrl}) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio"},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración Wompi pendiente</span></div></div>
+          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración Wompi pendiente</span></div></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{[["Total pagado","$16,700 USD","text-emerald-600"],["Pendiente","$3,200 USD","text-orange-600"],["En liberación parcial","$8,900 USD","text-blue-600"]].map(([l,v,c])=><Card key={l as string} padding="md"><p className="text-xs text-muted-foreground">{l as string}</p><p className={clsx("text-2xl font-semibold mt-1",c as string)}>{v as string}</p></Card>)}</div>
           <Card padding="none"><div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><p className="text-sm font-semibold">Historial de pagos</p><span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">Visual mockup</span></div>
             <table className="w-full text-sm"><thead><tr className="border-b border-border">{["ID","Concepto","Fecha","Estado","Monto"].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>)}</tr></thead>
@@ -2526,7 +3758,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
         <AppHeader user={USER} sb={sb}/>
         {submitted?(<div className="flex-1 flex items-center justify-center p-6"><div className="flex flex-col items-center text-center gap-4 max-w-sm"><div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500"/></div><div><h2 className="text-lg font-semibold">Solicitud enviada</h2><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Tu cotización ha sido registrada exitosamente.</p></div><Button variant="primary" onClick={onBack}>Ver mis cotizaciones</Button></div></div>):(
           <main className="flex-1 overflow-y-auto px-6 py-6">
-            <Breadcrumb items={[{label:"Inicio"},{label:"Cotizaciones",onClick:onBack},{label:"Nueva cotización"}]}/>
+            <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Cotizaciones",onClick:onBack},{label:"Nueva cotización"}]}/>
             <h1 className="text-xl font-semibold mt-3">Nueva cotización</h1><p className="text-sm text-muted-foreground mt-1 mb-7">Solicita una nueva cotización para importar productos desde proveedores internacionales.</p>
             <div className="mb-8"><Stepper current={step}/></div>
             <div className="flex gap-6 items-start">
@@ -2622,18 +3854,24 @@ function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:App
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[]}) {
+function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,averageResponseHours}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];orders:Order[];chats:ChatConv[];companyName:string;averageResponseHours:number}) {
   const activeQuotesCount = quotes.filter(q=>q.status!=="active-order").length;
   const assignedQuotesCount = quotes.filter(q=>q.mode==="Dirigida").length;
+  const sentResponsesCount = quotes.filter(q=>q.status==="accepted"||q.status==="active-order").length;
+  const activeOrdersCount = orders.filter((order)=>{
+    const normalizedStatus = String(order.status ?? "").trim().toLowerCase();
+    return !["entregada","completada","cancelada","cerrada","finalizada"].includes(normalizedStatus);
+  }).length;
+  const activeChatsCount = chats.filter(c=>c.status==="activa").length;
   const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
   const metrics=[
-    {label:"Cotizaciones pendientes",value:String(activeQuotesCount),delta:"Dato API",icon:<FileText className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Cotizaciones asignadas",value:String(assignedQuotesCount),delta:"Dato API",icon:<Users className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Respuestas enviadas",value:"N/D",delta:"Sin endpoint",icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Órdenes activas",value:"N/D",delta:"Sin endpoint",icon:<ShoppingCart className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
-    {label:"Chats activos",value:"N/D",delta:"Sin endpoint",icon:<MessageSquare className="w-5 h-5"/>,color:"text-rose-600",bg:"bg-rose-50"},
-    {label:"Tiempo prom. respuesta",value:"N/D",delta:"Sin endpoint",icon:<Clock className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
-    {label:"Asesores conectados",value:`${activeAdvisors}/${advisors.length}`,delta:"Dato API",icon:<Zap className="w-5 h-5"/>,color:"text-lime-600",bg:"bg-lime-50"},
+    {label:"Cotizaciones pendientes",value:String(activeQuotesCount),icon:<FileText className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
+    {label:"Cotizaciones asignadas",value:String(assignedQuotesCount),icon:<Users className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
+    {label:"Respuestas enviadas",value:String(sentResponsesCount),icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
+    {label:"Órdenes activas",value:String(activeOrdersCount),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
+    {label:"Chats activos",value:String(activeChatsCount),icon:<MessageSquare className="w-5 h-5"/>,color:"text-rose-600",bg:"bg-rose-50"},
+    {label:"Tiempo prom. respuesta (h)",value:String(averageResponseHours),icon:<Clock className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
+    {label:"Asesores conectados",value:String(activeAdvisors),icon:<Zap className="w-5 h-5"/>,color:"text-lime-600",bg:"bg-lime-50"},
   ];
   const recentActivity: {text:string;time:string;icon:React.ReactNode}[] = [];
   return (
@@ -2643,9 +3881,9 @@ function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quo
         <AppHeader user={USER_IMPORTADORA} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio"},{label:"Dashboard"}]}/>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Dashboard"}]}/>
             <h1 className="text-xl font-semibold mt-3">Panel de la empresa</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Grupo Nexus S.A. — Resumen de actividad</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{companyName ? `${companyName} - Resumen de actividad` : "Resumen de actividad"}</p>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map((m,i)=>(
@@ -2654,7 +3892,6 @@ function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quo
                 <div className="min-w-0">
                   <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
-                  <p className={clsx("text-xs mt-1 font-medium",m.color)}>{m.delta}</p>
                 </div>
               </Card>
             ))}
@@ -2693,7 +3930,7 @@ function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quo
                       </div>
                     </div>
                   ))}
-                  {recentActivity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente disponible en API.</p>}
+                  {recentActivity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente.</p>}
                 </div>
               </Card>
               <Card padding="md">
@@ -2715,7 +3952,7 @@ function ImporterDashboardScreen({sb,quotes,advisors}:{sb:SidebarCtrl;quotes:Quo
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — COMPANY PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;solo_cotizaciones_directas?:boolean;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;})=>Promise<void>}) {
   const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({
@@ -2729,16 +3966,37 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
 
   useEffect(()=>{
     if(!company)return;
+    const perfilPublico = company.perfil_publico && typeof company.perfil_publico === "object" ? company.perfil_publico : {};
+    const getString = (key: string, fallback = "") => {
+      const value = perfilPublico[key];
+      return typeof value === "string" ? value : fallback;
+    };
+    const getStringArray = (key: string, fallback: string[]) => {
+      const value = perfilPublico[key];
+      if (!Array.isArray(value)) {
+        return fallback;
+      }
+      return value.filter((entry): entry is string => typeof entry === "string");
+    };
+
     setForm((prev)=>(
       {
         ...prev,
         razonSocial:company.nombre_empresa,
         logoUrl:company.logo_url || "",
-        description:prev.description||"",
+        description:getString("description", ""),
+        year:getString("year", ""),
+        website:getString("website", ""),
+        email:getString("email", ""),
+        phone:getString("phone", prev.phone),
+        address:getString("address", prev.address),
         categories:company.especialidad_producto ?? [],
         countries:company.paises_origen ?? [],
+        industries:getStringArray("industries", prev.industries),
         avgResponse:company.tiempo_respuesta_promedio || "~24h",
         capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
+        certs:getStringArray("certs", prev.certs),
+        banner:getString("banner", ""),
         soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
       }
     ));
@@ -2756,6 +4014,17 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         paises_origen:form.countries,
         tiempo_respuesta_promedio:form.avgResponse,
         capacidad_volumen:form.capacityVolume.trim() ? Number.parseInt(form.capacityVolume, 10) : undefined,
+        perfil_publico: {
+          description: form.description.trim(),
+          year: form.year.trim(),
+          website: form.website.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          address: form.address.trim(),
+          industries: form.industries,
+          certs: form.certs,
+          banner: form.banner.trim(),
+        },
         solo_cotizaciones_directas:form.soloCotizacionesDirectas,
       });
       setSaved(true);
@@ -3184,15 +4453,15 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string}}) {
+function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSentCount,activeChatsCount}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string};responsesSentCount:number;activeChatsCount:number}) {
   const myQuotesCount = quotes.length;
   const activeOrdersCount = quotes.filter(q=>q.status==="active-order").length;
   const recentQuotes = quotes.slice(0,3);
   const metrics=[
     {label:"Cotizaciones disponibles",value:availableCount.toString(),icon:<Zap className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
     {label:"Mis cotizaciones",value:myQuotesCount.toString(),icon:<ClipboardList className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Respuestas enviadas",value:"N/D",icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Chats activos",value:"N/D",icon:<MessageSquare className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
+    {label:"Respuestas enviadas",value:responsesSentCount.toString(),icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
+    {label:"Chats activos",value:activeChatsCount.toString(),icon:<MessageSquare className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
     {label:"Órdenes en seguimiento",value:activeOrdersCount.toString(),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
   ];
   const activity:{text:string;time:string}[]=[];
@@ -3203,7 +4472,7 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser}:{sb:Sideba
         <AppHeader user={headerUser} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio"},{label:"Mi dashboard"}]}/>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Mi dashboard"}]}/>
             <h1 className="text-xl font-semibold mt-3">Panel del asesor</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{headerUser.company}</p>
           </div>
@@ -4092,45 +5361,6 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POLICY PAGES
-// ─────────────────────────────────────────────────────────────────────────────
-function PolicyScreen({page,onBack}:{page:"data"|"terms";onBack:()=>void}) {
-  const isData=page==="data";
-  return (
-    <div className="min-h-screen bg-white" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
-      <header className="sticky top-0 flex items-center justify-between px-6 py-3.5 bg-white border-b border-border z-10">
-        <Logo/>
-        <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
-      </header>
-      <main className="max-w-3xl mx-auto px-6 py-16">
-        <div className="flex flex-col items-center text-center gap-5 mb-12">
-          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">
-            <FileText className="w-8 h-8 text-amber-600"/>
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">{isData?"Política de Tratamiento de Datos":"Términos y Condiciones"}</h1>
-            <p className="text-muted-foreground mt-2 text-sm">ImportacionesQ8 — Versión 1.0</p>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0"/>
-            <p className="text-sm text-amber-700 font-medium">Este documento se encuentra en construcción y será publicado próximamente.</p>
-          </div>
-        </div>
-        <div className="space-y-6 text-sm text-muted-foreground leading-relaxed">
-          <div className="p-6 bg-muted rounded-xl border border-border">
-            <p className="font-semibold text-foreground mb-2">{isData?"Aviso importante":"Aviso importante"}</p>
-            <p>La {isData?"Política de Tratamiento de Datos Personales":"política de Términos y Condiciones"} de ImportacionesQ8 está siendo redactada por nuestro equipo legal y estará disponible antes del lanzamiento oficial de la plataforma.</p>
-          </div>
-          <p>En ella se detallará: {isData?"el tratamiento, almacenamiento y protección de tus datos personales según la legislación colombiana vigente (Ley 1581 de 2012 y sus decretos reglamentarios).":"las condiciones de uso de la plataforma, responsabilidades de las partes, propiedad intelectual y resolución de controversias."}</p>
-          <p>Si tienes preguntas, puedes contactarnos a <span className="text-primary font-medium">legal@importacionesq8.co</span></p>
-        </div>
-      </main>
-      <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">© 2025 ImportacionesQ8. Todos los derechos reservados.</footer>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────────────────────────────────────────
 function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void;initialEmail?:string}) {
@@ -4162,22 +5392,115 @@ function ResetPasswordScreen({ token, onBackToLogin }: { token: string; onBackTo
   );
 }
 
-function AdminDashboardScreen({sb}:{sb:SidebarCtrl}) {
+function AdminDashboardScreen({sb,onRefreshGlobal}:{sb:SidebarCtrl;onRefreshGlobal?:()=>Promise<void>}) {
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!mainRef.current) {
+      return;
+    }
+    mainRef.current.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="admin-dashboard"/>
-      <main className={clsx("transition-all duration-300",sb.pinned?"ml-52":"ml-16")}>
-        <div className="px-6 py-6 max-w-6xl mx-auto">
-          <div className="mb-5">
-            <Breadcrumb items={[{label:"Inicio"},{label:"Dashboard Admin"}]}/>
-            <h1 className="text-2xl font-bold mt-1">Panel Administrativo</h1>
-            <p className="text-sm text-muted-foreground mt-1">Acceso administrativo autenticado correctamente.</p>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F0F2F5]">
+        <AppHeader user={USER} sb={sb}/>
+        <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="max-w-6xl mx-auto">
+          <AdminDashboard onRefreshGlobal={onRefreshGlobal}/>
           </div>
-          <Card padding="lg">
-            <p className="text-sm text-muted-foreground">Este rol ya redirige al dashboard de admin. Aquí puedes conectar los módulos administrativos.</p>
-          </Card>
+        </main>
         </div>
-      </main>
+    </div>
+  );
+}
+
+function HelpSupportScreen({sb,role}:{sb:SidebarCtrl;role:UserRole}) {
+  const helpRole = normalizeHelpRole(role);
+  const roleContent = HELP_SUPPORT_CONTENT[helpRole];
+  const [faqSearch, setFaqSearch] = useState("");
+  const filteredFaqs = filterFaq(roleContent.faqs, faqSearch);
+
+  return (
+    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <Sidebar {...sb} active="help-support"/>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <AppHeader user={role === "importadora" ? USER_IMPORTADORA : role === "asesor" ? USER_ASESOR : USER} sb={sb}/>
+        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          <div>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(role === "importadora" ? "imp-dashboard" : role === "asesor" ? "adv-dashboard" : "dashboard")},{label:"Ayuda y soporte"}]}/>
+            <h1 className="text-xl font-semibold tracking-tight mt-3">Ayuda y soporte</h1>
+            <p className="text-sm text-muted-foreground mt-1">Guia de uso y preguntas frecuentes para rol {roleContent.roleLabel}.</p>
+          </div>
+
+          <Card padding="md">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+              <Input
+                value={faqSearch}
+                onChange={(event)=>setFaqSearch(event.target.value)}
+                placeholder="Buscar FAQ por tema, flujo o palabra clave"
+                prefix={<Search className="w-4 h-4"/>}
+              />
+              <div className="flex flex-wrap gap-2">
+                {roleContent.quickTopics.map((topic) => (
+                  <button
+                    key={topic}
+                    type="button"
+                    onClick={()=>setFaqSearch(topic)}
+                    className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card padding="md" className="md:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <HelpCircle className="w-4 h-4 text-primary"/>
+                <h2 className="text-sm font-semibold">FAQ por rol</h2>
+              </div>
+              <div className="space-y-3">
+                {filteredFaqs.length===0&&(
+                  <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                    No encontramos coincidencias para tu busqueda. Prueba con otro termino.
+                  </div>
+                )}
+                {filteredFaqs.map((item)=> (
+                  <div key={item.q} className="rounded-lg border border-border bg-white p-3">
+                    <p className="text-sm font-semibold text-foreground">{item.q}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{item.a}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <BookOpen className="w-4 h-4 text-primary"/>
+                <h2 className="text-sm font-semibold">Buenas practicas</h2>
+              </div>
+              <div className="space-y-3">
+                {roleContent.tips.map((tip) => (
+                  <div key={tip} className="rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    {tip}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 rounded-lg border border-border p-3 text-xs text-muted-foreground">
+                Si necesitas soporte adicional, escribe por chat interno y comparte el codigo de cotizacion u orden.
+              </div>
+              <div className="mt-3 rounded-lg border border-border p-3 text-xs text-muted-foreground">
+                Tip: usa palabras clave en el chat como Incoterm, MOQ o fecha objetivo para acelerar la atencion del equipo.
+              </div>
+            </Card>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
@@ -4241,13 +5564,13 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
-type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"courses"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications"|"user-profile";
+type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"courses"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications"|"user-profile"|"help-support";
 
 export default function App() {
   const storedRole = normalizeStoredRole(getStoredRole());
   const hasStoredSession = Boolean(getStoredToken() && storedRole);
 
-  const { isAuthenticated, isInitializing, appRole, signOut } = useAuth();
+  const { isAuthenticated, isInitializing, appRole, signOut, token } = useAuth();
   const [screen,setScreen]=useState<Screen>(() =>
     window.location.pathname === RESET_PASSWORD_PATH
       ? "reset-password"
@@ -4288,6 +5611,11 @@ export default function App() {
   const [importerOrders,setImporterOrders]=useState<Order[]>([]);
   const [chatConversations,setChatConversations]=useState<ChatConv[]>([]);
   const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
+  const [chatAttachmentsByConversation,setChatAttachmentsByConversation]=useState<Record<string, BackendChatAttachmentItem[]>>({});
+  const [documentExplorer,setDocumentExplorer]=useState<BackendExplorerResponse>({ carpetas: [], archivos: [] });
+  const [documentCurrentFolderId,setDocumentCurrentFolderId]=useState<string|null>(null);
+  const [isDocumentExplorerLoading,setIsDocumentExplorerLoading]=useState(false);
+  const documentCurrentFolderRef = useRef<string|null>(null);
   const [prevScreen,setPrevScreen]=useState<Screen>(() =>
     window.location.pathname === RESET_PASSWORD_PATH ? "login" : "dashboard",
   );
@@ -4416,7 +5744,33 @@ export default function App() {
       }),
     );
     setChatMessagesByConversation(Object.fromEntries(messagePairs));
+
+    const attachmentPairs = await Promise.all(
+      mappedConversations.map(async (conversation) => {
+        try {
+          const attachments = await businessService.listChatAttachments(conversation.id);
+          return [conversation.id, attachments] as const;
+        } catch {
+          return [conversation.id, [] as BackendChatAttachmentItem[]] as const;
+        }
+      }),
+    );
+    setChatAttachmentsByConversation(Object.fromEntries(attachmentPairs));
   }, [currentUserProfile?.id]);
+
+  const reloadDocumentExplorer = useCallback(async (parentId?: string | null) => {
+    const resolvedParent = typeof parentId === "undefined" ? documentCurrentFolderRef.current : parentId;
+    setIsDocumentExplorerLoading(true);
+    try {
+      const explorer = await businessService.listDocumentExplorer(resolvedParent);
+      documentCurrentFolderRef.current = resolvedParent ?? null;
+      setDocumentCurrentFolderId(resolvedParent ?? null);
+      setDocumentExplorer(explorer);
+      return explorer;
+    } finally {
+      setIsDocumentExplorerLoading(false);
+    }
+  }, []);
 
   const reloadAdvisorAssignedQuotes = useCallback(async () => {
     const rows = await businessService.listMyAssignedQuotes();
@@ -4558,22 +5912,23 @@ export default function App() {
   }, [isInitializing, isAuthenticated, appRole, screen]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing) {
+    if (!isAuthenticated || !token || isInitializing) {
       return;
     }
     void reloadImporters();
-  }, [isAuthenticated, isInitializing, reloadImporters]);
+  }, [isAuthenticated, token, isInitializing, reloadImporters]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing) {
+    if (!isAuthenticated || !token || isInitializing) {
       return;
     }
     void reloadCurrentUserProfile();
     void reloadChatData();
-  }, [isAuthenticated, isInitializing, reloadCurrentUserProfile, reloadChatData]);
+    void reloadDocumentExplorer();
+  }, [isAuthenticated, token, isInitializing, reloadCurrentUserProfile, reloadChatData, reloadDocumentExplorer]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing) {
+    if (!isAuthenticated || !token || isInitializing) {
       return;
     }
 
@@ -4597,6 +5952,7 @@ export default function App() {
     }
   }, [
     isAuthenticated,
+    token,
     isInitializing,
     userRole,
     reloadRequesterQuotes,
@@ -4610,26 +5966,27 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing || userRole !== "asesor") {
+    if (!isAuthenticated || !token || isInitializing || userRole !== "asesor") {
       return;
     }
     void reloadAdvisorProposalIndex();
-  }, [isAuthenticated, isInitializing, userRole, reloadAdvisorProposalIndex]);
+  }, [isAuthenticated, token, isInitializing, userRole, reloadAdvisorProposalIndex]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing || screen !== "order-detail" || !selectedOrderId) {
+    if (!isAuthenticated || !token || isInitializing || screen !== "order-detail" || !selectedOrderId) {
       return;
     }
     void loadOrderDetail(selectedOrderId);
-  }, [isAuthenticated, isInitializing, screen, selectedOrderId, loadOrderDetail]);
+  }, [isAuthenticated, token, isInitializing, screen, selectedOrderId, loadOrderDetail]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing) {
+    if (!isAuthenticated || !token || isInitializing) {
       return;
     }
     void reloadNotifications();
   }, [
     isAuthenticated,
+    token,
     isInitializing,
     userRole,
     advisorAssignedQuotes,
@@ -4667,6 +6024,18 @@ export default function App() {
   });
 
   const unreadCount=notifications.filter(n=>!n.read).length;
+  const chatUnreadCount=Math.max(
+    notifications.filter((n)=>!n.read&&n.type==="message").length,
+    chatConversations.reduce((acc,conversation)=>acc+(conversation.unread||0),0),
+  );
+  const activeChatCount = chatConversations.filter((conversation)=>conversation.status==="activa").length;
+  const importerAverageResponseHours = extractFirstNumber(companyProfile?.tiempo_respuesta_promedio);
+  const headerSubtitle = resolveHeaderSubtitle({
+    role: userRole,
+    importerCompanyName: companyProfile?.nombre_empresa,
+    importerFallbackCompany: importerHeaderUser.company,
+    advisorFallbackCompany: "Empresa asignada",
+  });
 
   function goTo(s:Screen){setPrevScreen(screen);setScreen(s);}
 
@@ -4698,7 +6067,29 @@ export default function App() {
     }
   }
 
-  const sb:SidebarCtrl={active:screen,onNav:handleNav,pinned:sidebarPinned,onToggle:()=>setSidebarPinned(p=>!p),navItems:getNavItems(),onNotif:()=>goTo("notifications"),notifCount:unreadCount,onLogout:()=>{void handleLogout();},onProfile:handleProfileClick};
+  function handleHelpClick(){
+    if(userRole==="admin"){
+      return;
+    }
+    goTo("help-support");
+  }
+
+  const sb:SidebarCtrl={
+    active:screen,
+    onNav:handleNav,
+    pinned:sidebarPinned,
+    onToggle:()=>setSidebarPinned(p=>!p),
+    navItems:getNavItems(),
+    onNotif:()=>goTo("notifications"),
+    notifCount:unreadCount,
+    onChat:()=>goTo("chats"),
+    chatCount:chatUnreadCount,
+    onHelp:handleHelpClick,
+    showHelp:userRole!=="admin",
+    profileSubtitle:headerSubtitle,
+    onLogout:()=>{void handleLogout();},
+    onProfile:handleProfileClick,
+  };
 
   function openResponse(id:string,from:ResponseFrom,fromQuoteId?:string){
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
@@ -4768,7 +6159,7 @@ export default function App() {
     await reloadCompanyAdvisors();
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;solo_cotizaciones_directas?:boolean;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }
@@ -4782,8 +6173,8 @@ export default function App() {
     await reloadCurrentUserProfile();
   }
 
-  async function handleSendChatMessage(conversationId: string, contenido: string) {
-    await businessService.sendChatMessage(conversationId, { contenido, tipo: "texto" });
+  async function handleSendChatMessage(conversationId: string, contenido: string, metadata?: Record<string, unknown>) {
+    await businessService.sendChatMessage(conversationId, { contenido, tipo: "texto", metadata: metadata ?? null });
     const messages = await businessService.listChatMessages(conversationId);
     setChatMessagesByConversation((prev) => ({
       ...prev,
@@ -4796,6 +6187,124 @@ export default function App() {
       })),
     }));
     await reloadChatData();
+  }
+
+  async function handleShareLocalAttachment(conversationId: string, file: File) {
+    const created = await businessService.uploadDocumentFile(file, null, "chat");
+
+    await businessService.shareDocumentsToChat({
+      conversacion_ids: [conversationId],
+      archivo_ids: [created.id],
+      mensaje: `Adjunto: ${file.name}`,
+    });
+
+    await Promise.all([reloadChatData(), reloadDocumentExplorer(documentCurrentFolderRef.current)]);
+  }
+
+  async function handleShareExistingResource(conversationIds: string[], fileId: string, message?: string) {
+    await businessService.shareDocumentsToChat({
+      conversacion_ids: conversationIds,
+      archivo_ids: [fileId],
+      mensaje: message,
+    });
+    await reloadChatData();
+  }
+
+  async function handleCreateDocumentFolder(name: string, parentId: string | null) {
+    await businessService.createDocumentFolder({ nombre: name, parent_id: parentId });
+    await reloadDocumentExplorer(parentId);
+  }
+
+  async function handleRegisterLocalDocument(file: File, parentId: string | null) {
+    await businessService.uploadDocumentFile(file, parentId, "manual");
+    await reloadDocumentExplorer(parentId);
+  }
+
+  async function handleMoveDocumentFile(fileId: string, targetFolderId: string | null) {
+    await businessService.updateDocumentFile(fileId, { carpeta_id: targetFolderId });
+    await reloadDocumentExplorer(documentCurrentFolderRef.current);
+  }
+
+  async function handleMoveDocumentFolder(folderId: string, targetParentId: string | null) {
+    await businessService.updateDocumentFolder(folderId, { parent_id: targetParentId });
+    await reloadDocumentExplorer(documentCurrentFolderRef.current);
+  }
+
+  async function handleRenameDocumentFile(fileId: string, newName: string) {
+    await businessService.updateDocumentFile(fileId, { nombre: newName });
+    await reloadDocumentExplorer(documentCurrentFolderRef.current);
+  }
+
+  async function handleRenameDocumentFolder(folderId: string, newName: string) {
+    await businessService.updateDocumentFolder(folderId, { nombre: newName });
+    await reloadDocumentExplorer(documentCurrentFolderRef.current);
+  }
+
+  async function handleDeleteDocumentFile(fileId: string) {
+    await businessService.deleteDocumentFile(fileId);
+    await reloadDocumentExplorer(documentCurrentFolderRef.current);
+  }
+
+  async function handleDeleteDocumentFolder(folderId: string) {
+    await businessService.deleteDocumentFolder(folderId);
+    await reloadDocumentExplorer(documentCurrentFolderRef.current);
+  }
+
+  async function handleTransferConversation(conversationId: string, newAdvisorEmail: string) {
+    const message = `Transferencia solicitada al asesor ${newAdvisorEmail}`;
+    await handleSendChatMessage(conversationId, message, {
+      action: "transfer-request",
+      advisor_email: newAdvisorEmail,
+      source: "frontend-only",
+      requested_at: new Date().toISOString(),
+    });
+    await reloadChatData();
+  }
+
+  async function handleUpdateOrderStatus(orderId: string, statusValue: string) {
+    await businessService.updateOrderStatus(orderId, { estado: statusValue });
+    await Promise.all([reloadRequesterOrders(), reloadImporterOrders(), reloadChatData()]);
+    if (selectedOrderId === orderId) {
+      await loadOrderDetail(orderId);
+    }
+  }
+
+  function mapOrderDocumentType(fileName: string): string {
+    const extension = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() : "";
+    if (extension === "pdf") return "factura_comercial";
+    if (extension === "xlsx" || extension === "xls" || extension === "csv") return "packing_list";
+    return "factura_proforma";
+  }
+
+  async function handleAttachOrderDocument(orderId: string, file: File) {
+    const extensionFromName = file.name.includes(".") ? file.name.split(".").pop() || undefined : undefined;
+    const created = await businessService.createDocumentFile({
+      nombre: file.name,
+      extension: extensionFromName,
+      mime_type: file.type || undefined,
+      size_bytes: file.size,
+      origen: "orden",
+    });
+
+    await businessService.addOrderDocument(orderId, {
+      nombre: file.name,
+      url: resolveApiUrl(created.storage_url),
+      tipo: mapOrderDocumentType(file.name),
+    });
+
+    await Promise.all([
+      reloadRequesterOrders(),
+      reloadImporterOrders(),
+      reloadChatData(),
+      reloadDocumentExplorer(documentCurrentFolderRef.current),
+    ]);
+    if (selectedOrderId === orderId) {
+      await loadOrderDetail(orderId);
+    }
+  }
+
+  function handleSearchDocuments(query: string) {
+    return businessService.searchDocumentFiles(query);
   }
 
   async function refreshQuoteLists(){
@@ -4822,10 +6331,25 @@ export default function App() {
     "adv-available": ["asesor"],
     "adv-my-quotes": ["asesor"],
     "user-profile": ["solicitante", "asesor"],
+    "help-support": ["solicitante", "importadora", "asesor"],
     "admin-dashboard": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
+
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing || !appRole || !allowedRoles) {
+      return;
+    }
+
+    if (!allowedRoles.includes(userRole)) {
+      const home = getHomeScreenForRole(userRole);
+      if (screen !== home) {
+        setScreen(home);
+      }
+    }
+  }, [isAuthenticated, isInitializing, appRole, allowedRoles, userRole, screen]);
+
   const loadingFallback = (
     <div className="min-h-screen flex items-center justify-center bg-[#F0F2F5]">
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -4877,27 +6401,28 @@ export default function App() {
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
-  if(screen==="policy-data")return <PolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="policy-terms")return <PolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
+  if(screen==="policy-data")return <LegalPolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
+  if(screen==="policy-terms")return <LegalPolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
   if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
     // ── Importer portal ───────────────────────────────────────────────────────
-    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors}/>;
+    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} orders={importerOrders} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""} averageResponseHours={importerAverageResponseHours}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive}/>;
     if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
-    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser}/>;
+    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount}/>;
     if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
     if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId}/>;
 
-    if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb}/>;
+    if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists}/>;
 
     // ── Shared ────────────────────────────────────────────────────────────────
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
+    if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole}/>;
     if(screen==="courses")return (
       <CoursesPortalScreen
         sb={sb}
@@ -4913,13 +6438,13 @@ export default function App() {
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote}/>;
-    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
+    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters}/>;
-    if(screen==="documentos")return <DocumentosScreen sb={sb}/>;
+    if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
     if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
     return null;

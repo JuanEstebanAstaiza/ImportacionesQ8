@@ -37,7 +37,7 @@ from utils.security import hash_password
 # ---------------------------------------------------------------------------
 # Constantes
 # ---------------------------------------------------------------------------
-MAIN_USER_EMAIL = "test@gmail.com"
+MAIN_USER_EMAIL = "akalife17@gmail.com"
 TEST_PASSWORD = "TestPassword123!"
 
 NOW = datetime.utcnow()

@@ -3,11 +3,10 @@ import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
-
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
-    resolveId(id) {
+    resolveId(id: string) {
       if (id.startsWith('figma:asset/')) {
         const filename = id.replace('figma:asset/', '')
         return path.resolve(__dirname, 'src/assets', filename)
@@ -33,4 +32,18 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  // Configuración del Servidor de Desarrollo y Proxy para Docker
+  server: {
+    proxy: {
+      '/api': {
+        // Apunta al contenedor de Docker en tu máquina local
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+        // Elimina el prefijo /api antes de enviar la petición a FastAPI
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
+    },
+  },
 })

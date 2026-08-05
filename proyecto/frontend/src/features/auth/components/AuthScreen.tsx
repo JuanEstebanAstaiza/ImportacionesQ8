@@ -59,6 +59,10 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         return;
       }
       const appRole = mapBackendRoleToAppRole(response.rol);
+      if (!appRole) {
+        setAuthError("No se reconoce el rol del usuario autenticado.");
+        return;
+      }
       onLogin(appRole);
     },
     onError: (error) => {
@@ -81,6 +85,10 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         return;
       }
       const appRole = mapBackendRoleToAppRole(response.rol);
+      if (!appRole) {
+        setAuthError("No se reconoce el rol del usuario autenticado.");
+        return;
+      }
       onLogin(appRole);
     },
     onError: (error) => {

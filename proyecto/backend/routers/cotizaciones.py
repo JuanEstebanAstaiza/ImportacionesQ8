@@ -465,23 +465,32 @@ async def enviar_propuesta(
             )
     # 2. Verificar matching Redis en cotizaciones abiertas (fail-closed).
     elif cotizacion.modalidad == "abierta":
-        if not config.redis_client:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
-            )
-        try:
-            importadores_matching = config.redis_client.hgetall(f"cotizacion_abierta:{cotizacion_id_str}")
-        except Exception:
-            logger.warning("Redis no disponible al verificar matching de cotización %s", cotizacion_id_str)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
-            )
-        if importador_id_str not in importadores_matching:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No autorizado para responder esta cotización (no está en la lista de matching)"
+        strict_matching = config.APP_ENV == "production"
+        if strict_matching:
+            if not config.redis_client:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
+                )
+            try:
+                importadores_matching = config.redis_client.hgetall(f"cotizacion_abierta:{cotizacion_id_str}")
+            except Exception:
+                logger.warning("Redis no disponible al verificar matching de cotización %s", cotizacion_id_str)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
+                )
+            if importador_id_str not in importadores_matching:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No autorizado para responder esta cotización (no está en la lista de matching)"
+                )
+        else:
+            logger.info(
+                "Matching relajado en APP_ENV=%s para cotizacion abierta %s e importador %s",
+                config.APP_ENV,
+                cotizacion_id_str,
+                importador_id_str,
             )
 
     # 2.5. Congruencia de categoría: la especialidad de la empresa debe incluir la línea de producto solicitada
@@ -924,6 +933,7 @@ async def aceptar_propuesta(
     # Notificación persistente + Redis (best-effort) al asesor asignado.
     if cotizacion.asesor_asignado_id:
         from services.notificacion_service import crear_notificacion_best_effort
+        from services.pdf_document_service import generate_order_documents
         crear_notificacion_best_effort(
             db,
             usuario_id=cotizacion.asesor_asignado_id,
@@ -1092,6 +1102,16 @@ async def pre_aceptar_propuesta(
                 estado_anterior=None,
                 estado_nuevo=EstadoOrden.cotizacion_aceptada.value
             ))
+
+        try:
+            generate_order_documents(
+                db,
+                orden=nueva_orden,
+                cotizacion=cotizacion,
+                propuesta=propuesta,
+            )
+        except Exception:
+            logger.warning("No se pudieron generar documentos PDF automáticos para la orden %s", nueva_orden.id)
 
         # Traspaso de chat al dueño (supervisor): a partir de aquí, el asesor deja
         # de negociar y responde la cuenta dueña de la empresa importadora.

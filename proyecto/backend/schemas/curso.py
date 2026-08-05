@@ -21,6 +21,9 @@ def _validar_url_http(value: Optional[str], *, campo: str = "url") -> Optional[s
     parsed = urlparse(raw)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError(f"{campo} debe ser una URL http(s) absoluta válida")
+    host = parsed.netloc.lower()
+    if "youtube.com" in host or "youtu.be" in host:
+        raise ValueError(f"{campo} no permite enlaces de YouTube; usa recursos de gestión documental")
     return raw
 
 
@@ -80,6 +83,21 @@ class CursoCreate(BaseModel):
         if not v:
             raise ValueError("El curso debe tener al menos un módulo")
         return v
+
+
+class CursoUpdate(BaseModel):
+    titulo: Optional[str] = Field(default=None, min_length=3, max_length=255)
+    descripcion: Optional[str] = Field(default=None, max_length=5000)
+    portada_url: Optional[str] = Field(default=None, max_length=500)
+    precio: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    nivel: Optional[NivelCursoLiteral] = None
+    categoria: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    estado: Optional[Literal["borrador", "publicado", "archivado"]] = None
+
+    @field_validator("portada_url")
+    @classmethod
+    def portada_segura_update(cls, v: Optional[str]) -> Optional[str]:
+        return _validar_url_http(v, campo="portada_url")
 
 
 class RecursoLeccionResponse(BaseModel):

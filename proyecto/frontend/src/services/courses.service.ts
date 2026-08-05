@@ -212,6 +212,21 @@ export const coursesService = {
     return mapBackendCourseToCourse(row);
   },
 
+  async updateCourse(courseId: string, payload: PublishCourseInput): Promise<Course> {
+    const response = await apiRequest<BackendCourseDetail | ApiEnvelope<BackendCourseDetail>>(`/cursos/${courseId}`, {
+      method: "PUT",
+      body: toPublishPayload(payload),
+    });
+    const row = unwrapApiData<BackendCourseDetail>(response);
+    return mapBackendCourseToCourse(row);
+  },
+
+  deleteCourse(courseId: string): Promise<{ success?: boolean }> {
+    return apiRequest<{ success?: boolean }>(`/cursos/${courseId}`, {
+      method: "DELETE",
+    });
+  },
+
   purchaseCourse(courseId: string): Promise<CompraCursoResponse> {
     return apiRequest<CompraCursoResponse>(`/cursos/${courseId}/comprar`, {
       method: "POST",

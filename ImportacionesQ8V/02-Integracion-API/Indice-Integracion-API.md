@@ -32,6 +32,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[14-Postman-Insomnia]] | Cómo importar y usar la colección HTTP |
 | [[15-Cursos-LMS]] | Catálogo, compra, progreso (reemplaza localStorage FE) |
 | [[16-Notificaciones]] | Bandeja real en BD + marcar leídas |
+| [[17-Documentos-y-Multimedia]] | Drive documental, adjuntos chat, reglas LMS y PDFs automáticos |
 | `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---

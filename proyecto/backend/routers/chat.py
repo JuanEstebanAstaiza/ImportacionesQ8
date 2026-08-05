@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 import config
 from models.chat import ConversacionChat, MensajeChat, TipoMensajeChat
+from models.documental import Archivo, MensajeAdjunto
 from schemas.chat import (
     MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
 )
@@ -17,6 +18,7 @@ from utils.dependencies import get_db, get_current_user, require_rol_in
 from utils.security import decode_access_token, JWTError
 from services.token_revocation import crear_ticket_ws, consumir_ticket_ws, jti_revocado
 from services.notificacion_service import crear_notificacion_best_effort
+from services.documental_service import create_document_file
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
@@ -65,6 +67,52 @@ def _verificar_acceso_conversacion(conversacion: ConversacionChat, current_user:
     if current_user["rol"] in ("importador", "asesor"):
         return conversacion.importador_usuario_id == user_id
     return current_user["rol"] == "admin"
+
+
+def _persistir_adjuntos_chat(
+    db: Session,
+    *,
+    mensaje: MensajeChat,
+    owner_user_id: str,
+    metadata: Optional[dict],
+) -> None:
+    if mensaje.tipo != TipoMensajeChat.archivo.value:
+        return
+
+    meta = metadata or {}
+    linked_ids = []
+
+    for archivo_id in meta.get("archivo_ids", []) if isinstance(meta.get("archivo_ids"), list) else []:
+        archivo = db.query(Archivo).filter(Archivo.id == str(archivo_id), Archivo.deleted_at.is_(None)).first()
+        if not archivo:
+            continue
+        db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=mensaje.id, archivo_id=archivo.id))
+        linked_ids.append(archivo.id)
+
+    file_info = meta.get("file") if isinstance(meta.get("file"), dict) else None
+    if file_info and not linked_ids:
+        nombre = str(file_info.get("name") or f"adjunto_{mensaje.id}.txt").strip()[:255]
+        extension = str(file_info.get("extension") or "").strip() or None
+        mime_type = str(file_info.get("mime_type") or "").strip() or None
+        size_bytes_raw = file_info.get("size_bytes")
+        size_bytes = int(size_bytes_raw) if isinstance(size_bytes_raw, (int, float, str)) and str(size_bytes_raw).isdigit() else None
+        storage_url = file_info.get("storage_url")
+        if storage_url is not None:
+            storage_url = str(storage_url).strip()[:500] or None
+
+        archivo = create_document_file(
+            db,
+            owner_user_id=owner_user_id,
+            nombre=nombre,
+            carpeta_id=None,
+            extension=extension,
+            mime_type=mime_type,
+            size_bytes=size_bytes,
+            storage_url=storage_url,
+            storage_path=None,
+            origen="chat",
+        )
+        db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=mensaje.id, archivo_id=archivo.id))
 
 
 @router.post("/iniciar", response_model=ConversacionChatResponse, status_code=status.HTTP_201_CREATED)
@@ -218,34 +266,44 @@ async def listar_mis_conversaciones(
     current_user: dict = Depends(get_current_user)
 ):
     """Lista las conversaciones de chat del usuario autenticado (solicitante o cuenta de empresa)."""
-    user_id_str = str(PyUUID(current_user["user_id"]))
-    rol = current_user["rol"]
+    try:
+        user_id_str = str(PyUUID(current_user["user_id"]))
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario autenticado inválido")
 
-    query = db.query(ConversacionChat)
-    if rol == "solicitante":
-        query = query.filter(ConversacionChat.solicitante_id == user_id_str)
-    elif rol in ("importador", "asesor"):
-        query = query.filter(ConversacionChat.importador_usuario_id == user_id_str)
-    else:
-        query = query.limit(50)
+    try:
+        rol = current_user["rol"]
 
-    conversaciones = query.order_by(ConversacionChat.fecha_creacion.desc()).all()
+        query = db.query(ConversacionChat)
+        if rol == "solicitante":
+            query = query.filter(ConversacionChat.solicitante_id == user_id_str)
+        elif rol in ("importador", "asesor"):
+            query = query.filter(ConversacionChat.importador_usuario_id == user_id_str)
+        else:
+            query = query.limit(50)
 
-    resultado = []
-    for c in conversaciones:
-        ultimo = db.query(MensajeChat).filter(
-            MensajeChat.conversacion_id == c.id
-        ).order_by(MensajeChat.fecha_envio.desc()).first()
-        resultado.append(ConversacionChatResponse(
-            id=str(c.id),
-            cotizacion_id=c.cotizacion_id,
-            orden_id=c.orden_id,
-            solicitante_id=c.solicitante_id,
-            importador_usuario_id=c.importador_usuario_id,
-            fecha_creacion=c.fecha_creacion,
-            ultimo_mensaje=ultimo
-        ))
-    return resultado
+        conversaciones = query.order_by(ConversacionChat.fecha_creacion.desc()).all()
+
+        resultado = []
+        for c in conversaciones:
+            ultimo = db.query(MensajeChat).filter(
+                MensajeChat.conversacion_id == c.id
+            ).order_by(MensajeChat.fecha_envio.desc()).first()
+            resultado.append(ConversacionChatResponse(
+                id=str(c.id),
+                cotizacion_id=c.cotizacion_id,
+                orden_id=c.orden_id,
+                solicitante_id=c.solicitante_id,
+                importador_usuario_id=c.importador_usuario_id,
+                fecha_creacion=c.fecha_creacion,
+                ultimo_mensaje=ultimo
+            ))
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error listando conversaciones para user_id=%s", user_id_str)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="No se pudieron listar las conversaciones") from exc
 
 
 @router.get("/conversaciones/{conversacion_id}/mensajes", response_model=List[MensajeChatResponse])
@@ -293,9 +351,17 @@ async def enviar_mensaje(
         conversacion_id=conversacion_id,
         remitente_id=user_id_str,
         contenido=datos.contenido,
-        tipo=datos.tipo
+        tipo=datos.tipo,
+        metadata_json=datos.metadata,
     )
     db.add(nuevo_mensaje)
+    db.flush()
+    _persistir_adjuntos_chat(
+        db,
+        mensaje=nuevo_mensaje,
+        owner_user_id=user_id_str,
+        metadata=datos.metadata,
+    )
     db.commit()
     db.refresh(nuevo_mensaje)
 
@@ -309,6 +375,7 @@ async def enviar_mensaje(
                     "remitente_id": user_id_str,
                     "contenido": nuevo_mensaje.contenido,
                     "tipo": nuevo_mensaje.tipo,
+                    "metadata": nuevo_mensaje.metadata_json,
                     "fecha_envio": nuevo_mensaje.fecha_envio.isoformat()
                 })
             )
@@ -477,9 +544,11 @@ async def websocket_chat(
                 payload_msg = json.loads(data)
                 contenido = payload_msg.get("contenido", "")
                 tipo = payload_msg.get("tipo", "texto")
+                metadata = payload_msg.get("metadata") if isinstance(payload_msg.get("metadata"), dict) else None
             except (json.JSONDecodeError, AttributeError):
                 contenido = data
                 tipo = "texto"
+                metadata = None
 
             if not contenido:
                 continue
@@ -490,9 +559,17 @@ async def websocket_chat(
                 conversacion_id=conversacion_id,
                 remitente_id=user_id_str,
                 contenido=contenido,
-                tipo=tipo
+                tipo=tipo,
+                metadata_json=metadata,
             )
             db.add(nuevo_mensaje)
+            db.flush()
+            _persistir_adjuntos_chat(
+                db,
+                mensaje=nuevo_mensaje,
+                owner_user_id=user_id_str,
+                metadata=metadata,
+            )
             db.commit()
             db.refresh(nuevo_mensaje)
 
@@ -502,6 +579,7 @@ async def websocket_chat(
                 "remitente_id": user_id_str,
                 "contenido": nuevo_mensaje.contenido,
                 "tipo": nuevo_mensaje.tipo,
+                "metadata": nuevo_mensaje.metadata_json,
                 "fecha_envio": nuevo_mensaje.fecha_envio.isoformat()
             })
 

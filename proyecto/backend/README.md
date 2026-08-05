@@ -399,3 +399,59 @@ response = requests.post("http://localhost:8000/cotizaciones", json={
 - **Hash de contraseñas**: bcrypt con passlib
 - **Cache/Matching**: Redis para cotizaciones abiertas
 - **API Documentation**: Swagger UI automático en `/docs`
+
+## Actualización 2026-08-05 (Gestión documental, chat multimedia, LMS y PDFs)
+
+### Migración aplicada
+
+- Revisión Alembic: `20260804_0006`.
+- Tablas nuevas: `carpetas`, `archivos`, `etiquetas`, `archivo_etiquetas`, `favoritos`, `curso_recursos`, `mensajes_adjuntos`, `orden_documentos`.
+- Columnas soft delete añadidas:
+  - `cursos.deleted_at`
+  - `recursos_leccion.deleted_at`
+
+Comando de despliegue:
+
+```bash
+docker exec importacionesq8_backend alembic upgrade head
+```
+
+### Endpoints nuevos (resumen)
+
+- Drive documental:
+  - `GET /documentos/explorador`
+  - `POST /documentos/carpetas`
+  - `PATCH /documentos/carpetas/{id}`
+  - `DELETE /documentos/carpetas/{id}`
+  - `POST /documentos/archivos`
+  - `PATCH /documentos/archivos/{id}`
+  - `DELETE /documentos/archivos/{id}`
+  - `GET /documentos/buscar`
+  - `POST /documentos/favoritos/toggle`
+  - `GET/POST /documentos/etiquetas`
+  - `POST /documentos/archivos/{id}/etiquetas`
+  - `GET /documentos/archivos/{id}/descargar`
+- Chat multimedia:
+  - `POST /documentos/compartir-chat`
+  - `GET /documentos/chats/{conversacion_id}/adjuntos`
+
+### Reglas LMS aplicadas
+
+- No se permiten enlaces de YouTube en:
+  - `video_url` de lecciones
+  - `url` de recursos de lección
+- Nuevos endpoints de ciclo de vida de curso:
+  - `PUT /cursos/{curso_id}`
+  - `DELETE /cursos/{curso_id}` (soft delete)
+- Protección de integridad:
+  - Un archivo no puede eliminarse si está vinculado a un curso activo o vigente.
+
+### Documentos automáticos de órdenes
+
+Al concretarse doble aceptación de propuesta y crearse orden:
+
+- Se generan PDFs de cotización, propuesta y orden.
+- Se registran en:
+  - `archivos`
+  - `orden_documentos`
+  - y se mantiene compatibilidad con `documentos_orden`.
