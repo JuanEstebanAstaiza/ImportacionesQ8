@@ -5,7 +5,7 @@ from .auth import (
     ReenviarOtpResponse, LoginOtpRequest,
 )
 from .importador import (
-    ImportadorCreate, ImportadorResponse, ImportadorUpdate,
+    ImportadorResponse, ImportadorUpdate,
     AdminCrearImportadorRequest, AdminCrearImportadorResponse
 )
 from .cotizacion import (
@@ -66,7 +66,6 @@ __all__ = [
     "ReenviarOtpRequest",
     "ReenviarOtpResponse",
     "LoginOtpRequest",
-    "ImportadorCreate",
     "ImportadorResponse",
     "ImportadorUpdate",
     "AdminCrearImportadorRequest",

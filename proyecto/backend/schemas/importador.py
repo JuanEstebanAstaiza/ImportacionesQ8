@@ -2,15 +2,9 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-class ImportadorCreate(BaseModel):
-    nombre_empresa: str = Field(..., min_length=1, description="Nombre de la empresa importadora")
-    logo_url: Optional[str] = None
-    especialidad_producto: List[str] = Field(..., description="Categorías de producto (ej: ['Textiles', 'Electrónica'])")
-    paises_origen: List[str] = Field(..., description="Países de origen (ej: ['China', 'Vietnam'])")
-    calificacion_promedio: float = 0.0
-    tiempo_respuesta_promedio: str = Field(..., min_length=1, description="Tiempo promedio de respuesta (ej: '24h')")
-    capacidad_volumen: Optional[int] = None
-    perfil_publico: Optional[Dict[str, Any]] = None
+# El alta de empresas usa `AdminCrearImportadorRequest` (empresa + cuenta dueño).
+# No existe un esquema de "crear solo la ficha": ese camino dejaba importadoras
+# sin representante legal y por eso no se expone.
 
 class ImportadorResponse(BaseModel):
     id: str

@@ -581,6 +581,36 @@
       "name": "Asesores",
       "item": [
         {
+          "name": "Dashboard Stats Asesor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asesores/dashboard/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asesores",
+                "dashboard",
+                "stats"
+              ]
+            },
+            "description": "Métricas de rendimiento del asesor: cotizaciones respondidas, tasa de\naceptación, volumen cotizado y órdenes asociadas."
+          },
+          "response": []
+        },
+        {
           "name": "Listar Mis Cotizaciones Asignadas",
           "request": {
             "method": "GET",
@@ -1041,6 +1071,44 @@
               ]
             },
             "description": "Envía un mensaje por REST (fallback cuando el cliente no usa WebSocket).\nTambién publica el mensaje en Redis para que quien esté conectado por WS lo reciba.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Iniciar Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/iniciar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "iniciar"
+              ]
+            },
+            "description": "Inicia (o reutiliza) la conversación de negociación desde el lado de la empresa.\n\nPensado para que el asesor abra el chat al enviar su propuesta, sin esperar\na que el solicitante invoque `PUT /cotizaciones/{id}/propuestas/aceptar`.\n\nAlias conceptual del gap frontend: `POST /chats/iniciar` → implementado como\n`POST /chat/iniciar` (prefijo REST existente del módulo).",
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -1538,7 +1606,7 @@
                 "comprar"
               ]
             },
-            "description": "Genera un enlace de pago con Wompi para recargar créditos.\n\nLos créditos se acreditan cuando Wompi confirma el pago vía webhook\n(`POST /pagos/webhook/wompi`), no en este endpoint.",
+            "description": "Genera un enlace de pago con Wompi para recargar créditos.\n\nDeshabilitado por defecto: el modelo de negocio no cobra al solicitante\n(quien cotiza). Solo se factura a empresas importadoras por contrato.\nReactivar con COBRO_A_SOLICITANTES=true.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"paquete_creditos\": 100\n}",
@@ -1606,6 +1674,349 @@
               ]
             },
             "description": "Saldo efectivo: wallet de organización si pertenece a una, si no el personal."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cursos",
+      "item": [
+        {
+          "name": "Listar Cursos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos"
+              ],
+              "query": [
+                {
+                  "key": "categoria",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por categoría"
+                },
+                {
+                  "key": "nivel",
+                  "value": "",
+                  "disabled": true,
+                  "description": "'Principiante' o 'Avanzado'"
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Búsqueda por título/descripción"
+                },
+                {
+                  "key": "recomendados",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Ordenar por rating y popularidad"
+                },
+                {
+                  "key": "importador_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Cursos de una empresa"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Catálogo público de cursos publicados con filtros y recomendaciones."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Curso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos"
+              ]
+            },
+            "description": "Publica un curso con módulos, lecciones, URLs de video y archivos adjuntos.\nSolo la cuenta dueña de la empresa importadora.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Curso",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Curso"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Curso",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Curso",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Comprar Curso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id/comprar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id",
+                "comprar"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Registra la compra/inscripción del solicitante en el curso.\nIdempotente: si ya compró, devuelve la inscripción existente.\n\nNota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en\nauditoría 2026-07-28 (A04 diseño de pagos)."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Progreso Leccion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id/lecciones/:leccion_id/progreso",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id",
+                "lecciones",
+                ":leccion_id",
+                "progreso"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                },
+                {
+                  "key": "leccion_id",
+                  "value": "{{leccion_id}}"
+                }
+              ]
+            },
+            "description": "Marca una lección como completada (o no) y devuelve el avance del curso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Curso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:id_o_slug",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":id_o_slug"
+              ],
+              "variable": [
+                {
+                  "key": "id_o_slug",
+                  "value": "{{id_o_slug}}"
+                }
+              ]
+            },
+            "description": "Detalle del curso con temario, vista previa y módulos."
+          },
+          "response": []
+        },
+        {
+          "name": "Mis Cursos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/mis-cursos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mis-cursos"
+              ]
+            },
+            "description": "Cursos comprados/inscritos por el usuario logueado, con progreso."
           },
           "response": []
         }
@@ -1778,6 +2189,626 @@
       ]
     },
     {
+      "name": "Gestión Documental",
+      "item": [
+        {
+          "name": "Crear Archivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos"
+              ]
+            },
+            "description": "Crear Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Subir Archivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                "upload"
+              ]
+            },
+            "description": "Subir Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Archivo",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Archivo"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Archivo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Descargar Archivo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id/descargar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id",
+                "descargar"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Descargar Archivo"
+          },
+          "response": []
+        },
+        {
+          "name": "Asignar Etiquetas Archivo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id/etiquetas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id",
+                "etiquetas"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Asignar Etiquetas Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar Archivos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/buscar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "buscar"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "tipo_recurso",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "etiqueta_ids",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "favorito",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "fecha_hasta",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Buscar Archivos"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Carpeta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/carpetas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "carpetas"
+              ]
+            },
+            "description": "Crear Carpeta",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Carpeta",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/carpetas/:carpeta_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "carpetas",
+                ":carpeta_id"
+              ],
+              "variable": [
+                {
+                  "key": "carpeta_id",
+                  "value": "{{carpeta_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Carpeta"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Carpeta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/carpetas/:carpeta_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "carpetas",
+                ":carpeta_id"
+              ],
+              "variable": [
+                {
+                  "key": "carpeta_id",
+                  "value": "{{carpeta_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Carpeta",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Adjuntos Chat",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/chats/:conversacion_id/adjuntos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "chats",
+                ":conversacion_id",
+                "adjuntos"
+              ],
+              "variable": [
+                {
+                  "key": "conversacion_id",
+                  "value": "{{conversacion_id}}"
+                }
+              ]
+            },
+            "description": "Listar Adjuntos Chat"
+          },
+          "response": []
+        },
+        {
+          "name": "Compartir Recursos Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/compartir-chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "compartir-chat"
+              ]
+            },
+            "description": "Compartir Recursos Chat",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Etiqueta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/etiquetas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "etiquetas"
+              ]
+            },
+            "description": "Crear Etiqueta",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Explorador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/explorador",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "explorador"
+              ],
+              "query": [
+                {
+                  "key": "parent_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Listar Explorador"
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Favorito",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/favoritos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "favoritos"
+              ]
+            },
+            "description": "Toggle Favorito",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Importadores",
       "item": [
         {
@@ -1788,6 +2819,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1822,47 +2858,22 @@
                   "value": "",
                   "disabled": true,
                   "description": "Filtrar por empresas verificadas (true/false)"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Máximo de filas (paginación anti-DoS)"
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
                 }
               ]
             },
-            "description": "Lista todos los importadores activos con filtros opcionales.\n\n- **especialidad**: Filtrar por especialidad de producto (ej: \"Textiles\")\n- **pais**: Filtrar por país de origen (ej: \"China\")\n- **orden**: 'calificacion' (mejor calificados primero) o 'reciente' (más nuevos primero)\n- **certificado**: `true` para solo empresas verificadas, `false` para no verificadas"
-          },
-          "response": []
-        },
-        {
-          "name": "Crear Importador",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/importadores",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "importadores"
-              ]
-            },
-            "description": "**Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba\nimportadoras sin representante legal (dueño). El alta oficial es siempre:\n\n`POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)\nen un solo paso. El dueño es el jefe de los asesores/operadores.",
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Lista importadores activos con filtros y paginación (default 50, max 200).\n\n- **especialidad**: Filtrar por especialidad de producto (ej: \"Textiles\")\n- **pais**: Filtrar por país de origen (ej: \"China\")\n- **orden**: 'calificacion' (mejor calificados primero) o 'reciente' (más nuevos primero)\n- **certificado**: `true` para solo empresas verificadas, `false` para no verificadas"
           },
           "response": []
         },
@@ -1930,6 +2941,42 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Asesor",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/asesores/:asesor_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "asesores",
+                ":asesor_id"
+              ],
+              "variable": [
+                {
+                  "key": "asesor_id",
+                  "value": "{{asesor_id}}"
+                }
+              ]
+            },
+            "description": "Eliminación física (hard delete) de un asesor de la empresa.\n\nPreferible usar `PUT /importadores/asesores/{id}/estado` (soft delete) si el\nasesor tiene historial de cotizaciones/chat. El hard delete solo se permite\ncuando el asesor no tiene cotizaciones asignadas ni es participante de chats."
           },
           "response": []
         },
@@ -2287,6 +3334,35 @@
           "response": []
         },
         {
+          "name": "Metricas Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/metricas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "metricas"
+              ]
+            },
+            "description": "Resumen comercial de la empresa: cotizaciones respondidas, tasa de aceptación,\nvolumen cotizado y rendimiento (panel importadora).\n\nConsultas agregadas (COUNT/SUM) — evita cargar todas las filas en memoria\n(crítico con 100+ ops concurrentes)."
+          },
+          "response": []
+        },
+        {
           "name": "Listar Importadores Por Categoria",
           "request": {
             "method": "GET",
@@ -2604,6 +3680,124 @@
               ]
             },
             "description": "Placeholder de los términos y condiciones de uso de la plataforma (en construcción)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notificaciones",
+      "item": [
+        {
+          "name": "Listar Notificaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notificaciones"
+              ],
+              "query": [
+                {
+                  "key": "solo_no_leidas",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Si true, solo no leídas"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Lista las notificaciones reales del usuario logueado (persistidas en BD)."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Todas Leidas",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notificaciones/leer-todas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notificaciones",
+                "leer-todas"
+              ]
+            },
+            "description": "Marca todas las notificaciones del usuario como leídas."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Leida",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notificaciones/:notificacion_id/leer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notificaciones",
+                ":notificacion_id",
+                "leer"
+              ],
+              "variable": [
+                {
+                  "key": "notificacion_id",
+                  "value": "{{notificacion_id}}"
+                }
+              ]
+            },
+            "description": "Marca una notificación propia como leída."
           },
           "response": []
         }

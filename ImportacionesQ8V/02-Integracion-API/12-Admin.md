@@ -1,6 +1,7 @@
 # APIs — Administración
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/12-Admin.md`; el resto se sobrescribe.
 
 ### `GET /admin/cotizaciones-abiertas`
 
@@ -145,6 +146,7 @@ _Sin campos detallados en OpenAPI._
 | `calificacion_promedio` | `number` | no |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | no |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `email_dueño` | `string` | sí | Email de la cuenta dueña de la empresa |
 | `password_dueño` | `string` | sí | Contraseña inicial de la cuenta dueña |
@@ -191,6 +193,7 @@ _Sin campos detallados en OpenAPI._
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
@@ -217,6 +220,7 @@ _Sin campos detallados en OpenAPI._
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |

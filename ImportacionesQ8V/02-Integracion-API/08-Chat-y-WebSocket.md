@@ -1,6 +1,7 @@
 # APIs — Chat y WebSocket
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/08-Chat-y-WebSocket.md`; el resto se sobrescribe.
 
 ## WebSocket (no aparece completo en OpenAPI REST)
 
@@ -64,29 +65,8 @@ Si el WebSocket no está disponible, usa:
 
 ## Endpoints REST de chat
 
-### `POST /chat/iniciar` (recomendado para asesores)
-
-Permite al **asesor o dueño** abrir (o reutilizar) la conversación de negociación **en el momento de enviar la propuesta**, sin esperar a que el solicitante llame a `PUT /cotizaciones/{id}/propuestas/aceptar`.
-
-> Nota de naming: el gap del frontend citaba `POST /chats/iniciar`. En este API el prefijo del módulo es `/chat` (singular), coherente con el resto de rutas.
-
-- **Auth:** JWT rol `importador` o `asesor`
-- **Body:**
-
-```json
-{
-  "propuesta_id": "uuid-opcional",
-  "cotizacion_id": "uuid-opcional",
-  "mensaje_inicial": "Hola, te dejo la propuesta y quedo atento."
-}
-```
-
-Debes enviar `propuesta_id` **o** `cotizacion_id`. La propuesta debe estar enviada (`pendiente`/`aceptada`, no `borrador`). Un asesor solo puede iniciar si es el asignado de la cotización (o si aún no hay asignado).
-
-- **Respuesta:** `ConversacionChatResponse` (201). Idempotente si ya existía la conversación.
-- **Efecto colateral:** notificación in-app al solicitante (`tipo: negociacion`).
-
----
+`POST /chat/iniciar` es la vía recomendada para asesores: reutiliza la
+conversación existente si ya la hay, en vez de crear duplicados.
 
 ### `GET /chat/conversaciones`
 
@@ -146,6 +126,7 @@ Array de `MensajeChatResponse`:
 |-------|------|-----|-------------|
 | `contenido` | `string` | sí |  |
 | `tipo` | `string` | no |  |
+| `metadata` | `Optional[object]` | no |  |
 
 ```json
 {
@@ -164,6 +145,42 @@ Array de `MensajeChatResponse`:
 | `tipo` | `string` | sí |  |
 | `fecha_envio` | `string` | sí |  |
 | `metadata` | `Optional[object]` | no |  |
+
+---
+
+### `POST /chat/iniciar`
+
+- **Resumen:** Iniciar Chat
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+
+**Body (`IniciarChatRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `propuesta_id` | `Optional[string]` | no |  |
+| `mensaje_inicial` | `Optional[string]` | no |  |
+
+```json
+{
+  "cotizacion_id": "<cotizacion_id>",
+  "propuesta_id": "<propuesta_id>",
+  "mensaje_inicial": "<mensaje_inicial>"
+}
+```
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `cotizacion_id` | `string` | sí |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `string` | sí |  |
+| `importador_usuario_id` | `string` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
 
 ---
 

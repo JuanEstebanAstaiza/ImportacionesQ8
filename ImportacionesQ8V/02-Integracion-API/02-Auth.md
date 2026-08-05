@@ -1,6 +1,7 @@
 # APIs — Autenticación
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/02-Auth.md`; el resto se sobrescribe.
 
 ### `POST /auth/forgot-password`
 

@@ -137,7 +137,9 @@ def body_for(path: str, method: str) -> dict | None:
 
 
 def main() -> None:
-    d = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    # utf-8-sig: el snapshot se exporta desde PowerShell, que antepone BOM.
+    # También lee correctamente un archivo sin BOM (curl, bash).
+    d = json.loads(OPENAPI.read_text(encoding="utf-8-sig"))
     by_tag: dict[str, list] = defaultdict(list)
 
     for path, methods in sorted(d["paths"].items()):

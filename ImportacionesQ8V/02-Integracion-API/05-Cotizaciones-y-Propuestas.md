@@ -1,8 +1,9 @@
 # APIs — Cotizaciones y propuestas
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/05-Cotizaciones-y-Propuestas.md`; el resto se sobrescribe.
 
-### `GET /cotizaciones/`
+### `GET /cotizaciones`
 
 - **Resumen:** Listar Cotizaciones
 - **Auth:** Bearer JWT
@@ -45,7 +46,7 @@ Array de `CotizacionResponse`:
 
 ---
 
-### `POST /cotizaciones/`
+### `POST /cotizaciones`
 
 - **Resumen:** Crear Cotizacion
 - **Auth:** Bearer JWT
@@ -386,7 +387,7 @@ Array de `PropuestaResponse`:
 
 ---
 
-### `POST /propuestas/`
+### `POST /propuestas`
 
 - **Resumen:** Enviar Propuesta
 - **Auth:** Bearer JWT

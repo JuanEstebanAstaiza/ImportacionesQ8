@@ -287,11 +287,13 @@ class TestDependencies:
 
     def test_require_admin_role(self, client, monkeypatch):
         data = registrar_verificado(client, monkeypatch, "solicitante@example.com")
-        response = client.post("/importadores", json={
+        response = client.post("/admin/importadores", json={
             "nombre_empresa": "Importadora Test",
             "especialidad_producto": ["Textiles"],
             "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
+            "tiempo_respuesta_promedio": "24h",
+            "email_dueño": "dueño_rol_denegado@example.com",
+            "password_dueño": "ClaveSegura1"
         }, headers={"Authorization": f"Bearer {data['access_token']}"})
         assert response.status_code == status.HTTP_403_FORBIDDEN
 

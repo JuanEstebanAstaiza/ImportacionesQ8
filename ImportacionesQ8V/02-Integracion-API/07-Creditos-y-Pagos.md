@@ -1,6 +1,7 @@
 # APIs — Créditos y pagos
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/07-Creditos-y-Pagos.md`; el resto se sobrescribe.
 
 ## Modelo actual (importante)
 
@@ -21,7 +22,7 @@ Los endpoints `GET /creditos/saldo` y `GET /creditos/movimientos` pueden seguir 
 
 - **Resumen:** Comprar Creditos
 - **Auth:** Bearer JWT
-- **Códigos:** **410** (default), 200 si `COBRO_A_SOLICITANTES=true`, 422
+- **Códigos:** 200, 422
 
 **Body (`ComprarCreditosRequest`)**
 

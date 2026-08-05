@@ -1,13 +1,14 @@
 # APIs — Importadores
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/04-Importadores.md`; el resto se sobrescribe.
 
-### `GET /importadores/`
+### `GET /importadores`
 
 - **Resumen:** Listar Importadores
 - **Auth:** Público
 - **Códigos:** 200, 422
-- **Query:** `especialidad`, `pais`, `orden`, `certificado`
+- **Query:** `especialidad`, `pais`, `orden`, `certificado`, `limit`, `offset`
 
 **Respuesta (`array[ImportadorResponse]`)**
 
@@ -23,52 +24,7 @@ Array de `ImportadorResponse`:
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
-| `estado` | `string` | sí |  |
-| `solo_cotizaciones_directas` | `boolean` | no |  |
-| `verificado` | `boolean` | no |  |
-| `fecha_registro` | `string` | sí |  |
-
----
-
-### `POST /importadores/`
-
-- **Resumen:** Crear Importador
-- **Auth:** Bearer JWT
-- **Códigos:** 201, 422
-
-**Body (`ImportadorCreate`)**
-
-| Campo | Tipo | Req | Descripción |
-|-------|------|-----|-------------|
-| `nombre_empresa` | `string` | sí | Nombre de la empresa importadora |
-| `logo_url` | `Optional[string]` | no |  |
-| `especialidad_producto` | `array[string]` | sí | Categorías de producto (ej: ['Textiles', 'Electrónica']) |
-| `paises_origen` | `array[string]` | sí | Países de origen (ej: ['China', 'Vietnam']) |
-| `calificacion_promedio` | `number` | no |  |
-| `tiempo_respuesta_promedio` | `string` | sí | Tiempo promedio de respuesta (ej: '24h') |
-| `capacidad_volumen` | `Optional[integer]` | no |  |
-
-```json
-{
-  "nombre_empresa": "<nombre_empresa>",
-  "especialidad_producto": null,
-  "paises_origen": null,
-  "tiempo_respuesta_promedio": "<tiempo_respuesta_promedio>"
-}
-```
-
-**Respuesta (`ImportadorResponse`)**
-
-| Campo | Tipo | Req | Descripción |
-|-------|------|-----|-------------|
-| `id` | `string` | sí |  |
-| `nombre_empresa` | `string` | sí |  |
-| `logo_url` | `Optional[string]` | sí |  |
-| `especialidad_producto` | `array[string]` | sí |  |
-| `paises_origen` | `array[string]` | sí |  |
-| `calificacion_promedio` | `number` | sí |  |
-| `tiempo_respuesta_promedio` | `string` | sí |  |
-| `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
@@ -132,6 +88,15 @@ Array de `AsesorResponse`:
 
 ---
 
+### `DELETE /importadores/asesores/{asesor_id}`
+
+- **Resumen:** Eliminar Asesor
+- **Auth:** Bearer JWT
+- **Códigos:** 204, 422
+- **Path params:** `asesor_id`
+
+---
+
 ### `PUT /importadores/asesores/{asesor_id}/estado`
 
 - **Resumen:** Actualizar Estado Asesor
@@ -161,38 +126,6 @@ Array de `AsesorResponse`:
 | `telefono` | `Optional[string]` | no |  |
 | `activo` | `boolean` | sí |  |
 | `fecha_creacion` | `string` | sí |  |
-
----
-
-### `DELETE /importadores/asesores/{asesor_id}`
-
-- **Resumen:** Hard delete de un asesor (solo dueño). Preferir soft delete con `PUT .../estado`.
-- **Auth:** Bearer JWT rol `importador`
-- **Códigos:** 204, 404, 409
-- **409:** el asesor tiene cotizaciones asignadas o conversaciones de chat (conservar historial con soft delete).
-
----
-
-### `GET /importadores/metricas`
-
-- **Resumen:** Dashboard comercial de la empresa (propuestas, tasa de aceptación, volumen USD, órdenes, asesores activos).
-- **Auth:** Bearer JWT rol `importador`
-- **Códigos:** 200
-
-**Respuesta (`MetricasImportadorResponse`)**
-
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `importador_id` | string |  |
-| `total_cotizaciones_recibidas` | int |  |
-| `total_propuestas_enviadas` | int |  |
-| `total_propuestas_aceptadas` | int |  |
-| `tasa_aceptacion_pct` | number |  |
-| `volumen_cotizado_usd` | number | Suma de precios ofrecidos |
-| `ordenes_activas` | int |  |
-| `ordenes_totales` | int |  |
-| `asesores_activos` | int |  |
-| `tiempo_promedio_respuesta_horas` | number\|null |  |
 
 ---
 
@@ -325,6 +258,7 @@ Array de `ImportadorResponse`:
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
@@ -353,6 +287,7 @@ Array de `ImportadorResponse`:
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
@@ -434,6 +369,29 @@ Array de `EvidenciaImportadorResponse`:
 
 ---
 
+### `GET /importadores/metricas`
+
+- **Resumen:** Metricas Importador
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`MetricasImportadorResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `total_cotizaciones_recibidas` | `integer` | sí |  |
+| `total_propuestas_enviadas` | `integer` | sí |  |
+| `total_propuestas_aceptadas` | `integer` | sí |  |
+| `tasa_aceptacion_pct` | `number` | sí |  |
+| `volumen_cotizado_usd` | `number` | sí |  |
+| `ordenes_activas` | `integer` | sí |  |
+| `ordenes_totales` | `integer` | sí |  |
+| `asesores_activos` | `integer` | sí |  |
+| `tiempo_promedio_respuesta_horas` | `Optional[number]` | no |  |
+
+---
+
 ### `GET /importadores/por-categoria`
 
 - **Resumen:** Listar Importadores Por Categoria
@@ -465,6 +423,7 @@ _Sin campos detallados en OpenAPI._
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
@@ -489,6 +448,7 @@ _Sin campos detallados en OpenAPI._
 | `paises_origen` | `Optional[array]` | no |  |
 | `tiempo_respuesta_promedio` | `Optional[string]` | no |  |
 | `capacidad_volumen` | `Optional[integer]` | no |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `solo_cotizaciones_directas` | `Optional[boolean]` | no |  |
 
 ```json
@@ -514,6 +474,7 @@ _Sin campos detallados en OpenAPI._
 | `calificacion_promedio` | `number` | sí |  |
 | `tiempo_respuesta_promedio` | `string` | sí |  |
 | `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |

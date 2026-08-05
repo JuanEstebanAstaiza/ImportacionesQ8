@@ -104,61 +104,29 @@ class TestObtenerImportador:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 class TestCrearImportador:
-    """Tests para el endpoint POST /importadores"""
-    
-    def test_crear_importador_sin_autenticacion(self, client):
-        """Intentar crear importador sin autenticación"""
-        response = client.post("/importadores", json={
-            "nombre_empresa": "Importadora Test",
-            "especialidad_producto": ["Textiles"],
-            "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
-        })
-        
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    
-    def test_crear_importador_sin_role_admin(self, client, monkeypatch):
-        """Intentar crear importador sin rol de admin"""
-        from conftest import registrar_verificado
-        data = registrar_verificado(client, monkeypatch, "solicitante@example.com")
-        token = data["access_token"]
-        
-        # Intentar crear importador - debería fallar por rol insuficiente
-        response = client.post("/importadores", json={
-            "nombre_empresa": "Importadora Test",
-            "especialidad_producto": ["Textiles"],
-            "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
-        }, headers={"Authorization": f"Bearer {token}"})
-        
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-    
-    def test_crear_importador_con_role_admin_deshabilitado(self, client, db_session):
-        """POST /importadores sin dueño está deshabilitado; el alta oficial es /admin/importadores."""
-        _, _ah = crear_usuario_con_token(db_session, rol="admin"); token = _ah["Authorization"].split(" ", 1)[1]
+    """El alta de empresas vive solo en POST /admin/importadores.
+
+    `/importadores` no expone POST: crear la ficha sin representante legal dejaba
+    importadoras huérfanas. La cobertura del alta real (201, 403, 401, 422, email
+    duplicado) está en test_admin.py::TestCrearImportadorConDueño.
+    """
+
+    def test_post_no_esta_expuesto(self, client, db_session):
+        """Con GET registrado en la ruta, un POST debe dar 405, no 404."""
+        _, headers = crear_usuario_con_token(db_session, rol="admin")
 
         response = client.post("/importadores", json={
             "nombre_empresa": "Importadora Test Admin",
-            "especialidad_producto": ["Textiles", "Electrónica"],
-            "paises_origen": ["China", "Vietnam", "Tailandia"],
-            "tiempo_respuesta_promedio": "12h",
-            "calificacion_promedio": 4.5,
-            "capacidad_volumen": 50000
-        }, headers={"Authorization": f"Bearer {token}"})
+            "especialidad_producto": ["Textiles"],
+            "paises_origen": ["China"],
+            "tiempo_respuesta_promedio": "12h"
+        }, headers=headers)
 
-        assert response.status_code == status.HTTP_410_GONE
-        assert "/admin/importadores" in response.json()["detail"]
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
-    def test_crear_importador_campos_requeridos(self, client, db_session):
-        """Crear importador con campos requeridos faltantes (validación Pydantic antes del 410)"""
-        _, _ah = crear_usuario_con_token(db_session, rol="admin"); token = _ah["Authorization"].split(" ", 1)[1]
-
-        # Intentar crear sin campos requeridos - debería fallar
-        response = client.post("/importadores", json={
-            "nombre_empresa": ""  # Campo vacío
-        }, headers={"Authorization": f"Bearer {token}"})
-
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    def test_get_de_la_coleccion_sigue_vivo(self, client):
+        """Quitar el POST no debe afectar la lectura del catálogo."""
+        assert client.get("/importadores").status_code == status.HTTP_200_OK
 
 class TestImportadorModel:
     """Tests para el modelo ORM Importador"""

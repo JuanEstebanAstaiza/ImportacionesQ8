@@ -139,16 +139,8 @@ class TestCrearCotizacion:
     
     def test_crear_cotizacion_abierta_exitosa(self, client, monkeypatch, db_session):
         """Crear cotización abierta exitosamente"""
-        _, _admin_h = crear_usuario_con_token(db_session, rol="admin"); token_admin = _admin_h["Authorization"].split(" ", 1)[1]
-        
-        importador_response = client.post("/importadores", json={
-            "nombre_empresa": "China Textiles Co.",
-            "especialidad_producto": ["Textiles"],
-            "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "12h"
-        }, headers={"Authorization": f"Bearer {token_admin}"})
-        
-        # Registrar usuario solicitante y obtener token
+        # Una cotización abierta no se dirige a ninguna empresa, así que no
+        # necesita un importador creado de antemano.
         token_solicitante = registrar_verificado(client, monkeypatch, "solicitante4@example.com")["access_token"]
         
         # Crear cotización abierta - debería funcionar

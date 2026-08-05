@@ -8,7 +8,7 @@ from uuid import UUID
 import json
 
 import config
-from schemas.importador import ImportadorCreate, ImportadorResponse, ImportadorUpdate
+from schemas.importador import ImportadorResponse, ImportadorUpdate
 from schemas.usuario import AsesorCreate, AsesorResponse, AsesorEstadoUpdate
 from schemas.campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
@@ -630,27 +630,9 @@ async def obtener_importador(
     
     return importador
 
-@router.post("", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
-async def crear_importador(
-    importador_data: ImportadorCreate,
-    current_user: dict = Depends(require_rol("admin")),
-    db: Session = Depends(get_db),
-):
-    """
-    **Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba
-    importadoras sin representante legal (dueño). El alta oficial es siempre:
-
-    `POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)
-    en un solo paso. El dueño es el jefe de los asesores/operadores.
-    """
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail=(
-            "Este endpoint está deshabilitado: no se permite crear una empresa "
-            "sin representante legal. Usa POST /admin/importadores para crear "
-            "la empresa junto con su cuenta dueño."
-        )
-    )
+# El alta de importadoras vive solo en `POST /admin/importadores`: crea la empresa
+# junto con su cuenta dueño (representante legal) en un paso. Aquí no se expone un
+# POST propio porque crear la ficha suelta dejaba empresas sin representante.
 
 # ==================== Endpoints de la bandeja de solicitudes del importador (Tarea 2.5) ====================
 

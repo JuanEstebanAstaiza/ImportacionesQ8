@@ -82,6 +82,28 @@ class TestCrearImportadorConDueño:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_sin_autenticacion_es_rechazado(self, client):
+        response = client.post(
+            "/admin/importadores",
+            json={
+                "nombre_empresa": "Empresa Anonima",
+                "especialidad_producto": ["Textiles"],
+                "paises_origen": ["China"],
+                "tiempo_respuesta_promedio": "24h",
+                "email_dueño": "anonimo@example.com",
+                "password_dueño": "ClaveSegura1"
+            },
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_campos_requeridos_faltantes(self, client, auth_headers_admin):
+        response = client.post(
+            "/admin/importadores",
+            json={"nombre_empresa": ""},
+            headers=auth_headers_admin
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
     def test_email_duplicado_es_rechazado(self, client, auth_headers_admin, empresa):
         importador, dueño = empresa
         response = client.post(

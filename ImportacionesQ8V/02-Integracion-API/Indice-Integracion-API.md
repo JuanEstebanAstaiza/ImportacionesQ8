@@ -97,7 +97,7 @@ sequenceDiagram
 
 ### 3) Cotización (sin cobro al solicitante)
 
-1. `POST /cotizaciones/` (`modalidad`: `abierta` | `dirigida`) — **gratis** para natural/jurídica
+1. `POST /cotizaciones` (`modalidad`: `abierta` | `dirigida`) — **gratis** para natural/jurídica
 2. **No** pedir compra de créditos ni mostrar saldo como requisito
 3. `POST /creditos/comprar` está **deshabilitado** (410); el cobro de la plataforma es a importadoras por contrato
 4. Flag backend: `COBRO_A_SOLICITANTES=false` (ver [[07-Creditos-y-Pagos]])
@@ -119,11 +119,11 @@ Detalle en [[08-Chat-y-WebSocket]].
 |--------------------|------------------------|
 | Login / Registro / OTP | [[02-Auth]] |
 | Perfil usuario | `GET/PUT /usuarios/me` |
-| Catálogo importadores | `GET /importadores/`, destacados, certificados |
-| Crear cotización | `POST /cotizaciones/`, `GET /creditos/saldo` |
+| Catálogo importadores | `GET /importadores`, destacados, certificados |
+| Crear cotización | `POST /cotizaciones`, `GET /creditos/saldo` |
 | Inbox importadora | `GET /cotizaciones/pool-empresa`, `POST .../reclamar` |
-| Propuestas | `POST /propuestas/`, borrador, enviar, pre-aceptar |
-| Órdenes | `GET /ordenes/`, actualizar estado, documentos |
+| Propuestas | `POST /propuestas`, borrador, enviar, pre-aceptar |
+| Órdenes | `GET /ordenes`, actualizar estado, documentos |
 | Chat | `GET /chat/conversaciones`, `POST /chat/iniciar`, WS ticket |
 | Cursos / LMS | [[15-Cursos-LMS]] — `GET/POST /cursos`, `/mis-cursos`, progreso |
 | Notificaciones | [[16-Notificaciones]] — `GET /notificaciones`, marcar leídas |
@@ -138,7 +138,7 @@ Detalle en [[08-Chat-y-WebSocket]].
 
 - Webhook Wompi (`POST /pagos/webhook/wompi`) — solo backend/Wompi.
 - Secretos (`SECRET_KEY`, `WOMPI_EVENTS_SECRET`, SMTP password, Redis password) — **nunca** en el repo del frontend ni en `VITE_*`.
-- Crear importadoras: `POST /importadores/` está deshabilitado; usar flujos admin.
+- Crear importadoras: única vía `POST /admin/importadores` (empresa + cuenta dueño en un paso). `/importadores` no expone POST.
 
 ---
 
