@@ -39,7 +39,7 @@ def get_db_now(db: Session) -> datetime:
         # Fallback a datetime.utcnow() (SQLite)
         return datetime.utcnow()
 
-@router.get("/", response_model=List[OrdenResponse])
+@router.get("", response_model=List[OrdenResponse])
 async def listar_ordenes(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)

@@ -235,11 +235,9 @@ function sanitizePath(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   const [pathname, search] = normalized.split("?");
 
-  // Solo normaliza raíces de colección que en backend están definidas como "/" bajo su prefijo.
-  // Evita tocar rutas como /notificaciones o /chat/conversaciones, que no llevan slash final.
-  const trailingSlashRoots = new Set(["/importadores", "/cotizaciones", "/ordenes", "/propuestas"]);
-  const canonicalPathname =
-    trailingSlashRoots.has(pathname) && !pathname.endsWith("/") ? `${pathname}/` : pathname;
+  // El backend registra todas sus rutas sin slash final, incluidas las raíces de
+  // colección (`/importadores`, `/cotizaciones`...). Se colapsa el que llegue.
+  const canonicalPathname = pathname.length > 1 ? pathname.replace(/\/+$/, "") || "/" : pathname;
 
   return search ? `${canonicalPathname}?${search}` : canonicalPathname;
 }

@@ -39,7 +39,7 @@ def json_contains_column(column, value):
     # Usar LIKE para buscar el valor dentro del JSON (compatible con ambos)
     return column.like(f'%"{value}"%')
 
-@router.get("/", response_model=List[ImportadorResponse])
+@router.get("", response_model=List[ImportadorResponse])
 @limiter.limit(RATE_LIMIT_PUBLIC_READ)
 async def listar_importadores(
     request: Request,
@@ -630,7 +630,7 @@ async def obtener_importador(
     
     return importador
 
-@router.post("/", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
+@router.post("", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def crear_importador(
     importador_data: ImportadorCreate,
     current_user: dict = Depends(require_rol("admin")),

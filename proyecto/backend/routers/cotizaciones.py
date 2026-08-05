@@ -32,7 +32,7 @@ router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
 # Router independiente para /propuestas (no anidado bajo /cotizaciones) - ver Tarea 2.1
 propuestas_router = APIRouter(prefix="/propuestas", tags=["Propuestas"])
 
-@router.get("/", response_model=List[CotizacionResponse])
+@router.get("", response_model=List[CotizacionResponse])
 async def listar_cotizaciones(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -229,7 +229,7 @@ async def obtener_cotizacion(
     
     return cotizacion
 
-@router.post("/", response_model=CotizacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CotizacionResponse, status_code=status.HTTP_201_CREATED)
 async def crear_cotizacion(
     cotizacion_data: CotizacionCreate,
     current_user: dict = Depends(require_rol("solicitante")),
@@ -399,7 +399,7 @@ def _validar_congruencia_categoria(cotizacion: Cotizacion, importador_id_str: st
         )
 
 
-@propuestas_router.post("/", response_model=PropuestaResponse, status_code=status.HTTP_201_CREATED)
+@propuestas_router.post("", response_model=PropuestaResponse, status_code=status.HTTP_201_CREATED)
 async def enviar_propuesta(
     propuesta: PropuestaCreate,
     current_user: dict = Depends(require_rol("importador")),

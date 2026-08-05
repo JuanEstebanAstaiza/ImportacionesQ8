@@ -26,7 +26,11 @@ from routers.cursos import router as cursos_router
 from routers.notificaciones import router as notificaciones_router
 from routers.documentos import router as documentos_router
 from utils.limiter import limiter
-from utils.security_middleware import SecurityHeadersMiddleware, RequestSizeLimitMiddleware
+from utils.security_middleware import (
+    SecurityHeadersMiddleware,
+    RequestSizeLimitMiddleware,
+    TrailingSlashNormalizationMiddleware,
+)
 
 logger = logging.getLogger("importacionesq8")
 
@@ -101,6 +105,11 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 # Blindaje HTTP (orden: size limit antes de handlers pesados; headers al final de la cadena de salida)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Va de último para quedar como el más externo: normaliza la ruta antes de que
+# CORS, rate limiting o el router la vean. Todas las rutas se registran sin slash
+# final; esto hace que `/importadores/` resuelva igual que `/importadores`.
+app.add_middleware(TrailingSlashNormalizationMiddleware)
 
 # Configurar rate limiting (fuerza bruta en /auth/login, abuso en /auth/register)
 app.state.limiter = limiter

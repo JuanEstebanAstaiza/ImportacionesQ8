@@ -66,7 +66,7 @@ export interface InviteSolicitantePayload {
 
 export const adminService = {
   listCompanies(): Promise<BackendImporter[]> {
-    return apiRequest<BackendImporter[]>("/importadores/", { method: "GET" });
+    return apiRequest<BackendImporter[]>("/importadores", { method: "GET" });
   },
 
   createImporterWithOwner(payload: CreateImporterWithOwnerPayload): Promise<CreateImporterWithOwnerResponse> {

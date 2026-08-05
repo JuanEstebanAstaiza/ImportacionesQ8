@@ -59,6 +59,36 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
+class TrailingSlashNormalizationMiddleware:
+    """Colapsa el slash final para que `/importadores/` y `/importadores` sean la misma ruta.
+
+    La app corre con `redirect_slashes=False` (sin 307 automáticos), así que sin
+    esto cada ruta solo respondería en la forma exacta con que fue registrada.
+    Todas se registran sin slash final; aquí se normaliza lo que llegue con él,
+    de modo que clientes viejos siguen funcionando sin un redirect de por medio.
+    """
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if len(path) > 1 and path.endswith("/"):
+            normalized = path.rstrip("/") or "/"
+            scope = dict(scope)
+            scope["path"] = normalized
+            # `raw_path` lo consultan algunos componentes ASGI: se mantiene coherente.
+            raw_path = scope.get("raw_path")
+            if isinstance(raw_path, bytes):
+                scope["raw_path"] = normalized.encode("latin1")
+
+        await self.app(scope, receive, send)
+
+
 class RequestSizeLimitMiddleware:
     """Rechaza bodies > MAX_BODY_BYTES (anti DoS)."""
 

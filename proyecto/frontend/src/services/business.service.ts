@@ -333,11 +333,11 @@ export interface BackendMarkAllNotificationsReadResponse {
 
 export const businessService = {
   listImporters(): Promise<BackendImporter[]> {
-    return apiRequest<BackendImporter[]>("/importadores/", { method: "GET" });
+    return apiRequest<BackendImporter[]>("/importadores", { method: "GET" });
   },
 
   listQuotes(): Promise<BackendCotizacion[]> {
-    return apiRequest<BackendCotizacion[]>("/cotizaciones/", { method: "GET" });
+    return apiRequest<BackendCotizacion[]>("/cotizaciones", { method: "GET" });
   },
 
   getQuoteById(cotizacionId: string): Promise<BackendCotizacion> {
@@ -347,7 +347,7 @@ export const businessService = {
   },
 
   createQuote(payload: CreateCotizacionPayload): Promise<BackendCotizacion> {
-    return apiRequest<BackendCotizacion>("/cotizaciones/", {
+    return apiRequest<BackendCotizacion>("/cotizaciones", {
       method: "POST",
       body: payload,
     });
@@ -396,7 +396,7 @@ export const businessService = {
   },
 
   listOrders(): Promise<BackendOrder[]> {
-    return apiRequest<BackendOrder[]>("/ordenes/", { method: "GET" });
+    return apiRequest<BackendOrder[]>("/ordenes", { method: "GET" });
   },
 
   getOrderById(orderId: string): Promise<BackendOrder> {
@@ -542,7 +542,7 @@ export const businessService = {
   },
 
   createProposal(payload: CreatePropuestaPayload): Promise<BackendPropuesta> {
-    return apiRequest<BackendPropuesta>("/propuestas/", {
+    return apiRequest<BackendPropuesta>("/propuestas", {
       method: "POST",
       body: payload,
     });
