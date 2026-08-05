@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
-from urllib.parse import urlparse
+
+from utils.urls import canonicalize_resource_url
 
 
 NivelCursoLiteral = Literal["Principiante", "Avanzado"]
@@ -14,17 +15,13 @@ MAX_RECURSOS_POR_LECCION = 20
 
 
 def _validar_url_http(value: Optional[str], *, campo: str = "url") -> Optional[str]:
-    """Solo permite http/https (mitiga javascript:/data: y esquemas raros)."""
-    if value is None or value == "":
-        return value
-    raw = value.strip()
-    parsed = urlparse(raw)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError(f"{campo} debe ser una URL http(s) absoluta válida")
-    host = parsed.netloc.lower()
-    if "youtube.com" in host or "youtu.be" in host:
-        raise ValueError(f"{campo} no permite enlaces de YouTube; usa recursos de gestión documental")
-    return raw
+    """Acepta rutas del backend o URLs http(s) externas y las deja canónicas.
+
+    Guarda `/documentos/archivos/<id>/descargar` en vez de una URL absoluta atada
+    al host donde se publicó el curso, para que siga resolviendo desde localhost,
+    Dev Tunnel o producción. Sigue bloqueando `javascript:`/`data:` y YouTube.
+    """
+    return canonicalize_resource_url(value, campo=campo)
 
 
 class RecursoLeccionCreate(BaseModel):

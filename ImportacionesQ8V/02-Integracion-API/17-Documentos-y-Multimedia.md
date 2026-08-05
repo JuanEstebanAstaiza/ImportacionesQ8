@@ -197,6 +197,31 @@ Esto habilita trazabilidad documental y descarga desde módulo de órdenes.
 
 ---
 
+## Normalización de URLs de recursos
+
+Los routers del backend se montan en la raíz (`/documentos`, `/cursos`, ...).
+El prefijo `/api` **no existe en FastAPI**: lo agrega el proxy del dev server de
+Vite (`server.proxy` en `vite.config.ts`) y lo elimina antes de reenviar.
+
+Reglas:
+
+- `storage_url` de un archivo propio se guarda como ruta canónica del backend:
+  `/documentos/archivos/{id}/descargar`. Nunca con host ni con `/api`.
+- Un recurso realmente externo (CDN, almacenamiento remoto) se guarda como URL
+  absoluta http(s) y se conserva intacta.
+- Al leer, el cliente resuelve la ruta contra el backend alcanzable desde ese
+  browser (`resolveApiUrl` en `services/api-client.ts`). Eso absorbe lo que ya
+  está guardado en formas viejas: `/api/...`, `/api/api/...`,
+  `http://localhost:5173/api/...` o `http://localhost:8000/...`.
+- Al escribir, el cliente envía la forma canónica (`toApiPath`) y el backend la
+  vuelve a canonicalizar (`utils/urls.py`), de modo que re-guardar un curso
+  antiguo repara sus URLs.
+- `VITE_API_URL` no debe incluir `/api`. Si apunta a loopback y la app se sirve
+  desde un host remoto (Dev Tunnel, LAN), el cliente lo ignora y usa el proxy
+  same-origin, que sí es alcanzable desde el browser del usuario.
+
+---
+
 ## Estado de compatibilidad
 
 - Compatible con autenticación JWT existente.

@@ -66,7 +66,7 @@ import type {
   ResourceType,
 } from "./types";
 import { isSafeEmbedUrl, isSafeHttpUrl, safeHttpUrl } from "@/utils/safe-url";
-import { getStoredToken, resolveApiUrl } from "@/services/api-client";
+import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import {
   businessService,
   type BackendArchivoItem,
@@ -261,52 +261,57 @@ function isEmbeddableVideo(url: string): boolean {
   return isSafeEmbedUrl(url);
 }
 
+/**
+ * Toda URL guardada (relativa, con prefijo `/api`, o absoluta hacia localhost:5173
+ * / localhost:8000 de entornos previos) se resuelve contra el backend alcanzable
+ * desde este browser. Ver `resolveApiUrl` en services/api-client.
+ */
 function normalizeVideoUrl(value: string | null | undefined): string {
-  const normalized = resolveApiUrl(value);
-  if (!normalized) {
-    return "";
-  }
-
-  try {
-    const parsed = new URL(normalized);
-    const isLegacyFrontendApiHost =
-      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") && parsed.port === "5173";
-    const isCurrentFrontendApiHost = typeof window !== "undefined" && parsed.origin === window.location.origin;
-
-    if (parsed.pathname.startsWith("/api/") && (isLegacyFrontendApiHost || isCurrentFrontendApiHost)) {
-      return resolveApiUrl(`${parsed.pathname}${parsed.search}`);
-    }
-  } catch {
-    return normalized;
-  }
-
-  return normalized;
+  return resolveApiUrl(value);
 }
 
-function toAbsoluteHttpUrl(value: string | null | undefined): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) {
-    return "";
+/**
+ * La descarga del backend exige Authorization, así que un enlace directo daría
+ * 401. Se resuelve la ruta, se descarga con token y se abre desde un blob.
+ * Los recursos externos (CDN) se abren tal cual, sin enviarles nuestro token.
+ */
+async function openResourceInNewTab(value: string | null | undefined): Promise<boolean> {
+  const canonical = toApiPath(value);
+  if (!canonical) {
+    return false;
   }
 
-  if (/^https?:\/\//i.test(raw)) {
-    return raw;
+  const target = resolveApiUrl(canonical);
+  const token = getStoredToken();
+  const isBackendResource = canonical.startsWith("/");
+
+  if (!isBackendResource || !token) {
+    window.open(target, "_blank", "noopener,noreferrer");
+    return true;
   }
 
-  // Rutas API relativas siempre deben resolver al backend (evita guardar localhost:5173/api/...)
-  if (raw.startsWith("/api/") || raw.startsWith("api/")) {
-    return resolveApiUrl(raw.startsWith("/") ? raw : `/${raw}`);
-  }
+  // Se abre la pestaña antes del await para no chocar con el bloqueo de popups.
+  const popup = window.open("about:blank", "_blank");
 
-  if (typeof window !== "undefined") {
-    try {
-      return new URL(raw, window.location.origin).toString();
-    } catch {
-      // Continúa con fallback.
+  try {
+    const response = await fetch(target, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) {
+      popup?.close();
+      return false;
     }
-  }
 
-  return resolveApiUrl(raw);
+    const objectUrl = window.URL.createObjectURL(await response.blob());
+    if (popup) {
+      popup.location.replace(objectUrl);
+    } else {
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+    }
+    window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000);
+    return true;
+  } catch {
+    popup?.close();
+    return false;
+  }
 }
 
 function toEmbeddableUrl(url: string): string | null {
@@ -469,16 +474,25 @@ function ProtectedVideoPlayer({ url, onEnded }: { url: string; onEnded?: () => v
   );
 }
 
+/**
+ * Se valida contra la URL resuelta (http/https real) pero se persiste la forma
+ * canónica: ruta del backend para recursos propios, URL absoluta para externos.
+ */
+function toStorableResourceUrl(value: string | null | undefined): { canonical: string; resolved: string } {
+  const canonical = toApiPath(value);
+  return { canonical, resolved: resolveApiUrl(canonical) };
+}
+
 function toPublishInput(form: PublishFormState): { value: PublishCourseInput | null; error: string } {
   const precio = Number(form.precio);
-  const portadaUrl = toAbsoluteHttpUrl(form.portada_url);
+  const portada = toStorableResourceUrl(form.portada_url);
 
-  if (!form.titulo.trim() || !form.descripcion.trim() || !portadaUrl || !form.categoria.trim()) {
+  if (!form.titulo.trim() || !form.descripcion.trim() || !portada.canonical || !form.categoria.trim()) {
     return { value: null, error: "Completa titulo, descripcion, categoria e imagen del curso." };
   }
 
-  if (!isSafeHttpUrl(portadaUrl)) {
-    return { value: null, error: "La portada debe ser una URL http(s) absoluta válida." };
+  if (!isSafeHttpUrl(portada.resolved)) {
+    return { value: null, error: "La portada debe apuntar a un recurso http(s) válido." };
   }
 
   if (Number.isNaN(precio) || precio <= 0) {
@@ -503,18 +517,18 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
     const lessons = [] as PublishCourseInput["modulos"][number]["lecciones"];
 
     for (const lesson of module.lecciones) {
-      const normalizedVideoUrl = toAbsoluteHttpUrl(lesson.video_url);
+      const video = toStorableResourceUrl(lesson.video_url);
 
-      if (!lesson.titulo.trim() || !lesson.duracion.trim() || !normalizedVideoUrl) {
+      if (!lesson.titulo.trim() || !lesson.duracion.trim() || !video.canonical) {
         return { value: null, error: "Cada leccion debe incluir titulo, duracion y video subido." };
       }
 
-      if (toEmbeddableUrl(normalizedVideoUrl)) {
+      if (toEmbeddableUrl(video.resolved)) {
         return { value: null, error: "El video debe ser un archivo subido desde tus carpetas, no un enlace de YouTube/Vimeo." };
       }
 
-      if (!isSafeHttpUrl(normalizedVideoUrl)) {
-        return { value: null, error: "El video debe ser una URL http(s) absoluta válida." };
+      if (!isSafeHttpUrl(video.resolved)) {
+        return { value: null, error: "El video debe apuntar a un recurso http(s) válido." };
       }
 
       const resources = [] as PublishLessonResourceInput[];
@@ -527,14 +541,14 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
         }
 
         if (hasName && hasUrl) {
-          const normalizedResourceUrl = toAbsoluteHttpUrl(resource.url);
-          if (!isSafeHttpUrl(normalizedResourceUrl)) {
-            return { value: null, error: "Cada recurso debe apuntar a una URL http(s) absoluta válida." };
+          const normalizedResource = toStorableResourceUrl(resource.url);
+          if (!isSafeHttpUrl(normalizedResource.resolved)) {
+            return { value: null, error: "Cada recurso debe apuntar a un recurso http(s) válido." };
           }
 
           resources.push({
             nombre: resource.nombre.trim(),
-            url: normalizedResourceUrl,
+            url: normalizedResource.canonical,
             tipo: resource.tipo,
           });
         }
@@ -543,7 +557,7 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
       lessons.push({
         titulo: lesson.titulo.trim(),
         duracion: lesson.duracion.trim(),
-        video_url: normalizedVideoUrl,
+        video_url: video.canonical,
         recursos: resources,
       });
     }
@@ -558,7 +572,7 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
     value: {
       titulo: form.titulo.trim(),
       descripcion: form.descripcion.trim(),
-      portada_url: portadaUrl,
+      portada_url: portada.canonical,
       precio,
       nivel: form.nivel,
       categoria: form.categoria.trim(),
@@ -1066,7 +1080,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
     target: DocumentTarget,
     doc: BackendArchivoItem,
   ): void {
-    const resolvedUrl = toAbsoluteHttpUrl(resolveApiUrl(doc.storage_url));
+    // Se guarda la ruta canónica del backend (sin host ni prefijo de proxy) para
+    // que el curso siga funcionando en localhost, Dev Tunnel o producción.
+    const resolvedUrl = toApiPath(doc.storage_url);
     if (!resolvedUrl) {
       setActionError("El recurso seleccionado no tiene URL disponible.");
       return;
@@ -1256,7 +1272,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
           <Card key={course.id} className="overflow-hidden gap-0">
             <div className="aspect-[16/10] overflow-hidden bg-muted">
               <img
-                src={safeHttpUrl(course.portada_url, IMAGE_FALLBACK)}
+                src={safeHttpUrl(resolveApiUrl(course.portada_url), IMAGE_FALLBACK)}
                 alt={course.titulo}
                 className="h-full w-full object-cover"
                 onError={(event) => {
@@ -1530,7 +1546,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                   {inProgressCourses.map((course) => (
                     <Card key={course.id} className="gap-0 overflow-hidden">
                       <div className="aspect-[16/9] overflow-hidden bg-muted">
-                        <img src={safeHttpUrl(course.portada_url, IMAGE_FALLBACK)} alt={course.titulo} className="h-full w-full object-cover" onError={(event) => { event.currentTarget.src = IMAGE_FALLBACK; }} />
+                        <img src={safeHttpUrl(resolveApiUrl(course.portada_url), IMAGE_FALLBACK)} alt={course.titulo} className="h-full w-full object-cover" onError={(event) => { event.currentTarget.src = IMAGE_FALLBACK; }} />
                       </div>
                       <CardHeader>
                         <div className="flex items-start justify-between gap-3">
@@ -1850,21 +1866,22 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                       {activeLesson?.recursos.length ? (
                         <div className="space-y-2">
                           {activeLesson.recursos.map((resource) => (
-                            <Button key={resource.id} variant="outline" className="w-full justify-between" asChild>
-                              <a
-                                href={isSafeHttpUrl(resource.url) ? resource.url : undefined}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => {
-                                  if (!isSafeHttpUrl(resource.url)) e.preventDefault();
-                                }}
-                              >
-                                <span className="flex items-center gap-2 truncate">
-                                  <FileDown className="size-4" />
-                                  <span className="truncate">{resource.nombre}</span>
-                                </span>
-                                <Badge variant="secondary" className="capitalize">{resource.tipo}</Badge>
-                              </a>
+                            <Button
+                              key={resource.id}
+                              variant="outline"
+                              className="w-full justify-between"
+                              disabled={!isSafeHttpUrl(resolveApiUrl(resource.url))}
+                              onClick={() => {
+                                void openResourceInNewTab(resource.url).then((ok) => {
+                                  if (!ok) setActionError("No se pudo abrir el recurso desde el backend.");
+                                });
+                              }}
+                            >
+                              <span className="flex items-center gap-2 truncate">
+                                <FileDown className="size-4" />
+                                <span className="truncate">{resource.nombre}</span>
+                              </span>
+                              <Badge variant="secondary" className="capitalize">{resource.tipo}</Badge>
                             </Button>
                           ))}
                         </div>
@@ -2098,7 +2115,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                     </Button>
                     {publishForm.portada_url ? (
                       <Button variant="outline" size="sm" asChild>
-                        <a href={publishForm.portada_url} target="_blank" rel="noreferrer">Ver</a>
+                        <a href={resolveApiUrl(publishForm.portada_url)} target="_blank" rel="noreferrer">Ver</a>
                       </Button>
                     ) : null}
                   </div>
@@ -2288,7 +2305,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                     </Button>
                                     {resource.url ? (
                                       <Button variant="outline" size="sm" asChild>
-                                        <a href={resource.url} target="_blank" rel="noreferrer">Abrir</a>
+                                        <a href={resolveApiUrl(resource.url)} target="_blank" rel="noreferrer">Abrir</a>
                                       </Button>
                                     ) : null}
                                     <Button variant="outline" size="sm" onClick={() => removeResource(module.id, lesson.id, resource.id)} disabled={lesson.recursos.length === 1}>
@@ -2386,8 +2403,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                   <p className="truncate text-sm font-semibold">{file.nombre}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{file.extension.toUpperCase()} · {new Date(file.created_at).toLocaleDateString("es-CO")}</p>
                   <div className="mt-3 flex items-center gap-2">
-                    <Button size="sm" variant="outline" asChild>
-                      <a href={resolveApiUrl(file.storage_url)} target="_blank" rel="noreferrer">Abrir</a>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        void openResourceInNewTab(file.storage_url).then((ok) => {
+                          if (!ok) setActionError("No se pudo abrir el recurso desde el backend.");
+                        });
+                      }}
+                    >
+                      Abrir
                     </Button>
                     <Button size="sm" onClick={() => selectDocumentResource(file)}>Usar recurso</Button>
                   </div>

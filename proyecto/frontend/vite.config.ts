@@ -35,6 +35,11 @@ export default defineConfig({
 
   // Configuración del Servidor de Desarrollo y Proxy para Docker
   server: {
+    // Escucha en todas las interfaces para que el Dev Tunnel pueda exponerlo.
+    host: true,
+    // El browser remoto no alcanza localhost:8000: todo el tráfico de API y de
+    // archivos viaja por este mismo origen y el proxy lo reenvía al backend.
+    allowedHosts: ['.devtunnels.ms', '.ngrok-free.app', '.ngrok.io', '.trycloudflare.com'],
     proxy: {
       '/api': {
         // Apunta al contenedor de Docker en tu máquina local

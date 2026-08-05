@@ -49,7 +49,7 @@ import {
   type CreateCotizacionPayload,
   type CreatePropuestaPayload,
 } from "@/services/business.service";
-import { getStoredRole, getStoredToken, resolveApiUrl } from "@/services/api-client";
+import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { RegisterRequest } from "@/types/auth";
 
 const RESET_PASSWORD_PATH = "/restablecer-password";
@@ -1565,8 +1565,8 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                         <span className={clsx("text-[11px] font-medium px-2 py-0.5 rounded",doc.url?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-700")}>{doc.status}</span>
                         {doc.url && (
                           <>
-                            <a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>}>Ver PDF</Button></a>
-                            <a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>}>Descargar</Button></a>
+                            <a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>}>Ver PDF</Button></a>
+                            <a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>}>Descargar</Button></a>
                           </>
                         )}
                       </div>
@@ -2018,7 +2018,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
                     <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date}</p></div></div>
                     <div className="flex items-center gap-2">
                       <span className={clsx("text-xs font-medium px-2 py-0.5 rounded",doc.status==="Disponible"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500")}>{doc.status}</span>
-                      {doc.status==="Disponible"&&<><a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs">Ver</Button></a><a href={doc.url} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs">Descargar</Button></a></>}
+                      {doc.status==="Disponible"&&<><a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs">Ver</Button></a><a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs">Descargar</Button></a></>}
                     </div>
                   </div>
                 ))}</div>
@@ -2097,6 +2097,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [isAttachingOrderDoc,setIsAttachingOrderDoc]=useState(false);
   const [orderActionMessage,setOrderActionMessage]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
+  // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
+  // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
+  const [previewObjectUrl,setPreviewObjectUrl]=useState("");
+  const [previewLoadFailed,setPreviewLoadFailed]=useState(false);
   const [isResourcePickerOpen,setIsResourcePickerOpen]=useState(false);
   const [resourceExplorer,setResourceExplorer]=useState<BackendExplorerResponse>({ carpetas: [], archivos: [] });
   const [resourceCurrentFolderId,setResourceCurrentFolderId]=useState<string|null>(null);
@@ -2296,6 +2300,42 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     }
     return response.blob();
   }
+
+  useEffect(()=>{
+    let objectUrl:string|null=null;
+    let cancelled=false;
+
+    setPreviewObjectUrl("");
+    setPreviewLoadFailed(false);
+
+    const source=previewAttachment?.storage_url;
+    if(!source){
+      return;
+    }
+
+    void (async()=>{
+      try{
+        const blob=await fetchProtectedBlob(source);
+        if(!blob){
+          if(!cancelled) setPreviewLoadFailed(true);
+          return;
+        }
+        objectUrl=window.URL.createObjectURL(blob);
+        if(cancelled){
+          window.URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        setPreviewObjectUrl(objectUrl);
+      }catch{
+        if(!cancelled) setPreviewLoadFailed(true);
+      }
+    })();
+
+    return ()=>{
+      cancelled=true;
+      if(objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  },[previewAttachment?.archivo_id,previewAttachment?.storage_url]);
 
   async function handleDownloadResource(url: string | null, fileName: string) {
     try {
@@ -2852,14 +2892,22 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 </div>
               </div>
               <div className="p-4 overflow-auto bg-slate-50/60 flex-1">
-                {previewAttachment.storage_url && previewType(previewAttachment)==="image" && (
-                  <img src={previewAttachment.storage_url} alt={previewAttachment.nombre} className="max-h-[70vh] w-auto mx-auto rounded-lg border border-border"/>
+                {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && !previewObjectUrl && !previewLoadFailed && (
+                  <div className="h-[40vh] flex items-center justify-center text-sm text-muted-foreground">Cargando vista previa...</div>
                 )}
-                {previewAttachment.storage_url && previewType(previewAttachment)==="pdf" && (
-                  <iframe src={previewAttachment.storage_url} title={previewAttachment.nombre} className="w-full h-[70vh] rounded-lg border border-border bg-white"/>
+                {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && previewLoadFailed && (
+                  <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
+                    <p className="text-sm text-muted-foreground">No se pudo cargar el recurso desde el backend. Verifica permisos o disponibilidad del archivo.</p>
+                  </div>
                 )}
-                {previewAttachment.storage_url && previewType(previewAttachment)==="video" && (
-                  <video src={previewAttachment.storage_url} controls className="w-full max-h-[70vh] rounded-lg border border-border bg-black"/>
+                {previewObjectUrl && previewType(previewAttachment)==="image" && (
+                  <img src={previewObjectUrl} alt={previewAttachment.nombre} className="max-h-[70vh] w-auto mx-auto rounded-lg border border-border"/>
+                )}
+                {previewObjectUrl && previewType(previewAttachment)==="pdf" && (
+                  <iframe src={previewObjectUrl} title={previewAttachment.nombre} className="w-full h-[70vh] rounded-lg border border-border bg-white"/>
+                )}
+                {previewObjectUrl && previewType(previewAttachment)==="video" && (
+                  <video src={previewObjectUrl} controls className="w-full max-h-[70vh] rounded-lg border border-border bg-black"/>
                 )}
                 {(!previewAttachment.storage_url || previewType(previewAttachment)==="other") && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
@@ -6288,7 +6336,9 @@ export default function App() {
 
     await businessService.addOrderDocument(orderId, {
       nombre: file.name,
-      url: resolveApiUrl(created.storage_url),
+      // Ruta canónica del backend: independiente de si se publicó desde
+      // localhost, un Dev Tunnel o producción.
+      url: toApiPath(created.storage_url),
       tipo: mapOrderDocumentType(file.name),
     });
 
