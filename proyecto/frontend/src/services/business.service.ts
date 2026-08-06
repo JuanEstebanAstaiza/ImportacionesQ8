@@ -70,6 +70,15 @@ export interface BackendAsesor {
   fecha_creacion: string;
 }
 
+/** Qué se movió al reasignar trabajo entre cuentas de la empresa. */
+export interface BackendReasignacion {
+  cotizaciones_reasignadas: number;
+  ordenes_reasignadas: number;
+  conversaciones_reasignadas: number;
+}
+
+export interface BackendAsesorEstadoResponse extends BackendAsesor, BackendReasignacion {}
+
 export interface UpdateAsesorEstadoPayload {
   activo: boolean;
 }
@@ -365,10 +374,23 @@ export const businessService = {
     });
   },
 
-  updateCompanyAdvisorStatus(asesorId: string, activo: boolean): Promise<BackendAsesor> {
-    return apiRequest<BackendAsesor>(`/importadores/asesores/${asesorId}/estado`, {
+  /**
+   * Activa o desactiva un asesor. Al desactivarlo el backend traspasa su carga
+   * (cotizaciones, órdenes y chats) a la cuenta dueña y devuelve cuánto movió,
+   * para poder avisárselo al usuario.
+   */
+  updateCompanyAdvisorStatus(asesorId: string, activo: boolean): Promise<BackendAsesorEstadoResponse> {
+    return apiRequest<BackendAsesorEstadoResponse>(`/importadores/asesores/${asesorId}/estado`, {
       method: "PUT",
       body: { activo } satisfies UpdateAsesorEstadoPayload,
+    });
+  },
+
+  /** Reasigna el responsable de una cotización (o la devuelve al pool con null). */
+  assignAdvisorToQuote(cotizacionId: string, asesorId: string | null): Promise<BackendReasignacion> {
+    return apiRequest<BackendReasignacion>(`/importadores/cotizaciones/${cotizacionId}/asignar`, {
+      method: "PUT",
+      body: { asesor_id: asesorId },
     });
   },
 

@@ -9,7 +9,7 @@ from sqlalchemy import and_
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from schemas.usuario import UsuarioMeResponse, UsuarioMeUpdate, CotizacionAsignadaItem
-from utils.dependencies import get_db, get_current_user, require_rol
+from utils.dependencies import get_db, get_current_user, require_rol_in
 
 logger = logging.getLogger("importacionesq8")
 
@@ -66,11 +66,15 @@ async def actualizar_mi_perfil(
 @asesores_router.get("/me/cotizaciones", response_model=List[CotizacionAsignadaItem])
 async def listar_mis_cotizaciones_asignadas(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("asesor"))
+    current_user: dict = Depends(require_rol_in("importador", "asesor"))
 ):
     """
-    Cotizaciones que el asesor autenticado ha reclamado (pantalla "cuántas
+    Cotizaciones que la cuenta autenticada ha reclamado (pantalla "cuántas
     tengo asignadas" del panel de empresa).
+
+    Acepta al dueño además del asesor: `POST /cotizaciones/{id}/reclamar` permite
+    reclamar a ambos, así que limitar esta consulta a "asesor" dejaba al dueño con
+    un 403 en la pantalla que lista justamente lo que él acababa de reclamar.
     """
     user_id_str = str(PyUUID(current_user["user_id"]))
 
@@ -99,11 +103,14 @@ async def listar_mis_cotizaciones_asignadas(
 @asesores_router.get("/dashboard/stats")
 async def dashboard_stats_asesor(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("asesor")),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
 ):
     """
-    Métricas de rendimiento del asesor: cotizaciones respondidas, tasa de
-    aceptación, volumen cotizado y órdenes asociadas.
+    Métricas de rendimiento de la cuenta de empresa autenticada: cotizaciones
+    respondidas, tasa de aceptación, volumen cotizado y órdenes asociadas.
+
+    El dueño también reclama y responde cotizaciones, así que ve sus propias
+    métricas con el mismo cálculo que un asesor.
     """
     from schemas.metricas_empresa import MetricasAsesorResponse
     from models.propuesta import Propuesta, EstadoPropuesta

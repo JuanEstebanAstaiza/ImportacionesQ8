@@ -18,7 +18,11 @@ from utils.dependencies import get_db, get_current_user, require_rol_in
 from utils.security import decode_access_token, JWTError
 from services.token_revocation import crear_ticket_ws, consumir_ticket_ws, jti_revocado
 from services.notificacion_service import crear_notificacion_best_effort
-from services.documental_service import create_document_file, ensure_folder_path
+from services.documental_service import (
+    clonar_archivo_para_chat,
+    create_document_file,
+    ensure_folder_path,
+)
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
@@ -51,22 +55,39 @@ async def emitir_ticket_ws(
     Preferir `?ticket=` frente a pasar el JWT en la query (OWASP A07).
     """
     conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == body.conversacion_id).first()
-    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user):
+    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
     ticket = crear_ticket_ws(current_user["user_id"], body.conversacion_id, ttl_seconds=60)
     return WsTicketResponse(ticket=ticket)
 
 
-def _verificar_acceso_conversacion(conversacion: ConversacionChat, current_user: dict) -> bool:
+def _verificar_acceso_conversacion(
+    conversacion: ConversacionChat,
+    current_user: dict,
+    db: Optional[Session] = None,
+) -> bool:
     """Solo el solicitante y el usuario de la empresa (dueño o asesor asignado)
     de esa conversación pueden leer/escribir mensajes en ella (evita IDOR entre
     conversaciones de otros clientes/empresas)."""
     user_id = current_user["user_id"]
-    if current_user["rol"] == "solicitante":
+    rol = current_user["rol"]
+    if rol == "solicitante":
         return conversacion.solicitante_id == user_id
-    if current_user["rol"] in ("importador", "asesor"):
+    if rol == "asesor":
         return conversacion.importador_usuario_id == user_id
-    return current_user["rol"] == "admin"
+    if rol == "importador":
+        if conversacion.importador_usuario_id == user_id:
+            return True
+        # El dueño supervisa las conversaciones de sus asesores: sin esto, un
+        # asesor desactivado dejaba el hilo ilegible para toda la empresa.
+        importador_id = current_user.get("importador_id")
+        if db is None or not importador_id:
+            return False
+        contraparte = db.query(Usuario).filter(
+            Usuario.id == conversacion.importador_usuario_id
+        ).first()
+        return bool(contraparte and contraparte.importador_id == importador_id)
+    return rol == "admin"
 
 
 def _persistir_adjuntos_chat(
@@ -87,24 +108,42 @@ def _persistir_adjuntos_chat(
         segments=["Chats", f"Conversacion-{mensaje.conversacion_id[:8]}"],
     )
 
+    conversacion = (
+        db.query(ConversacionChat)
+        .filter(ConversacionChat.id == mensaje.conversacion_id)
+        .first()
+    )
+    # Una copia por participante: el receptor la ve en su gestión documental y
+    # queda autorizado a descargarla.
+    destinatarios = {owner_user_id}
+    if conversacion:
+        destinatarios.add(conversacion.solicitante_id)
+        destinatarios.add(conversacion.importador_usuario_id)
+
     for archivo_id in meta.get("archivo_ids", []) if isinstance(meta.get("archivo_ids"), list) else []:
-        archivo = db.query(Archivo).filter(Archivo.id == str(archivo_id), Archivo.deleted_at.is_(None)).first()
+        archivo = (
+            db.query(Archivo)
+            .filter(
+                Archivo.id == str(archivo_id),
+                # Solo se puede adjuntar lo propio: sin este filtro bastaba con
+                # conocer un UUID ajeno para clonarlo dentro de una conversación
+                # y darse acceso de descarga a un documento de otro usuario.
+                Archivo.owner_user_id == owner_user_id,
+                Archivo.deleted_at.is_(None),
+            )
+            .first()
+        )
         if not archivo:
             continue
-        cloned = create_document_file(
-            db,
-            owner_user_id=owner_user_id,
-            nombre=archivo.nombre,
-            carpeta_id=conversation_folder_id,
-            extension=archivo.extension,
-            mime_type=archivo.mime_type,
-            size_bytes=archivo.size_bytes,
-            storage_url=archivo.storage_url,
-            storage_path=archivo.storage_path,
-            origen="chat",
-        )
-        db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=mensaje.id, archivo_id=cloned.id))
-        linked_ids.append(cloned.id)
+        for destinatario_id in destinatarios:
+            cloned = clonar_archivo_para_chat(
+                db,
+                archivo=archivo,
+                destinatario_id=destinatario_id,
+                conversacion_id=mensaje.conversacion_id,
+            )
+            db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=mensaje.id, archivo_id=cloned.id))
+            linked_ids.append(cloned.id)
 
     file_info = meta.get("file") if isinstance(meta.get("file"), dict) else None
     if file_info and not linked_ids:
@@ -294,8 +333,22 @@ async def listar_mis_conversaciones(
         query = db.query(ConversacionChat)
         if rol == "solicitante":
             query = query.filter(ConversacionChat.solicitante_id == user_id_str)
-        elif rol in ("importador", "asesor"):
+        elif rol == "asesor":
             query = query.filter(ConversacionChat.importador_usuario_id == user_id_str)
+        elif rol == "importador":
+            # El dueño ve además las conversaciones de sus asesores: si un asesor
+            # queda desactivado, su hilo seguía existiendo pero desaparecía de la
+            # bandeja de la empresa y nadie podía retomarlo.
+            importador_id = current_user.get("importador_id")
+            cuentas_empresa = [user_id_str]
+            if importador_id:
+                cuentas_empresa = [
+                    str(fila[0])
+                    for fila in db.query(Usuario.id).filter(
+                        Usuario.importador_id == importador_id
+                    ).all()
+                ] or [user_id_str]
+            query = query.filter(ConversacionChat.importador_usuario_id.in_(cuentas_empresa))
         else:
             query = query.limit(50)
 
@@ -334,7 +387,7 @@ async def listar_mensajes(
     if not conversacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
 
-    if not _verificar_acceso_conversacion(conversacion, current_user):
+    if not _verificar_acceso_conversacion(conversacion, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para ver esta conversación")
 
     mensajes = db.query(MensajeChat).filter(
@@ -342,6 +395,63 @@ async def listar_mensajes(
     ).order_by(MensajeChat.fecha_envio.asc()).all()
 
     return mensajes
+
+
+def _notificar_mensaje_chat(
+    db: Session,
+    *,
+    conversacion: ConversacionChat,
+    remitente_id: str,
+    contenido: str,
+    tipo: str,
+) -> None:
+    """Avisa al otro participante de que tiene un mensaje sin leer.
+
+    Los canales externos (WhatsApp/correo) se silencian si ya hay un aviso de
+    chat sin leer reciente: una conversación activa generaría un WhatsApp por
+    cada frase enviada.
+    """
+    from datetime import datetime, timedelta
+
+    from models.notificacion import Notificacion
+    from services.notificacion_service import notificar
+
+    destinatario_id = (
+        conversacion.importador_usuario_id
+        if str(conversacion.solicitante_id) == str(remitente_id)
+        else conversacion.solicitante_id
+    )
+    if not destinatario_id or str(destinatario_id) == str(remitente_id):
+        return
+
+    remitente = db.query(Usuario).filter(Usuario.id == str(remitente_id)).first()
+    quien = (remitente.nombre or remitente.email) if remitente else "Tu contraparte"
+
+    reciente = (
+        db.query(Notificacion.id)
+        .filter(
+            Notificacion.usuario_id == str(destinatario_id),
+            Notificacion.tipo == "chat",
+            Notificacion.leida.is_(False),
+            Notificacion.fecha_creacion >= datetime.utcnow() - timedelta(minutes=10),
+        )
+        .first()
+        is not None
+    )
+
+    resumen = "Te envió un archivo." if tipo == TipoMensajeChat.archivo.value else (contenido or "")[:160]
+
+    notificar(
+        db,
+        usuario_id=str(destinatario_id),
+        tipo="chat",
+        titulo=f"Nuevo mensaje de {quien}",
+        mensaje=resumen,
+        data={"conversacion_id": str(conversacion.id), "cotizacion_id": str(conversacion.cotizacion_id)},
+        enlace_relativo="/chats",
+        whatsapp=not reciente,
+        email=not reciente,
+    )
 
 
 @router.post("/conversaciones/{conversacion_id}/mensajes", response_model=MensajeChatResponse, status_code=status.HTTP_201_CREATED)
@@ -359,7 +469,7 @@ async def enviar_mensaje(
     if not conversacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
 
-    if not _verificar_acceso_conversacion(conversacion, current_user):
+    if not _verificar_acceso_conversacion(conversacion, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para escribir en esta conversación")
 
     user_id_str = str(PyUUID(current_user["user_id"]))
@@ -379,6 +489,14 @@ async def enviar_mensaje(
         owner_user_id=user_id_str,
         metadata=datos.metadata,
     )
+    if nuevo_mensaje.tipo != TipoMensajeChat.sistema.value:
+        _notificar_mensaje_chat(
+            db,
+            conversacion=conversacion,
+            remitente_id=user_id_str,
+            contenido=nuevo_mensaje.contenido,
+            tipo=str(nuevo_mensaje.tipo),
+        )
     db.commit()
     db.refresh(nuevo_mensaje)
 
@@ -438,7 +556,7 @@ async def traducir_mensaje(
     if not mensaje:
         raise HTTPException(status_code=404, detail="Mensaje no encontrado")
     conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == mensaje.conversacion_id).first()
-    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user):
+    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user, db):
         raise HTTPException(status_code=403, detail="No autorizado")
 
     meta = dict(mensaje.metadata_json or {})
@@ -527,7 +645,7 @@ async def websocket_chat(
         return
 
     conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
-    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user):
+    if not conversacion or not _verificar_acceso_conversacion(conversacion, current_user, db):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -587,6 +705,14 @@ async def websocket_chat(
                 owner_user_id=user_id_str,
                 metadata=metadata,
             )
+            if nuevo_mensaje.tipo != TipoMensajeChat.sistema.value:
+                _notificar_mensaje_chat(
+                    db,
+                    conversacion=conversacion,
+                    remitente_id=user_id_str,
+                    contenido=nuevo_mensaje.contenido,
+                    tipo=str(nuevo_mensaje.tipo),
+                )
             db.commit()
             db.refresh(nuevo_mensaje)
 

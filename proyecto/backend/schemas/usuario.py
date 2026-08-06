@@ -43,6 +43,28 @@ class AsesorResponse(BaseModel):
 class AsesorEstadoUpdate(BaseModel):
     activo: bool
 
+class AsignarAsesorRequest(BaseModel):
+    """Reasignación explícita del responsable de una cotización.
+
+    `asesor_id = None` devuelve la cotización al pool de la empresa.
+    """
+    asesor_id: Optional[str] = None
+
+class ReasignacionResponse(BaseModel):
+    cotizaciones_reasignadas: int = 0
+    ordenes_reasignadas: int = 0
+    conversaciones_reasignadas: int = 0
+
+class AsesorEstadoResponse(AsesorResponse):
+    """Estado del asesor + qué se movió al desactivarlo.
+
+    Extiende `AsesorResponse` en vez de envolverlo para no romper a los clientes
+    que ya leen `activo`/`id` en la raíz de la respuesta.
+    """
+    cotizaciones_reasignadas: int = 0
+    ordenes_reasignadas: int = 0
+    conversaciones_reasignadas: int = 0
+
 class CotizacionPoolItem(BaseModel):
     """Item del pool de cotizaciones sin reclamar de la empresa."""
     id: str

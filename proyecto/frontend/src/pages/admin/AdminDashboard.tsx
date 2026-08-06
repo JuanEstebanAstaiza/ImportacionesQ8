@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Building2, RefreshCw, Shield, Users } from "lucide-react";
+import { Building2, MessageSquare, RefreshCw, Search, Shield, Users, X } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
-import { adminService, type AdminCotizacionAbierta, type AdminMetricas, type AdminUser } from "@/services/admin.service";
+import {
+  adminService,
+  type AdminConversacion,
+  type AdminCotizacionAbierta,
+  type AdminMensaje,
+  type AdminMetricas,
+  type AdminUser,
+} from "@/services/admin.service";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "empresas" | "usuarios" | "metricas";
+type AdminTab = "empresas" | "usuarios" | "metricas" | "chats";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin";
 
 type CompanyUiDetails = {
@@ -50,6 +57,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; label: string }> = [
   { id: "metricas", label: "Resumen / General" },
   { id: "empresas", label: "Empresas / Importadores" },
   { id: "usuarios", label: "Usuarios y Roles" },
+  { id: "chats", label: "Supervisión de chats" },
 ];
 
 const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "admin"] as const;
@@ -152,6 +160,15 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
   const metricsSectionRef = useRef<HTMLElement | null>(null);
   const companiesSectionRef = useRef<HTMLElement | null>(null);
   const usersSectionRef = useRef<HTMLElement | null>(null);
+  const chatsSectionRef = useRef<HTMLElement | null>(null);
+
+  // Supervisión de chats (solo lectura).
+  const [conversations, setConversations] = useState<AdminConversacion[]>([]);
+  const [conversationsTotal, setConversationsTotal] = useState(0);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [openConversation, setOpenConversation] = useState<AdminConversacion | null>(null);
+  const [conversationMessages, setConversationMessages] = useState<AdminMensaje[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   const usersByRole = useMemo(() => {
     return users.reduce<Record<string, number>>((acc, item) => {
@@ -192,24 +209,42 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
     setIsLoading(true);
     setError("");
     try {
-      const [companyRows, userRows, metricsRow, openQuoteRows] = await Promise.all([
+      const [companyRows, userRows, metricsRow, openQuoteRows, conversationRows] = await Promise.all([
         adminService.listCompanies(),
         adminService.listUsers(userFilters),
         adminService.getMetricas(),
         adminService.listOpenQuotes(),
+        adminService.listConversations({ buscar: conversationSearch }),
       ]);
 
       setCompanies(companyRows);
       setUsers(userRows);
       setMetrics(metricsRow);
       setOpenQuotes(openQuoteRows);
+      setConversations(conversationRows.items);
+      setConversationsTotal(conversationRows.total);
     } catch (requestError) {
       const errorMessage = requestError instanceof Error ? requestError.message : "No se pudo cargar el panel de administracion.";
       setError(`Error cargando datos del panel: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, userFilters]);
+  }, [isAdmin, userFilters, conversationSearch]);
+
+  /** Abre el historial de una conversación en modo lectura. */
+  const openConversationDetail = useCallback(async (conversation: AdminConversacion) => {
+    setOpenConversation(conversation);
+    setConversationMessages([]);
+    setIsLoadingMessages(true);
+    try {
+      setConversationMessages(await adminService.getConversationMessages(conversation.id));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo abrir la conversación.");
+      setOpenConversation(null);
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -359,7 +394,9 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
         ? metricsSectionRef.current
         : nextTab === "empresas"
           ? companiesSectionRef.current
-          : usersSectionRef.current;
+          : nextTab === "chats"
+            ? chatsSectionRef.current
+            : usersSectionRef.current;
 
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -682,6 +719,168 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
             </div>
           </div>
         </section>
+
+      <section ref={chatsSectionRef} className="space-y-4 scroll-mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm">
+          <div>
+            <p className="flex items-center gap-2 text-base font-semibold">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              Supervisión de chats
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Todas las conversaciones entre cotizantes y empresas. Solo lectura: el equipo supervisa, no interviene en la negociación.
+            </p>
+          </div>
+          <span className="text-xs text-muted-foreground">{conversationsTotal} conversaciones</span>
+        </div>
+
+        <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={conversationSearch}
+                onChange={(event) => setConversationSearch(event.target.value)}
+                placeholder="Buscar por cotizante, asesor o empresa..."
+                className="w-full rounded-lg border border-border py-2 pl-9 pr-3 text-sm"
+              />
+            </div>
+            {conversationSearch ? (
+              <button
+                type="button"
+                onClick={() => setConversationSearch("")}
+                className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+              >
+                Limpiar
+              </button>
+            ) : null}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th className="py-2 pr-3">Cotizante</th>
+                  <th className="py-2 pr-3">Empresa / asesor</th>
+                  <th className="py-2 pr-3">Último mensaje</th>
+                  <th className="py-2 pr-3 text-right">Mensajes</th>
+                  <th className="py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {conversations.map((conversation) => (
+                  <tr key={conversation.id} className="border-b border-border/60 align-top">
+                    <td className="py-3 pr-3">
+                      <p className="font-medium text-foreground">{conversation.solicitante_nombre || "Sin nombre"}</p>
+                      <p className="text-xs text-muted-foreground">{conversation.solicitante_email || conversation.solicitante_id}</p>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <p className="font-medium text-foreground">{conversation.empresa_nombre || "Empresa no identificada"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {conversation.importador_usuario_nombre || conversation.importador_usuario_email || conversation.importador_usuario_id}
+                      </p>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <p className="line-clamp-2 max-w-sm text-xs text-muted-foreground">
+                        {conversation.ultimo_mensaje_texto || "Sin mensajes"}
+                      </p>
+                      {conversation.ultimo_mensaje_fecha ? (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                          {new Date(conversation.ultimo_mensaje_fecha).toLocaleString("es-CO")}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="py-3 pr-3 text-right font-medium">{conversation.total_mensajes}</td>
+                    <td className="py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void openConversationDetail(conversation);
+                        }}
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                      >
+                        Ver conversación
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {conversations.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      No hay conversaciones que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {openConversation ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl border border-border bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+              <div>
+                <h2 className="text-base font-semibold">
+                  {openConversation.solicitante_nombre || openConversation.solicitante_email} · {openConversation.empresa_nombre || "Empresa"}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Cotización {openConversation.cotizacion_id.slice(0, 8).toUpperCase()}
+                  {openConversation.orden_id ? ` · Orden ${openConversation.orden_id.slice(0, 8).toUpperCase()}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenConversation(null)}
+                className="rounded-md border border-border p-1.5 hover:bg-muted"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              {isLoadingMessages ? (
+                <p className="text-sm text-muted-foreground">Cargando conversación...</p>
+              ) : null}
+              {!isLoadingMessages && conversationMessages.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Esta conversación todavía no tiene mensajes.</p>
+              ) : null}
+              {conversationMessages.map((message) => {
+                const esSolicitante = message.remitente_id === openConversation.solicitante_id;
+                return (
+                  <div
+                    key={message.id}
+                    className={`rounded-lg border p-3 ${
+                      message.tipo === "sistema"
+                        ? "border-border bg-muted/50"
+                        : esSolicitante
+                          ? "border-blue-100 bg-blue-50"
+                          : "border-emerald-100 bg-emerald-50"
+                    }`}
+                  >
+                    <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-xs font-semibold text-foreground">
+                        {message.remitente_nombre || message.remitente_email || message.remitente_id}
+                        {message.remitente_rol ? <span className="ml-1 font-normal text-muted-foreground">({message.remitente_rol})</span> : null}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {new Date(message.fecha_envio).toLocaleString("es-CO")}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm text-foreground">{message.contenido}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
+              Vista de solo lectura para auditoría. Los participantes no ven que estás consultando el hilo.
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showCompanyModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">

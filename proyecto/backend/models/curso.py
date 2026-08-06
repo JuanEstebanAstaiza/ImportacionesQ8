@@ -141,6 +141,24 @@ class CompraCurso(Base):
         return f"<CompraCurso(curso_id={self.curso_id}, usuario_id={self.usuario_id})>"
 
 
+class CertificadoCurso(Base):
+    """Certificado de finalización emitido a un alumno que completó el curso."""
+    __tablename__ = "certificados_curso"
+    __table_args__ = (
+        UniqueConstraint("curso_id", "usuario_id", name="unique_certificado_curso_usuario"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    curso_id = Column(String(36), ForeignKey("cursos.id"), nullable=False, index=True)
+    usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False, index=True)
+    # Archivo PDF en gestión documental (propiedad del alumno).
+    archivo_id = Column(String(36), ForeignKey("archivos.id"), nullable=False)
+    fecha_emision = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<CertificadoCurso(curso_id={self.curso_id}, usuario_id={self.usuario_id})>"
+
+
 class ProgresoLeccion(Base):
     """Marca de lección completada y última vista por usuario/curso."""
     __tablename__ = "progreso_lecciones"

@@ -4,7 +4,7 @@ import {
   Moon, Sun, Info, AlertCircle, CheckCircle2, Loader2, Package2,
   FileText, ShoppingCart, FolderOpen, CreditCard, ChevronRight,
   Plus, Search, MessageCircle, Phone, ExternalLink, ArrowUpDown,
-  ChevronDown, Globe, Check, Star, Clock, X, Upload, ChevronLeft,
+  ChevronDown, Globe, Check, Clock, X, Upload, ChevronLeft,
   Save, Send, Users, MapPin, Tag, Layers, Building, RotateCcw,
   BadgeCheck, GitCompare, Mail as MailIcon, ClipboardList,
   Truck, Package, Anchor, Warehouse, CheckCircle, Edit2, Copy, Ban,
@@ -31,6 +31,9 @@ import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { useAuth } from "@/hooks/useAuth";
+import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
+import { useChatSocket } from "@/hooks/useChatSocket";
+import { usePlatformConfig } from "@/hooks/usePlatformConfig";
 import { authService } from "@/services/auth.service";
 import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
 import { HELP_SUPPORT_CONTENT, filterFaq, normalizeHelpRole } from "@/features/help/help-support-content";
@@ -336,6 +339,9 @@ const QUOTE_TIMELINE:TimelineStage[]=[
 type ChatType="orden"|"cotizacion";
 interface ChatConv {
   id:string;type:ChatType;refCode:string;refId:string;importerId:string;
+  // `refId` pasa a apuntar a la orden en cuanto existe; la cotización se guarda
+  // aparte porque es lo que identifica al responsable que se puede reasignar.
+  quoteId:string;
   status:"activa"|"archivada";unread:number;lastMsg:string;lastDate:string;
 }
 type MsgFileType="pdf"|"excel"|"word"|"image";
@@ -471,11 +477,37 @@ function importerColorFromId(id: string): string {
   return palette[hash % palette.length];
 }
 
+/** Lee una clave de `perfil_publico` sin asumir su forma (es JSON libre). */
+function readPerfilPublicoString(perfil: Record<string, unknown> | null | undefined, ...claves: string[]): string {
+  for (const clave of claves) {
+    const valor = perfil?.[clave];
+    if (typeof valor === "string" && valor.trim()) {
+      return valor.trim();
+    }
+  }
+  return "";
+}
+
+function readPerfilPublicoStringArray(perfil: Record<string, unknown> | null | undefined, ...claves: string[]): string[] {
+  for (const clave of claves) {
+    const valor = perfil?.[clave];
+    if (Array.isArray(valor)) {
+      return valor.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    }
+  }
+  return [];
+}
+
 function mapBackendImporterToUi(imp: BackendImporter): Importer {
   const primaryCategory = imp.especialidad_producto[0] ?? "General";
   const primaryCountry = imp.paises_origen[0] ?? "N/A";
   const name = imp.nombre_empresa;
+  const perfil = imp.perfil_publico ?? null;
   return {
+    description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
+    certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
+    bannerUrl: readPerfilPublicoString(perfil, "banner_url", "banner"),
+    logoUrl: imp.logo_url ?? "",
     id: imp.id,
     name,
     specialty: `${primaryCategory} internacional`,
@@ -988,8 +1020,8 @@ function CoursesPortalScreen({
 function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
   imp:Importer;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;featured?:boolean;
 }) {
-  const desc=IMP_DESCRIPTIONS[imp.id]||"Importadora con experiencia en comercio internacional.";
-  const certs=IMP_CERTS[imp.id]||[];
+  const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Importadora con experiencia en comercio internacional.";
+  const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
   return (
     <div className={clsx(
       "bg-white border rounded-xl p-5 flex flex-col gap-4 hover:shadow-md transition-all duration-200 group",
@@ -1008,7 +1040,9 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
           <p className="text-xs text-muted-foreground/70 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3"/>{imp.country}</p>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          <div className="flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400"/><span className="text-sm font-semibold">{imp.rating}</span></div>
+          {/* Las certificaciones sustituyen a la calificación: son un dato
+              verificable de la empresa, no una nota agregada sin reseñas reales. */}
+          {certs.length>0&&<div className="flex items-center gap-1 text-emerald-700"><Shield className="w-3.5 h-3.5"/><span className="text-xs font-semibold">{certs.length}</span></div>}
           <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span className="text-xs">{imp.responseTime}</span></div>
         </div>
       </div>
@@ -1047,18 +1081,22 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
 function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;importers:Importer[]}) {
   const [search,setSearch]=useState("");
   const [catFilter,setCatFilter]=useState<string>("Todas");
-  const [ratingFilter,setRatingFilter]=useState("");
+  // Sustituye al viejo filtro por calificación: se filtra por empresas con
+  // certificaciones registradas, que es un dato real y no una nota inventada.
+  const [certFilter,setCertFilter]=useState("");
   const [countryFilter,setCountryFilter]=useState("");
 
   const filtered=importers.filter(imp=>{
     const ms=!search||[imp.name,imp.specialty,...imp.categories].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mc=catFilter==="Todas"||imp.categories.some(c=>c.toLowerCase()===catFilter.toLowerCase());
-    const mr=!ratingFilter||imp.rating>=parseFloat(ratingFilter);
+    const certs=imp.certs??[];
+    const mr=!certFilter||(certFilter==="certificadas"?certs.length>0:certs.some(c=>c===certFilter));
     const mco=!countryFilter||imp.country===countryFilter;
     return ms&&mc&&mr&&mco;
   });
 
-  const featured=importers.filter(i=>i.verified&&i.rating>=4.7).slice(0,3);
+  const certOptions=[...new Set(importers.flatMap(i=>i.certs??[]))].sort();
+  const featured=importers.filter(i=>i.verified).slice(0,3);
   const quickCats=["Todas","Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad"];
 
   return (
@@ -1086,7 +1124,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
             {[
               {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
               {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
-              {label:"Rating promedio",value:"4.6",icon:<Star className="w-4 h-4"/>,color:"text-amber-500"},
+              {label:"Con certificaciones",value:importers.filter(i=>(i.certs??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600"},
               {label:"Tiempo prom. respuesta",value:"~34h",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
             ].map(s=>(
               <Card key={s.label} padding="md" className="flex flex-col gap-2">
@@ -1098,12 +1136,12 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
           </div>
 
           {/* Featured */}
-          {!search&&catFilter==="Todas"&&!ratingFilter&&!countryFilter&&(
+          {!search&&catFilter==="Todas"&&!certFilter&&!countryFilter&&(
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Award className="w-4 h-4 text-amber-500"/>
                 <h2 className="text-sm font-semibold">Empresas destacadas</h2>
-                <span className="text-xs text-muted-foreground">· Mejor calificadas y verificadas</span>
+                <span className="text-xs text-muted-foreground">· Verificadas por la plataforma</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {featured.map(imp=>(
@@ -1119,12 +1157,11 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
               <div className="flex-1 min-w-[200px]">
                 <Input placeholder="Buscar por nombre, especialidad o categoría..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/>
               </div>
-              <div className="w-36">
-                <Select value={ratingFilter} onChange={e=>setRatingFilter(e.target.value)}>
-                  <option value="">Calificación</option>
-                  <option value="4.9">⭐ 4.9+</option>
-                  <option value="4.7">⭐ 4.7+</option>
-                  <option value="4.5">⭐ 4.5+</option>
+              <div className="w-44">
+                <Select value={certFilter} onChange={e=>setCertFilter(e.target.value)}>
+                  <option value="">Certificación</option>
+                  <option value="certificadas">Con certificaciones</option>
+                  {certOptions.map(c=><option key={c} value={c}>{c}</option>)}
                 </Select>
               </div>
               <div className="w-40">
@@ -1133,8 +1170,8 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
                   {[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}
                 </Select>
               </div>
-              {(search||ratingFilter||countryFilter||catFilter!=="Todas")&&(
-                <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setSearch("");setRatingFilter("");setCountryFilter("");setCatFilter("Todas");}}>Limpiar</Button>
+              {(search||certFilter||countryFilter||catFilter!=="Todas")&&(
+                <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setSearch("");setCertFilter("");setCountryFilter("");setCatFilter("Todas");}}>Limpiar</Button>
               )}
             </div>
 
@@ -1181,8 +1218,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];
 }) {
   const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
-  const desc=IMP_DESCRIPTIONS[imp.id]||"";
-  const certs=IMP_CERTS[imp.id]||[];
+  // Lo que la empresa configuró en su perfil manda; los textos de ejemplo solo
+  // se usan para las importadoras de demostración, que no tienen perfil real.
+  const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Esta empresa aún no ha publicado su descripción.";
+  const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
+  const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
   const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
   const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
@@ -1200,8 +1240,20 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
         <main className="flex-1 overflow-y-auto px-6 py-6">
           <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Dashboard",onClick:onBack},{label:imp.name}]}/>
 
+          {/* Banner de portada: primera impresión de la empresa para el solicitante */}
+          {bannerUrl&&(
+            <div className="mt-4 rounded-2xl overflow-hidden border border-border bg-muted/40">
+              <img
+                src={bannerUrl}
+                alt={`Portada de ${imp.name}`}
+                className="w-full h-40 sm:h-56 object-cover"
+                loading="lazy"
+              />
+            </div>
+          )}
+
           {/* Hero card */}
-          <Card padding="md" className="mt-4 mb-5">
+          <Card padding="md" className={clsx("mb-5",bannerUrl?"mt-3":"mt-4")}>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
               <div className="flex items-start gap-4">
                 <Avatar initials={imp.initials} size="xl" color={imp.color}/>
@@ -1212,7 +1264,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
                   <div className="flex items-center gap-4 mt-2 flex-wrap">
-                    <div className="flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400"/><span className="text-sm font-semibold">{imp.rating}</span><span className="text-xs text-muted-foreground ml-1">calificación</span></div>
+                    {certs.length>0&&<div className="flex items-center gap-1 text-muted-foreground"><Award className="w-3.5 h-3.5"/><span className="text-xs">{certs.length} {certs.length===1?"certificación":"certificaciones"}</span></div>}
                     <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime} respuesta</span></div>
                     <div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div>
                     <div className="flex items-center gap-1 text-muted-foreground"><Package2 className="w-3.5 h-3.5"/><span className="text-xs">{imp.projects} proyectos</span></div>
@@ -1763,7 +1815,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
                 <div>
                   <div className="flex items-center gap-2 flex-wrap"><h1 className="text-lg font-semibold">{imp.name}</h1>{imp.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}<Badge variant={resp.status}/></div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
-                  <div className="flex items-center gap-4 mt-1.5 flex-wrap"><div className="flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400"/><span className="text-xs font-medium">{imp.rating}</span></div><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime}</span></div><div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div></div>
+                  <div className="flex items-center gap-4 mt-1.5 flex-wrap"><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime}</span></div><div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div></div>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">Cotización: <span className="font-mono font-medium text-foreground">{quote.code}</span></p>
@@ -2034,7 +2086,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
             </div>
             <div className="w-64 flex-shrink-0 hidden lg:block space-y-4">
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa importadora</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/><div><div className="flex items-start gap-1"><p className="font-semibold text-sm">{imp?.name || "Empresa importadora"}</p>{imp?.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Sin especialidad"}</p><div className="flex items-center gap-1 mt-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/><span className="text-xs font-medium">{imp?.rating ?? "N/A"}</span></div></div></div>
+                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/><div><div className="flex items-start gap-1"><p className="font-semibold text-sm">{imp?.name || "Empresa importadora"}</p>{imp?.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Sin especialidad"}</p></div></div>
                 <div className="space-y-1.5 pt-3 border-t border-border mb-3">{[["Años en plataforma","5+"],["Proyectos",imp?.projects?.toString() || "N/D"],["Resp. prom.",imp?.responseTime || "N/D"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div>
                 <Button variant="secondary" size="sm" fullWidth>Ver perfil</Button>
               </Card>
@@ -2080,7 +2132,7 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"no-leidas">("all");
   const [searchConv,setSearchConv]=useState("");
@@ -2092,6 +2144,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [transferTo,setTransferTo]=useState("");
   const [isTransferring,setIsTransferring]=useState(false);
   const [transferMessage,setTransferMessage]=useState("");
+  const [transferError,setTransferError]=useState("");
   const [orderStatusDraft,setOrderStatusDraft]=useState("");
   const [isUpdatingOrderStatus,setIsUpdatingOrderStatus]=useState(false);
   const [isAttachingOrderDoc,setIsAttachingOrderDoc]=useState(false);
@@ -2125,6 +2178,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   useEffect(()=>{
     setMsgs(messagesByConversation);
   },[messagesByConversation]);
+
+  // Informa al contenedor qué conversación está abierta, para que abra el
+  // WebSocket solo de esa y la desconecte al salir de la pantalla.
+  useEffect(()=>{
+    onActiveConversationChange?.(selectedId);
+    return ()=>{ onActiveConversationChange?.(null); };
+  },[selectedId,onActiveConversationChange]);
 
   useEffect(()=>{
     if (!selectedId && conversations.length > 0) {
@@ -2272,8 +2332,15 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     acc[attachment.mensaje_id].push(attachment);
     return acc;
   }, {});
+  // Solo asesores activos de la propia empresa: antes se ofrecía el correo
+  // genérico de ejemplo que rellena `mapBackendImporterToUi`, que no existe.
   const advisorOptions = Array.from(
-    new Set(importers.map((row) => row.advisor.email).filter((email) => Boolean(email && email.trim()))),
+    new Set(
+      companyAdvisors
+        .filter((advisor) => advisor.status === "activo")
+        .map((advisor) => advisor.email)
+        .filter((email) => Boolean(email && email.trim())),
+    ),
   );
 
   const refQuote=conv?.type==="cotizacion"?quotes.find((quote)=>quote.id===conv.refId)||null:null;
@@ -2300,11 +2367,14 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   async function handleTransferConversation() {
     if (!conv || !transferTo.trim()) return;
     setTransferMessage("");
+    setTransferError("");
     setIsTransferring(true);
     try {
       await onTransferConversation(conv.id, transferTo.trim());
-      setTransferMessage(`Transferencia solicitada a ${transferTo.trim()}`);
+      setTransferMessage(`Conversación transferida a ${transferTo.trim()}`);
       setTransferTo("");
+    } catch (error) {
+      setTransferError(error instanceof Error && error.message.trim() ? error.message : "No se pudo transferir la conversación.");
     } finally {
       setIsTransferring(false);
     }
@@ -2915,7 +2985,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               <div className="p-3 space-y-3 flex-1">
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
-                  <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.name || "Empresa importadora"}</p><div className="flex items-center gap-1"><Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400"/><span className="text-[10px] text-muted-foreground">{imp?.rating ?? "N/A"}</span></div></div></div>
+                  <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.name || "Empresa importadora"}</p></div></div>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
@@ -2966,9 +3036,11 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                       loading={isTransferring}
                       disabled={!transferTo.trim()}
                     >
-                      Solicitar transferencia
+                      Transferir conversación
                     </Button>
+                    {advisorOptions.length===0&&<p className="text-[10px] text-muted-foreground">No hay asesores activos en tu empresa.</p>}
                     {transferMessage&&<p className="text-[10px] text-emerald-600">{transferMessage}</p>}
+                    {transferError&&<p className="text-[10px] text-destructive">{transferError}</p>}
                   </div>
                 </div>
                 <div className="border-t border-border"/>
@@ -3778,7 +3850,7 @@ const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",
 
 function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
-  const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||imp.rating>=parseFloat(cr);return ms&&mc&&mcat&&mr;});
+  const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||(imp.certs??[]).length>0;return ms&&mc&&mcat&&mr;});
   const hasF=cs||cc||ccat||cr;
   return (
     <div className="space-y-6">
@@ -3795,7 +3867,7 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
           <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
           <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
           <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
-          <div className="w-40"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Calificación mín.</option><option value="4.9">⭐ 4.9+</option><option value="4.7">⭐ 4.7+</option><option value="4.5">⭐ 4.5+</option></Select></div>
+          <div className="w-44"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Certificación</option><option value="certificadas">Con certificaciones</option></Select></div>
           {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
         </div></Card>
         {fi.length===0?<Card padding="lg" className="border-dashed"><div className="py-6 text-center"><p className="text-sm text-muted-foreground">No se encontraron empresas</p></div></Card>:(
@@ -3803,7 +3875,7 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
             <div key={imp.id} onClick={()=>setSelectedId(sel?null:imp.id)} className={clsx("relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200",sel?"border-primary shadow-lg bg-white":"border-border bg-white hover:border-primary/40 hover:shadow-md")}>
               {sel&&<div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-white"/></div>}
               <div className="flex items-start gap-3 mb-3"><Avatar initials={imp.initials} size="lg" color={imp.color}/><div className="min-w-0"><div className="flex items-start gap-1"><p className="font-semibold text-sm leading-tight">{imp.name}</p>{imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5 leading-tight">{imp.specialty}</p><p className="text-xs text-muted-foreground/70 mt-0.5">{imp.country}</p></div></div>
-              <div className="flex items-center justify-between text-xs mb-3"><div className="flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/><span className="font-medium">{imp.rating}</span></div><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span>{imp.responseTime}</span></div></div>
+              <div className="flex items-center justify-between text-xs mb-3"><div className="flex items-center gap-1 text-emerald-700">{(imp.certs??[]).length>0&&(<><Shield className="w-3 h-3"/><span className="font-medium">{(imp.certs??[]).length} cert.</span></>)}</div><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span>{imp.responseTime}</span></div></div>
               <button onClick={e=>{e.stopPropagation();setSelectedId(sel?null:imp.id);}} className={clsx("w-full h-8 rounded-lg text-xs font-medium transition-all",sel?"bg-primary text-white":"bg-muted text-foreground hover:bg-primary/10")}>{sel?"Seleccionada":"Seleccionar"}</button>
             </div>
           );})}</div>
@@ -3816,7 +3888,7 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
 function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"abierta"|null;si:Importer|null;form:QuoteFormState}) {
   const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?`${form.minQuantity} u`:""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
   if(modalidad==="dirigida"&&si)return(<div className="space-y-4">
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p><div className="flex items-center gap-1 mt-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/><span className="text-xs font-medium">{si.rating}</span></div></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
+    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
     <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center"/><ContactBtn type="chat" size="sm" className="flex-1 justify-center"/></div></Card>
     {step>=2&&<Summary/>}
     {step===3&&<Card padding="md" className="border-primary/20 bg-primary/5"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse"/><span className="text-xs font-semibold text-primary">Lista para enviar</span></div></Card>}
@@ -4148,6 +4220,13 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — COMPANY PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Formatos que gestión documental acepta como imagen (ver IMAGE_EXTENSIONS del backend). */
+const BANNER_EXTENSIONS=["png","jpg","jpeg","webp"];
+const BANNER_FORMATS_LABEL="PNG, JPG o WebP";
+const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
+const BANNER_MAX_BYTES=5*1024*1024;
+
 function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;})=>Promise<void>}) {
   const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
@@ -4159,6 +4238,9 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
     certs:["ISO 9001","CE"],banner:"",
   });
   const [saveError,setSaveError]=useState("");
+  const [bannerUploading,setBannerUploading]=useState(false);
+  const [bannerError,setBannerError]=useState("");
+  const bannerInputRef=useRef<HTMLInputElement>(null);
 
   useEffect(()=>{
     if(!company)return;
@@ -4199,6 +4281,39 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
   },[company]);
 
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));setSaved(false);}
+
+  /**
+   * Sube el banner a gestión documental y guarda su ruta canónica.
+   *
+   * La imagen tiene que vivir en la plataforma (no una URL pegada a mano) para
+   * que el backend la reconozca como imagen pública de la empresa y la sirva
+   * sin sesión al solicitante que abre la ficha.
+   */
+  async function handleUploadBanner(archivo:File){
+    setBannerError("");
+    const extension=(archivo.name.split(".").pop()||"").toLowerCase();
+    if(!BANNER_EXTENSIONS.includes(extension)){
+      setBannerError(`Formato no soportado (.${extension}). Usa ${BANNER_FORMATS_LABEL}.`);
+      return;
+    }
+    if(archivo.size>BANNER_MAX_BYTES){
+      setBannerError("La imagen supera 5 MB. Comprímela antes de subirla.");
+      return;
+    }
+
+    setBannerUploading(true);
+    try{
+      const subido=await businessService.uploadDocumentFile(archivo,null,"perfil-empresa");
+      const url=toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
+      setForm(p=>({...p,banner:url}));
+      setSaved(false);
+    }catch(err){
+      setBannerError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir la imagen del banner.");
+    }finally{
+      setBannerUploading(false);
+    }
+  }
+
   async function save(){
     setSaveError("");
     setSaving(true);
@@ -4305,13 +4420,42 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 </div>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary"/>Imágenes y banner</p>
-                <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center gap-2 text-center">
-                  <Upload className="w-8 h-8 text-muted-foreground/40"/>
-                  <p className="text-sm text-muted-foreground">Arrastra imágenes o haz clic para subir</p>
-                  <p className="text-xs text-muted-foreground/60">PNG, JPG hasta 5MB cada una</p>
-                  <Button variant="secondary" size="sm">Seleccionar archivos</Button>
-                </div>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary"/>Banner de portada</p>
+                <p className="text-xs text-muted-foreground mb-4">Imagen ancha que encabeza tu perfil público. Se recomienda 1600×400 px.</p>
+
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept={BANNER_UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={e=>{
+                    const archivo=e.target.files?.[0];
+                    e.target.value="";
+                    if(archivo)void handleUploadBanner(archivo);
+                  }}
+                />
+
+                {form.banner?(
+                  <div className="space-y-3">
+                    <div className="rounded-xl overflow-hidden border border-border bg-muted/40">
+                      <img src={resolveApiUrl(form.banner)} alt="Banner de la empresa" className="w-full h-32 object-cover"/>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="sm" loading={bannerUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>bannerInputRef.current?.click()}>Reemplazar</Button>
+                      <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{setForm(p=>({...p,banner:""}));setSaved(false);}}>Quitar</Button>
+                    </div>
+                  </div>
+                ):(
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center gap-2 text-center">
+                    <Upload className="w-8 h-8 text-muted-foreground/40"/>
+                    <p className="text-sm text-muted-foreground">Sube la imagen de portada de tu empresa</p>
+                    <p className="text-xs text-muted-foreground/60">PNG, JPG o WebP hasta 5 MB</p>
+                    <Button variant="secondary" size="sm" loading={bannerUploading} onClick={()=>bannerInputRef.current?.click()}>Seleccionar imagen</Button>
+                  </div>
+                )}
+
+                {bannerError&&<p className="text-xs text-destructive mt-3">{bannerError}</p>}
+                {form.banner&&!saved&&<p className="text-xs text-muted-foreground mt-3">Recuerda pulsar «Guardar cambios» para publicar el banner.</p>}
               </Card>
             </div>
             <div>
@@ -4322,7 +4466,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>}>Cambiar logo</Button>
                 </div>
                 <div className="mt-5 pt-5 border-t border-border space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Calificación</span><span className="font-semibold flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/>{company.calificacion_promedio || 0}</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Certificaciones</span><span className="font-semibold flex items-center gap-1 text-emerald-700"><Shield className="w-3 h-3"/>{form.certs.length}</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos</span><span className="font-semibold">N/D</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Miembro desde</span><span className="font-semibold">{formatShortDate(company.fecha_registro)}</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Verificada</span><span className="font-semibold flex items-center gap-1 text-emerald-600"><BadgeCheck className="w-3 h-3"/>{company.verificado?"Sí":"No"}</span></div>
@@ -4339,7 +4483,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — ADVISORS
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<void>}) {
+function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<string>}) {
   const [advisors,setAdvisors]=useState(initialAdvisors);
   const [search,setSearch]=useState("");
   const [showModal,setShowModal]=useState(false);
@@ -4347,6 +4491,7 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
   const [editAdv,setEditAdv]=useState<CompanyAdvisor|null>(null);
   const [form,setForm]=useState({name:"",role:"",email:"",phone:"",password:"",status:"activo" as CompanyAdvisor["status"],availability:"alta" as CompanyAdvisor["availability"]});
   const [formError,setFormError]=useState("");
+  const [statusMessage,setStatusMessage]=useState("");
 
   const filtered=advisors.filter(a=>!search||[a.name,a.role,a.email].some(v=>v.toLowerCase().includes(search.toLowerCase())));
 
@@ -4384,7 +4529,7 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
       return;
     }
     const nextActivo = target.status !== "activo";
-    await onSetAdvisorActive(id, nextActivo);
+    setStatusMessage(await onSetAdvisorActive(id, nextActivo));
     setAdvisors((prev) => prev.map((advisor) => (
       advisor.id === id
         ? {
@@ -4395,8 +4540,10 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
     )));
   }
   async function deactivate(id:string){
-    if(!confirm("¿Desactivar asesor?"))return;
-    await onSetAdvisorActive(id, false);
+    // Se advierte del traspaso: el backend mueve sus cotizaciones y chats a la
+    // cuenta dueña para que ninguna negociación quede sin responsable.
+    if(!confirm("¿Desactivar asesor? Sus cotizaciones y conversaciones abiertas pasarán a tu cuenta."))return;
+    setStatusMessage(await onSetAdvisorActive(id, false));
     setAdvisors((prev) => prev.map((advisor) => (
       advisor.id === id
         ? {
@@ -4424,6 +4571,14 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
             </div>
             <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={openCreate}>Nuevo asesor</Button>
           </div>
+          {statusMessage&&(
+            <Card padding="sm" className="border-emerald-200 bg-emerald-50">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-emerald-800">{statusMessage}</p>
+                <button type="button" onClick={()=>setStatusMessage("")} className="text-emerald-700 hover:text-emerald-900" aria-label="Cerrar aviso"><X className="w-3.5 h-3.5"/></button>
+              </div>
+            </Card>
+          )}
           <div className="max-w-sm">
             <Input placeholder="Buscar por nombre, cargo o correo…" value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/>
           </div>
@@ -5114,7 +5269,7 @@ function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegiste
     {q:"¿Qué pasa si no recibo respuesta?",a:"El sistema notifica a las empresas automáticamente. Si no recibes respuesta en 48h, te recomendamos ampliar tu solicitud a más proveedores."},
     {q:"¿Cómo funciona el seguimiento de la orden?",a:"Una vez creada la orden, el representante de la empresa importadora actualiza el estado en cada etapa: producción, tránsito, aduana y entrega."},
   ];
-  const featuredImporters=IMPORTERS.filter(i=>i.verified&&i.rating>=4.7).slice(0,3);
+  const featuredImporters=IMPORTERS.filter(i=>i.verified).slice(0,3);
 
   return (
     <div className="min-h-screen bg-white" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -5218,7 +5373,7 @@ function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegiste
                     <div className="flex items-center gap-1 flex-wrap"><p className="font-semibold text-sm">{imp.name}</p><BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0"/></div>
                     <p className="text-xs text-muted-foreground">{imp.specialty}</p>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0"><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400"/><span className="text-sm font-semibold">{imp.rating}</span></div>
+                  
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">{IMP_DESCRIPTIONS[imp.id]||""}</p>
                 <div className="flex flex-wrap gap-1.5 mt-3">
@@ -5806,6 +5961,10 @@ export default function App() {
   const [requesterOrders,setRequesterOrders]=useState<Order[]>([]);
   const [importerOrders,setImporterOrders]=useState<Order[]>([]);
   const [chatConversations,setChatConversations]=useState<ChatConv[]>([]);
+  // Conversación abierta en pantalla: es la única que necesita canal en vivo.
+  const [activeChatId,setActiveChatId]=useState<string|null>(null);
+  const { config: platformConfig, isLoading: platformConfigLoading } = usePlatformConfig();
+  const moduloEducativoHabilitado = platformConfig.modulo_educativo_habilitado;
   const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
   const [chatAttachmentsByConversation,setChatAttachmentsByConversation]=useState<Record<string, BackendChatAttachmentItem[]>>({});
   const [documentExplorer,setDocumentExplorer]=useState<BackendExplorerResponse>({ carpetas: [], archivos: [] });
@@ -5918,6 +6077,7 @@ export default function App() {
       type: row.orden_id ? "orden" : "cotizacion",
       refCode: row.orden_id ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}` : `COT-${row.cotizacion_id.slice(0, 8).toUpperCase()}`,
       refId: row.orden_id ?? row.cotizacion_id,
+      quoteId: row.cotizacion_id,
       importerId: importerByQuoteId.get(row.cotizacion_id) || row.importador_usuario_id,
       status: "activa",
       unread: 0,
@@ -6193,6 +6353,68 @@ export default function App() {
     reloadNotifications,
   ]);
 
+  /**
+   * Recarga todo lo que le corresponde ver al rol actual. Es lo que dispara
+   * `useAutoRefresh` al volver a la pestaña y cada pocos segundos, para que la
+   * pantalla deje de depender de un F5 manual.
+   */
+  const refreshAllData = useCallback(async (reason: AutoRefreshReason = "focus") => {
+    const tareas: Array<Promise<unknown>> = [
+      reloadImporters(),
+      reloadCurrentUserProfile(),
+      reloadNotifications(),
+    ];
+
+    // El chat cuesta 2 peticiones por conversación, así que en el tick periódico
+    // se omite: la conversación abierta ya llega en vivo por WebSocket y el
+    // resto se refresca al volver a la pestaña.
+    if (reason === "focus") {
+      tareas.push(reloadChatData());
+    }
+
+    if (userRole === "solicitante") {
+      tareas.push(reloadRequesterQuotes(), reloadRequesterResponses(), reloadRequesterOrders());
+    } else if (userRole === "importadora") {
+      tareas.push(reloadImporterQuotes(), reloadCompanyAdvisors(), reloadImporterOrders());
+    } else if (userRole === "asesor") {
+      tareas.push(reloadAdvisorAssignedQuotes(), reloadAdvisorAvailableQuotes(), reloadAdvisorProposalIndex());
+    }
+
+    // `allSettled`: que falle una lista no debe impedir refrescar las demás.
+    await Promise.allSettled(tareas);
+  }, [
+    userRole,
+    reloadImporters,
+    reloadCurrentUserProfile,
+    reloadChatData,
+    reloadNotifications,
+    reloadRequesterQuotes,
+    reloadRequesterResponses,
+    reloadRequesterOrders,
+    reloadImporterQuotes,
+    reloadCompanyAdvisors,
+    reloadImporterOrders,
+    reloadAdvisorAssignedQuotes,
+    reloadAdvisorAvailableQuotes,
+    reloadAdvisorProposalIndex,
+  ]);
+
+  useAutoRefresh(refreshAllData, {
+    enabled: Boolean(isAuthenticated && token && !isInitializing),
+  });
+
+  // Mensajes en vivo de la conversación abierta: el backend ya publicaba en
+  // `/ws/chat/{id}`, pero nadie estaba escuchando.
+  const handleIncomingChatMessage = useCallback(() => {
+    void reloadChatData();
+  }, [reloadChatData]);
+
+  useChatSocket(
+    activeChatId,
+    handleIncomingChatMessage,
+    Boolean(isAuthenticated && token && !isInitializing),
+  );
+
   const advisorHeaderUser = {
     name: currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_ASESOR.name,
     company: companyProfile?.nombre_empresa
@@ -6242,14 +6464,19 @@ export default function App() {
       responses:"responses",chats:"chats",orders:"orders",documentos:"documentos",pagos:"pagos",courses:"courses",
       "imp-advisors":"imp-advisors","imp-profile":"imp-profile",notifications:"notifications",
     };
+    if(key==="courses"&&!moduloEducativoHabilitado)return;
     const s=all[key];if(s)goTo(s);
   }
 
   function getNavItems():NavItem[]{
-    if(userRole==="admin")return NAV_ADMIN as NavItem[];
-    if(userRole==="importadora")return NAV_IMPORTADORA as NavItem[];
-    if(userRole==="asesor")return NAV_ASESOR as NavItem[];
-    return NAV_ITEMS as NavItem[];
+    const base = userRole==="admin" ? NAV_ADMIN
+      : userRole==="importadora" ? NAV_IMPORTADORA
+      : userRole==="asesor" ? NAV_ASESOR
+      : NAV_ITEMS;
+    // Con el módulo educativo apagado en el backend, "Cursos" desaparece del
+    // menú: dejarlo visible llevaría a una pantalla cuya API responde 404.
+    const items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    return items as NavItem[];
   }
 
   function handleProfileClick(){
@@ -6350,9 +6577,17 @@ export default function App() {
     return mapBackendAdvisorToUi(created);
   }
 
-  async function handleSetAdvisorActive(advisorId: string, activo: boolean): Promise<void> {
-    await businessService.updateCompanyAdvisorStatus(advisorId, activo);
-    await reloadCompanyAdvisors();
+  async function handleSetAdvisorActive(advisorId: string, activo: boolean): Promise<string> {
+    const resultado = await businessService.updateCompanyAdvisorStatus(advisorId, activo);
+    // Al desactivar, el backend traspasa su trabajo a la cuenta dueña; conviene
+    // decírselo al usuario en vez de dejarlo adivinar dónde quedaron los chats.
+    await Promise.all([reloadCompanyAdvisors(), reloadChatData(), reloadImporterQuotes()]);
+
+    const movidos = resultado.cotizaciones_reasignadas + resultado.conversaciones_reasignadas;
+    if (!activo && movidos > 0) {
+      return `Asesor desactivado. Se traspasaron a tu cuenta ${resultado.cotizaciones_reasignadas} cotización(es) y ${resultado.conversaciones_reasignadas} conversación(es).`;
+    }
+    return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
   async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;}) {
@@ -6446,15 +6681,28 @@ export default function App() {
     await reloadDocumentExplorer(documentCurrentFolderRef.current);
   }
 
+  /**
+   * Transfiere la conversación a otro asesor de la empresa.
+   *
+   * Antes esto solo escribía un mensaje de texto ("transferencia solicitada")
+   * y nada cambiaba de verdad. Ahora reasigna el responsable de la cotización
+   * en el backend, que mueve también la conversación y deja constancia con un
+   * mensaje de sistema.
+   */
   async function handleTransferConversation(conversationId: string, newAdvisorEmail: string) {
-    const message = `Transferencia solicitada al asesor ${newAdvisorEmail}`;
-    await handleSendChatMessage(conversationId, message, {
-      action: "transfer-request",
-      advisor_email: newAdvisorEmail,
-      source: "frontend-only",
-      requested_at: new Date().toISOString(),
-    });
-    await reloadChatData();
+    const conversation = chatConversations.find((item) => item.id === conversationId);
+    if (!conversation?.quoteId) {
+      throw new Error("No se encontró la cotización asociada a esta conversación.");
+    }
+
+    const correo = newAdvisorEmail.trim().toLowerCase();
+    const advisor = companyAdvisors.find((item) => item.email.trim().toLowerCase() === correo);
+    if (!advisor) {
+      throw new Error(`${newAdvisorEmail} no es un asesor activo de tu empresa.`);
+    }
+
+    await businessService.assignAdvisorToQuote(conversation.quoteId, advisor.id);
+    await Promise.all([reloadChatData(), reloadCompanyAdvisors(), reloadImporterQuotes()]);
   }
 
   async function handleUpdateOrderStatus(orderId: string, statusValue: string) {
@@ -6534,6 +6782,14 @@ export default function App() {
   };
 
   const allowedRoles = screenAllowedByRole[screen];
+
+  // Si alguien llega a "courses" con el módulo apagado (enlace guardado, botón
+  // atrás), se le devuelve a su inicio en vez de dejarlo en una pantalla muerta.
+  useEffect(() => {
+    if (!platformConfigLoading && !moduloEducativoHabilitado && screen === "courses") {
+      setScreen(getHomeScreenForRole(userRole));
+    }
+  }, [platformConfigLoading, moduloEducativoHabilitado, screen, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated || isInitializing || !appRole || !allowedRoles) {
@@ -6639,7 +6895,7 @@ export default function App() {
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={setActiveChatId} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder}/>;

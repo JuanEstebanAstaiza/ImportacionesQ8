@@ -86,6 +86,24 @@ CREDITO_BONO_REGISTRO = float(os.getenv("CREDITO_BONO_REGISTRO", "20"))
 CREDITO_BONO_REFERIDO = float(os.getenv("CREDITO_BONO_REFERIDO", "10"))
 CREDITO_BONO_REFERIDOR = float(os.getenv("CREDITO_BONO_REFERIDOR", "10"))
 
+# --- Notificaciones salientes (además de la notificación in-app) ---
+# WhatsApp vía open-wa (https://github.com/open-wa/wa-automate-nodejs): la
+# instancia levanta una "EASY API" HTTP local, así que aquí solo se necesita su
+# URL base y la api_key con la que se arrancó.
+OPENWA_API_URL = os.getenv("OPENWA_API_URL", "").rstrip("/")
+OPENWA_API_KEY = os.getenv("OPENWA_API_KEY", "")
+OPENWA_SEND_PATH = os.getenv("OPENWA_SEND_PATH", "/sendText")
+OPENWA_TIMEOUT_SECONDS = int(os.getenv("OPENWA_TIMEOUT_SECONDS", "10"))
+# Indicativo que se antepone a los números guardados sin país (Colombia).
+WHATSAPP_INDICATIVO_POR_DEFECTO = os.getenv("WHATSAPP_INDICATIVO_POR_DEFECTO", "57")
+
+NOTIFICACIONES_WHATSAPP = os.getenv("NOTIFICACIONES_WHATSAPP", "true").lower() == "true"
+NOTIFICACIONES_EMAIL = os.getenv("NOTIFICACIONES_EMAIL", "true").lower() == "true"
+
+# Módulo educativo (cursos/LMS). Apagarlo deja la API de cursos en 404 y el
+# frontend oculta la sección; no borra ningún dato.
+MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").lower() == "true"
+
 TRANSLATION_ENABLED = os.getenv("TRANSLATION_ENABLED", "false").lower() == "true"
 GOOGLE_TRANSLATE_API_KEY = os.getenv("GOOGLE_TRANSLATE_API_KEY")
 GOOGLE_TRANSLATE_PROJECT = os.getenv("GOOGLE_TRANSLATE_PROJECT")

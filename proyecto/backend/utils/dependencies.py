@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -94,6 +96,24 @@ async def get_current_user(
         "exp": payload.get("exp"),
         "token": token,
     }
+
+
+async def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> Optional[dict]:
+    """Igual que `get_current_user`, pero devuelve None en lugar de fallar.
+
+    Para rutas donde conviven contenido público y privado (portada del catálogo y
+    vista previa de un curso frente al material de pago): sin token se sirve solo
+    lo público, con token válido se amplía el acceso.
+    """
+    if credentials is None:
+        return None
+    try:
+        return await get_current_user(credentials=credentials, db=db)
+    except HTTPException:
+        return None
 
 
 def require_rol(rol: str):

@@ -92,6 +92,56 @@ def _persist_pdf_as_file(
     return archivo.id
 
 
+def generate_course_certificate(
+    db: Session,
+    *,
+    curso,
+    usuario,
+    empresa_nombre: Optional[str] = None,
+) -> str:
+    """Genera el certificado de finalización y lo deja en gestión documental.
+
+    Devuelve el `Archivo.id`. El PDF queda en la carpeta `Certificados` del
+    alumno, así que se descarga por el mismo endpoint que cualquier otro archivo
+    suyo y aparece en su explorador.
+    """
+    ahora = datetime.utcnow()
+    nombre_alumno = (getattr(usuario, "nombre", None) or usuario.email or "Alumno").strip()
+
+    lineas = [
+        "CERTIFICADO DE FINALIZACION",
+        "",
+        "ImportacionesQ8 certifica que",
+        "",
+        nombre_alumno,
+        "",
+        f"completo el 100% del curso: {curso.titulo}",
+        f"Nivel: {curso.nivel}",
+        f"Categoria: {curso.categoria}",
+        f"Impartido por: {empresa_nombre or 'Empresa importadora'}",
+        "",
+        f"Fecha de emision: {ahora.strftime('%Y-%m-%d')}",
+        f"Codigo de verificacion: {curso.id[:8]}-{str(usuario.id)[:8]}",
+    ]
+
+    path = _write_pdf_file(f"certificado_{curso.slug[:40]}", lineas)
+
+    carpeta_id = ensure_folder_path(
+        db,
+        owner_user_id=str(usuario.id),
+        segments=["Certificados"],
+    )
+
+    return _persist_pdf_as_file(
+        db,
+        owner_user_id=str(usuario.id),
+        carpeta_id=carpeta_id,
+        nombre=f"Certificado - {curso.titulo}.pdf"[:255],
+        origen="curso",
+        path=path,
+    )
+
+
 def generate_order_documents(
     db: Session,
     *,

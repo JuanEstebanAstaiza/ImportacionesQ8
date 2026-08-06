@@ -14,9 +14,19 @@ from models.documental import Archivo, Carpeta, CursoRecurso
 
 DOC_EXTENSIONS = {"pdf", "doc", "docx", "pptx", "xls", "xlsx", "txt"}
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-VIDEO_EXTENSIONS = {"mp4"}
+# Solo contenedores que un <video> reproduce de forma nativa: aceptar avi/mkv
+# dejaría subir archivos que después no se pueden ver en el reproductor.
+VIDEO_EXTENSIONS = {"mp4", "webm", "mov", "m4v"}
+ALLOWED_EXTENSIONS = DOC_EXTENSIONS | IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 DOCUMENTAL_URL_RE = re.compile(r"/documentos/archivos/([0-9a-fA-F-]{36})/descargar")
+
+VIDEO_MIME_TYPES = {
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "mov": "video/quicktime",
+    "m4v": "video/x-m4v",
+}
 
 
 def infer_file_type(extension: str) -> str:
@@ -27,9 +37,10 @@ def infer_file_type(extension: str) -> str:
         return "imagen"
     if ext in VIDEO_EXTENSIONS:
         return "video"
+    permitidas = ", ".join(sorted(ALLOWED_EXTENSIONS)).upper()
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail="Tipo de archivo no soportado. Permitidos: PDF, DOC, DOCX, PPTX, XLS, XLSX, TXT, PNG, JPG, JPEG, WEBP y MP4.",
+        detail=f"Tipo de archivo no soportado ({ext or 'sin extensión'}). Permitidos: {permitidas}.",
     )
 
 
@@ -47,13 +58,17 @@ def infer_extension(nombre: str, extension: Optional[str] = None) -> str:
 
 
 def infer_mime_type(nombre: str, extension: str, mime_type: Optional[str] = None) -> str:
+    # En video la extensión manda: el navegador reporta mimes genéricos
+    # (application/octet-stream) que luego impiden reproducir el archivo.
+    if extension in VIDEO_MIME_TYPES:
+        if mime_type and mime_type.lower().startswith("video/"):
+            return mime_type
+        return VIDEO_MIME_TYPES[extension]
     if mime_type:
         return mime_type
     guessed, _ = mimetypes.guess_type(f"{nombre}.{extension}")
     if guessed:
         return guessed
-    if extension == "mp4":
-        return "video/mp4"
     if extension in {"jpg", "jpeg"}:
         return "image/jpeg"
     if extension == "png":
@@ -100,6 +115,50 @@ def create_document_file(
         archivo.storage_url = f"/documentos/archivos/{archivo.id}/descargar"
 
     return archivo
+
+
+def carpeta_chat_de_usuario(db: Session, *, owner_user_id: str, conversacion_id: str) -> Optional[str]:
+    """Carpeta `Chats/Conversacion-xxxxxxxx` del usuario en gestión documental."""
+    return ensure_folder_path(
+        db,
+        owner_user_id=owner_user_id,
+        segments=["Chats", f"Conversacion-{str(conversacion_id)[:8]}"],
+    )
+
+
+def clonar_archivo_para_chat(
+    db: Session,
+    *,
+    archivo: Archivo,
+    destinatario_id: str,
+    conversacion_id: str,
+) -> Archivo:
+    """Copia un archivo a la carpeta de chat de un participante.
+
+    El binario no se duplica (`storage_path` se comparte), pero `storage_url` se
+    regenera a partir del id del clon: heredar la del original apuntaba la
+    descarga a un archivo que solo el emisor podía leer, así que el destinatario
+    recibía 403 al abrir el adjunto.
+
+    Si el archivo vive en un almacenamiento externo (URL absoluta y sin ruta
+    local) se conserva su URL, porque ahí no hay nada que servir por el endpoint
+    de descarga.
+    """
+    externo = bool(archivo.storage_url) and str(archivo.storage_url).startswith("http") and not archivo.storage_path
+    return create_document_file(
+        db,
+        owner_user_id=destinatario_id,
+        nombre=archivo.nombre,
+        carpeta_id=carpeta_chat_de_usuario(
+            db, owner_user_id=destinatario_id, conversacion_id=conversacion_id
+        ),
+        extension=archivo.extension,
+        mime_type=archivo.mime_type,
+        size_bytes=archivo.size_bytes,
+        storage_url=archivo.storage_url if externo else None,
+        storage_path=archivo.storage_path,
+        origen="chat",
+    )
 
 
 def ensure_file_not_linked_to_active_course(db: Session, archivo_id: str) -> None:

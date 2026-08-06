@@ -22,6 +22,10 @@ venv/
 *.sqlite3
 test_data/
 
+# Almacenamiento local de gestión documental (binarios subidos por usuarios)
+proyecto/backend/uploads/
+proyecto/backend/generated_docs/
+
 # Node / frontend
 node_modules/
 .next/

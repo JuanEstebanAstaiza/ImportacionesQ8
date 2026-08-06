@@ -7,60 +7,51 @@ from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 
 from models.curso import (
     Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
-    EstadoCurso,
+    CertificadoCurso, EstadoCurso,
 )
 from models.documental import Archivo, CursoRecurso
 from models.importador import Importador
-from models.usuario import Usuario
 from schemas.curso import (
     CursoCreate, CursoUpdate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
     ProgresoLeccionRequest, ProgresoLeccionResponse, ModuloResponse, LeccionResponse,
-    RecursoLeccionResponse,
+    RecursoLeccionResponse, CertificadoCursoResponse,
 )
 from services.notificacion_service import crear_notificacion_best_effort
 from services.documental_service import extract_document_file_id_from_url, ensure_folder_path
-from services.token_revocation import jti_revocado
-from utils.dependencies import get_db, get_current_user, require_rol, security
-from utils.security import decode_access_token, JWTError
+from utils.dependencies import (
+    get_db,
+    get_current_user,
+    get_optional_current_user as get_optional_user,
+    require_rol,
+    require_rol_in,
+)
 from utils.limiter import limiter, RATE_LIMIT_PUBLIC_READ, RATE_LIMIT_PUBLIC_WRITE
 from utils.query_safety import like_contains_pattern, clamp_str
 
 logger = logging.getLogger("importacionesq8")
 
-router = APIRouter(tags=["Cursos"])
+
+def _modulo_educativo_activo() -> None:
+    """Apaga el módulo LMS entero desde `MODULO_EDUCATIVO_HABILITADO`.
+
+    Se responde 404 (no 403) para que la sección sea indistinguible de una que
+    no existe cuando el cliente decide no ofrecer formación.
+    """
+    import config as app_config
+
+    if not app_config.MODULO_EDUCATIVO_HABILITADO:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El módulo de cursos no está habilitado en esta instalación",
+        )
 
 
-async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db),
-) -> Optional[dict]:
-    """JWT opcional: catálogo/detalle públicos; progreso si hay sesión."""
-    if credentials is None:
-        return None
-    try:
-        payload = decode_access_token(credentials.credentials)
-        user_id = payload.get("sub")
-        jti = payload.get("jti")
-        if not user_id or not jti:
-            return None
-        if db is not None and jti_revocado(db, jti):
-            return None
-        usuario = db.query(Usuario).filter(Usuario.id == str(user_id)).first()
-        if not usuario or not usuario.activo:
-            return None
-        return {
-            "user_id": str(usuario.id),
-            "rol": usuario.rol,
-            "importador_id": usuario.importador_id,
-        }
-    except JWTError:
-        return None
+router = APIRouter(tags=["Cursos"], dependencies=[Depends(_modulo_educativo_activo)])
 
 
 def _slugify(texto: str) -> str:
@@ -184,9 +175,13 @@ def _puede_ver_contenido_completo(curso: Curso, current_user: Optional[dict], co
         return True
     if not current_user:
         return False
-    # Dueño de la empresa publicadora
+    if current_user.get("rol") == "admin":
+        return True
+    # Cualquier cuenta de la empresa publicadora (dueño o asesor): el asesor que
+    # sube y edita el material también necesita verlo, y limitarlo al dueño lo
+    # dejaba tras el muro de pago de su propio curso.
     if (
-        current_user.get("rol") == "importador"
+        current_user.get("rol") in ("importador", "asesor")
         and current_user.get("importador_id")
         and current_user.get("importador_id") == curso.importador_id
     ):
@@ -231,6 +226,25 @@ def _vincular_recurso_documental(
     )
 
 
+def _vincular_portada_curso(db: Session, curso: Curso) -> None:
+    """Vincula la portada al curso para que la descarga la autorice sin sesión.
+
+    La portada se muestra en el catálogo público; sin este vínculo el `<img>`
+    del catálogo pedía un archivo privado y caía siempre al placeholder.
+    """
+    db.query(CursoRecurso).filter(
+        CursoRecurso.curso_id == curso.id,
+        CursoRecurso.tipo == "portada",
+    ).delete(synchronize_session=False)
+    _vincular_recurso_documental(
+        db,
+        curso_id=curso.id,
+        leccion_id=None,
+        recurso_url=curso.portada_url or "",
+        tipo="portada",
+    )
+
+
 def _url_documental_obligatoria(value: str, *, campo: str) -> str:
     url = (value or "").strip()
     if not url.startswith("/documentos/archivos/"):
@@ -250,35 +264,52 @@ def _asegurar_carpeta_curso(db: Session, curso: Curso) -> None:
 
 
 def _reemplazar_estructura_curso(db: Session, curso: Curso, modulos: List) -> None:
-    curso.modulos.clear()
-    db.flush()
+    """Reconcilia el temario del curso conservando las lecciones que siguen ahí.
+
+    Antes se borraba todo y se recreaba con ids nuevos, así que cualquier
+    edición del temario —hasta corregir una tilde en un título— dejaba las filas
+    de `ProgresoLeccion` apuntando a lecciones inexistentes y todos los alumnos
+    volvían a 0%. Ahora solo se elimina lo que el editor quitó de verdad.
+    """
+    modulos_existentes = {str(m.id): m for m in curso.modulos}
+    lecciones_existentes = {
+        str(leccion.id): leccion
+        for modulo in curso.modulos
+        for leccion in modulo.lecciones
+    }
+
+    modulos_conservados: set = set()
+    lecciones_conservadas: set = set()
+
+    # `CursoRecurso` es un índice derivado del temario: se reconstruye entero.
     db.query(CursoRecurso).filter(CursoRecurso.curso_id == curso.id).delete(synchronize_session=False)
 
     primera_leccion = True
     for modulo_index, modulo_data in enumerate(modulos):
-        modulo = ModuloCurso(
-            id=str(uuid4()),
-            curso_id=curso.id,
-            titulo=modulo_data.titulo.strip(),
-            orden=modulo_index,
-        )
-        db.add(modulo)
+        modulo = modulos_existentes.get(str(getattr(modulo_data, "id", None) or ""))
+        if modulo is None:
+            modulo = ModuloCurso(id=str(uuid4()), curso_id=curso.id)
+            db.add(modulo)
+        modulo.titulo = modulo_data.titulo.strip()
+        modulo.orden = modulo_index
         db.flush()
+        modulos_conservados.add(str(modulo.id))
 
         for leccion_index, leccion_data in enumerate(modulo_data.lecciones):
             video_url = _url_documental_obligatoria(leccion_data.video_url, campo="video_url")
-            leccion = LeccionCurso(
-                id=str(uuid4()),
-                modulo_id=modulo.id,
-                curso_id=curso.id,
-                titulo=leccion_data.titulo.strip(),
-                duracion=leccion_data.duracion or "10 min",
-                video_url=video_url,
-                orden=leccion_index,
-                es_preview=bool(leccion_data.es_preview or primera_leccion),
-            )
-            db.add(leccion)
+            leccion = lecciones_existentes.get(str(getattr(leccion_data, "id", None) or ""))
+            if leccion is None:
+                leccion = LeccionCurso(id=str(uuid4()), curso_id=curso.id)
+                db.add(leccion)
+            leccion.modulo_id = modulo.id
+            leccion.curso_id = curso.id
+            leccion.titulo = leccion_data.titulo.strip()
+            leccion.duracion = leccion_data.duracion or "10 min"
+            leccion.video_url = video_url
+            leccion.orden = leccion_index
+            leccion.es_preview = bool(leccion_data.es_preview or primera_leccion)
             db.flush()
+            lecciones_conservadas.add(str(leccion.id))
 
             _vincular_recurso_documental(
                 db,
@@ -287,6 +318,12 @@ def _reemplazar_estructura_curso(db: Session, curso: Curso, modulos: List) -> No
                 recurso_url=video_url,
                 tipo="video",
             )
+
+            # Los materiales adjuntos no tienen progreso asociado, así que se
+            # reemplazan sin más.
+            for recurso_previo in list(leccion.recursos):
+                db.delete(recurso_previo)
+            db.flush()
 
             for recurso_data in leccion_data.recursos:
                 recurso_url = _url_documental_obligatoria(recurso_data.url, campo="url de recurso")
@@ -309,6 +346,24 @@ def _reemplazar_estructura_curso(db: Session, curso: Curso, modulos: List) -> No
 
             primera_leccion = False
 
+    # Lo que el editor eliminó: se borra junto con el progreso que apuntaba a él,
+    # para no dejar filas huérfanas que falseen el porcentaje del alumno.
+    for leccion_id, leccion in lecciones_existentes.items():
+        if leccion_id in lecciones_conservadas:
+            continue
+        db.query(ProgresoLeccion).filter(
+            ProgresoLeccion.leccion_id == leccion_id
+        ).delete(synchronize_session=False)
+        db.delete(leccion)
+
+    for modulo_id, modulo in modulos_existentes.items():
+        if modulo_id not in modulos_conservados:
+            db.delete(modulo)
+
+    db.flush()
+    db.expire(curso, ["modulos"])
+
+    _vincular_portada_curso(db, curso)
     _asegurar_carpeta_curso(db, curso)
 
 
@@ -457,11 +512,15 @@ async def comprar_curso(
     request: Request,
     curso_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("solicitante")),
+    current_user: dict = Depends(require_rol_in("solicitante", "importador", "asesor")),
 ):
     """
-    Registra la compra/inscripción del solicitante en el curso.
+    Registra la compra/inscripción del usuario en el curso.
     Idempotente: si ya compró, devuelve la inscripción existente.
+
+    Cualquier cuenta de negocio puede inscribirse (no solo el solicitante):
+    restringirlo al rol "solicitante" devolvía 403 a los asesores y dueños de
+    empresa que quisieran tomar un curso de otra importadora.
 
     Nota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en
     auditoría 2026-07-28 (A04 diseño de pagos).
@@ -660,6 +719,80 @@ async def marcar_progreso_leccion(
     )
 
 
+@router.get("/cursos/{curso_id}/certificado", response_model=CertificadoCursoResponse)
+async def obtener_certificado_curso(
+    curso_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Certificado de finalización del alumno que completó el 100% del curso.
+
+    Es idempotente: el PDF se emite una sola vez y queda en la carpeta
+    `Certificados` de su gestión documental; las llamadas siguientes devuelven
+    el mismo archivo.
+    """
+    from models.usuario import Usuario
+    from services.pdf_document_service import generate_course_certificate
+
+    usuario_id = current_user["user_id"]
+
+    curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id)).first()
+    if not curso or curso.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+
+    compra = db.query(CompraCurso).filter(
+        CompraCurso.curso_id == curso.id,
+        CompraCurso.usuario_id == usuario_id,
+    ).first()
+    if not compra:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debes estar inscrito en el curso para obtener el certificado",
+        )
+
+    _, total, pct = _progreso_usuario(db, usuario_id, curso.id)
+    if total == 0 or pct < 100:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Completa el 100% del curso para descargar tu certificado (llevas {pct}%)",
+        )
+
+    certificado = db.query(CertificadoCurso).filter(
+        CertificadoCurso.curso_id == curso.id,
+        CertificadoCurso.usuario_id == usuario_id,
+    ).first()
+
+    if not certificado:
+        usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if not usuario:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+        archivo_id = generate_course_certificate(
+            db,
+            curso=curso,
+            usuario=usuario,
+            empresa_nombre=_nombres_importadoras(db, [curso.importador_id]).get(curso.importador_id),
+        )
+        certificado = CertificadoCurso(
+            id=str(uuid4()),
+            curso_id=curso.id,
+            usuario_id=usuario_id,
+            archivo_id=archivo_id,
+            fecha_emision=datetime.utcnow(),
+        )
+        db.add(certificado)
+        db.commit()
+        db.refresh(certificado)
+
+    return CertificadoCursoResponse(
+        curso_id=str(curso.id),
+        curso_titulo=curso.titulo,
+        archivo_id=str(certificado.archivo_id),
+        url_descarga=f"/documentos/archivos/{certificado.archivo_id}/descargar",
+        fecha_emision=certificado.fecha_emision,
+    )
+
+
 @router.put("/cursos/{curso_id}", response_model=CursoDetailResponse)
 @limiter.limit(RATE_LIMIT_PUBLIC_WRITE)
 async def actualizar_curso(
@@ -695,6 +828,8 @@ async def actualizar_curso(
 
     if datos.modulos is not None:
         _reemplazar_estructura_curso(db, curso, datos.modulos)
+    elif datos.portada_url is not None:
+        _vincular_portada_curso(db, curso)
 
     curso.fecha_actualizacion = datetime.utcnow()
     db.commit()

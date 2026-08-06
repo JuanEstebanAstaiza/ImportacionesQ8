@@ -320,9 +320,9 @@ async def actualizar_estado_orden(
     )
     db.add(nuevo_historial)
     
-    # Notificación persistente in-app + Redis Pub/Sub (best-effort).
-    from services.notificacion_service import crear_notificacion_best_effort
-    crear_notificacion_best_effort(
+    # Notificación in-app + WhatsApp + correo, y Redis Pub/Sub (best-effort).
+    from services.notificacion_service import notificar
+    notificar(
         db,
         usuario_id=orden.solicitante_id,
         tipo="orden",
@@ -333,6 +333,7 @@ async def actualizar_estado_orden(
             "estado_anterior": estado_actual,
             "estado_nuevo": nuevo_estado_valor,
         },
+        enlace_relativo="/ordenes",
     )
 
     if config.redis_client:

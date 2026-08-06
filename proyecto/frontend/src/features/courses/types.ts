@@ -46,12 +46,19 @@ export interface Course {
 }
 
 export interface PublishLessonResourceInput {
+  id?: string;
   nombre: string;
   url: string;
   tipo: ResourceType;
 }
 
+/**
+ * Al editar un curso hay que devolver el `id` que entregó el backend: es lo que
+ * le permite reconocer la lección y conservar el progreso que los alumnos ya
+ * tenían sobre ella. Sin `id` la lección se trata como nueva.
+ */
 export interface PublishLessonInput {
+  id?: string;
   titulo: string;
   duracion: string;
   video_url: string;
@@ -60,6 +67,7 @@ export interface PublishLessonInput {
 }
 
 export interface PublishModuleInput {
+  id?: string;
   titulo: string;
   lecciones: PublishLessonInput[];
 }

@@ -179,6 +179,22 @@ async def root():
         "version": "1.0.0"
     }
 
+@app.get("/configuracion-publica", tags=["Salud"])
+async def configuracion_publica():
+    """Flags que el frontend necesita conocer antes de dibujar la navegación.
+
+    Fuente única de verdad: el frontend no duplica estas banderas en su propio
+    `.env`, así que encender o apagar un módulo se hace en un solo sitio.
+    """
+    import config as app_config
+
+    return {
+        "modulo_educativo_habilitado": app_config.MODULO_EDUCATIVO_HABILITADO,
+        "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
+        "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
+    }
+
+
 @app.get("/health", tags=["Salud"])
 async def health_check():
     """Liveness: el proceso responde (no valida dependencias)."""

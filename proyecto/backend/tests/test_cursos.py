@@ -233,11 +233,14 @@ class TestCompraYProgreso:
         ).json()
         assert all(l["video_url"] for m in det_auth["modulos"] for l in m["lecciones"])
 
-    def test_solo_solicitante_compra(self, client, empresa):
+    def test_cuenta_de_empresa_tambien_puede_inscribirse(self, client, empresa):
+        """Un dueño o asesor puede tomar cursos: limitar la compra al rol
+        "solicitante" devolvía 403 a las cuentas de empresa."""
         _, dueño = empresa
         curso = client.post("/cursos", json=CURSO_PAYLOAD, headers=auth_headers_for(dueño)).json()
         r = client.post(f"/cursos/{curso['id']}/comprar", headers=auth_headers_for(dueño))
-        assert r.status_code == status.HTTP_403_FORBIDDEN
+        assert r.status_code == status.HTTP_201_CREATED
+        assert r.json()["curso_id"] == curso["id"]
 
     def test_progreso_requiere_compra(self, client, empresa, solicitante):
         _, dueño = empresa

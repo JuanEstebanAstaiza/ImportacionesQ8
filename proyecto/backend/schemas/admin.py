@@ -28,6 +28,47 @@ class DisputaOrdenResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class ConversacionAdminItem(BaseModel):
+    """Fila del supervisor de chats del panel de administración."""
+    id: str
+    cotizacion_id: str
+    orden_id: Optional[str] = None
+    fecha_creacion: datetime
+
+    solicitante_id: str
+    solicitante_nombre: Optional[str] = None
+    solicitante_email: Optional[str] = None
+
+    importador_usuario_id: str
+    importador_usuario_nombre: Optional[str] = None
+    importador_usuario_email: Optional[str] = None
+    importador_id: Optional[str] = None
+    empresa_nombre: Optional[str] = None
+
+    total_mensajes: int = 0
+    ultimo_mensaje_texto: Optional[str] = None
+    ultimo_mensaje_fecha: Optional[datetime] = None
+
+
+class ConversacionesAdminResponse(BaseModel):
+    items: List[ConversacionAdminItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class MensajeAdminItem(BaseModel):
+    id: str
+    conversacion_id: str
+    remitente_id: str
+    remitente_nombre: Optional[str] = None
+    remitente_email: Optional[str] = None
+    remitente_rol: Optional[str] = None
+    contenido: str
+    tipo: str
+    fecha_envio: datetime
+
+
 class MetricasResponse(BaseModel):
     """Métricas de éxito de la plataforma (sección "Métricas de éxito" del PDF)."""
     total_cotizaciones: int

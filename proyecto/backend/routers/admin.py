@@ -4,7 +4,8 @@ from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, aliased
 
 from models.usuario import Usuario
 from models.importador import Importador
@@ -14,7 +15,15 @@ from models.orden import Orden
 from models.solicitud_recreacion import SolicitudRecreacion, EstadoSolicitudRecreacion
 from models.credito import MovimientoCredito, TipoMovimientoCredito
 from schemas.importador import AdminCrearImportadorRequest, AdminCrearImportadorResponse, ImportadorResponse
-from schemas.admin import UsuarioAdminResponse, UsuarioEstadoUpdate, DisputaOrdenResponse, MetricasResponse
+from schemas.admin import (
+    UsuarioAdminResponse,
+    UsuarioEstadoUpdate,
+    DisputaOrdenResponse,
+    MetricasResponse,
+    ConversacionAdminItem,
+    ConversacionesAdminResponse,
+    MensajeAdminItem,
+)
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
 from schemas.features import RevisarEvidenciaRequest, ResolverDisputaRoomRequest
@@ -429,6 +438,129 @@ async def resolver_recreacion(
 
 
 # ==================== Métricas de éxito (sección del PDF) ====================
+
+# ==================== Supervisión de chats ====================
+
+@router.get("/conversaciones", response_model=ConversacionesAdminResponse)
+async def listar_conversaciones_admin(
+    db: Session = Depends(get_db),
+    buscar: Optional[str] = Query(None, max_length=120, description="Filtra por nombre o email de solicitante/empresa"),
+    importador_id: Optional[str] = Query(None, description="Solo conversaciones de esta empresa"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Todas las conversaciones de la plataforma, para supervisión del equipo.
+
+    Reemplaza el uso de `GET /chat/conversaciones`, que para un admin devolvía
+    las 50 más recientes sin filtros ni paginación ni datos de los participantes.
+    """
+    from models.chat import ConversacionChat, MensajeChat
+
+    solicitante = aliased(Usuario)
+    contraparte = aliased(Usuario)
+
+    query = (
+        db.query(ConversacionChat, solicitante, contraparte, Importador)
+        .outerjoin(solicitante, solicitante.id == ConversacionChat.solicitante_id)
+        .outerjoin(contraparte, contraparte.id == ConversacionChat.importador_usuario_id)
+        .outerjoin(Importador, Importador.id == contraparte.importador_id)
+    )
+
+    if importador_id:
+        query = query.filter(contraparte.importador_id == importador_id)
+
+    if buscar:
+        patron = f"%{buscar.strip()}%"
+        query = query.filter(
+            or_(
+                solicitante.nombre.ilike(patron),
+                solicitante.email.ilike(patron),
+                contraparte.nombre.ilike(patron),
+                contraparte.email.ilike(patron),
+                Importador.nombre_empresa.ilike(patron),
+            )
+        )
+
+    total = query.count()
+    filas = (
+        query.order_by(ConversacionChat.fecha_creacion.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    items = []
+    for conversacion, usuario_solicitante, usuario_empresa, empresa in filas:
+        total_mensajes = db.query(func.count(MensajeChat.id)).filter(
+            MensajeChat.conversacion_id == conversacion.id
+        ).scalar() or 0
+        ultimo = (
+            db.query(MensajeChat)
+            .filter(MensajeChat.conversacion_id == conversacion.id)
+            .order_by(MensajeChat.fecha_envio.desc())
+            .first()
+        )
+        items.append(ConversacionAdminItem(
+            id=str(conversacion.id),
+            cotizacion_id=str(conversacion.cotizacion_id),
+            orden_id=str(conversacion.orden_id) if conversacion.orden_id else None,
+            fecha_creacion=conversacion.fecha_creacion,
+            solicitante_id=str(conversacion.solicitante_id),
+            solicitante_nombre=usuario_solicitante.nombre if usuario_solicitante else None,
+            solicitante_email=usuario_solicitante.email if usuario_solicitante else None,
+            importador_usuario_id=str(conversacion.importador_usuario_id),
+            importador_usuario_nombre=usuario_empresa.nombre if usuario_empresa else None,
+            importador_usuario_email=usuario_empresa.email if usuario_empresa else None,
+            importador_id=str(empresa.id) if empresa else None,
+            empresa_nombre=empresa.nombre_empresa if empresa else None,
+            total_mensajes=int(total_mensajes),
+            ultimo_mensaje_texto=(ultimo.contenido[:280] if ultimo else None),
+            ultimo_mensaje_fecha=(ultimo.fecha_envio if ultimo else None),
+        ))
+
+    return ConversacionesAdminResponse(items=items, total=int(total), limit=limit, offset=offset)
+
+
+@router.get("/conversaciones/{conversacion_id}/mensajes", response_model=List[MensajeAdminItem])
+async def leer_conversacion_admin(
+    conversacion_id: str,
+    db: Session = Depends(get_db),
+    limit: int = Query(200, ge=1, le=500),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Historial completo de una conversación. Solo lectura: el admin supervisa,
+    no interviene en la negociación."""
+    from models.chat import ConversacionChat, MensajeChat
+
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
+    if not conversacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
+
+    filas = (
+        db.query(MensajeChat, Usuario)
+        .outerjoin(Usuario, Usuario.id == MensajeChat.remitente_id)
+        .filter(MensajeChat.conversacion_id == conversacion_id)
+        .order_by(MensajeChat.fecha_envio.asc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        MensajeAdminItem(
+            id=str(mensaje.id),
+            conversacion_id=str(mensaje.conversacion_id),
+            remitente_id=str(mensaje.remitente_id),
+            remitente_nombre=remitente.nombre if remitente else None,
+            remitente_email=remitente.email if remitente else None,
+            remitente_rol=remitente.rol if remitente else None,
+            contenido=mensaje.contenido,
+            tipo=str(mensaje.tipo),
+            fecha_envio=mensaje.fecha_envio,
+        )
+        for mensaje, remitente in filas
+    ]
+
 
 @router.get("/metricas", response_model=MetricasResponse)
 async def obtener_metricas(

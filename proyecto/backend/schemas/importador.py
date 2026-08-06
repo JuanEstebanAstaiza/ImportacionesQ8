@@ -1,6 +1,13 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+
+from utils.urls import canonicalize_resource_url
+
+# Claves de `perfil_publico` que guardan imágenes y se normalizan igual que
+# `logo_url`: si quedaran como URL absoluta al host donde se editó el perfil,
+# dejarían de resolver desde otro entorno (Dev Tunnel, producción).
+CLAVES_IMAGEN_PERFIL = ("banner_url", "banner")
 
 # El alta de empresas usa `AdminCrearImportadorRequest` (empresa + cuenta dueño).
 # No existe un esquema de "crear solo la ficha": ese camino dejaba importadoras
@@ -33,6 +40,23 @@ class ImportadorUpdate(BaseModel):
     capacidad_volumen: Optional[int] = None
     perfil_publico: Optional[Dict[str, Any]] = None
     solo_cotizaciones_directas: Optional[bool] = None
+
+    @field_validator("logo_url")
+    @classmethod
+    def logo_seguro(cls, v: Optional[str]) -> Optional[str]:
+        return canonicalize_resource_url(v, campo="logo_url")
+
+    @field_validator("perfil_publico")
+    @classmethod
+    def imagenes_perfil_seguras(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not v:
+            return v
+        limpio = dict(v)
+        for clave in CLAVES_IMAGEN_PERFIL:
+            valor = limpio.get(clave)
+            if isinstance(valor, str) and valor.strip():
+                limpio[clave] = canonicalize_resource_url(valor, campo=clave)
+        return limpio
 
 class AdminCrearImportadorRequest(BaseModel):
     """El admin crea la empresa Y la cuenta dueña ('rol=importador') en un solo paso."""

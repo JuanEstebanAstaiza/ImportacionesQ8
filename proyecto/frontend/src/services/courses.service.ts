@@ -68,6 +68,14 @@ interface ProgresoLeccionResponse {
   fecha_completado: string | null;
 }
 
+export interface CertificadoCursoResponse {
+  curso_id: string;
+  curso_titulo: string;
+  archivo_id: string;
+  url_descarga: string;
+  fecha_emision: string | null;
+}
+
 type ApiEnvelope<T> = {
   data?: T | ApiEnvelope<T>;
 };
@@ -169,14 +177,22 @@ function toPublishPayload(input: PublishCourseInput): Record<string, unknown> {
     precio: input.precio,
     nivel: input.nivel,
     categoria: input.categoria,
+    // Los ids solo se envían cuando existen (edición). En una publicación nueva
+    // se omiten y el backend genera los suyos.
     modulos: input.modulos.map((module) => ({
+      ...(module.id ? { id: module.id } : {}),
       titulo: module.titulo,
       lecciones: module.lecciones.map((lesson, index) => ({
+        ...(lesson.id ? { id: lesson.id } : {}),
         titulo: lesson.titulo,
         duracion: lesson.duracion,
         video_url: lesson.video_url,
         es_preview: Boolean(lesson.es_preview) || index === 0,
-        recursos: lesson.recursos,
+        recursos: lesson.recursos.map((resource) => ({
+          nombre: resource.nombre,
+          url: resource.url,
+          tipo: resource.tipo,
+        })),
       })),
     })),
   };
@@ -241,6 +257,15 @@ export const coursesService = {
       rows.map((row) => [row.id, Array.isArray(row.lecciones_completadas) ? row.lecciones_completadas : []]),
     );
     return { courses, completedByCourseId };
+  },
+
+  /**
+   * Certificado de finalización. El backend responde 409 mientras el alumno no
+   * haya completado el 100% del curso, y es idempotente: emite el PDF una vez y
+   * después devuelve siempre el mismo archivo.
+   */
+  getCertificate(courseId: string): Promise<CertificadoCursoResponse> {
+    return apiRequest<CertificadoCursoResponse>(`/cursos/${courseId}/certificado`, { method: "GET" });
   },
 
   markLessonProgress(courseId: string, lessonId: string, completada: boolean): Promise<ProgresoLeccionResponse> {

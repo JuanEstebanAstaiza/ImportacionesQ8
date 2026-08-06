@@ -37,6 +37,44 @@ export interface AdminCotizacionAbierta {
   fecha_creacion: string;
 }
 
+/** Fila del supervisor de chats: una conversación con sus dos participantes. */
+export interface AdminConversacion {
+  id: string;
+  cotizacion_id: string;
+  orden_id: string | null;
+  fecha_creacion: string;
+  solicitante_id: string;
+  solicitante_nombre: string | null;
+  solicitante_email: string | null;
+  importador_usuario_id: string;
+  importador_usuario_nombre: string | null;
+  importador_usuario_email: string | null;
+  importador_id: string | null;
+  empresa_nombre: string | null;
+  total_mensajes: number;
+  ultimo_mensaje_texto: string | null;
+  ultimo_mensaje_fecha: string | null;
+}
+
+export interface AdminConversacionesResponse {
+  items: AdminConversacion[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminMensaje {
+  id: string;
+  conversacion_id: string;
+  remitente_id: string;
+  remitente_nombre: string | null;
+  remitente_email: string | null;
+  remitente_rol: string | null;
+  contenido: string;
+  tipo: string;
+  fecha_envio: string;
+}
+
 export interface CreateImporterWithOwnerPayload {
   nombre_empresa: string;
   logo_url?: string;
@@ -111,6 +149,25 @@ export const adminService = {
 
   getMetricas(): Promise<AdminMetricas> {
     return apiRequest<AdminMetricas>("/admin/metricas", { method: "GET" });
+  },
+
+  /** Supervisión: todas las conversaciones de la plataforma, paginadas. */
+  listConversations(filters?: { buscar?: string; importadorId?: string; limit?: number; offset?: number }): Promise<AdminConversacionesResponse> {
+    const query = new URLSearchParams();
+    if (filters?.buscar?.trim()) {
+      query.set("buscar", filters.buscar.trim());
+    }
+    if (filters?.importadorId) {
+      query.set("importador_id", filters.importadorId);
+    }
+    query.set("limit", String(filters?.limit ?? 50));
+    query.set("offset", String(filters?.offset ?? 0));
+    return apiRequest<AdminConversacionesResponse>(`/admin/conversaciones?${query.toString()}`, { method: "GET" });
+  },
+
+  /** Historial completo de una conversación. Solo lectura: el admin no interviene. */
+  getConversationMessages(conversacionId: string): Promise<AdminMensaje[]> {
+    return apiRequest<AdminMensaje[]>(`/admin/conversaciones/${conversacionId}/mensajes`, { method: "GET" });
   },
 
   listOpenQuotes(): Promise<AdminCotizacionAbierta[]> {

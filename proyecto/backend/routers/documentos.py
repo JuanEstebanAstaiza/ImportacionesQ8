@@ -7,11 +7,13 @@ from uuid import UUID as PyUUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import and_, or_
+from sqlalchemy import String, and_, func, or_
 from sqlalchemy.orm import Session
 
 import config
 from models.chat import ConversacionChat, MensajeChat
+from models.curso import CompraCurso, Curso, EstadoCurso, LeccionCurso
+from models.importador import Importador
 from models.documental import (
     Archivo,
     ArchivoEtiqueta,
@@ -37,12 +39,13 @@ from schemas.documental import (
     ResourceTagAssign,
 )
 from services.documental_service import (
+    clonar_archivo_para_chat,
     create_document_file,
     ensure_file_not_linked_to_active_course,
-    ensure_folder_path,
+    infer_extension,
     soft_delete_file,
 )
-from utils.dependencies import get_current_user, get_db
+from utils.dependencies import get_current_user, get_db, get_optional_current_user
 
 router = APIRouter(prefix="/documentos", tags=["Gestión Documental"])
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -322,13 +325,17 @@ async def subir_archivo(
     if not original_name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nombre de archivo inválido")
 
+    # Se valida la extensión antes de tocar disco: si el formato no está
+    # soportado, escribir primero dejaba el binario huérfano en uploads/ sin
+    # ninguna fila en base de datos que lo respaldara.
+    extension = infer_extension(original_name)
+
     file_bytes = await archivo.read()
     LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     stored_name = f"{uuid4()}_{original_name}"
     storage_path = LOCAL_UPLOADS_DIR / stored_name
     storage_path.write_bytes(file_bytes)
 
-    extension = Path(original_name).suffix.lstrip(".") or None
     file_row = create_document_file(
         db,
         owner_user_id=user_id,
@@ -596,26 +603,20 @@ async def compartir_recursos_chat(
         db.add(message)
         db.flush()
 
-        chat_folder_id = ensure_folder_path(
-            db,
-            owner_user_id=user_id,
-            segments=["Chats", f"Conversacion-{conversation_id[:8]}"],
-        )
+        # Una copia por participante: cada uno la ve en su propia gestión
+        # documental y queda autorizado a descargarla vía `MensajeAdjunto`.
+        destinatarios = {conversation.solicitante_id, conversation.importador_usuario_id}
+        destinatarios.add(user_id)
 
         for file_row in files:
-            cloned = create_document_file(
-                db,
-                owner_user_id=user_id,
-                nombre=file_row.nombre,
-                carpeta_id=chat_folder_id,
-                extension=file_row.extension,
-                mime_type=file_row.mime_type,
-                size_bytes=file_row.size_bytes,
-                storage_url=file_row.storage_url,
-                storage_path=file_row.storage_path,
-                origen="chat",
-            )
-            db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=message.id, archivo_id=cloned.id))
+            for destinatario_id in destinatarios:
+                cloned = clonar_archivo_para_chat(
+                    db,
+                    archivo=file_row,
+                    destinatario_id=destinatario_id,
+                    conversacion_id=conversation_id,
+                )
+                db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=message.id, archivo_id=cloned.id))
 
         if config.redis_client:
             try:
@@ -666,61 +667,205 @@ async def listar_adjuntos_chat(
         .all()
     )
 
-    items = []
+    # Cada adjunto se guarda una vez por participante (así aparece en la gestión
+    # documental de ambos). Aquí se colapsa a una sola tarjeta por archivo,
+    # prefiriendo la copia del propio usuario; los adjuntos antiguos, clonados
+    # solo para el emisor, siguen visibles gracias al fallback.
+    user_id = _current_user_id(current_user)
+    elegidos: Dict[tuple, Archivo] = {}
+    fechas: Dict[tuple, datetime] = {}
     for link, message, file_row in rows:
+        clave = (message.id, file_row.nombre, file_row.size_bytes)
+        actual = elegidos.get(clave)
+        if actual is None or (actual.owner_user_id != user_id and file_row.owner_user_id == user_id):
+            elegidos[clave] = file_row
+            fechas[clave] = message.fecha_envio
+
+    items = []
+    for clave, file_row in elegidos.items():
+        mensaje_id = clave[0]
         items.append(
             ChatAttachmentItem(
                 archivo_id=file_row.id,
-                mensaje_id=message.id,
+                mensaje_id=mensaje_id,
                 conversacion_id=conversacion_id,
                 nombre=file_row.nombre,
                 mime_type=file_row.mime_type,
                 extension=file_row.extension,
                 tipo_recurso=file_row.tipo_recurso,
                 size_bytes=file_row.size_bytes,
-                storage_url=file_row.storage_url,
-                created_at=message.fecha_envio,
+                # URL canónica del archivo que este usuario sí puede descargar.
+                storage_url=f"/documentos/archivos/{file_row.id}/descargar",
+                created_at=fechas[clave],
             )
         )
     return items
+
+
+def _es_adjunto_de_chat_del_usuario(db: Session, archivo_id: str, user_id: str) -> bool:
+    linked = (
+        db.query(MensajeAdjunto)
+        .join(MensajeChat, MensajeChat.id == MensajeAdjunto.mensaje_id)
+        .join(ConversacionChat, ConversacionChat.id == MensajeChat.conversacion_id)
+        .filter(
+            MensajeAdjunto.archivo_id == archivo_id,
+            MensajeAdjunto.deleted_at.is_(None),
+            or_(
+                ConversacionChat.solicitante_id == user_id,
+                ConversacionChat.importador_usuario_id == user_id,
+            ),
+        )
+        .first()
+    )
+    return linked is not None
+
+
+def _es_recurso_publico_de_curso(db: Session, archivo_id: str) -> bool:
+    """Portada del curso y media de lecciones marcadas como vista previa.
+
+    Es exactamente lo que `GET /cursos/{id_o_slug}` ya entrega sin sesión, así
+    que servirlo sin token no expone nada nuevo: sin esto la portada del
+    catálogo y el tráiler del curso respondían 401 y no se veían.
+    """
+    fila = (
+        db.query(CursoRecurso.id)
+        .join(Curso, Curso.id == CursoRecurso.curso_id)
+        .outerjoin(LeccionCurso, LeccionCurso.id == CursoRecurso.leccion_id)
+        .filter(
+            CursoRecurso.archivo_id == archivo_id,
+            CursoRecurso.deleted_at.is_(None),
+            Curso.deleted_at.is_(None),
+            Curso.estado == EstadoCurso.publicado.value,
+            or_(
+                CursoRecurso.leccion_id.is_(None),
+                LeccionCurso.es_preview.is_(True),
+            ),
+        )
+        .first()
+    )
+    if fila is not None:
+        return True
+
+    # Cursos publicados antes de que las portadas se vincularan como recurso:
+    # se reconocen por la propia `portada_url` para no dejarlos sin imagen.
+    try:
+        PyUUID(archivo_id)
+    except ValueError:
+        return False
+
+    portada = (
+        db.query(Curso.id)
+        .filter(
+            Curso.deleted_at.is_(None),
+            Curso.estado == EstadoCurso.publicado.value,
+            Curso.portada_url.like(f"%/{archivo_id}/%"),
+        )
+        .first()
+    )
+    return portada is not None
+
+
+def _es_imagen_publica_de_empresa(db: Session, archivo_id: str) -> bool:
+    """Logo y banner de portada de una empresa importadora.
+
+    El catálogo de empresas y la ficha pública son visibles sin sesión, así que
+    sus imágenes tienen que servirse igual: si no, el `<img>` del perfil pedía un
+    archivo privado y siempre caía al placeholder.
+    """
+    try:
+        PyUUID(archivo_id)
+    except ValueError:
+        return False
+
+    patron = f"%/{archivo_id}/%"
+    fila = (
+        db.query(Importador.id)
+        .filter(
+            Importador.estado == "activo",
+            or_(
+                Importador.logo_url.like(patron),
+                # `perfil_publico` es JSON: en MySQL y SQLite se busca el id como
+                # texto dentro del documento serializado.
+                func.cast(Importador.perfil_publico, String).like(f"%{archivo_id}%"),
+            ),
+        )
+        .first()
+    )
+    return fila is not None
+
+
+def _tiene_acceso_por_curso(db: Session, archivo_id: str, current_user: dict) -> bool:
+    """Alumno inscrito en el curso, o cuenta de la empresa que lo publica.
+
+    El archivo lo sube el dueño de la empresa, así que sin esta regla ningún
+    alumno podía reproducir el video que compró.
+    """
+    base = (
+        db.query(CursoRecurso.id)
+        .join(Curso, Curso.id == CursoRecurso.curso_id)
+        .filter(
+            CursoRecurso.archivo_id == archivo_id,
+            CursoRecurso.deleted_at.is_(None),
+            Curso.deleted_at.is_(None),
+        )
+    )
+
+    importador_id = current_user.get("importador_id")
+    if importador_id and base.filter(Curso.importador_id == importador_id).first():
+        return True
+
+    comprado = (
+        base.join(CompraCurso, CompraCurso.curso_id == Curso.id)
+        .filter(CompraCurso.usuario_id == current_user.get("user_id"))
+        .first()
+    )
+    return comprado is not None
 
 
 @router.get("/archivos/{archivo_id}/descargar")
 async def descargar_archivo(
     archivo_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: Optional[dict] = Depends(get_optional_current_user),
 ):
-    user_id = _current_user_id(current_user)
     file_row = db.query(Archivo).filter(Archivo.id == archivo_id, Archivo.deleted_at.is_(None)).first()
     if not file_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Archivo no encontrado")
 
-    # El owner puede descargar siempre; quienes reciben por chat también.
-    allowed = file_row.owner_user_id == user_id
-    if not allowed:
-        linked = (
-            db.query(MensajeAdjunto)
-            .join(MensajeChat, MensajeChat.id == MensajeAdjunto.mensaje_id)
-            .join(ConversacionChat, ConversacionChat.id == MensajeChat.conversacion_id)
-            .filter(
-                MensajeAdjunto.archivo_id == archivo_id,
-                MensajeAdjunto.deleted_at.is_(None),
-                or_(
-                    ConversacionChat.solicitante_id == user_id,
-                    ConversacionChat.importador_usuario_id == user_id,
-                ),
-            )
-            .first()
-        )
-        allowed = linked is not None
+    allowed = _es_recurso_publico_de_curso(db, archivo_id) or _es_imagen_publica_de_empresa(db, archivo_id)
 
-    if not allowed and current_user.get("rol") != "admin":
+    if not allowed and current_user is not None:
+        user_id = _current_user_id(current_user)
+        # El owner puede descargar siempre; quienes lo reciben por chat y los
+        # alumnos del curso donde está vinculado, también.
+        allowed = (
+            file_row.owner_user_id == user_id
+            or current_user.get("rol") == "admin"
+            or _es_adjunto_de_chat_del_usuario(db, archivo_id, user_id)
+            or _tiene_acceso_por_curso(db, archivo_id, current_user)
+        )
+
+    if not allowed:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Se requiere iniciar sesión para acceder a este archivo",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para descargar este archivo")
 
     local_path = _resolve_local_storage_path(file_row)
     if local_path:
-        return FileResponse(path=str(local_path), media_type=file_row.mime_type, filename=file_row.nombre)
+        # `inline` en imágenes y video: el navegador los muestra en vez de
+        # forzar descarga, y FileResponse atiende Range (206) para que el
+        # reproductor pueda buscar sin traerse el archivo completo.
+        disposition = "inline" if file_row.tipo_recurso in ("imagen", "video") else "attachment"
+        return FileResponse(
+            path=str(local_path),
+            media_type=file_row.mime_type,
+            filename=file_row.nombre,
+            content_disposition_type=disposition,
+        )
 
     if file_row.storage_url and file_row.storage_url.startswith("http"):
         return {"download_url": file_row.storage_url}

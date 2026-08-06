@@ -34,6 +34,7 @@ def _validar_url_documental(value: Optional[str], *, campo: str = "url") -> Opti
 
 
 class RecursoLeccionCreate(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=36)
     nombre: str = Field(..., min_length=1, max_length=255)
     url: str = Field(..., min_length=5, max_length=500)
     tipo: TipoRecursoLiteral = "archivo"
@@ -45,6 +46,10 @@ class RecursoLeccionCreate(BaseModel):
 
 
 class LeccionCreate(BaseModel):
+    # Al editar un curso hay que devolver el id que entregó `LeccionResponse`:
+    # es lo que permite conservar la lección y, con ella, el progreso que los
+    # alumnos ya tenían registrado sobre ella.
+    id: Optional[str] = Field(default=None, max_length=36)
     titulo: str = Field(..., min_length=1, max_length=255)
     duracion: str = Field(default="10 min", max_length=30)
     video_url: str = Field(..., min_length=5, max_length=500)
@@ -58,6 +63,7 @@ class LeccionCreate(BaseModel):
 
 
 class ModuloCreate(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=36)
     titulo: str = Field(..., min_length=1, max_length=255)
     lecciones: List[LeccionCreate] = Field(default_factory=list, max_length=MAX_LECCIONES_POR_MODULO)
 
@@ -181,6 +187,14 @@ class CompraCursoResponse(BaseModel):
     precio_pagado: float
     fecha_compra: datetime
     curso: Optional[CursoListItem] = None
+
+
+class CertificadoCursoResponse(BaseModel):
+    curso_id: str
+    curso_titulo: str
+    archivo_id: str
+    url_descarga: str
+    fecha_emision: Optional[datetime] = None
 
 
 class ProgresoLeccionRequest(BaseModel):

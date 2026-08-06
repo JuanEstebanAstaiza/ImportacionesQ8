@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Award,
   BookOpen,
   ChevronRight,
   CirclePlay,
@@ -67,6 +68,7 @@ import type {
 } from "./types";
 import { isSafeHttpUrl, safeHttpUrl } from "@/utils/safe-url";
 import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
+import { coursesService } from "@/services/courses.service";
 import {
   businessService,
   type BackendArchivoItem,
@@ -87,7 +89,14 @@ type DraftResource = {
 };
 
 type DraftLesson = {
+  /** Id local, solo para claves de React y reordenamiento en la lista. */
   id: string;
+  /**
+   * Id real de la lección en el backend, presente solo al editar un curso ya
+   * publicado. Hay que devolverlo para que el backend reconozca la lección y no
+   * borre el progreso que los alumnos ya tenían sobre ella.
+   */
+  serverId?: string;
   titulo: string;
   duracion: string;
   video_url: string;
@@ -96,6 +105,7 @@ type DraftLesson = {
 
 type DraftModule = {
   id: string;
+  serverId?: string;
   titulo: string;
   lecciones: DraftLesson[];
 };
@@ -176,10 +186,12 @@ function draftFormFromCourse(course: Course): PublishFormState {
     modulos: course.modulos.length > 0
       ? course.modulos.map((module) => ({
           id: createTempId("module"),
+          serverId: module.id,
           titulo: module.titulo,
           lecciones: module.lecciones.length > 0
             ? module.lecciones.map((lesson) => ({
                 id: createTempId("lesson"),
+                serverId: lesson.id,
                 titulo: lesson.titulo,
                 duracion: lesson.duracion,
                 video_url: lesson.video_url,
@@ -320,36 +332,66 @@ function resolvePlayableVideoSource(url: string):
   return null;
 }
 
+/**
+ * Contenedores que gestión documental acepta y que un <video> reproduce de
+ * forma nativa. Debe coincidir con `VIDEO_EXTENSIONS` del backend: si aquí se
+ * ofrece un formato que allá se rechaza, la subida falla y el archivo nunca
+ * aparece en Documentos.
+ */
+const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
+const VIDEO_FORMATS_LABEL = "MP4, WebM, MOV o M4V";
+const VIDEO_UPLOAD_ACCEPT = ".mp4,.webm,.mov,.m4v,video/mp4,video/webm,video/quicktime,video/x-m4v";
+
+type VideoLoadError = "forbidden" | "missing" | "network";
+
+const VIDEO_ERROR_MESSAGE: Record<VideoLoadError, string> = {
+  forbidden: "No tienes acceso a este video. Inscríbete en el curso para verlo completo.",
+  missing: "El archivo del video ya no está disponible en gestión documental.",
+  network: "No se pudo contactar al servidor para cargar el video.",
+};
+
 function ProtectedVideoPlayer({ url, onEnded }: { url: string; onEnded?: () => void }) {
   const [mediaUrl, setMediaUrl] = useState<string>("");
-  const [hasError, setHasError] = useState(false);
+  const [loadError, setLoadError] = useState<VideoLoadError | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
     let isCancelled = false;
 
     async function loadVideo(): Promise<void> {
-      setHasError(false);
+      setLoadError(null);
       setMediaUrl("");
 
       const absoluteUrl = normalizeVideoUrl(url);
-      const token = getStoredToken();
       if (!absoluteUrl) {
-        setHasError(true);
-        return;
-      }
-
-      if (!token) {
-        setMediaUrl(absoluteUrl);
+        setLoadError("missing");
         return;
       }
 
       try {
-        const response = await fetch(absoluteUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // Portadas y lecciones de vista previa son públicas en el backend: si
+        // responde sin token se usa la URL directa, que conserva la búsqueda
+        // por Range en vez de descargar el archivo entero.
+        const publicProbe = await fetch(absoluteUrl, { headers: { Range: "bytes=0-0" } });
+        if (publicProbe.ok) {
+          if (!isCancelled) {
+            setMediaUrl(absoluteUrl);
+          }
+          return;
+        }
+
+        // Para el material de pago hay que mandar Authorization, y un
+        // <video src> no puede llevar cabeceras: se descarga y se reproduce
+        // desde un blob. Nunca se cae a la URL cruda, que volvería a dar 401.
+        const token = getStoredToken();
+        const response = token
+          ? await fetch(absoluteUrl, { headers: { Authorization: `Bearer ${token}` } })
+          : publicProbe;
+
         if (!response.ok) {
-          setMediaUrl(absoluteUrl);
+          if (!isCancelled) {
+            setLoadError(response.status === 404 ? "missing" : "forbidden");
+          }
           return;
         }
 
@@ -360,7 +402,7 @@ function ProtectedVideoPlayer({ url, onEnded }: { url: string; onEnded?: () => v
         }
       } catch {
         if (!isCancelled) {
-          setHasError(true);
+          setLoadError("network");
         }
       }
     }
@@ -375,10 +417,10 @@ function ProtectedVideoPlayer({ url, onEnded }: { url: string; onEnded?: () => v
     };
   }, [url]);
 
-  if (hasError) {
+  if (loadError) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        No se pudo cargar el video. Verifica permisos o disponibilidad del archivo.
+      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        {VIDEO_ERROR_MESSAGE[loadError]}
       </div>
     );
   }
@@ -483,6 +525,7 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
       }
 
       lessons.push({
+        ...(lesson.serverId ? { id: lesson.serverId } : {}),
         titulo: lesson.titulo.trim(),
         duracion: lesson.duracion.trim(),
         video_url: video.canonical,
@@ -491,6 +534,7 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
     }
 
     modules.push({
+      ...(module.serverId ? { id: module.serverId } : {}),
       titulo: module.titulo.trim(),
       lecciones: lessons,
     });
@@ -617,6 +661,30 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
   const continueProgress = continueCourse ? getProgressPercentage(continueCourse, continueCompletedIds) : 0;
   const nextLesson = continueCourse ? getNextLesson(continueCourse, continueLessonId, continueCompletedIds) : null;
   const playerProgress = playerCourse ? getProgressPercentage(playerCourse, completedLessonsByCourse[playerCourse.id] || []) : 0;
+
+  const [isDownloadingCertificate, setIsDownloadingCertificate] = useState(false);
+  const [certificateError, setCertificateError] = useState("");
+
+  /**
+   * Pide el certificado y lo abre. El PDF queda además en la carpeta
+   * `Certificados` de la gestión documental del alumno, así que puede volver a
+   * descargarlo desde ahí sin pasar por el reproductor.
+   */
+  const handleDownloadCertificate = useCallback(async (courseId: string) => {
+    setCertificateError("");
+    setIsDownloadingCertificate(true);
+    try {
+      const certificado = await coursesService.getCertificate(courseId);
+      const abierto = await openResourceInNewTab(certificado.url_descarga);
+      if (!abierto) {
+        setCertificateError("El certificado se generó, pero no se pudo abrir. Búscalo en Documentos › Certificados.");
+      }
+    } catch (error) {
+      setCertificateError(error instanceof Error && error.message.trim() ? error.message : "No se pudo generar el certificado.");
+    } finally {
+      setIsDownloadingCertificate(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!activePlayerCourseId && purchasedCourses.length > 0) {
@@ -910,7 +978,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
   function isVideoDocument(doc: BackendArchivoItem): boolean {
     const mime = String(doc.mime_type || "").toLowerCase();
     const ext = String(doc.extension || "").toLowerCase();
-    return mime.startsWith("video/") || ["mp4", "webm", "mov", "m4v", "avi", "mkv"].includes(ext);
+    return mime.startsWith("video/") || VIDEO_EXTENSIONS.includes(ext);
   }
 
   function isImageDocument(doc: BackendArchivoItem): boolean {
@@ -1011,7 +1079,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
     if (target.kind === "cover") {
       setResourceUploadAccept("image/*");
     } else if (target.kind === "video") {
-      setResourceUploadAccept("video/*");
+      setResourceUploadAccept(VIDEO_UPLOAD_ACCEPT);
     } else {
       setResourceUploadAccept("*/*");
     }
@@ -1059,19 +1127,35 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
       return;
     }
 
-    if (resourceUploadTarget.kind === "video" && !file.type.startsWith("video/")) {
-      setActionError("La lección requiere un archivo de video.");
-      event.target.value = "";
-      setResourceUploadTarget(null);
-      return;
+    if (resourceUploadTarget.kind === "video") {
+      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+      if (!file.type.startsWith("video/") && !VIDEO_EXTENSIONS.includes(extension)) {
+        setActionError("La lección requiere un archivo de video.");
+        event.target.value = "";
+        setResourceUploadTarget(null);
+        return;
+      }
+
+      // Se avisa antes de subir: el backend rechaza el resto de contenedores y
+      // el navegador tampoco sabría reproducirlos.
+      if (!VIDEO_EXTENSIONS.includes(extension)) {
+        setActionError(`Formato de video no soportado (.${extension}). Usa ${VIDEO_FORMATS_LABEL}.`);
+        event.target.value = "";
+        setResourceUploadTarget(null);
+        return;
+      }
     }
 
     try {
       const created = await businessService.uploadDocumentFile(file, resourceCurrentFolderId, "curso");
       applyDocumentToTarget(resourceUploadTarget, created);
       await loadResourceFolder(resourceCurrentFolderId);
-    } catch {
-      setActionError("No se pudo subir el archivo para este recurso.");
+    } catch (uploadError) {
+      // El detalle del backend dice qué formato falló; el mensaje genérico
+      // hacía parecer que el archivo sí se había cargado.
+      const detail = uploadError instanceof Error ? uploadError.message.trim() : "";
+      setActionError(detail || "No se pudo subir el archivo para este recurso.");
     } finally {
       setResourceUploadTarget(null);
       event.target.value = "";
@@ -1621,14 +1705,29 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${playerProgress}%` }} />
                         </div>
                         <p className="text-sm text-muted-foreground">Progreso sincronizado: {playerProgress}%</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isSavingProgress}
-                          onClick={() => { void handleVideoFinished(activeLesson.id); }}
-                        >
-                          Marcar clase como completada
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isSavingProgress}
+                            onClick={() => { void handleVideoFinished(activeLesson.id); }}
+                          >
+                            Marcar clase como completada
+                          </Button>
+                          {/* El certificado solo aparece con el curso terminado:
+                              es exactamente la condición que valida el backend. */}
+                          {playerProgress >= 100 && playerCourse ? (
+                            <Button
+                              size="sm"
+                              disabled={isDownloadingCertificate}
+                              onClick={() => { void handleDownloadCertificate(playerCourse.id); }}
+                            >
+                              <Award className="mr-1.5 size-4" />
+                              {isDownloadingCertificate ? "Generando..." : "Descargar certificado"}
+                            </Button>
+                          ) : null}
+                        </div>
+                        {certificateError ? <p className="text-sm text-destructive">{certificateError}</p> : null}
                       </div>
                     </div>
                   </>
@@ -2050,8 +2149,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                   Subir video local
                                 </Button>
                                 {lesson.video_url ? (
-                                  <Button variant="outline" size="sm" asChild>
-                                    <a href={resolveApiUrl(lesson.video_url)} target="_blank" rel="noreferrer">Abrir video</a>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      void openResourceInNewTab(lesson.video_url).then((ok) => {
+                                        if (!ok) setActionError("No se pudo abrir el video desde el backend.");
+                                      });
+                                    }}
+                                  >
+                                    Abrir video
                                   </Button>
                                 ) : null}
                               </div>
@@ -2110,8 +2217,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                       Subir
                                     </Button>
                                     {resource.url ? (
-                                      <Button variant="outline" size="sm" asChild>
-                                        <a href={resolveApiUrl(resource.url)} target="_blank" rel="noreferrer">Abrir</a>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          void openResourceInNewTab(resource.url).then((ok) => {
+                                            if (!ok) setActionError("No se pudo abrir el recurso desde el backend.");
+                                          });
+                                        }}
+                                      >
+                                        Abrir
                                       </Button>
                                     ) : null}
                                     <Button variant="outline" size="sm" onClick={() => removeResource(module.id, lesson.id, resource.id)} disabled={lesson.recursos.length === 1}>
