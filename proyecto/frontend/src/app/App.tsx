@@ -2101,6 +2101,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
   const [previewObjectUrl,setPreviewObjectUrl]=useState("");
   const [previewLoadFailed,setPreviewLoadFailed]=useState(false);
+  const [attachmentThumbUrls,setAttachmentThumbUrls]=useState<Record<string,string>>({});
   const [isResourcePickerOpen,setIsResourcePickerOpen]=useState(false);
   const [resourceExplorer,setResourceExplorer]=useState<BackendExplorerResponse>({ carpetas: [], archivos: [] });
   const [resourceCurrentFolderId,setResourceCurrentFolderId]=useState<string|null>(null);
@@ -2117,6 +2118,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const messagesEndRef=useRef<HTMLDivElement>(null);
   const resourcePreviewLoadingRef=useRef<Record<string,boolean>>({});
   const resourcePreviewRegistryRef=useRef<Record<string,string>>({});
+  const attachmentThumbLoadingRef=useRef<Record<string,boolean>>({});
+  const attachmentThumbRegistryRef=useRef<Record<string,string>>({});
   const emojiOptions=["😀","😎","👍","✅","📦","🚢","💬","📌","🎯","🤝","🙏","🔥"];
 
   useEffect(()=>{
@@ -2183,6 +2186,51 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     return "word";
   }
 
+  function previewType(attachment: BackendChatAttachmentItem): "image" | "pdf" | "video" | "other" {
+    const mime = String(attachment.mime_type || "").toLowerCase();
+    if (mime.startsWith("image/")) return "image";
+    if (mime.includes("pdf")) return "pdf";
+    if (mime.startsWith("video/")) return "video";
+    return "other";
+  }
+
+  function attachmentIcon(attachment: BackendChatAttachmentItem): React.ReactNode {
+    const extension = String(attachment.extension || "").toLowerCase();
+    const kind = previewType(attachment);
+    if (kind === "image") return <ImageIcon className="w-4 h-4 text-fuchsia-600"/>;
+    if (kind === "pdf") return <FileText className="w-4 h-4 text-red-600"/>;
+    if (kind === "video") return <Video className="w-4 h-4 text-indigo-600"/>;
+    if (["xlsx", "xls", "csv"].includes(extension)) return <FileSpreadsheet className="w-4 h-4 text-emerald-600"/>;
+    if (["ppt", "pptx"].includes(extension)) return <FileText className="w-4 h-4 text-amber-600"/>;
+    return <FileIcon className="w-4 h-4 text-slate-600"/>;
+  }
+
+  function attachmentTypeLabel(attachment: BackendChatAttachmentItem): string {
+    const extension = String(attachment.extension || "").toLowerCase();
+    const kind = previewType(attachment);
+    if (kind === "image") return "Imagen";
+    if (kind === "pdf") return "PDF";
+    if (kind === "video") return "Video";
+    if (["xlsx", "xls", "csv"].includes(extension)) return "Hoja de calculo";
+    if (["ppt", "pptx"].includes(extension)) return "Presentacion";
+    if (["doc", "docx"].includes(extension)) return "Documento";
+    return extension ? extension.toUpperCase() : "Archivo";
+  }
+
+  function shouldRenderMessageText(message: ChatMsg, attachmentsCount: number): boolean {
+    if (!message.text) return false;
+    if (attachmentsCount === 0) return true;
+    return !/^(adjunto:|recurso compartido:)/i.test(message.text.trim());
+  }
+
+  async function handleAttachmentCardClick(attachment: BackendChatAttachmentItem) {
+    if (previewType(attachment) === "image" || previewType(attachment) === "pdf") {
+      setPreviewAttachment(attachment);
+      return;
+    }
+    await handleDownloadResource(attachment.storage_url, attachment.nombre);
+  }
+
   async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>,isImage:boolean){
     const file=event.target.files?.[0];
     if(!file||!selectedId)return;
@@ -2217,6 +2265,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   const convMsgs=selectedId?msgs[selectedId]||[]:[];
   const convAttachments=selectedId?chatAttachmentsByConversation[selectedId]||[]:[];
+  const attachmentsByMessage = convAttachments.reduce<Record<string, BackendChatAttachmentItem[]>>((acc, attachment) => {
+    if (!acc[attachment.mensaje_id]) {
+      acc[attachment.mensaje_id] = [];
+    }
+    acc[attachment.mensaje_id].push(attachment);
+    return acc;
+  }, {});
   const advisorOptions = Array.from(
     new Set(importers.map((row) => row.advisor.email).filter((email) => Boolean(email && email.trim()))),
   );
@@ -2458,17 +2513,54 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     return null;
   }
 
-  function previewType(attachment: BackendChatAttachmentItem): "image" | "pdf" | "video" | "other" {
-    const mime = String(attachment.mime_type || "").toLowerCase();
-    if (mime.startsWith("image/")) return "image";
-    if (mime.includes("pdf")) return "pdf";
-    if (mime.startsWith("video/")) return "video";
-    return "other";
-  }
-
   const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
   const pickerVisibleFiles = resourceSearchResults ?? resourceExplorer.archivos;
   const pickerVisibleFolders = resourceSearchResults ? [] : resourceExplorer.carpetas;
+
+  useEffect(() => {
+    const attachmentIds = new Set(convAttachments.map((attachment) => attachment.archivo_id));
+    Object.entries(attachmentThumbRegistryRef.current).forEach(([attachmentId, objectUrl]) => {
+      if (!attachmentIds.has(attachmentId)) {
+        window.URL.revokeObjectURL(objectUrl);
+        delete attachmentThumbRegistryRef.current[attachmentId];
+        delete attachmentThumbLoadingRef.current[attachmentId];
+      }
+    });
+
+    setAttachmentThumbUrls((current) => {
+      const next: Record<string,string> = {};
+      convAttachments.forEach((attachment) => {
+        if (current[attachment.archivo_id]) {
+          next[attachment.archivo_id] = current[attachment.archivo_id];
+        }
+      });
+      return next;
+    });
+
+    convAttachments.forEach((attachment) => {
+      if (previewType(attachment) !== "image" || !attachment.storage_url) {
+        return;
+      }
+      if (attachmentThumbRegistryRef.current[attachment.archivo_id] || attachmentThumbLoadingRef.current[attachment.archivo_id]) {
+        return;
+      }
+
+      attachmentThumbLoadingRef.current[attachment.archivo_id] = true;
+      void fetchProtectedBlob(attachment.storage_url)
+        .then((blob) => {
+          if (!blob) return;
+          const objectUrl = window.URL.createObjectURL(blob);
+          attachmentThumbRegistryRef.current[attachment.archivo_id] = objectUrl;
+          setAttachmentThumbUrls((current) => ({ ...current, [attachment.archivo_id]: objectUrl }));
+        })
+        .catch(() => {
+          // Si falla miniatura protegida, se mantiene icono fallback.
+        })
+        .finally(() => {
+          delete attachmentThumbLoadingRef.current[attachment.archivo_id];
+        });
+    });
+  }, [convAttachments]);
 
   useEffect(() => {
     if (!isResourcePickerOpen) {
@@ -2522,6 +2614,11 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   useEffect(() => {
     return () => {
+      Object.values(attachmentThumbRegistryRef.current).forEach((objectUrl) => {
+        window.URL.revokeObjectURL(objectUrl);
+      });
+      attachmentThumbRegistryRef.current = {};
+      attachmentThumbLoadingRef.current = {};
       Object.values(resourcePreviewRegistryRef.current).forEach((objectUrl) => {
         window.URL.revokeObjectURL(objectUrl);
       });
@@ -2636,6 +2733,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 {convMsgs.map((msg,i)=>{
                   const isClient=msg.sender==="client";
                   const prevMsg=i>0?convMsgs[i-1]:null;
+                  const messageAttachments=attachmentsByMessage[msg.id]||[];
                   return (
                     <div key={msg.id}>
                       {msg.dateGroup&&(
@@ -2649,7 +2747,53 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         {!isClient&&<Avatar initials={imp?.advisor.initials || "AS"} size="sm" color={imp?.color || "bg-slate-500"}/>}
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
-                          {msg.text&&(
+                          {messageAttachments.length>0 && (
+                            <div className={clsx("grid gap-2", messageAttachments.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1", isClient ? "justify-items-end" : "justify-items-start")}>
+                              {messageAttachments.map((attachment) => {
+                                const kind = previewType(attachment);
+                                const thumbUrl = kind === "image" ? attachmentThumbUrls[attachment.archivo_id] : "";
+                                return (
+                                  <div
+                                    key={attachment.archivo_id}
+                                    className="w-[240px] rounded-xl border border-border bg-white overflow-hidden shadow-sm"
+                                  >
+                                    <button
+                                      onClick={()=>{void handleAttachmentCardClick(attachment);}}
+                                      className="w-full text-left hover:bg-muted/50 transition-colors"
+                                    >
+                                      <div className="h-28 border-b border-border bg-slate-50 flex items-center justify-center overflow-hidden">
+                                        {kind === "image" && thumbUrl ? (
+                                          <img src={thumbUrl} alt={attachment.nombre} className="w-full h-full object-cover"/>
+                                        ) : (
+                                          <div className="w-10 h-10 rounded-lg bg-white border border-border flex items-center justify-center">
+                                            {attachmentIcon(attachment)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="p-2.5">
+                                        <p className="text-xs font-semibold text-foreground truncate">{attachment.nombre}</p>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                          {attachmentTypeLabel(attachment)}
+                                          {attachment.size_bytes ? ` · ${getReadableFileSize(attachment.size_bytes)}` : ""}
+                                        </p>
+                                      </div>
+                                    </button>
+                                    <div className="px-2.5 pb-2.5">
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        icon={<Download className="w-3.5 h-3.5"/>}
+                                        onClick={()=>{void handleDownloadResource(attachment.storage_url, attachment.nombre);}}
+                                      >
+                                        Descargar
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {shouldRenderMessageText(msg, messageAttachments.length) && (
                             <div className={clsx("px-3 py-2 rounded-2xl text-sm leading-relaxed",
                               isClient
                                 ?"bg-primary text-white rounded-br-sm"
@@ -2791,11 +2935,15 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     {convAttachments.slice(0, 12).map((attachment)=>(
                       <button
                         key={attachment.mensaje_id + attachment.archivo_id}
-                        onClick={()=>setPreviewAttachment(attachment)}
+                        onClick={()=>{void handleAttachmentCardClick(attachment);}}
                         className="w-full text-left block rounded-lg border border-border px-2 py-1.5 hover:bg-muted transition-colors"
                       >
                         <p className="text-[11px] font-medium truncate">{attachment.nombre}</p>
-                        <p className="text-[10px] text-muted-foreground">{attachment.extension.toUpperCase()} · {new Date(attachment.created_at).toLocaleDateString("es-CO")}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {attachment.extension.toUpperCase()}
+                          {attachment.size_bytes ? ` · ${getReadableFileSize(attachment.size_bytes)}` : ""}
+                          {` · ${new Date(attachment.created_at).toLocaleDateString("es-CO")}`}
+                        </p>
                       </button>
                     ))}
                     {convAttachments.length===0&&<p className="text-[10px] text-muted-foreground">Sin adjuntos todavía.</p>}

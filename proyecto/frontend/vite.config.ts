@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite'
-import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+
+const srcAssetsBase = new URL('./src/assets/', import.meta.url)
+const srcBase = new URL('./src/', import.meta.url)
 
 function figmaAssetResolver() {
   return {
@@ -9,7 +11,7 @@ function figmaAssetResolver() {
     resolveId(id: string) {
       if (id.startsWith('figma:asset/')) {
         const filename = id.replace('figma:asset/', '')
-        return path.resolve(__dirname, 'src/assets', filename)
+        return new URL(filename, srcAssetsBase).pathname
       }
     },
   }
@@ -26,7 +28,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // Alias @ to the src directory
-      '@': path.resolve(__dirname, './src'),
+      '@': srcBase.pathname,
     },
   },
 
@@ -39,7 +41,7 @@ export default defineConfig({
     host: true,
     // El browser remoto no alcanza localhost:8000: todo el tráfico de API y de
     // archivos viaja por este mismo origen y el proxy lo reenvía al backend.
-    allowedHosts: ['.devtunnels.ms', '.ngrok-free.app', '.ngrok.io', '.trycloudflare.com'],
+    allowedHosts: ['.devtunnels.ms', '.use.devtunnels.ms', '.ngrok-free.app', '.ngrok.io', '.trycloudflare.com'],
     proxy: {
       '/api': {
         // Apunta al contenedor de Docker en tu máquina local

@@ -18,7 +18,7 @@ from utils.dependencies import get_db, get_current_user, require_rol_in
 from utils.security import decode_access_token, JWTError
 from services.token_revocation import crear_ticket_ws, consumir_ticket_ws, jti_revocado
 from services.notificacion_service import crear_notificacion_best_effort
-from services.documental_service import create_document_file
+from services.documental_service import create_document_file, ensure_folder_path
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
@@ -81,13 +81,30 @@ def _persistir_adjuntos_chat(
 
     meta = metadata or {}
     linked_ids = []
+    conversation_folder_id = ensure_folder_path(
+        db,
+        owner_user_id=owner_user_id,
+        segments=["Chats", f"Conversacion-{mensaje.conversacion_id[:8]}"],
+    )
 
     for archivo_id in meta.get("archivo_ids", []) if isinstance(meta.get("archivo_ids"), list) else []:
         archivo = db.query(Archivo).filter(Archivo.id == str(archivo_id), Archivo.deleted_at.is_(None)).first()
         if not archivo:
             continue
-        db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=mensaje.id, archivo_id=archivo.id))
-        linked_ids.append(archivo.id)
+        cloned = create_document_file(
+            db,
+            owner_user_id=owner_user_id,
+            nombre=archivo.nombre,
+            carpeta_id=conversation_folder_id,
+            extension=archivo.extension,
+            mime_type=archivo.mime_type,
+            size_bytes=archivo.size_bytes,
+            storage_url=archivo.storage_url,
+            storage_path=archivo.storage_path,
+            origen="chat",
+        )
+        db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=mensaje.id, archivo_id=cloned.id))
+        linked_ids.append(cloned.id)
 
     file_info = meta.get("file") if isinstance(meta.get("file"), dict) else None
     if file_info and not linked_ids:
@@ -104,7 +121,7 @@ def _persistir_adjuntos_chat(
             db,
             owner_user_id=owner_user_id,
             nombre=nombre,
-            carpeta_id=None,
+            carpeta_id=conversation_folder_id,
             extension=extension,
             mime_type=mime_type,
             size_bytes=size_bytes,

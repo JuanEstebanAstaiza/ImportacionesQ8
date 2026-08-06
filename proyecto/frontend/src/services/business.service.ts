@@ -304,6 +304,7 @@ export interface BackendChatAttachmentItem {
   mime_type: string;
   extension: string;
   tipo_recurso: string;
+  size_bytes: number | null;
   storage_url: string | null;
   created_at: string;
 }

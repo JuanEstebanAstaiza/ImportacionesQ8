@@ -103,5 +103,6 @@ class ChatAttachmentItem(BaseModel):
     mime_type: str
     extension: str
     tipo_recurso: str
+    size_bytes: Optional[int] = None
     storage_url: Optional[str] = None
     created_at: datetime

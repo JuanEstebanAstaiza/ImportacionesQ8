@@ -10,7 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.curso import Curso, EstadoCurso
-from models.documental import Archivo, CursoRecurso
+from models.documental import Archivo, Carpeta, CursoRecurso
 
 DOC_EXTENSIONS = {"pdf", "doc", "docx", "pptx", "xls", "xlsx", "txt"}
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
@@ -138,3 +138,37 @@ def ensure_generated_docs_dir() -> Path:
     folder = Path(__file__).resolve().parent.parent / "generated_docs"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
+
+
+def ensure_folder_path(
+    db: Session,
+    *,
+    owner_user_id: str,
+    segments: list[str],
+) -> Optional[str]:
+    """Crea (si falta) y devuelve la carpeta final de una ruta jerárquica."""
+    parent_id: Optional[str] = None
+    for raw_name in segments:
+        name = str(raw_name or "").strip()
+        if not name:
+            continue
+        folder = (
+            db.query(Carpeta)
+            .filter(
+                Carpeta.owner_user_id == owner_user_id,
+                Carpeta.parent_id == parent_id,
+                Carpeta.nombre == name,
+                Carpeta.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if folder is None:
+            folder = Carpeta(
+                owner_user_id=owner_user_id,
+                parent_id=parent_id,
+                nombre=name,
+            )
+            db.add(folder)
+            db.flush()
+        parent_id = folder.id
+    return parent_id

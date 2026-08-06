@@ -9,7 +9,7 @@ from models.cotizacion import Cotizacion
 from models.documental import OrdenDocumento
 from models.orden import DocumentoOrden, Orden, TipoDocumentoOrden
 from models.propuesta import Propuesta
-from services.documental_service import create_document_file, ensure_generated_docs_dir
+from services.documental_service import create_document_file, ensure_folder_path, ensure_generated_docs_dir
 
 
 def _escape_pdf_text(value: str) -> str:
@@ -72,6 +72,7 @@ def _persist_pdf_as_file(
     db: Session,
     *,
     owner_user_id: str,
+    carpeta_id: Optional[str],
     nombre: str,
     origen: str,
     path: Path,
@@ -80,7 +81,7 @@ def _persist_pdf_as_file(
         db,
         owner_user_id=owner_user_id,
         nombre=nombre,
-        carpeta_id=None,
+        carpeta_id=carpeta_id,
         extension="pdf",
         mime_type="application/pdf",
         size_bytes=path.stat().st_size,
@@ -136,10 +137,17 @@ def generate_order_documents(
         ("orden", _write_pdf_file(f"orden_{orden.id[:8]}", ord_lines), TipoDocumentoOrden.factura_comercial.value),
     ]
 
+    pdf_folder_id = ensure_folder_path(
+        db,
+        owner_user_id=orden.solicitante_id,
+        segments=["Empresas", f"Importador-{orden.importador_id[:8]}", f"Orden-{orden.id[:8]}"],
+    )
+
     for doc_kind, path, legacy_type in generated:
         archivo_id = _persist_pdf_as_file(
             db,
             owner_user_id=orden.solicitante_id,
+            carpeta_id=pdf_folder_id,
             nombre=path.name,
             origen="orden",
             path=path,

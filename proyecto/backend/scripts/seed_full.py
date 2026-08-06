@@ -13,6 +13,9 @@ Uso:
 
 import sys
 import os
+import base64
+import zipfile
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Asegura que el directorio raíz del backend esté en el path de importación
@@ -28,17 +31,35 @@ from models.importador import Importador
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta
 from models.chat import ConversacionChat, MensajeChat
+from models.orden import Orden, HistorialEstadosOrden
 from models.curso import (
     Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
 )
+from models.documental import Archivo, CursoRecurso, MensajeAdjunto
 from models.notificacion import Notificacion
 from utils.security import hash_password
+from services.documental_service import create_document_file
+from services.pdf_document_service import generate_order_documents
 
 # ---------------------------------------------------------------------------
 # Constantes
 # ---------------------------------------------------------------------------
 MAIN_USER_EMAIL = "akalife17@gmail.com"
+MAIN_USER_PASSWORD = "PRIMOS2026@"
 TEST_PASSWORD = "TestPassword123!"
+
+ADMIN_USERS = [
+    {
+        "email": "admin@importacionesq8.local",
+        "nombre": "Admin",
+        "apellido": "Plataforma",
+    },
+    {
+        "email": "ops@importacionesq8.local",
+        "nombre": "Operaciones",
+        "apellido": "Q8",
+    },
+]
 
 NOW = datetime.utcnow()
 
@@ -366,7 +387,7 @@ COTIZACIONES_DATA = [
 CHAT_MESSAGES = [
     # Cotización 0 - Maquinaria CNC
     [
-        ("asesor", "Hola Juan Samuel, recibimos tu solicitud de cotización para las máquinas CNC. Tenemos excelentes proveedores en Guangdong con experiencia en equipos para carpintería. ¿Tienes preferencia de marca?"),
+        ("asesor", "Hola Juan, recibimos tu solicitud de cotización para las máquinas CNC. Tenemos excelentes proveedores en Guangdong con experiencia en equipos para carpintería. ¿Tienes preferencia de marca?"),
         ("main", "Hola! Preferiría marcas como Biesse o Homag, pero estoy abierto a marcas chinas de calidad como BEKE o IGOLDEN si el precio lo justifica."),
         ("asesor", "Perfecto. Trabajamos con IGOLDEN y CNC-STEP, ambas con certificación CE. El tiempo de fabricación es de 45 días más 25 días de tránsito marítimo. ¿El precio objetivo de USD 8,500 es por unidad?"),
         ("main", "Sí, es por unidad incluyendo flete hasta Bogotá (CIF). ¿Es alcanzable ese precio con las especificaciones que mencioné?"),
@@ -376,7 +397,7 @@ CHAT_MESSAGES = [
     ],
     # Cotización 1 - Ropa deportiva
     [
-        ("asesor", "Buenos días Juan Samuel. Somos especialistas en importaciones textiles desde Vietnam y Bangladesh. Para las 500 docenas de ropa deportiva con poliéster reciclado, ¿ya tienes el diseño técnico (ficha técnica)?"),
+        ("asesor", "Buenos días Juan. Somos especialistas en importaciones textiles desde Vietnam y Bangladesh. Para las 500 docenas de ropa deportiva con poliéster reciclado, ¿ya tienes el diseño técnico (ficha técnica)?"),
         ("main", "Hola Diego! Tengo el diseño pero en boceto. ¿Pueden ayudarme con la ficha técnica final o necesito contratar un diseñador?"),
         ("asesor", "Nosotros coordinamos la ficha técnica con el proveedor sin costo adicional. El proceso sería: 1) Revisión de tu boceto, 2) Muestra digital (7 días), 3) Muestra física (21 días). ¿Puedes enviarme el boceto?"),
         ("main", "Claro, te lo envío por correo. Una pregunta: ¿el proveedor puede manejar empaque con mi marca (hang tags, bolsas con logo)?"),
@@ -384,7 +405,7 @@ CHAT_MESSAGES = [
     ],
     # Cotización 2 - Smartphones
     [
-        ("asesor", "Hola Juan Samuel, soy Valentina de Aduanas & Carga Express. Para la importación de 200 smartphones reacondicionados, necesito verificar contigo algunos puntos clave para evitar problemas en aduana."),
+        ("asesor", "Hola Juan, soy Valentina de Aduanas & Carga Express. Para la importación de 200 smartphones reacondicionados, necesito verificar contigo algunos puntos clave para evitar problemas en aduana."),
         ("main", "Hola Valentina, claro. ¿Qué información necesitas?"),
         ("asesor", "Primero: ¿serán para reventa o uso corporativo? Esto define el régimen aduanero y los documentos requeridos. Segundo: ¿tienes RUT activo y resolución de importación? Para la DIAN los teléfonos tienen control especial (IMEI)."),
         ("main", "Son para reventa. Tengo RUT activo pero no tengo experiencia en el registro de IMEIs. ¿Pueden asesorarme en ese proceso?"),
@@ -415,9 +436,175 @@ def _get_importador(db, nombre_empresa: str):
     return db.query(Importador).filter(Importador.nombre_empresa == nombre_empresa).first()
 
 
+def _dummy_storage_dir() -> Path:
+    folder = Path(__file__).resolve().parent.parent / "storage" / "dummy_assets"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _ensure_dummy_png(path: Path) -> None:
+    # PNG 1x1 real para miniaturas autenticadas.
+    data = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6M2r0AAAAASUVORK5CYII="
+    )
+    path.write_bytes(data)
+
+
+def _ensure_dummy_jpg(path: Path) -> None:
+    data = base64.b64decode(
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAPEA8QDw8QEA8QDw8QEA8PFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OFRAQFS0dFR0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/xAAXAAEBAQEAAAAAAAAAAAAAAAABAgAD/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHKE2f/xAAVEAEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAQABBQKf/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwEf/8QAFBABAAAAAAAAAAAAAAAAAAAAEP/aAAgBAQAGPwJf/8QAFBABAAAAAAAAAAAAAAAAAAAAEP/aAAgBAQABPyFf/9k="
+    )
+    path.write_bytes(data)
+
+
+def _ensure_dummy_pdf(path: Path) -> None:
+    pdf_bytes = (
+        b"%PDF-1.4\n"
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n"
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
+        b"5 0 obj << /Length 68 >> stream\nBT /F1 18 Tf 60 760 Td (Dummy PDF ImportacionesQ8) Tj ET\nendstream endobj\n"
+        b"xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000241 00000 n \n0000000311 00000 n \n"
+        b"trailer << /Size 6 /Root 1 0 R >>\nstartxref\n431\n%%EOF"
+    )
+    path.write_bytes(pdf_bytes)
+
+
+def _ensure_dummy_mp4(path: Path) -> None:
+    # MP4 mínimo con cajas ftyp+free+mdat (suficiente para tests de tipo/stream).
+    mp4_bytes = (
+        b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
+        b"\x00\x00\x00\x08free"
+        b"\x00\x00\x00\x10mdat\x00\x00\x00\x00\x00\x00\x00\x00"
+    )
+    path.write_bytes(mp4_bytes)
+
+
+def _ensure_dummy_pptx(path: Path) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(
+            "[Content_Types].xml",
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">
+  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>
+  <Default Extension=\"xml\" ContentType=\"application/xml\"/>
+  <Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\"/>
+  <Override PartName=\"/ppt/slides/slide1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/>
+</Types>""",
+        )
+        zf.writestr(
+            "_rels/.rels",
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">
+  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"ppt/presentation.xml\"/>
+</Relationships>""",
+        )
+        zf.writestr(
+            "ppt/presentation.xml",
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<p:presentation xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">
+  <p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>
+  <p:sldSz cx=\"9144000\" cy=\"6858000\" type=\"screen4x3\"/>
+  <p:notesSz cx=\"6858000\" cy=\"9144000\"/>
+</p:presentation>""",
+        )
+        zf.writestr(
+            "ppt/_rels/presentation.xml.rels",
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">
+  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slides/slide1.xml\"/>
+</Relationships>""",
+        )
+        zf.writestr(
+            "ppt/slides/slide1.xml",
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<p:sld xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+    </p:spTree>
+  </p:cSld>
+</p:sld>""",
+        )
+
+
+def _ensure_dummy_assets_on_disk() -> dict[str, Path]:
+    folder = _dummy_storage_dir()
+    assets = {
+        "pdf": folder / "ficha-tecnica-dummy.pdf",
+        "mp4": folder / "video-leccion-dummy.mp4",
+        "jpg": folder / "foto-producto-dummy.jpg",
+        "png": folder / "evidencia-dummy.png",
+        "pptx": folder / "presentacion-dummy.pptx",
+    }
+    if not assets["pdf"].exists():
+        _ensure_dummy_pdf(assets["pdf"])
+    if not assets["mp4"].exists():
+        _ensure_dummy_mp4(assets["mp4"])
+    if not assets["jpg"].exists():
+        _ensure_dummy_jpg(assets["jpg"])
+    if not assets["png"].exists():
+        _ensure_dummy_png(assets["png"])
+    if not assets["pptx"].exists():
+        _ensure_dummy_pptx(assets["pptx"])
+    return assets
+
+
+def _register_dummy_assets(db, owner_user_id: str) -> dict[str, Archivo]:
+    paths = _ensure_dummy_assets_on_disk()
+    created: dict[str, Archivo] = {}
+    for key, path in paths.items():
+        existing = db.query(Archivo).filter(Archivo.owner_user_id == owner_user_id, Archivo.nombre == path.name).first()
+        if existing is not None:
+            created[key] = existing
+            continue
+        created[key] = create_document_file(
+            db,
+            owner_user_id=owner_user_id,
+            nombre=path.name,
+            carpeta_id=None,
+            extension=path.suffix.lstrip("."),
+            mime_type=None,
+            size_bytes=path.stat().st_size,
+            storage_url=None,
+            storage_path=str(path),
+            origen="seed",
+        )
+    return created
+
+
 # ---------------------------------------------------------------------------
 # Funciones de creación
 # ---------------------------------------------------------------------------
+
+def crear_administradores(db) -> None:
+    for admin_data in ADMIN_USERS:
+        admin = _get_usuario(db, admin_data["email"])
+        if admin is None:
+            admin = Usuario(
+                id=str(uuid4()),
+                email=admin_data["email"],
+                password_hash=hash_password(TEST_PASSWORD),
+                rol="admin",
+                nombre=admin_data["nombre"],
+                apellido=admin_data["apellido"],
+                activo=True,
+                email_verificado=True,
+                perfil_completo=True,
+                acepto_politica_datos=True,
+                fecha_aceptacion_politica=NOW - timedelta(days=200),
+                creditos_balance=0,
+                fecha_creacion=NOW - timedelta(days=200),
+            )
+            db.add(admin)
+            print(f"  [+] Admin: {admin_data['email']}")
+        else:
+            admin.activo = True
+            admin.email_verificado = True
+            print(f"  [~] Admin ya existe: {admin_data['email']}")
+
 
 def crear_empresas_y_asesores(db) -> list[dict]:
     """Crea o recupera las 3 empresas importadoras con sus dueños y asesores."""
@@ -511,7 +698,7 @@ def crear_empresas_y_asesores(db) -> list[dict]:
     return created
 
 
-def crear_cursos(db, empresas_info: list[dict], main_user_id: str) -> list:
+def crear_cursos(db, empresas_info: list[dict], main_user_id: str, dummy_assets: dict[str, Archivo]) -> list:
     """Crea cursos LMS, compra e inscripción del usuario principal."""
     cursos_creados = []
     for curso_data in CURSOS_DATA:
@@ -558,13 +745,16 @@ def crear_cursos(db, empresas_info: list[dict], main_user_id: str) -> list:
             db.flush()
 
             for lec_idx, lec_data in enumerate(mod_data["lecciones"]):
+                lesson_video_url = lec_data["video_url"]
+                if not lec_data.get("es_preview", False) and lec_idx == 0 and dummy_assets.get("mp4"):
+                    lesson_video_url = dummy_assets["mp4"].storage_url or lec_data["video_url"]
                 leccion = LeccionCurso(
                     id=str(uuid4()),
                     modulo_id=modulo.id,
                     curso_id=curso.id,
                     titulo=lec_data["titulo"],
                     duracion=lec_data["duracion"],
-                    video_url=lec_data["video_url"],
+                    video_url=lesson_video_url,
                     orden=lec_idx,
                     es_preview=lec_data.get("es_preview", False),
                 )
@@ -582,6 +772,44 @@ def crear_cursos(db, empresas_info: list[dict], main_user_id: str) -> list:
                         tipo=rec_data["tipo"],
                     )
                     db.add(recurso)
+
+        # Recursos dummy reales enlazados al módulo documental.
+        if todas_las_lecciones:
+            first_lesson = todas_las_lecciones[0]
+            for key, tipo in (("pdf", "guia"), ("pptx", "archivo")):
+                dummy_file = dummy_assets.get(key)
+                if dummy_file is None:
+                    continue
+                existing_resource = db.query(RecursoLeccion).filter(
+                    RecursoLeccion.leccion_id == first_lesson.id,
+                    RecursoLeccion.url == (dummy_file.storage_url or ""),
+                ).first()
+                if existing_resource is None:
+                    db.add(
+                        RecursoLeccion(
+                            id=str(uuid4()),
+                            leccion_id=first_lesson.id,
+                            nombre=dummy_file.nombre,
+                            url=dummy_file.storage_url or "",
+                            tipo=tipo,
+                        )
+                    )
+
+                existing_link = db.query(CursoRecurso).filter(
+                    CursoRecurso.curso_id == curso.id,
+                    CursoRecurso.leccion_id == first_lesson.id,
+                    CursoRecurso.archivo_id == dummy_file.id,
+                ).first()
+                if existing_link is None:
+                    db.add(
+                        CursoRecurso(
+                            id=str(uuid4()),
+                            curso_id=curso.id,
+                            leccion_id=first_lesson.id,
+                            archivo_id=dummy_file.id,
+                            tipo="material",
+                        )
+                    )
 
         # Compra del usuario principal si aplica
         if curso_data.get("comprado_por_main"):
@@ -717,7 +945,7 @@ def crear_cotizaciones_y_propuestas(db, empresas_info: list[dict], main_user_id:
     return cotizaciones_creadas
 
 
-def crear_chats(db, cotizaciones_info: list[dict], empresas_info: list[dict], main_user_id: str):
+def crear_chats(db, cotizaciones_info: list[dict], empresas_info: list[dict], main_user_id: str, dummy_assets: dict[str, Archivo]):
     """Crea conversaciones y mensajes de chat para las primeras 3 cotizaciones."""
     for i, cot_info in enumerate(cotizaciones_info[:3]):
         cotizacion = cot_info["cotizacion"]
@@ -764,9 +992,90 @@ def crear_chats(db, cotizaciones_info: list[dict], empresas_info: list[dict], ma
             )
             db.add(mensaje)
 
+        attachment_keys = ["pdf", "pptx", "jpg", "png"]
+        selected_key = attachment_keys[i % len(attachment_keys)]
+        selected_file = dummy_assets.get(selected_key)
+        if selected_file is not None:
+            attachment_message = MensajeChat(
+                id=str(uuid4()),
+                conversacion_id=conversacion.id,
+                remitente_id=asesor.id,
+                contenido=f"Adjunto: {selected_file.nombre}",
+                tipo="archivo",
+                metadata_json={"archivo_ids": [selected_file.id]},
+                fecha_envio=base_time + timedelta(hours=len(mensajes_data) * 2 + 1),
+            )
+            db.add(attachment_message)
+            db.flush()
+            db.add(
+                MensajeAdjunto(
+                    id=str(uuid4()),
+                    mensaje_id=attachment_message.id,
+                    archivo_id=selected_file.id,
+                )
+            )
+
         print(f"  [+] Chat ({len(mensajes_data)} mensajes): {cotizacion.nombre_producto[:40]}")
 
     db.flush()
+
+
+def crear_ordenes_prueba(db, cotizaciones_info: list[dict]) -> int:
+    """Convierte dos cotizaciones con propuesta en órdenes y genera PDFs."""
+    created_orders = 0
+    for cot_info in cotizaciones_info[:2]:
+        cotizacion = cot_info["cotizacion"]
+        propuesta = db.query(Propuesta).filter(Propuesta.cotizacion_id == cotizacion.id).first()
+        if propuesta is None:
+            continue
+
+        orden_existente = db.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        if orden_existente is not None:
+            print(f"  [~] Orden ya existe para cotización: {cotizacion.nombre_producto[:40]}")
+            continue
+
+        propuesta.estado = "aceptada"
+        propuesta.preaceptada_por_solicitante = True
+        propuesta.preaceptada_por_empresa = True
+        cotizacion.estado = "orden_activa"
+
+        orden = Orden(
+            id=str(uuid4()),
+            cotizacion_id=cotizacion.id,
+            importador_id=propuesta.importador_id,
+            solicitante_id=cotizacion.solicitante_id,
+            asesor_asignado_id=cotizacion.asesor_asignado_id,
+            estado="cotizacion_aceptada",
+            precio_acordado_usd=propuesta.precio_ofrecido_usd,
+            tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
+            condiciones_adicionales=propuesta.condiciones_adicionales,
+            fecha_creacion=NOW - timedelta(days=10),
+            fecha_actualizacion=NOW - timedelta(days=9),
+        )
+        db.add(orden)
+        db.flush()
+
+        db.add(
+            HistorialEstadosOrden(
+                id=str(uuid4()),
+                orden_id=orden.id,
+                estado_anterior=None,
+                estado_nuevo="cotizacion_aceptada",
+                fecha_cambio=NOW - timedelta(days=10),
+            )
+        )
+
+        generate_order_documents(
+            db,
+            orden=orden,
+            cotizacion=cotizacion,
+            propuesta=propuesta,
+        )
+        created_orders += 1
+        print(f"  [+] Orden creada: {orden.id[:8]} para {cotizacion.nombre_producto[:35]}")
+
+    db.flush()
+    return created_orders
 
 
 def crear_notificaciones(db, main_user_id: str, cotizaciones_info: list[dict], cursos_info: list):
@@ -850,12 +1159,30 @@ def main():
 
     db = SessionLocal()
     try:
-        # Verificar usuario principal
+        # Verificar/crear usuario principal
         main_user = _get_usuario(db, MAIN_USER_EMAIL)
         if main_user is None:
-            print(f"\n[ERROR] El usuario principal no existe: {MAIN_USER_EMAIL}")
-            print("  Ejecuta primero el registro desde la app o crea el usuario manualmente.")
-            return
+            main_user = Usuario(
+                id=str(uuid4()),
+                email=MAIN_USER_EMAIL,
+                password_hash=hash_password(MAIN_USER_PASSWORD),
+                rol="solicitante",
+                nombre="Juan Samuel",
+                apellido="Principal",
+                activo=True,
+                email_verificado=True,
+                perfil_completo=True,
+                tipo_persona="natural",
+                tipo_documento="cedula",
+                numero_documento="1000000001",
+                acepto_politica_datos=True,
+                fecha_aceptacion_politica=NOW - timedelta(days=365),
+                creditos_balance=120,
+                fecha_creacion=NOW - timedelta(days=365),
+            )
+            db.add(main_user)
+            db.flush()
+            print(f"\n[+] Usuario principal creado: {MAIN_USER_EMAIL}")
 
         print(f"\n[OK] Usuario principal encontrado: {MAIN_USER_EMAIL} (id={main_user.id})")
 
@@ -870,27 +1197,39 @@ def main():
             main_user.acepto_politica_datos = True
             main_user.fecha_aceptacion_politica = NOW
             print("  [~] acepto_politica_datos actualizado a True")
+        if not main_user.activo:
+            main_user.activo = True
+            print("  [~] activo actualizado a True")
+        main_user.tipo_persona = "natural"
 
         db.flush()
 
-        # 1. Empresas y asesores
-        print("\n[1/5] Creando empresas importadoras y asesores...")
+        print("\n[0/6] Registrando activos dummy reales...")
+        dummy_assets = _register_dummy_assets(db, main_user.id)
+        print(f"  [+] Assets dummy registrados: {', '.join(sorted(dummy_assets.keys()))}")
+
+        print("\n[1/6] Creando administradores de prueba...")
+        crear_administradores(db)
+
+        # 2. Empresas y asesores
+        print("\n[2/6] Creando empresas importadoras y asesores...")
         empresas_info = crear_empresas_y_asesores(db)
 
-        # 2. Cursos LMS
-        print("\n[2/5] Creando cursos LMS...")
-        cursos_info = crear_cursos(db, empresas_info, main_user.id)
+        # 3. Cursos LMS
+        print("\n[3/6] Creando cursos LMS...")
+        cursos_info = crear_cursos(db, empresas_info, main_user.id, dummy_assets)
 
-        # 3. Cotizaciones y propuestas
-        print("\n[3/5] Creando cotizaciones y propuestas...")
+        # 4. Cotizaciones y propuestas
+        print("\n[4/6] Creando cotizaciones y propuestas...")
         cotizaciones_info = crear_cotizaciones_y_propuestas(db, empresas_info, main_user.id)
 
-        # 4. Conversaciones y mensajes de chat
-        print("\n[4/5] Creando chats y mensajes...")
-        crear_chats(db, cotizaciones_info, empresas_info, main_user.id)
+        # 5. Conversaciones, adjuntos y órdenes
+        print("\n[5/6] Creando chats, adjuntos y órdenes...")
+        crear_chats(db, cotizaciones_info, empresas_info, main_user.id, dummy_assets)
+        ordenes_creadas = crear_ordenes_prueba(db, cotizaciones_info)
 
-        # 5. Notificaciones
-        print("\n[5/5] Creando notificaciones...")
+        # 6. Notificaciones
+        print("\n[6/6] Creando notificaciones...")
         crear_notificaciones(db, main_user.id, cotizaciones_info, cursos_info)
 
         db.commit()
@@ -901,8 +1240,11 @@ def main():
         print("=" * 60)
         print(f"  Usuario principal : {MAIN_USER_EMAIL}")
         print(f"  Empresas creadas  : {len(EMPRESAS)}")
+        print(f"  Admins de prueba  : {len(ADMIN_USERS)}")
         print(f"  Cursos LMS        : {len(CURSOS_DATA)}")
         print(f"  Cotizaciones      : {len(COTIZACIONES_DATA)}")
+        print(f"  Ordenes nuevas    : {ordenes_creadas}")
+        print(f"  Password principal: {MAIN_USER_PASSWORD}")
         print(f"  Contraseña tests  : {TEST_PASSWORD}")
         print("=" * 60)
         print("\nCuentas de prueba creadas:")

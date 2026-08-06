@@ -65,7 +65,7 @@ import type {
   PublishLessonResourceInput,
   ResourceType,
 } from "./types";
-import { isSafeEmbedUrl, isSafeHttpUrl, safeHttpUrl } from "@/utils/safe-url";
+import { isSafeHttpUrl, safeHttpUrl } from "@/utils/safe-url";
 import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import {
   businessService,
@@ -256,11 +256,6 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-/** Solo YouTube/Vimeo https en iframe (anti-XSS / javascript:). */
-function isEmbeddableVideo(url: string): boolean {
-  return isSafeEmbedUrl(url);
-}
-
 /**
  * Toda URL guardada (relativa, con prefijo `/api`, o absoluta hacia localhost:5173
  * / localhost:8000 de entornos previos) se resuelve contra el backend alcanzable
@@ -314,76 +309,10 @@ async function openResourceInNewTab(value: string | null | undefined): Promise<b
   }
 }
 
-function toEmbeddableUrl(url: string): string | null {
-  if (!isSafeHttpUrl(url)) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-
-    if (host === "youtu.be") {
-      const id = parsed.pathname.replace(/^\//, "");
-      if (id) {
-        return `https://www.youtube.com/embed/${id}`;
-      }
-    }
-
-    if (host === "youtube.com" || host === "www.youtube.com" || host === "m.youtube.com") {
-      if (parsed.pathname.startsWith("/embed/")) {
-        return parsed.toString();
-      }
-      if (parsed.pathname === "/watch") {
-        const id = parsed.searchParams.get("v");
-        if (id) {
-          return `https://www.youtube.com/embed/${id}`;
-        }
-      }
-    }
-
-    if (host === "vimeo.com") {
-      const id = parsed.pathname.replace(/^\//, "").split("/")[0];
-      if (id) {
-        return `https://player.vimeo.com/video/${id}`;
-      }
-    }
-
-    if (host === "player.vimeo.com" && parsed.pathname.startsWith("/video/")) {
-      return parsed.toString();
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 function resolvePlayableVideoSource(url: string):
-  | { kind: "embed"; src: string }
   | { kind: "video"; src: string }
   | null {
   const normalized = normalizeVideoUrl(url);
-  const embedded = toEmbeddableUrl(normalized);
-  if (embedded && isEmbeddableVideo(embedded)) {
-    try {
-      const parsed = new URL(embedded);
-      if (parsed.hostname.includes("youtube.com")) {
-        parsed.searchParams.set("enablejsapi", "1");
-        parsed.searchParams.set("playsinline", "1");
-        parsed.searchParams.set("rel", "0");
-        if (typeof window !== "undefined") {
-          parsed.searchParams.set("origin", window.location.origin);
-        }
-        return { kind: "embed", src: parsed.toString() };
-      }
-    } catch {
-      // Si no se puede normalizar el querystring, usa la URL embebida original.
-    }
-
-    return { kind: "embed", src: embedded };
-  }
-
   if (isSafeHttpUrl(normalized)) {
     return { kind: "video", src: normalized };
   }
@@ -480,6 +409,9 @@ function ProtectedVideoPlayer({ url, onEnded }: { url: string; onEnded?: () => v
  */
 function toStorableResourceUrl(value: string | null | undefined): { canonical: string; resolved: string } {
   const canonical = toApiPath(value);
+  if (!canonical.startsWith("/documentos/archivos/")) {
+    return { canonical: "", resolved: "" };
+  }
   return { canonical, resolved: resolveApiUrl(canonical) };
 }
 
@@ -521,10 +453,6 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
 
       if (!lesson.titulo.trim() || !lesson.duracion.trim() || !video.canonical) {
         return { value: null, error: "Cada leccion debe incluir titulo, duracion y video subido." };
-      }
-
-      if (toEmbeddableUrl(video.resolved)) {
-        return { value: null, error: "El video debe ser un archivo subido desde tus carpetas, no un enlace de YouTube/Vimeo." };
       }
 
       if (!isSafeHttpUrl(video.resolved)) {
@@ -641,7 +569,6 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
   const [isPublishing, setIsPublishing] = useState(false);
   const [pendingPurchaseCourseId, setPendingPurchaseCourseId] = useState<string | null>(null);
   const finishingLessonRef = useRef<string | null>(null);
-  const playerEmbedRef = useRef<HTMLIFrameElement | null>(null);
   const resourceUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const categories = useMemo(() => ["Todas", ...Array.from(new Set([...CATEGORY_SHORTCUTS, ...courses.map((course) => course.categoria)]))], [courses]);
@@ -769,90 +696,6 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
       finishingLessonRef.current = null;
     }
   }, [activeLesson?.id, completedLessonsByCourse, markLessonViewed, playerCourse, playerLessons, toggleLessonCompleted]);
-
-  useEffect(() => {
-    if (!playerCourse || !activeLesson) {
-      return;
-    }
-
-    const activeSource = resolvePlayableVideoSource(activeLesson.video_url);
-    if (!activeSource || activeSource.kind !== "embed") {
-      return;
-    }
-
-    const subscribePlayerEvents = () => {
-      const iframe = playerEmbedRef.current;
-      if (!iframe?.contentWindow) {
-        return;
-      }
-
-      iframe.contentWindow.postMessage(
-        JSON.stringify({ event: "listening", id: "courses-player" }),
-        "*",
-      );
-      iframe.contentWindow.postMessage(
-        JSON.stringify({ event: "command", func: "addEventListener", args: ["onStateChange"] }),
-        "*",
-      );
-      iframe.contentWindow.postMessage(
-        JSON.stringify({ event: "command", func: "addEventListener", args: ["onError"] }),
-        "*",
-      );
-    };
-
-    const onMessage = (event: MessageEvent) => {
-      const playerWindow = playerEmbedRef.current?.contentWindow;
-      if (playerWindow && event.source !== playerWindow) {
-        return;
-      }
-
-      let parsed: unknown = event.data;
-
-      if (typeof parsed === "string") {
-        const trimmed = parsed.trim();
-        if (!trimmed) {
-          return;
-        }
-
-        try {
-          parsed = JSON.parse(trimmed);
-        } catch {
-          const lower = trimmed.toLowerCase();
-          if (lower.includes("ended") || lower.includes("finish") || lower.includes("completed")) {
-            void handleVideoFinished(activeLesson.id);
-          }
-          return;
-        }
-      }
-
-      if (!parsed || typeof parsed !== "object") {
-        return;
-      }
-
-      const payload = parsed as Record<string, unknown>;
-      const eventName = String(payload.event ?? payload.type ?? "").toLowerCase();
-      const status = String(payload.status ?? payload.state ?? "").toLowerCase();
-      const info = typeof payload.info === "number" ? payload.info : null;
-
-      const finished =
-        eventName === "ended"
-        || eventName === "finish"
-        || eventName === "complete"
-        || status === "completed"
-        || status === "ended"
-        || (eventName === "onstatechange" && info === 0);
-
-      if (finished) {
-        void handleVideoFinished(activeLesson.id);
-      }
-    };
-
-    subscribePlayerEvents();
-    window.addEventListener("message", onMessage);
-    return () => {
-      window.removeEventListener("message", onMessage);
-    };
-  }, [activeLesson, handleVideoFinished, playerCourse]);
 
   async function handleOpenCourseDetail(courseId: string): Promise<void> {
     const normalizedCourseId = courseId?.trim();
@@ -1254,7 +1097,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
   const pickerTitle = resourcePickerTarget?.kind === "cover"
     ? "Seleccionar portada desde Documentos"
     : resourcePickerTarget?.kind === "video"
-      ? "Seleccionar video de lección desde Documentos"
+      ? "Subir video local a Documentos"
       : "Seleccionar recurso desde Documentos";
   const pickerDescription = resourcePickerTarget?.kind === "cover"
     ? "Elige una imagen existente de tus carpetas para usarla como portada del curso."
@@ -1748,28 +1591,6 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                       <div className="aspect-video">
                         {(() => {
                           const playable = resolvePlayableVideoSource(activeLesson.video_url);
-                          if (playable?.kind === "embed") {
-                            return (
-                              <iframe
-                                ref={playerEmbedRef}
-                                src={playable.src}
-                                title={activeLesson.titulo}
-                                className="h-full w-full"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                                sandbox="allow-scripts allow-same-origin allow-presentation"
-                                onLoad={() => {
-                                  const target = playerEmbedRef.current?.contentWindow;
-                                  if (!target) {
-                                    return;
-                                  }
-                                  target.postMessage(JSON.stringify({ event: "listening", id: "courses-player" }), "*");
-                                  target.postMessage(JSON.stringify({ event: "command", func: "addEventListener", args: ["onStateChange"] }), "*");
-                                }}
-                              />
-                            );
-                          }
-
                           if (playable?.kind === "video") {
                             return (
                               <ProtectedVideoPlayer
@@ -1917,18 +1738,6 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                       {(() => {
                         const trailer = flattenLessons(selectedCourse)[0]?.video_url || "";
                         const playable = resolvePlayableVideoSource(trailer);
-                        if (playable?.kind === "embed") {
-                          return (
-                            <iframe
-                              src={playable.src}
-                              title={`Trailer de ${selectedCourse.titulo}`}
-                              className="h-full w-full"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              sandbox="allow-scripts allow-same-origin allow-presentation"
-                            />
-                          );
-                        }
                         if (playable?.kind === "video") {
                           return <ProtectedVideoPlayer url={playable.src} />;
                         }
@@ -2233,19 +2042,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                               <Input
                                 value={lesson.video_url}
                                 readOnly
-                                placeholder="Selecciona o sube un video desde tus carpetas"
+                                placeholder="Sube un video local a Documentos para vincularlo"
                               />
                               <div className="flex flex-wrap gap-2">
-                                <Button variant="outline" size="sm" onClick={() => { void openPickerForTarget({ kind: "video", moduleId: module.id, lessonId: lesson.id }); }}>
-                                  Seleccionar video
-                                </Button>
                                 <Button variant="outline" size="sm" onClick={() => { triggerUploadForTarget({ kind: "video", moduleId: module.id, lessonId: lesson.id }); }}>
                                   <Upload className="size-3.5" />
-                                  Subir video
+                                  Subir video local
                                 </Button>
                                 {lesson.video_url ? (
                                   <Button variant="outline" size="sm" asChild>
-                                    <a href={lesson.video_url} target="_blank" rel="noreferrer">Abrir video</a>
+                                    <a href={resolveApiUrl(lesson.video_url)} target="_blank" rel="noreferrer">Abrir video</a>
                                   </Button>
                                 ) : null}
                               </div>

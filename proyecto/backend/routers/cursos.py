@@ -24,7 +24,7 @@ from schemas.curso import (
     RecursoLeccionResponse,
 )
 from services.notificacion_service import crear_notificacion_best_effort
-from services.documental_service import extract_document_file_id_from_url
+from services.documental_service import extract_document_file_id_from_url, ensure_folder_path
 from services.token_revocation import jti_revocado
 from utils.dependencies import get_db, get_current_user, require_rol, security
 from utils.security import decode_access_token, JWTError
@@ -231,6 +231,87 @@ def _vincular_recurso_documental(
     )
 
 
+def _url_documental_obligatoria(value: str, *, campo: str) -> str:
+    url = (value or "").strip()
+    if not url.startswith("/documentos/archivos/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{campo} debe apuntar a un archivo subido a la plataforma",
+        )
+    return url
+
+
+def _asegurar_carpeta_curso(db: Session, curso: Curso) -> None:
+    ensure_folder_path(
+        db,
+        owner_user_id=str(curso.creado_por_usuario_id),
+        segments=["Cursos", curso.slug],
+    )
+
+
+def _reemplazar_estructura_curso(db: Session, curso: Curso, modulos: List) -> None:
+    curso.modulos.clear()
+    db.flush()
+    db.query(CursoRecurso).filter(CursoRecurso.curso_id == curso.id).delete(synchronize_session=False)
+
+    primera_leccion = True
+    for modulo_index, modulo_data in enumerate(modulos):
+        modulo = ModuloCurso(
+            id=str(uuid4()),
+            curso_id=curso.id,
+            titulo=modulo_data.titulo.strip(),
+            orden=modulo_index,
+        )
+        db.add(modulo)
+        db.flush()
+
+        for leccion_index, leccion_data in enumerate(modulo_data.lecciones):
+            video_url = _url_documental_obligatoria(leccion_data.video_url, campo="video_url")
+            leccion = LeccionCurso(
+                id=str(uuid4()),
+                modulo_id=modulo.id,
+                curso_id=curso.id,
+                titulo=leccion_data.titulo.strip(),
+                duracion=leccion_data.duracion or "10 min",
+                video_url=video_url,
+                orden=leccion_index,
+                es_preview=bool(leccion_data.es_preview or primera_leccion),
+            )
+            db.add(leccion)
+            db.flush()
+
+            _vincular_recurso_documental(
+                db,
+                curso_id=curso.id,
+                leccion_id=leccion.id,
+                recurso_url=video_url,
+                tipo="video",
+            )
+
+            for recurso_data in leccion_data.recursos:
+                recurso_url = _url_documental_obligatoria(recurso_data.url, campo="url de recurso")
+                recurso = RecursoLeccion(
+                    id=str(uuid4()),
+                    leccion_id=leccion.id,
+                    nombre=recurso_data.nombre.strip(),
+                    url=recurso_url,
+                    tipo=recurso_data.tipo,
+                )
+                db.add(recurso)
+                db.flush()
+                _vincular_recurso_documental(
+                    db,
+                    curso_id=curso.id,
+                    leccion_id=leccion.id,
+                    recurso_url=recurso_url,
+                    tipo="material",
+                )
+
+            primera_leccion = False
+
+    _asegurar_carpeta_curso(db, curso)
+
+
 @router.get("/cursos", response_model=List[CursoListItem])
 @limiter.limit(RATE_LIMIT_PUBLIC_READ)
 async def listar_cursos(
@@ -356,54 +437,7 @@ async def crear_curso(
         deleted_at=None,
     )
     db.add(curso)
-
-    primera_leccion = True
-    for i, mod_in in enumerate(datos.modulos):
-        mod = ModuloCurso(
-            id=str(uuid4()),
-            curso_id=curso_id,
-            titulo=mod_in.titulo.strip(),
-            orden=i,
-        )
-        db.add(mod)
-        db.flush()
-        for j, lec_in in enumerate(mod_in.lecciones):
-            es_preview = lec_in.es_preview or primera_leccion
-            lec = LeccionCurso(
-                id=str(uuid4()),
-                modulo_id=mod.id,
-                curso_id=curso_id,
-                titulo=lec_in.titulo.strip(),
-                duracion=lec_in.duracion or "10 min",
-                video_url=lec_in.video_url.strip(),
-                orden=j,
-                es_preview=es_preview,
-            )
-            db.add(lec)
-            db.flush()
-            primera_leccion = False
-            _vincular_recurso_documental(
-                db,
-                curso_id=curso_id,
-                leccion_id=lec.id,
-                recurso_url=lec_in.video_url,
-                tipo="video",
-            )
-            for rec_in in lec_in.recursos:
-                db.add(RecursoLeccion(
-                    id=str(uuid4()),
-                    leccion_id=lec.id,
-                    nombre=rec_in.nombre.strip(),
-                    url=rec_in.url.strip(),
-                    tipo=rec_in.tipo,
-                ))
-                _vincular_recurso_documental(
-                    db,
-                    curso_id=curso_id,
-                    leccion_id=lec.id,
-                    recurso_url=rec_in.url,
-                    tipo="material",
-                )
+    _reemplazar_estructura_curso(db, curso, datos.modulos)
 
     db.commit()
     curso = _cargar_curso_detalle(db, curso_id)
@@ -649,7 +683,7 @@ async def actualizar_curso(
     if datos.descripcion is not None:
         curso.descripcion = datos.descripcion
     if datos.portada_url is not None:
-        curso.portada_url = datos.portada_url
+        curso.portada_url = _url_documental_obligatoria(datos.portada_url, campo="portada_url")
     if datos.precio is not None:
         curso.precio = float(datos.precio)
     if datos.nivel is not None:
@@ -658,6 +692,9 @@ async def actualizar_curso(
         curso.categoria = datos.categoria.strip()
     if datos.estado is not None:
         curso.estado = datos.estado
+
+    if datos.modulos is not None:
+        _reemplazar_estructura_curso(db, curso, datos.modulos)
 
     curso.fecha_actualizacion = datetime.utcnow()
     db.commit()

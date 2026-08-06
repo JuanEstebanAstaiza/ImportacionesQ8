@@ -39,6 +39,7 @@ from schemas.documental import (
 from services.documental_service import (
     create_document_file,
     ensure_file_not_linked_to_active_course,
+    ensure_folder_path,
     soft_delete_file,
 )
 from utils.dependencies import get_current_user, get_db
@@ -595,8 +596,26 @@ async def compartir_recursos_chat(
         db.add(message)
         db.flush()
 
+        chat_folder_id = ensure_folder_path(
+            db,
+            owner_user_id=user_id,
+            segments=["Chats", f"Conversacion-{conversation_id[:8]}"],
+        )
+
         for file_row in files:
-            db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=message.id, archivo_id=file_row.id))
+            cloned = create_document_file(
+                db,
+                owner_user_id=user_id,
+                nombre=file_row.nombre,
+                carpeta_id=chat_folder_id,
+                extension=file_row.extension,
+                mime_type=file_row.mime_type,
+                size_bytes=file_row.size_bytes,
+                storage_url=file_row.storage_url,
+                storage_path=file_row.storage_path,
+                origen="chat",
+            )
+            db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=message.id, archivo_id=cloned.id))
 
         if config.redis_client:
             try:
@@ -658,6 +677,7 @@ async def listar_adjuntos_chat(
                 mime_type=file_row.mime_type,
                 extension=file_row.extension,
                 tipo_recurso=file_row.tipo_recurso,
+                size_bytes=file_row.size_bytes,
                 storage_url=file_row.storage_url,
                 created_at=message.fecha_envio,
             )

@@ -24,6 +24,15 @@ def _validar_url_http(value: Optional[str], *, campo: str = "url") -> Optional[s
     return canonicalize_resource_url(value, campo=campo)
 
 
+def _validar_url_documental(value: Optional[str], *, campo: str = "url") -> Optional[str]:
+        url = _validar_url_http(value, campo=campo)
+        if url is None:
+            return None
+        if not url.startswith("/documentos/archivos/"):
+                raise ValueError(f"{campo} debe apuntar a un archivo subido a la plataforma")
+        return url
+
+
 class RecursoLeccionCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=255)
     url: str = Field(..., min_length=5, max_length=500)
@@ -32,7 +41,7 @@ class RecursoLeccionCreate(BaseModel):
     @field_validator("url")
     @classmethod
     def url_segura(cls, v: str) -> str:
-        return _validar_url_http(v, campo="url de recurso")  # type: ignore[return-value]
+        return _validar_url_documental(v, campo="url de recurso")  # type: ignore[return-value]
 
 
 class LeccionCreate(BaseModel):
@@ -45,7 +54,7 @@ class LeccionCreate(BaseModel):
     @field_validator("video_url")
     @classmethod
     def video_url_segura(cls, v: str) -> str:
-        return _validar_url_http(v, campo="video_url")  # type: ignore[return-value]
+        return _validar_url_documental(v, campo="video_url")  # type: ignore[return-value]
 
 
 class ModuloCreate(BaseModel):
@@ -90,11 +99,19 @@ class CursoUpdate(BaseModel):
     nivel: Optional[NivelCursoLiteral] = None
     categoria: Optional[str] = Field(default=None, min_length=1, max_length=120)
     estado: Optional[Literal["borrador", "publicado", "archivado"]] = None
+    modulos: Optional[List[ModuloCreate]] = Field(default=None, max_length=MAX_MODULOS)
 
     @field_validator("portada_url")
     @classmethod
     def portada_segura_update(cls, v: Optional[str]) -> Optional[str]:
         return _validar_url_http(v, campo="portada_url")
+
+    @field_validator("modulos")
+    @classmethod
+    def modulos_validos(cls, v: Optional[List[ModuloCreate]]) -> Optional[List[ModuloCreate]]:
+        if v is not None and not v:
+            raise ValueError("El curso debe tener al menos un módulo")
+        return v
 
 
 class RecursoLeccionResponse(BaseModel):
