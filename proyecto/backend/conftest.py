@@ -76,6 +76,11 @@ from models.jwt_blacklist import JwtBlacklist  # noqa: F401 — registra metadat
 from models.otp import CodigoOtp  # noqa: F401
 from models.curso import (  # noqa: F401 — registra metadata LMS
     Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
+    CertificadoCurso,
+)
+from models.documental import (  # noqa: F401 — registra metadata de gestión documental
+    Archivo, ArchivoEtiqueta, Carpeta, CursoRecurso, Etiqueta, Favorito,
+    MensajeAdjunto, OrdenDocumento,
 )
 from models.notificacion import Notificacion  # noqa: F401
 
@@ -522,22 +527,49 @@ def mock_redis_client(monkeypatch):
 # Limpiar base de datos de test después de cada test
 @pytest.fixture(autouse=True)
 def cleanup_test_db(db_session):
-    """Limpiar la base de datos después de cada test"""
+    """Limpiar la base de datos después de cada test.
+
+    El orden respeta las claves foráneas: hijos antes que padres. Las tablas del
+    módulo LMS y de gestión documental tienen que estar aquí; mientras faltaron,
+    un test que publicaba un curso hacía fallar el DELETE de `importadores`, y
+    como todo el bloque iba en un solo `try` la limpieza entera se revertía en
+    silencio y el resto de la sesión heredaba datos ajenos.
+    """
     yield
-    # Eliminar todos los registros creados en el test (en orden inverso para respetar FK)
     try:
         db_session.query(PasswordResetToken).delete()
+        db_session.query(MensajeAdjunto).delete()
         db_session.query(MensajeChat).delete()
         db_session.query(ConversacionChat).delete()
         db_session.query(MovimientoCredito).delete()
         db_session.query(SolicitudRecreacion).delete()
         db_session.query(Pago).delete()
+        db_session.query(OrdenDocumento).delete()
         db_session.query(DocumentoOrden).delete()
         db_session.query(HistorialEstadosOrden).delete()
         db_session.query(Orden).delete()
         db_session.query(Propuesta).delete()
         db_session.query(CampoPersonalizado).delete()
         db_session.query(Cotizacion).delete()
+
+        # LMS: certificados y progreso apuntan a lecciones y cursos.
+        db_session.query(CertificadoCurso).delete()
+        db_session.query(ProgresoLeccion).delete()
+        db_session.query(CompraCurso).delete()
+        db_session.query(CursoRecurso).delete()
+        db_session.query(RecursoLeccion).delete()
+        db_session.query(LeccionCurso).delete()
+        db_session.query(ModuloCurso).delete()
+        db_session.query(Curso).delete()
+
+        # Gestión documental: etiquetas y favoritos referencian archivos.
+        db_session.query(ArchivoEtiqueta).delete()
+        db_session.query(Favorito).delete()
+        db_session.query(Etiqueta).delete()
+        db_session.query(Archivo).delete()
+        db_session.query(Carpeta).delete()
+
+        db_session.query(Notificacion).delete()
         db_session.query(Importador).delete()
         db_session.query(Usuario).delete()
         db_session.commit()
