@@ -82,6 +82,7 @@ from models.documental import (  # noqa: F401 — registra metadata de gestión 
     Archivo, ArchivoEtiqueta, Carpeta, CursoRecurso, Etiqueta, Favorito,
     MensajeAdjunto, OrdenDocumento,
 )
+from models.certificacion import Certificacion, CertificacionImportador  # noqa: F401
 from models.notificacion import Notificacion  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
@@ -570,6 +571,9 @@ def cleanup_test_db(db_session):
         db_session.query(Carpeta).delete()
 
         db_session.query(Notificacion).delete()
+        # Los sellos referencian empresas y admins: van antes que ambos.
+        db_session.query(CertificacionImportador).delete()
+        db_session.query(Certificacion).delete()
         db_session.query(Importador).delete()
         db_session.query(Usuario).delete()
         db_session.commit()

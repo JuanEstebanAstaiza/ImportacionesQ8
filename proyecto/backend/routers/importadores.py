@@ -29,6 +29,10 @@ from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.campo_personalizado import CampoPersonalizado
 from models.orden import Orden
+from services.certificacion_service import (
+    adjuntar_certificaciones,
+    subconsulta_puntaje_publicidad,
+)
 from utils.dependencies import get_db, require_rol, require_rol_in, get_current_user
 from utils.security import hash_password
 from utils.limiter import limiter, RATE_LIMIT_PUBLIC_READ
@@ -81,14 +85,37 @@ async def listar_importadores(
     if certificado is not None:
         query = query.filter(Importador.verificado == certificado)
 
-    if orden == "calificacion":
-        query = query.order_by(Importador.calificacion_promedio.desc())
-    elif orden == "reciente":
-        query = query.order_by(Importador.fecha_registro.desc())
-    else:
-        query = query.order_by(Importador.calificacion_promedio.desc())
+    # El orden por defecto lo decide el peso de las certificaciones que la
+    # plataforma otorgó: es el "algoritmo de publicidad" del catálogo. Se hace
+    # con un outerjoin para que las empresas sin sello sigan apareciendo (con 0).
+    puntajes = subconsulta_puntaje_publicidad(db)
+    query = query.outerjoin(puntajes, puntajes.c.importador_id == Importador.id)
+    puntaje_col = func.coalesce(puntajes.c.puntaje, 0.0)
 
-    return query.offset(offset).limit(limit).all()
+    if orden == "reciente":
+        query = query.order_by(Importador.fecha_registro.desc())
+    elif orden == "calificacion":
+        query = query.order_by(Importador.calificacion_promedio.desc())
+    else:
+        # Desempate estable: a igual peso, primero la empresa verificada y luego
+        # la más antigua, para que el orden no baile entre peticiones.
+        query = query.order_by(
+            puntaje_col.desc(),
+            Importador.verificado.desc(),
+            Importador.fecha_registro.asc(),
+        )
+
+    filas = query.offset(offset).limit(limit).all()
+    return _con_certificaciones(db, filas)
+
+
+def _con_certificaciones(db: Session, importadores: List[Importador]) -> List[ImportadorResponse]:
+    """Adjunta a cada empresa sus sellos vigentes y su puntaje agregado."""
+    return adjuntar_certificaciones(db, importadores)
+
+
+def _una_con_certificaciones(db: Session, importador: Importador) -> ImportadorResponse:
+    return _con_certificaciones(db, [importador])[0]
 
 # ==================== Panel de empresa: asesores (Fase 1) ====================
 # NOTA: estas rutas de un solo segmento literal ("/asesores", "/campos-personalizados")
@@ -667,12 +694,25 @@ async def listar_importadores_destacados(
     db: Session = Depends(get_db)
 ):
     """
-    Top empresas importadoras activas por calificación promedio, para la sección
-    "Mejor calificados" del dashboard del solicitante.
+    Empresas destacadas del dashboard del solicitante.
+
+    El criterio es el peso de las certificaciones que la plataforma les otorgó,
+    no una calificación promedio: ese campo nunca se alimentó de reseñas reales.
     """
-    return db.query(Importador).filter(
-        Importador.estado == "activo"
-    ).order_by(Importador.calificacion_promedio.desc()).limit(limite).all()
+    puntajes = subconsulta_puntaje_publicidad(db)
+    filas = (
+        db.query(Importador)
+        .outerjoin(puntajes, puntajes.c.importador_id == Importador.id)
+        .filter(Importador.estado == "activo")
+        .order_by(
+            func.coalesce(puntajes.c.puntaje, 0.0).desc(),
+            Importador.verificado.desc(),
+            Importador.fecha_registro.asc(),
+        )
+        .limit(limite)
+        .all()
+    )
+    return _con_certificaciones(db, filas)
 
 @router.get("/por-categoria", response_model=dict)
 async def listar_importadores_por_categoria(
@@ -684,12 +724,13 @@ async def listar_importadores_por_categoria(
     Una empresa con varias especialidades aparece en cada una de sus categorías.
     """
     importadores = db.query(Importador).filter(Importador.estado == "activo").all()
+    respuestas = {r.id: r for r in _con_certificaciones(db, importadores)}
 
     agrupado: dict[str, list] = {}
     for imp in importadores:
         categorias = imp.especialidad_producto or []
         for categoria in categorias:
-            agrupado.setdefault(categoria, []).append(ImportadorResponse.model_validate(imp).model_dump(mode="json"))
+            agrupado.setdefault(categoria, []).append(respuestas[str(imp.id)].model_dump(mode="json"))
 
     return agrupado
 
@@ -702,10 +743,18 @@ async def listar_importadores_certificados(
     equipo de la plataforma), para la sección "Empresas certificadas" del
     dashboard del solicitante.
     """
-    return db.query(Importador).filter(
-        Importador.estado == "activo",
-        Importador.verificado == True  # noqa: E712 - comparación explícita requerida por SQLAlchemy
-    ).order_by(Importador.calificacion_promedio.desc()).all()
+    puntajes = subconsulta_puntaje_publicidad(db)
+    filas = (
+        db.query(Importador)
+        .outerjoin(puntajes, puntajes.c.importador_id == Importador.id)
+        .filter(
+            Importador.estado == "activo",
+            Importador.verificado == True,  # noqa: E712 - comparación explícita requerida por SQLAlchemy
+        )
+        .order_by(func.coalesce(puntajes.c.puntaje, 0.0).desc(), Importador.fecha_registro.asc())
+        .all()
+    )
+    return _con_certificaciones(db, filas)
 
 
 # ==================== Evidencias de perfil ====================
@@ -821,8 +870,8 @@ async def obtener_importador(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Importador no encontrado"
         )
-    
-    return importador
+
+    return _una_con_certificaciones(db, importador)
 
 # El alta de importadoras vive solo en `POST /admin/importadores`: crea la empresa
 # junto con su cuenta dueño (representante legal) en un paso. Aquí no se expone un
@@ -1033,7 +1082,7 @@ async def actualizar_perfil_importador(
     db.commit()
     db.refresh(importador)
 
-    return importador
+    return _una_con_certificaciones(db, importador)
 
 @router.get("/{importador_id}/formulario", response_model=FormularioImportadorResponse)
 async def obtener_formulario_importador(

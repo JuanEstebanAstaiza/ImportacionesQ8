@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from pathlib import Path
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
@@ -7,11 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
 
+from database import Base
 from models.usuario import Usuario
 from models.importador import Importador
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.orden import Orden
+from models.certificacion import Certificacion, CertificacionImportador
 from models.solicitud_recreacion import SolicitudRecreacion, EstadoSolicitudRecreacion
 from models.credito import MovimientoCredito, TipoMovimientoCredito
 from schemas.importador import AdminCrearImportadorRequest, AdminCrearImportadorResponse, ImportadorResponse
@@ -26,7 +29,19 @@ from schemas.admin import (
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
+from schemas.certificacion import (
+    CertificacionCreate,
+    CertificacionUpdate,
+    CertificacionResponse,
+    CertificacionesDeEmpresaResponse,
+    OtorgarCertificacionRequest,
+)
 from schemas.features import RevisarEvidenciaRequest, ResolverDisputaRoomRequest
+from services.certificacion_service import (
+    adjuntar_certificaciones,
+    certificaciones_por_importador,
+    puntaje_de,
+)
 from utils.dependencies import get_db, require_rol
 from utils.security import hash_password
 
@@ -87,7 +102,7 @@ async def crear_importador_con_dueño(
     db.refresh(nuevo_dueño)
 
     return AdminCrearImportadorResponse(
-        importador=nuevo_importador,
+        importador=adjuntar_certificaciones(db, [nuevo_importador])[0],
         usuario_dueño_id=str(nuevo_dueño.id),
         email_dueño=nuevo_dueño.email
     )
@@ -115,7 +130,7 @@ async def verificar_importador(
     db.commit()
     db.refresh(importador)
 
-    return importador
+    return adjuntar_certificaciones(db, [importador])[0]
 
 
 @router.put("/importadores/{importador_id}/estado", response_model=ImportadorResponse)
@@ -142,7 +157,7 @@ async def actualizar_estado_importador(
     db.commit()
     db.refresh(importador)
 
-    return importador
+    return adjuntar_certificaciones(db, [importador])[0]
 
 
 # ==================== Monitoreo de usuarios ====================
@@ -438,6 +453,335 @@ async def resolver_recreacion(
 
 
 # ==================== Métricas de éxito (sección del PDF) ====================
+
+# ==================== Copia de seguridad ====================
+
+@router.get("/backup")
+async def descargar_backup(
+    db: Session = Depends(get_db),
+    incluir_archivos: bool = Query(True, description="Incluir uploads/ y generated_docs/ en el ZIP"),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Descarga un ZIP con toda la plataforma: base de datos + archivos subidos.
+
+    Pensado para tomar una foto antes de actualizar y poder volver atrás sin
+    depender de integración continua. Se restaura con
+    `python scripts/restaurar_backup.py <archivo.zip>`.
+
+    Ojo: el ZIP contiene datos personales y hashes de contraseña de toda la
+    plataforma. Trátalo como un secreto.
+    """
+    import tempfile
+
+    from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
+
+    from services.backup_service import construir_backup, nombre_de_archivo
+
+    # Se escribe a disco en vez de armarlo en memoria: con los uploads dentro,
+    # el ZIP puede pesar cientos de MB.
+    temporal = Path(tempfile.gettempdir()) / f"q8-backup-{uuid4().hex}.zip"
+
+    try:
+        manifiesto = construir_backup(db, temporal, incluir_archivos=incluir_archivos)
+    except Exception:
+        temporal.unlink(missing_ok=True)
+        logger.exception("Fallo generando la copia de seguridad")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se pudo generar la copia de seguridad",
+        )
+
+    logger.info(
+        "Backup generado por admin %s: %s tablas, %s archivos",
+        current_user["user_id"],
+        len(manifiesto.get("tablas", {})),
+        manifiesto.get("archivos_copiados", 0),
+    )
+
+    return FileResponse(
+        path=str(temporal),
+        media_type="application/zip",
+        filename=nombre_de_archivo(),
+        # El temporal se borra en cuanto termina de enviarse.
+        background=BackgroundTask(lambda: temporal.unlink(missing_ok=True)),
+    )
+
+
+@router.get("/backup/resumen")
+async def resumen_backup(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Qué contendría el backup, sin generarlo: filas por tabla y peso de los archivos."""
+    from services.backup_service import BACKEND_DIR, DIRECTORIOS_DE_ARCHIVOS, _revision_alembic, _tablas_existentes
+
+    presentes = set(_tablas_existentes())
+    tablas = {}
+    total_filas = 0
+    for tabla in Base.metadata.sorted_tables:
+        if tabla.name not in presentes:
+            continue
+        try:
+            total = db.query(func.count()).select_from(tabla).scalar() or 0
+        except Exception:
+            total = 0
+        tablas[tabla.name] = int(total)
+        total_filas += int(total)
+
+    archivos = 0
+    bytes_archivos = 0
+    for nombre_dir in DIRECTORIOS_DE_ARCHIVOS:
+        carpeta = BACKEND_DIR / nombre_dir
+        if not carpeta.is_dir():
+            continue
+        for archivo in carpeta.rglob("*"):
+            if archivo.is_file():
+                archivos += 1
+                bytes_archivos += archivo.stat().st_size
+
+    return {
+        "revision_alembic": _revision_alembic(db),
+        "tablas": tablas,
+        "total_filas": total_filas,
+        "archivos": archivos,
+        "bytes_archivos": bytes_archivos,
+    }
+
+
+# ==================== Certificaciones de plataforma ====================
+#
+# Sellos que respalda la propia plataforma. Cada uno lleva un `peso_publicidad`
+# que suma al puntaje con el que se ordena el catálogo del solicitante, así que
+# solo un admin puede crearlos y otorgarlos.
+
+@router.post("/certificaciones", response_model=CertificacionResponse, status_code=status.HTTP_201_CREATED)
+async def crear_certificacion(
+    datos: CertificacionCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Crea un sello desde cero: nombre, descripción, logo y peso publicitario."""
+    nombre = datos.nombre.strip()
+    if db.query(Certificacion.id).filter(func.lower(Certificacion.nombre) == nombre.lower()).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ya existe una certificación llamada '{nombre}'",
+        )
+
+    certificacion = Certificacion(
+        id=str(uuid4()),
+        nombre=nombre,
+        descripcion=(datos.descripcion or "").strip(),
+        logo_url=datos.logo_url,
+        peso_publicidad=float(datos.peso_publicidad or 0.0),
+        activa=datos.activa,
+        creada_por_admin_id=current_user["user_id"],
+    )
+    db.add(certificacion)
+    db.commit()
+    db.refresh(certificacion)
+
+    return _certificacion_response(db, certificacion)
+
+
+@router.get("/certificaciones", response_model=List[CertificacionResponse])
+async def listar_certificaciones_admin(
+    db: Session = Depends(get_db),
+    incluir_inactivas: bool = Query(True, description="Incluir sellos retirados del catálogo"),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Catálogo completo de sellos, con cuántas empresas tiene cada uno."""
+    query = db.query(Certificacion)
+    if not incluir_inactivas:
+        query = query.filter(Certificacion.activa.is_(True))
+
+    filas = query.order_by(Certificacion.peso_publicidad.desc(), Certificacion.nombre.asc()).all()
+    conteos = _conteo_por_certificacion(db)
+
+    return [_certificacion_response(db, fila, conteos) for fila in filas]
+
+
+@router.put("/certificaciones/{certificacion_id}", response_model=CertificacionResponse)
+async def actualizar_certificacion(
+    certificacion_id: str,
+    datos: CertificacionUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Edita el sello. Cambiar `peso_publicidad` reordena el catálogo al instante."""
+    certificacion = db.query(Certificacion).filter(Certificacion.id == certificacion_id).first()
+    if not certificacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificación no encontrada")
+
+    cambios = datos.model_dump(exclude_unset=True)
+
+    nuevo_nombre = cambios.get("nombre")
+    if nuevo_nombre:
+        nuevo_nombre = nuevo_nombre.strip()
+        duplicada = db.query(Certificacion.id).filter(
+            func.lower(Certificacion.nombre) == nuevo_nombre.lower(),
+            Certificacion.id != certificacion_id,
+        ).first()
+        if duplicada:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ya existe una certificación llamada '{nuevo_nombre}'",
+            )
+        cambios["nombre"] = nuevo_nombre
+
+    for campo, valor in cambios.items():
+        setattr(certificacion, campo, valor)
+
+    db.commit()
+    db.refresh(certificacion)
+
+    return _certificacion_response(db, certificacion)
+
+
+@router.delete("/certificaciones/{certificacion_id}", response_model=CertificacionResponse)
+async def retirar_certificacion(
+    certificacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Retira el sello del catálogo sin borrarlo.
+
+    No se elimina de verdad: eso perdería el registro de a qué empresas se les
+    había otorgado y por qué aparecían destacadas en su momento.
+    """
+    certificacion = db.query(Certificacion).filter(Certificacion.id == certificacion_id).first()
+    if not certificacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificación no encontrada")
+
+    certificacion.activa = False
+    db.commit()
+    db.refresh(certificacion)
+
+    return _certificacion_response(db, certificacion)
+
+
+@router.post(
+    "/importadores/{importador_id}/certificaciones",
+    response_model=CertificacionesDeEmpresaResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def otorgar_certificacion(
+    importador_id: str,
+    datos: OtorgarCertificacionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Respalda a una empresa con un sello de la plataforma."""
+    importador = db.query(Importador).filter(Importador.id == importador_id).first()
+    if not importador:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa importadora no encontrada")
+
+    certificacion = db.query(Certificacion).filter(
+        Certificacion.id == datos.certificacion_id,
+        Certificacion.activa.is_(True),
+    ).first()
+    if not certificacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificación no encontrada o retirada del catálogo",
+        )
+
+    existente = db.query(CertificacionImportador).filter(
+        CertificacionImportador.certificacion_id == certificacion.id,
+        CertificacionImportador.importador_id == importador.id,
+    ).first()
+
+    if existente and existente.revocada_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La empresa ya tiene esta certificación vigente",
+        )
+
+    if existente:
+        # Reactivar el otorgamiento anterior conserva la fila histórica.
+        existente.revocada_at = None
+        existente.fecha_otorgada = datetime.utcnow()
+        existente.otorgada_por_admin_id = current_user["user_id"]
+        existente.notas = datos.notas
+    else:
+        db.add(CertificacionImportador(
+            id=str(uuid4()),
+            certificacion_id=certificacion.id,
+            importador_id=importador.id,
+            otorgada_por_admin_id=current_user["user_id"],
+            notas=datos.notas,
+            fecha_otorgada=datetime.utcnow(),
+        ))
+
+    db.commit()
+    return _certificaciones_de_empresa(db, importador_id)
+
+
+@router.delete(
+    "/importadores/{importador_id}/certificaciones/{certificacion_id}",
+    response_model=CertificacionesDeEmpresaResponse,
+)
+async def revocar_certificacion(
+    importador_id: str,
+    certificacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Retira el respaldo a una empresa. La empresa baja en el catálogo al instante."""
+    otorgada = db.query(CertificacionImportador).filter(
+        CertificacionImportador.importador_id == importador_id,
+        CertificacionImportador.certificacion_id == certificacion_id,
+        CertificacionImportador.revocada_at.is_(None),
+    ).first()
+    if not otorgada:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="La empresa no tiene esa certificación vigente",
+        )
+
+    otorgada.revocada_at = datetime.utcnow()
+    db.commit()
+
+    return _certificaciones_de_empresa(db, importador_id)
+
+
+@router.get("/importadores/{importador_id}/certificaciones", response_model=CertificacionesDeEmpresaResponse)
+async def listar_certificaciones_de_empresa(
+    importador_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    return _certificaciones_de_empresa(db, importador_id)
+
+
+def _conteo_por_certificacion(db: Session) -> dict:
+    """Cuántas empresas tienen vigente cada sello (una sola query)."""
+    filas = (
+        db.query(CertificacionImportador.certificacion_id, func.count(CertificacionImportador.id))
+        .filter(CertificacionImportador.revocada_at.is_(None))
+        .group_by(CertificacionImportador.certificacion_id)
+        .all()
+    )
+    return {str(cert_id): int(total) for cert_id, total in filas}
+
+
+def _certificacion_response(db: Session, certificacion: Certificacion, conteos: Optional[dict] = None) -> CertificacionResponse:
+    if conteos is None:
+        conteos = _conteo_por_certificacion(db)
+    respuesta = CertificacionResponse.model_validate(certificacion)
+    respuesta.empresas_certificadas = conteos.get(str(certificacion.id), 0)
+    return respuesta
+
+
+def _certificaciones_de_empresa(db: Session, importador_id: str) -> CertificacionesDeEmpresaResponse:
+    certificaciones = certificaciones_por_importador(db, [importador_id]).get(str(importador_id), [])
+    return CertificacionesDeEmpresaResponse(
+        importador_id=str(importador_id),
+        puntaje_publicidad=puntaje_de(certificaciones),
+        certificaciones=certificaciones,
+    )
+
 
 # ==================== Supervisión de chats ====================
 

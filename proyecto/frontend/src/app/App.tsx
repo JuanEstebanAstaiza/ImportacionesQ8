@@ -508,6 +508,14 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
     bannerUrl: readPerfilPublicoString(perfil, "banner_url", "banner"),
     logoUrl: imp.logo_url ?? "",
+    platformCerts: (imp.certificaciones ?? []).map((cert) => ({
+      id: cert.certificacion_id,
+      nombre: cert.nombre,
+      descripcion: cert.descripcion || "",
+      logoUrl: cert.logo_url || "",
+      peso: Number(cert.peso_publicidad || 0),
+    })),
+    adScore: Number(imp.puntaje_publicidad || 0),
     id: imp.id,
     name,
     specialty: `${primaryCategory} internacional`,
@@ -1022,6 +1030,9 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
 }) {
   const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Importadora con experiencia en comercio internacional.";
   const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
+  // Sellos que respalda la plataforma: pesan más que las certificaciones que la
+  // propia empresa declara, así que se muestran primero y con su logo.
+  const platformCerts=imp.platformCerts??[];
   return (
     <div className={clsx(
       "bg-white border rounded-xl p-5 flex flex-col gap-4 hover:shadow-md transition-all duration-200 group",
@@ -1042,7 +1053,7 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           {/* Las certificaciones sustituyen a la calificación: son un dato
               verificable de la empresa, no una nota agregada sin reseñas reales. */}
-          {certs.length>0&&<div className="flex items-center gap-1 text-emerald-700"><Shield className="w-3.5 h-3.5"/><span className="text-xs font-semibold">{certs.length}</span></div>}
+          {(platformCerts.length+certs.length)>0&&<div className="flex items-center gap-1 text-emerald-700"><Shield className="w-3.5 h-3.5"/><span className="text-xs font-semibold">{platformCerts.length+certs.length}</span></div>}
           <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span className="text-xs">{imp.responseTime}</span></div>
         </div>
       </div>
@@ -1054,6 +1065,14 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
       <div className="flex flex-wrap gap-1.5">
         {imp.categories.map(c=>(
           <span key={c} className="px-2 py-0.5 bg-muted rounded-md text-[10px] font-medium text-muted-foreground">{c}</span>
+        ))}
+        {platformCerts.map(c=>(
+          <span key={c.id} title={c.descripcion||`Respaldado por ImportacionesQ8`} className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-semibold text-primary flex items-center gap-1">
+            {c.logoUrl
+              ? <img src={resolveApiUrl(c.logoUrl)} alt="" className="w-3 h-3 object-contain"/>
+              : <BadgeCheck className="w-2.5 h-2.5"/>}
+            {c.nombre}
+          </span>
         ))}
         {certs.map(c=>(
           <span key={c} className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md text-[10px] font-medium text-emerald-700 flex items-center gap-1"><Shield className="w-2.5 h-2.5"/>{c}</span>
@@ -1090,13 +1109,17 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
     const ms=!search||[imp.name,imp.specialty,...imp.categories].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mc=catFilter==="Todas"||imp.categories.some(c=>c.toLowerCase()===catFilter.toLowerCase());
     const certs=imp.certs??[];
-    const mr=!certFilter||(certFilter==="certificadas"?certs.length>0:certs.some(c=>c===certFilter));
+    const sellos=(imp.platformCerts??[]).map(c=>c.nombre);
+    const todas=[...sellos,...certs];
+    const mr=!certFilter||(certFilter==="certificadas"?todas.length>0:todas.some(c=>c===certFilter));
     const mco=!countryFilter||imp.country===countryFilter;
     return ms&&mc&&mr&&mco;
   });
 
-  const certOptions=[...new Set(importers.flatMap(i=>i.certs??[]))].sort();
-  const featured=importers.filter(i=>i.verified).slice(0,3);
+  const certOptions=[...new Set(importers.flatMap(i=>[...(i.platformCerts??[]).map(c=>c.nombre),...(i.certs??[])]))].sort();
+  // El backend ya devuelve el catálogo ordenado por peso publicitario, así que
+  // basta con tomar las primeras: son las que más respaldo tienen.
+  const featured=importers.filter(i=>(i.platformCerts??[]).length>0||i.verified).slice(0,3);
   const quickCats=["Todas","Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad"];
 
   return (
@@ -1124,7 +1147,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
             {[
               {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
               {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
-              {label:"Con certificaciones",value:importers.filter(i=>(i.certs??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600"},
+              {label:"Respaldadas por Q8",value:importers.filter(i=>(i.platformCerts??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600"},
               {label:"Tiempo prom. respuesta",value:"~34h",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
             ].map(s=>(
               <Card key={s.label} padding="md" className="flex flex-col gap-2">
@@ -1141,7 +1164,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
               <div className="flex items-center gap-2 mb-4">
                 <Award className="w-4 h-4 text-amber-500"/>
                 <h2 className="text-sm font-semibold">Empresas destacadas</h2>
-                <span className="text-xs text-muted-foreground">· Verificadas por la plataforma</span>
+                <span className="text-xs text-muted-foreground">· Con mayor respaldo de ImportacionesQ8</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {featured.map(imp=>(
@@ -1222,6 +1245,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   // se usan para las importadoras de demostración, que no tienen perfil real.
   const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Esta empresa aún no ha publicado su descripción.";
   const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
+  const platformCerts=imp.platformCerts??[];
   const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
   const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
   const relOrders=orders.filter(o=>o.importerId===imp.id);
@@ -1264,6 +1288,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
                   <div className="flex items-center gap-4 mt-2 flex-wrap">
+                    {platformCerts.length>0&&<div className="flex items-center gap-1 text-primary"><BadgeCheck className="w-3.5 h-3.5"/><span className="text-xs font-medium">{platformCerts.length} {platformCerts.length===1?"sello":"sellos"} de ImportacionesQ8</span></div>}
                     {certs.length>0&&<div className="flex items-center gap-1 text-muted-foreground"><Award className="w-3.5 h-3.5"/><span className="text-xs">{certs.length} {certs.length===1?"certificación":"certificaciones"}</span></div>}
                     <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime} respuesta</span></div>
                     <div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div>
@@ -1292,9 +1317,33 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 </div>
               </Card>
 
+              {/* Respaldo de la plataforma: distinto de las certificaciones que
+                  la propia empresa declara, porque este lo otorga ImportacionesQ8. */}
+              {platformCerts.length>0&&(
+                <Card padding="md" className="border-primary/20 bg-primary/5">
+                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck className="w-4 h-4 text-primary"/>Respaldada por ImportacionesQ8</h3>
+                  <p className="text-xs text-muted-foreground mb-3">Sellos que nuestro equipo otorgó tras verificar a esta empresa.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {platformCerts.map(c=>(
+                      <div key={c.id} className="flex items-start gap-3 p-3 bg-white border border-primary/15 rounded-xl">
+                        <div className="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                          {c.logoUrl
+                            ? <img src={resolveApiUrl(c.logoUrl)} alt="" className="w-8 h-8 object-contain"/>
+                            : <BadgeCheck className="w-5 h-5 text-primary"/>}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground">{c.nombre}</p>
+                          {c.descripcion&&<p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{c.descripcion}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
               {/* Certifications */}
               <Card padding="md">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Shield className="w-4 h-4 text-primary"/>Certificaciones</h3>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Shield className="w-4 h-4 text-primary"/>Certificaciones declaradas por la empresa</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {certs.map(c=>(
                     <div key={c} className="flex items-center gap-2.5 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">

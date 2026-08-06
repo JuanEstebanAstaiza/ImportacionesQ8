@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import config
 from models.chat import ConversacionChat, MensajeChat
 from models.curso import CompraCurso, Curso, EstadoCurso, LeccionCurso
+from models.certificacion import Certificacion
 from models.importador import Importador
 from models.documental import (
     Archivo,
@@ -791,7 +792,17 @@ def _es_imagen_publica_de_empresa(db: Session, archivo_id: str) -> bool:
         )
         .first()
     )
-    return fila is not None
+    if fila is not None:
+        return True
+
+    # Logos de los sellos que otorga la plataforma: se muestran junto a la
+    # empresa en el catálogo público, así que también van sin sesión.
+    sello = (
+        db.query(Certificacion.id)
+        .filter(Certificacion.activa.is_(True), Certificacion.logo_url.like(patron))
+        .first()
+    )
+    return sello is not None
 
 
 def _tiene_acceso_por_curso(db: Session, archivo_id: str, current_user: dict) -> bool:

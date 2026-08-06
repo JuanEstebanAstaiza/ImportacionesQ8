@@ -494,16 +494,40 @@ class TestCatalogoEnriquecido:
         importador, _dueño = crear_empresa_importadora(db_session, **kwargs)
         return importador
 
-    def test_destacados_ordena_por_calificacion_desc(self, client, db_session):
-        self._crear(db_session, nombre_empresa="Baja Calificación", email_dueño="baja@example.com", calificacion_promedio=2.0)
-        self._crear(db_session, nombre_empresa="Alta Calificación", email_dueño="alta@example.com", calificacion_promedio=4.9)
+    def test_destacados_ordena_por_peso_de_certificaciones(self, client, db_session):
+        """Las destacadas salen por el respaldo que les dio la plataforma.
+
+        Antes se ordenaba por `calificacion_promedio`, un campo que nunca se
+        alimentó de reseñas reales: ahora manda el peso publicitario de los
+        sellos que el admin otorga.
+        """
+        sin_sello = self._crear(db_session, nombre_empresa="Sin Respaldo", email_dueño="sin@example.com")
+        con_sello = self._crear(db_session, nombre_empresa="Con Respaldo", email_dueño="con@example.com")
+
+        _admin, headers_admin = crear_usuario_con_token(db_session, rol="admin")
+        certificacion = client.post(
+            "/admin/certificaciones",
+            json={"nombre": "Socio Destacado", "descripcion": "", "peso_publicidad": 50},
+            headers=headers_admin,
+        )
+        assert certificacion.status_code == status.HTTP_201_CREATED, certificacion.text
+
+        otorgada = client.post(
+            f"/admin/importadores/{con_sello.id}/certificaciones",
+            json={"certificacion_id": certificacion.json()["id"]},
+            headers=headers_admin,
+        )
+        assert otorgada.status_code == status.HTTP_201_CREATED, otorgada.text
 
         response = client.get("/importadores/destacados")
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 2
         nombres = [i["nombre_empresa"] for i in data]
-        assert nombres.index("Alta Calificación") < nombres.index("Baja Calificación")
+        assert nombres.index("Con Respaldo") < nombres.index("Sin Respaldo")
+        assert data[nombres.index("Con Respaldo")]["puntaje_publicidad"] == 50
+        assert data[nombres.index("Sin Respaldo")]["puntaje_publicidad"] == 0
+        assert sin_sello.id  # la empresa sin sello sigue apareciendo en el catálogo
 
     def test_destacados_respeta_limite(self, client, db_session):
         for i in range(5):

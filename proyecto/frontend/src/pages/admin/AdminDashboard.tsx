@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Building2, MessageSquare, RefreshCw, Search, Shield, Users, X } from "lucide-react";
+import { Award, Building2, Download, MessageSquare, RefreshCw, Search, Shield, Trash2, Upload, Users, X } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import {
   adminService,
+  type AdminCertificacion,
   type AdminConversacion,
   type AdminCotizacionAbierta,
   type AdminMensaje,
   type AdminMetricas,
   type AdminUser,
+  type BackupResumen,
 } from "@/services/admin.service";
+import { businessService } from "@/services/business.service";
+import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "empresas" | "usuarios" | "metricas" | "chats";
+type AdminTab = "empresas" | "usuarios" | "metricas" | "chats" | "certificaciones";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin";
 
 type CompanyUiDetails = {
@@ -58,6 +62,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; label: string }> = [
   { id: "empresas", label: "Empresas / Importadores" },
   { id: "usuarios", label: "Usuarios y Roles" },
   { id: "chats", label: "Supervisión de chats" },
+  { id: "certificaciones", label: "Certificaciones y respaldo" },
 ];
 
 const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "admin"] as const;
@@ -93,6 +98,33 @@ const EMPTY_USER_FORM: UserFormState = {
   companyId: "",
   companyName: "",
 };
+
+type CertificationFormState = {
+  nombre: string;
+  descripcion: string;
+  logo_url: string;
+  peso_publicidad: string;
+};
+
+const EMPTY_CERTIFICATION_FORM: CertificationFormState = {
+  nombre: "",
+  descripcion: "",
+  logo_url: "",
+  // El peso decide qué tan arriba sale la empresa en el catálogo del solicitante.
+  peso_publicidad: "10",
+};
+
+/** Formatos aceptados por gestión documental como imagen. */
+const LOGO_EXTENSIONS = ["png", "jpg", "jpeg", "webp"];
+const LOGO_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+
+function formatBytes(total: number): string {
+  if (total < 1024) return `${total} B`;
+  if (total < 1024 * 1024) return `${(total / 1024).toFixed(1)} KB`;
+  if (total < 1024 * 1024 * 1024) return `${(total / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(total / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 function parseCsvField(value: string): string[] {
   return value
@@ -170,6 +202,27 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
   const [conversationMessages, setConversationMessages] = useState<AdminMensaje[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
+  // Certificaciones de plataforma y copia de seguridad.
+  const certificationsSectionRef = useRef<HTMLElement | null>(null);
+  const certificationLogoInputRef = useRef<HTMLInputElement | null>(null);
+  const [certifications, setCertifications] = useState<AdminCertificacion[]>([]);
+  const [certificationForm, setCertificationForm] = useState(EMPTY_CERTIFICATION_FORM);
+  const [editingCertificationId, setEditingCertificationId] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [grantCompanyId, setGrantCompanyId] = useState("");
+  const [grantCertificationId, setGrantCertificationId] = useState("");
+  const [backupSummary, setBackupSummary] = useState<BackupResumen | null>(null);
+  const [isDownloadingBackup, setIsDownloadingBackup] = useState(false);
+  const [includeFilesInBackup, setIncludeFilesInBackup] = useState(true);
+
+  /** Sellos vigentes por empresa, para pintarlos en la tabla de otorgamiento. */
+  const certificationsByCompany = useMemo(() => {
+    return companies.reduce<Record<string, BackendImporter["certificaciones"]>>((acc, company) => {
+      acc[company.id] = company.certificaciones ?? [];
+      return acc;
+    }, {});
+  }, [companies]);
+
   const usersByRole = useMemo(() => {
     return users.reduce<Record<string, number>>((acc, item) => {
       const key = String(item.rol || "sin-rol");
@@ -209,13 +262,17 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
     setIsLoading(true);
     setError("");
     try {
-      const [companyRows, userRows, metricsRow, openQuoteRows, conversationRows] = await Promise.all([
-        adminService.listCompanies(),
-        adminService.listUsers(userFilters),
-        adminService.getMetricas(),
-        adminService.listOpenQuotes(),
-        adminService.listConversations({ buscar: conversationSearch }),
-      ]);
+      const [companyRows, userRows, metricsRow, openQuoteRows, conversationRows, certificationRows, backupRow] =
+        await Promise.all([
+          adminService.listCompanies(),
+          adminService.listUsers(userFilters),
+          adminService.getMetricas(),
+          adminService.listOpenQuotes(),
+          adminService.listConversations({ buscar: conversationSearch }),
+          adminService.listCertifications(),
+          // El resumen del backup es informativo: que falle no debe tumbar el panel.
+          adminService.getBackupSummary().catch(() => null),
+        ]);
 
       setCompanies(companyRows);
       setUsers(userRows);
@@ -223,6 +280,8 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
       setOpenQuotes(openQuoteRows);
       setConversations(conversationRows.items);
       setConversationsTotal(conversationRows.total);
+      setCertifications(certificationRows);
+      setBackupSummary(backupRow);
     } catch (requestError) {
       const errorMessage = requestError instanceof Error ? requestError.message : "No se pudo cargar el panel de administracion.";
       setError(`Error cargando datos del panel: ${errorMessage}`);
@@ -230,6 +289,149 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
       setIsLoading(false);
     }
   }, [isAdmin, userFilters, conversationSearch]);
+
+  /**
+   * Sube el logo del sello a gestión documental. Tiene que vivir en la
+   * plataforma para que el backend lo reconozca y lo sirva sin sesión en el
+   * catálogo público.
+   */
+  async function handleUploadCertificationLogo(archivo: File) {
+    setError("");
+    const extension = (archivo.name.split(".").pop() || "").toLowerCase();
+    if (!LOGO_EXTENSIONS.includes(extension)) {
+      setError(`Formato de logo no soportado (.${extension}). Usa PNG, JPG o WebP.`);
+      return;
+    }
+    if (archivo.size > LOGO_MAX_BYTES) {
+      setError("El logo supera 2 MB. Usa una imagen más liviana.");
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const subido = await businessService.uploadDocumentFile(archivo, null, "certificacion");
+      const url = toApiPath(subido.storage_url || `/documentos/archivos/${subido.id}/descargar`);
+      setCertificationForm((prev) => ({ ...prev, logo_url: url }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo subir el logo.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }
+
+  async function handleSaveCertification() {
+    setError("");
+    setStatusMessage("");
+
+    const nombre = certificationForm.nombre.trim();
+    if (nombre.length < 2) {
+      setError("La certificación necesita un nombre.");
+      return;
+    }
+
+    const peso = Number(certificationForm.peso_publicidad);
+    if (!Number.isFinite(peso) || peso < 0 || peso > 1000) {
+      setError("El peso publicitario debe ser un número entre 0 y 1000.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        nombre,
+        descripcion: certificationForm.descripcion.trim(),
+        logo_url: certificationForm.logo_url.trim() || null,
+        peso_publicidad: peso,
+      };
+
+      if (editingCertificationId) {
+        await adminService.updateCertification(editingCertificationId, payload);
+        setStatusMessage(`Certificación "${nombre}" actualizada.`);
+      } else {
+        await adminService.createCertification(payload);
+        setStatusMessage(`Certificación "${nombre}" creada.`);
+      }
+
+      setCertificationForm(EMPTY_CERTIFICATION_FORM);
+      setEditingCertificationId(null);
+      await reloadAdminData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo guardar la certificación.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function startEditingCertification(certificacion: AdminCertificacion) {
+    setEditingCertificationId(certificacion.id);
+    setCertificationForm({
+      nombre: certificacion.nombre,
+      descripcion: certificacion.descripcion || "",
+      logo_url: certificacion.logo_url || "",
+      peso_publicidad: String(certificacion.peso_publicidad ?? 0),
+    });
+    certificationsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function handleRetireCertification(certificacion: AdminCertificacion) {
+    if (!confirm(`¿Retirar "${certificacion.nombre}" del catálogo? Las ${certificacion.empresas_certificadas} empresa(s) que la tienen dejarán de mostrarla.`)) {
+      return;
+    }
+    setError("");
+    try {
+      await adminService.retireCertification(certificacion.id);
+      setStatusMessage(`Certificación "${certificacion.nombre}" retirada.`);
+      await reloadAdminData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo retirar la certificación.");
+    }
+  }
+
+  async function handleGrantCertification() {
+    if (!grantCompanyId || !grantCertificationId) {
+      setError("Elige empresa y certificación para otorgar el respaldo.");
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+    try {
+      const resultado = await adminService.grantCertification(grantCompanyId, grantCertificationId);
+      setStatusMessage(
+        `Respaldo otorgado. La empresa queda con ${resultado.puntaje_publicidad} punto(s) de peso publicitario.`,
+      );
+      setGrantCertificationId("");
+      await reloadAdminData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo otorgar la certificación.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRevokeCertification(importadorId: string, certificacionId: string) {
+    setError("");
+    try {
+      await adminService.revokeCertification(importadorId, certificacionId);
+      setStatusMessage("Respaldo revocado. La empresa baja en el catálogo.");
+      await reloadAdminData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo revocar la certificación.");
+    }
+  }
+
+  async function handleDownloadBackup() {
+    setError("");
+    setStatusMessage("");
+    setIsDownloadingBackup(true);
+    try {
+      const nombre = await adminService.downloadBackup(includeFilesInBackup);
+      setStatusMessage(`Copia de seguridad descargada: ${nombre}. Guárdala en un lugar seguro antes de actualizar.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo generar la copia de seguridad.");
+    } finally {
+      setIsDownloadingBackup(false);
+    }
+  }
 
   /** Abre el historial de una conversación en modo lectura. */
   const openConversationDetail = useCallback(async (conversation: AdminConversacion) => {
@@ -396,7 +598,9 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
           ? companiesSectionRef.current
           : nextTab === "chats"
             ? chatsSectionRef.current
-            : usersSectionRef.current;
+            : nextTab === "certificaciones"
+              ? certificationsSectionRef.current
+              : usersSectionRef.current;
 
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -814,6 +1018,356 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <section ref={certificationsSectionRef} className="space-y-4 scroll-mt-6">
+        <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+          <p className="flex items-center gap-2 text-base font-semibold">
+            <Award className="h-4 w-4 text-primary" />
+            Certificaciones de la plataforma
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Sellos con los que respaldas a una empresa. El <strong>peso publicitario</strong> es lo que decide
+            qué tan arriba aparece en el catálogo del solicitante: a mayor peso, más visibilidad.
+          </p>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
+          {/* Crear / editar el sello */}
+          <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <p className="mb-3 text-sm font-semibold">
+              {editingCertificationId ? "Editar certificación" : "Crear certificación"}
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre</label>
+                <input
+                  value={certificationForm.nombre}
+                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                  placeholder="Ej. Socio Verificado Oro"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Descripción</label>
+                <textarea
+                  value={certificationForm.descripcion}
+                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                  rows={3}
+                  placeholder="Qué respalda este sello y cómo se obtiene."
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Peso publicitario (0 – 1000)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={1000}
+                  step={1}
+                  value={certificationForm.peso_publicidad}
+                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, peso_publicidad: event.target.value }))}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  El puntaje de una empresa es la suma de los pesos de sus sellos vigentes.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Logo</label>
+                <input
+                  ref={certificationLogoInputRef}
+                  type="file"
+                  accept={LOGO_UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={(event) => {
+                    const archivo = event.target.files?.[0];
+                    event.target.value = "";
+                    if (archivo) void handleUploadCertificationLogo(archivo);
+                  }}
+                />
+                <div className="flex items-center gap-3">
+                  {certificationForm.logo_url ? (
+                    <img
+                      src={resolveApiUrl(certificationForm.logo_url)}
+                      alt="Logo de la certificación"
+                      className="h-12 w-12 rounded-lg border border-border object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-border">
+                      <Shield className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    disabled={isUploadingLogo}
+                    onClick={() => certificationLogoInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {isUploadingLogo ? "Subiendo..." : certificationForm.logo_url ? "Cambiar" : "Subir logo"}
+                  </button>
+                  {certificationForm.logo_url ? (
+                    <button
+                      type="button"
+                      onClick={() => setCertificationForm((prev) => ({ ...prev, logo_url: "" }))}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Quitar
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    void handleSaveCertification();
+                  }}
+                  className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {editingCertificationId ? "Guardar cambios" : "Crear certificación"}
+                </button>
+                {editingCertificationId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCertificationId(null);
+                      setCertificationForm(EMPTY_CERTIFICATION_FORM);
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+                  >
+                    Cancelar
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Catálogo de sellos + otorgamiento */}
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm font-semibold">Catálogo de sellos</p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr className="border-b border-border">
+                      <th className="py-2 pr-3">Sello</th>
+                      <th className="py-2 pr-3 text-right">Peso</th>
+                      <th className="py-2 pr-3 text-right">Empresas</th>
+                      <th className="py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {certifications.map((certificacion) => (
+                      <tr key={certificacion.id} className="border-b border-border/60">
+                        <td className="py-3 pr-3">
+                          <div className="flex items-center gap-2.5">
+                            {certificacion.logo_url ? (
+                              <img
+                                src={resolveApiUrl(certificacion.logo_url)}
+                                alt=""
+                                className="h-8 w-8 rounded border border-border object-contain"
+                              />
+                            ) : (
+                              <div className="flex h-8 w-8 items-center justify-center rounded border border-border">
+                                <Shield className="h-4 w-4 text-muted-foreground/60" />
+                              </div>
+                            )}
+                            <div>
+                              <p className={`font-medium ${certificacion.activa ? "text-foreground" : "text-muted-foreground line-through"}`}>
+                                {certificacion.nombre}
+                              </p>
+                              <p className="line-clamp-1 max-w-xs text-xs text-muted-foreground">
+                                {certificacion.descripcion || "Sin descripción"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-3 text-right font-semibold">{certificacion.peso_publicidad}</td>
+                        <td className="py-3 pr-3 text-right">{certificacion.empresas_certificadas}</td>
+                        <td className="py-3 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => startEditingCertification(certificacion)}
+                              className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                            >
+                              Editar
+                            </button>
+                            {certificacion.activa ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleRetireCertification(certificacion);
+                                }}
+                                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {certifications.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                          Aún no has creado ninguna certificación.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm font-semibold">Respaldar a una empresa</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[200px] flex-1">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Empresa</label>
+                  <select
+                    value={grantCompanyId}
+                    onChange={(event) => setGrantCompanyId(event.target.value)}
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    <option value="">Selecciona una empresa</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.nombre_empresa}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[200px] flex-1">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Certificación</label>
+                  <select
+                    value={grantCertificationId}
+                    onChange={(event) => setGrantCertificationId(event.target.value)}
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    <option value="">Selecciona un sello</option>
+                    {certifications.filter((item) => item.activa).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.nombre} (peso {item.peso_publicidad})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    void handleGrantCertification();
+                  }}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  Otorgar
+                </button>
+              </div>
+
+              {grantCompanyId ? (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Sellos vigentes de {companyNameById[grantCompanyId] || "la empresa"}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(certificationsByCompany[grantCompanyId] ?? []).map((otorgada) => (
+                      <span
+                        key={otorgada.certificacion_id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800"
+                      >
+                        <Shield className="h-3 w-3" />
+                        {otorgada.nombre} · {otorgada.peso_publicidad}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleRevokeCertification(grantCompanyId, otorgada.certificacion_id);
+                          }}
+                          className="ml-0.5 text-emerald-700 hover:text-red-600"
+                          aria-label={`Revocar ${otorgada.nombre}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {(certificationsByCompany[grantCompanyId] ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Esta empresa no tiene sellos vigentes.</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Copia de seguridad */}
+        <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+          <p className="flex items-center gap-2 text-base font-semibold">
+            <Download className="h-4 w-4 text-primary" />
+            Copia de seguridad
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Descarga un ZIP con la base de datos y los archivos subidos. Tómala antes de cada actualización:
+            si algo sale mal, se restaura con <code className="rounded bg-muted px-1">python scripts/restaurar_backup.py copia.zip --aplicar</code>.
+          </p>
+
+          {backupSummary ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: "Filas de base de datos", value: backupSummary.total_filas.toLocaleString("es-CO") },
+                { label: "Archivos subidos", value: backupSummary.archivos.toLocaleString("es-CO") },
+                { label: "Peso de los archivos", value: formatBytes(backupSummary.bytes_archivos) },
+              ].map((item) => (
+                <div key={item.label} className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-lg font-semibold">{item.value}</p>
+                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={isDownloadingBackup}
+              onClick={() => {
+                void handleDownloadBackup();
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              {isDownloadingBackup ? "Generando ZIP..." : "Descargar copia de seguridad"}
+            </button>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={includeFilesInBackup}
+                onChange={(event) => setIncludeFilesInBackup(event.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              Incluir archivos subidos (más pesado)
+            </label>
+          </div>
+
+          <p className="mt-3 text-xs text-amber-700">
+            El ZIP contiene datos personales y hashes de contraseña de toda la plataforma. Guárdalo cifrado y no lo compartas.
+          </p>
+          {backupSummary?.revision_alembic ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Revisión de esquema actual: <code className="rounded bg-muted px-1">{backupSummary.revision_alembic}</code>
+            </p>
+          ) : null}
         </div>
       </section>
 

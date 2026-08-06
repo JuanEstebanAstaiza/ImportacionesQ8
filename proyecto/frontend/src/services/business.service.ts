@@ -1,9 +1,23 @@
 import { apiRequest } from "@/services/api-client";
 
+/** Sello otorgado por la plataforma, tal como llega en el catálogo. */
+export interface BackendCertificacionOtorgada {
+  id: string;
+  certificacion_id: string;
+  nombre: string;
+  descripcion: string;
+  logo_url: string | null;
+  peso_publicidad: number;
+  fecha_otorgada: string | null;
+}
+
 export interface BackendImporter {
   id: string;
   nombre_empresa: string;
   logo_url?: string | null;
+  certificaciones?: BackendCertificacionOtorgada[];
+  /** Suma de los pesos de sus sellos: define el orden del catálogo. */
+  puntaje_publicidad?: number;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;

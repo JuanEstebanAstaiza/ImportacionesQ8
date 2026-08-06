@@ -18,6 +18,19 @@ export interface Importer {
    */
   description?: string;
   certs?: string[];
+  /**
+   * Sellos que la plataforma respalda (distintos de `certs`, que son las
+   * certificaciones externas que la propia empresa declara).
+   */
+  platformCerts?: Array<{
+    id: string;
+    nombre: string;
+    descripcion: string;
+    logoUrl: string;
+    peso: number;
+  }>;
+  /** Suma de pesos de los sellos: el backend ya ordena el catálogo por esto. */
+  adScore?: number;
   /** Imagen de portada ancha que encabeza la ficha pública. */
   bannerUrl?: string;
   logoUrl?: string;

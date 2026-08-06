@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
+from schemas.certificacion import CertificacionOtorgadaResponse
 from utils.urls import canonicalize_resource_url
 
 # Claves de `perfil_publico` que guardan imágenes y se normalizan igual que
@@ -17,6 +18,10 @@ class ImportadorResponse(BaseModel):
     id: str
     nombre_empresa: str
     logo_url: Optional[str]
+    # Sellos que la plataforma le otorgó y su peso agregado. `puntaje_publicidad`
+    # es lo que ordena el catálogo del solicitante.
+    certificaciones: List["CertificacionOtorgadaResponse"] = Field(default_factory=list)
+    puntaje_publicidad: float = 0.0
     especialidad_producto: List[str]
     paises_origen: List[str]
     calificacion_promedio: float

@@ -1,4 +1,4 @@
-import { apiRequest } from "@/services/api-client";
+import { apiRequest, getStoredToken, resolveApiUrl } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 import type { RegisterResponse } from "@/types/auth";
 
@@ -73,6 +73,51 @@ export interface AdminMensaje {
   contenido: string;
   tipo: string;
   fecha_envio: string;
+}
+
+/** Sello que la plataforma crea y otorga a las empresas que respalda. */
+export interface AdminCertificacion {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  logo_url: string | null;
+  /** Cuánto empuja a la empresa hacia arriba en el catálogo del solicitante. */
+  peso_publicidad: number;
+  activa: boolean;
+  fecha_creacion: string | null;
+  empresas_certificadas: number;
+}
+
+export interface CertificacionOtorgada {
+  id: string;
+  certificacion_id: string;
+  nombre: string;
+  descripcion: string;
+  logo_url: string | null;
+  peso_publicidad: number;
+  fecha_otorgada: string | null;
+}
+
+export interface CertificacionesDeEmpresa {
+  importador_id: string;
+  puntaje_publicidad: number;
+  certificaciones: CertificacionOtorgada[];
+}
+
+export interface CertificacionPayload {
+  nombre: string;
+  descripcion: string;
+  logo_url?: string | null;
+  peso_publicidad: number;
+  activa?: boolean;
+}
+
+export interface BackupResumen {
+  revision_alembic: string | null;
+  tablas: Record<string, number>;
+  total_filas: number;
+  archivos: number;
+  bytes_archivos: number;
 }
 
 export interface CreateImporterWithOwnerPayload {
@@ -172,6 +217,81 @@ export const adminService = {
 
   listOpenQuotes(): Promise<AdminCotizacionAbierta[]> {
     return apiRequest<AdminCotizacionAbierta[]>("/admin/cotizaciones-abiertas", { method: "GET" });
+  },
+
+  // ---- Certificaciones de plataforma ----
+
+  listCertifications(): Promise<AdminCertificacion[]> {
+    return apiRequest<AdminCertificacion[]>("/admin/certificaciones", { method: "GET" });
+  },
+
+  createCertification(payload: CertificacionPayload): Promise<AdminCertificacion> {
+    return apiRequest<AdminCertificacion>("/admin/certificaciones", { method: "POST", body: payload });
+  },
+
+  updateCertification(certificacionId: string, payload: Partial<CertificacionPayload>): Promise<AdminCertificacion> {
+    return apiRequest<AdminCertificacion>(`/admin/certificaciones/${certificacionId}`, {
+      method: "PUT",
+      body: payload,
+    });
+  },
+
+  /** Retira el sello del catálogo sin borrar a quién se le había otorgado. */
+  retireCertification(certificacionId: string): Promise<AdminCertificacion> {
+    return apiRequest<AdminCertificacion>(`/admin/certificaciones/${certificacionId}`, { method: "DELETE" });
+  },
+
+  grantCertification(importadorId: string, certificacionId: string, notas?: string): Promise<CertificacionesDeEmpresa> {
+    return apiRequest<CertificacionesDeEmpresa>(`/admin/importadores/${importadorId}/certificaciones`, {
+      method: "POST",
+      body: { certificacion_id: certificacionId, notas: notas || null },
+    });
+  },
+
+  revokeCertification(importadorId: string, certificacionId: string): Promise<CertificacionesDeEmpresa> {
+    return apiRequest<CertificacionesDeEmpresa>(
+      `/admin/importadores/${importadorId}/certificaciones/${certificacionId}`,
+      { method: "DELETE" },
+    );
+  },
+
+  // ---- Copia de seguridad ----
+
+  getBackupSummary(): Promise<BackupResumen> {
+    return apiRequest<BackupResumen>("/admin/backup/resumen", { method: "GET" });
+  },
+
+  /**
+   * Descarga el ZIP. No usa `apiRequest` porque la respuesta es binaria: se pide
+   * como blob y se dispara la descarga desde el navegador.
+   */
+  async downloadBackup(incluirArchivos = true): Promise<string> {
+    const token = getStoredToken();
+    const url = resolveApiUrl(`/admin/backup?incluir_archivos=${incluirArchivos ? "true" : "false"}`);
+
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      const detalle = await response.json().catch(() => ({}));
+      throw new Error(typeof detalle?.detail === "string" ? detalle.detail : "No se pudo generar la copia de seguridad.");
+    }
+
+    // El backend propone el nombre con marca de tiempo en Content-Disposition.
+    const disposition = response.headers.get("content-disposition") || "";
+    const propuesto = /filename="?([^";]+)"?/i.exec(disposition)?.[1];
+    const nombre = propuesto || `importacionesq8-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+
+    const objectUrl = window.URL.createObjectURL(await response.blob());
+    const enlace = document.createElement("a");
+    enlace.href = objectUrl;
+    enlace.download = nombre;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    window.URL.revokeObjectURL(objectUrl);
+
+    return nombre;
   },
 
   inviteSolicitante(payload: InviteSolicitantePayload): Promise<RegisterResponse> {
