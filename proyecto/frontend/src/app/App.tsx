@@ -15,6 +15,7 @@ import {
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video,
+  LockKeyhole,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
+import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -115,7 +117,7 @@ function Button({variant="primary",size="md",loading=false,fullWidth=false,icon,
 
 // ─── Unified contact action button ───────────────────────────────────────────
 type ContactType="whatsapp"|"chat"|"email"|"phone";
-function ContactBtn({type,size="sm",label,className}:{type:ContactType;size?:"sm"|"md";label?:string;className?:string}) {
+function ContactBtn({type,size="sm",label,className,onClick,disabled,title}:{type:ContactType;size?:"sm"|"md";label?:string;className?:string;onClick?:()=>void;disabled?:boolean;title?:string}) {
   const cfg:Record<ContactType,{icon:React.FC<{className?:string}>;defaultLabel:string;cls:string}>={
     whatsapp:{icon:Phone,         defaultLabel:"WhatsApp",cls:"border-emerald-200 hover:bg-emerald-50 text-emerald-700"},
     chat:    {icon:MessageCircle, defaultLabel:"Chat",    cls:"border-border hover:bg-muted text-foreground"},
@@ -124,7 +126,40 @@ function ContactBtn({type,size="sm",label,className}:{type:ContactType;size?:"sm
   };
   const c=cfg[type];const Icon=c.icon;
   const iconSize=size==="sm"?"w-3.5 h-3.5":"w-4 h-4";
-  return <Button variant="secondary" size={size} icon={<Icon className={iconSize}/>} className={clsx(c.cls,className)}>{label??c.defaultLabel}</Button>;
+  return <Button variant="secondary" size={size} icon={<Icon className={iconSize}/>} className={clsx(c.cls,className)} onClick={onClick} disabled={disabled} title={title}>{label??c.defaultLabel}</Button>;
+}
+
+function normalizePhoneForWa(value:string|undefined|null):string{
+  const digits=String(value||"").replace(/\D+/g,"");
+  if(!digits)return "";
+  if(digits.length>=10&&digits.length<=15)return digits;
+  return "";
+}
+
+function openSmartContact({type,whatsapp,email,onOpenChat}:{type:ContactType;whatsapp?:string|null;email?:string|null;onOpenChat?:()=>void}){
+  if(type==="chat"){
+    onOpenChat?.();
+    return;
+  }
+
+  const wa=normalizePhoneForWa(whatsapp);
+  if((type==="whatsapp"||type==="phone")&&wa){
+    window.open(`https://wa.me/${wa}`, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const normalizedEmail=String(email||"").trim();
+  if(normalizedEmail){
+    window.open(`mailto:${normalizedEmail}`, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  if(onOpenChat){
+    onOpenChat();
+    return;
+  }
+
+  toast.error("No hay un canal de contacto disponible.");
 }
 
 type InputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>,"prefix"> & {
@@ -180,8 +215,11 @@ function Card({children,className,padding="md"}:{children:React.ReactNode;classN
   return <div className={clsx("bg-white border border-border rounded-xl shadow-sm",p[padding],className)}>{children}</div>;
 }
 
-function Avatar({initials,size="md",color="bg-primary"}:{initials:string;size?:"sm"|"md"|"lg"|"xl";color?:string}) {
+function Avatar({initials,size="md",color="bg-primary",src}:{initials:string;size?:"sm"|"md"|"lg"|"xl";color?:string;src?:string}) {
   const s={sm:"w-7 h-7 text-xs",md:"w-9 h-9 text-sm",lg:"w-10 h-10 text-sm",xl:"w-12 h-12 text-base"};
+  if(src){
+    return <img src={src} alt={initials} className={clsx("rounded-full object-cover flex-shrink-0 border border-border",s[size])}/>;
+  }
   return <div className={clsx("rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0",color,s[size])}>{initials}</div>;
 }
 
@@ -324,16 +362,40 @@ interface Order {
   conversationId?:string;
 }
 
-const QUOTE_TIMELINE:TimelineStage[]=[
-  {label:"Solicitud enviada",   icon:<Send className="w-3.5 h-3.5"/>,         status:"done"},
-  {label:"Proveedor respondió", icon:<ClipboardList className="w-3.5 h-3.5"/>,status:"done"},
-  {label:"Negociación",         icon:<Scale className="w-3.5 h-3.5"/>,        status:"current"},
-  {label:"Producción",          icon:<Factory className="w-3.5 h-3.5"/>,      status:"pending"},
-  {label:"En tránsito",         icon:<Ship className="w-3.5 h-3.5"/>,         status:"pending"},
-  {label:"En aduana",           icon:<Anchor className="w-3.5 h-3.5"/>,       status:"pending"},
-  {label:"En bodega",           icon:<Warehouse className="w-3.5 h-3.5"/>,    status:"pending"},
-  {label:"Entrega final",       icon:<CheckCircle className="w-3.5 h-3.5"/>,  status:"pending"},
+const ORDER_LIFECYCLE_STEPS=[
+  {key:"solicitud_enviada",label:"Solicitud enviada",icon:<Send className="w-3.5 h-3.5"/>},
+  {key:"proveedor_respondio",label:"Proveedor respondió",icon:<ClipboardList className="w-3.5 h-3.5"/>},
+  {key:"negociacion_en_curso",label:"Negociación en curso",icon:<Scale className="w-3.5 h-3.5"/>},
+  {key:"orden_confirmada_produccion",label:"Orden confirmada / Producción",icon:<Factory className="w-3.5 h-3.5"/>},
+  {key:"en_transito",label:"En tránsito",icon:<Ship className="w-3.5 h-3.5"/>},
+  {key:"en_aduana",label:"En aduana",icon:<Anchor className="w-3.5 h-3.5"/>},
+  {key:"en_bodega",label:"En bodega",icon:<Warehouse className="w-3.5 h-3.5"/>},
+  {key:"en_ruta",label:"En ruta",icon:<Navigation2 className="w-3.5 h-3.5"/>},
+  {key:"entregado",label:"Entregado",icon:<CheckCircle className="w-3.5 h-3.5"/>},
 ];
+
+function inferLifecycleStageIndex(rawState:string|undefined|null):number{
+  const normalized=String(rawState||"").trim().toLowerCase();
+  if(!normalized)return 0;
+  if(normalized.includes("entreg"))return 8;
+  if(normalized.includes("ruta"))return 7;
+  if(normalized.includes("bodega"))return 6;
+  if(normalized.includes("aduan"))return 5;
+  if(normalized.includes("transit")||normalized.includes("enviad"))return 4;
+  if(normalized.includes("produ")||normalized.includes("orden")||normalized.includes("proceso"))return 3;
+  if(normalized.includes("negoci"))return 2;
+  if(normalized.includes("respond")||normalized.includes("propuesta")||normalized.includes("respuesta"))return 1;
+  return 0;
+}
+
+function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
+  const bounded=Math.max(0,Math.min(ORDER_LIFECYCLE_STEPS.length-1,currentStageIndex));
+  return ORDER_LIFECYCLE_STEPS.map((step,index)=>({
+    label:step.label,
+    icon:step.icon,
+    status:index<bounded?"done":index===bounded?"current":"pending",
+  }));
+}
 
 // ─── Chat data ────────────────────────────────────────────────────────────────
 type ChatType="orden"|"cotizacion";
@@ -355,6 +417,15 @@ const INCOTERMS=["EXW","FCA","FAS","FOB","CFR","CIF","CPT","CIP","DAP","DPU","DD
 const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","Francia","España","Brasil","Corea del Sur","Turquía","México","Colombia"];
 const LINES=["Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Químicos","Automotriz","Construcción","Consumo masivo","Farmacéutico","Seguridad"];
 const ALL_CATEGORIES=["Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad","Química","Software","Confección","Bebidas","Electrónica"];
+const SYSTEM_ROOT_FOLDER_NAMES=["Órdenes","Cotizaciones","Respuestas","Cursos","Chats"];
+
+function normalizeFolderName(value:string):string{
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIDEBAR — pinned / floating / toggle tab
@@ -956,7 +1027,7 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
 // ─────────────────────────────────────────────────────────────────────────────
 // APP HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
+function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string;photoUrl?:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
   const { user: authUser } = useAuth();
   const count=sb?.notifCount??notifCount;
   const handler=sb?.onNotif??onNotif;
@@ -969,6 +1040,8 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayInitials = initialsFromName(initialsSource);
+  const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
+  const displayPhotoUrl = authUserPhoto || user.photoUrl || "";
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
       <div/>
@@ -987,7 +1060,7 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
             <p className="text-sm font-medium text-foreground leading-tight">{displayName}</p>
             <p className="text-xs text-muted-foreground leading-tight">{displayCompany}</p>
           </div>
-          <button onClick={profileHandler} title="Editar perfil"><Avatar initials={displayInitials} size="md"/></button>
+          <button onClick={profileHandler} title="Editar perfil"><Avatar initials={displayInitials} size="md" src={displayPhotoUrl?resolveApiUrl(displayPhotoUrl):undefined}/></button>
         </div>
       </div>
     </header>
@@ -1033,14 +1106,27 @@ function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
   // Sellos que respalda la plataforma: pesan más que las certificaciones que la
   // propia empresa declara, así que se muestran primero y con su logo.
   const platformCerts=imp.platformCerts??[];
+  const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
+  const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
   return (
     <div className={clsx(
-      "bg-white border rounded-xl p-5 flex flex-col gap-4 hover:shadow-md transition-all duration-200 group",
+      "bg-white border rounded-xl p-4 flex flex-col gap-3.5 hover:shadow-md transition-all duration-200 group",
       featured?"border-primary/20 shadow-sm ring-1 ring-primary/10":"border-border"
     )}>
+      <div className="relative">
+        <div className={clsx("h-16 rounded-lg overflow-hidden border border-border",bannerUrl?"bg-slate-100":"bg-gradient-to-r from-blue-50 via-cyan-50 to-amber-50")}>
+          {bannerUrl&&<img src={bannerUrl} alt="" className="w-full h-full object-cover"/>}
+        </div>
+        <div className="absolute -bottom-5 left-3 w-10 h-10 rounded-lg ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
+          {logoUrl
+            ? <img src={logoUrl} alt={`Logo de ${imp.name}`} className="w-full h-full object-cover"/>
+            : <Avatar initials={imp.initials} size="md" color={imp.color}/>}
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="flex items-start gap-3">
-        <Avatar initials={imp.initials} size="xl" color={imp.color}/>
+      <div className="flex items-start gap-3 mt-3">
+        <div className="w-10"/>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1.5 flex-wrap">
             <p className="font-semibold text-sm leading-tight">{imp.name}</p>
@@ -1121,6 +1207,13 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
   // basta con tomar las primeras: son las que más respaldo tienen.
   const featured=importers.filter(i=>(i.platformCerts??[]).length>0||i.verified).slice(0,3);
   const quickCats=["Todas","Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad"];
+  const responseHours=importers
+    .map((imp)=>{
+      const match=imp.responseTime.match(/(\d+(?:[\.,]\d+)?)/);
+      return match?Number(match[1].replace(",",".")):null;
+    })
+    .filter((value):value is number=>value!==null&&!Number.isNaN(value));
+  const avgResponseHours=responseHours.length>0?Math.round(responseHours.reduce((acc,value)=>acc+value,0)/responseHours.length):null;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -1148,7 +1241,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
               {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
               {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
               {label:"Respaldadas por Q8",value:importers.filter(i=>(i.platformCerts??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600"},
-              {label:"Tiempo prom. respuesta",value:"~34h",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
+              {label:"Tiempo prom. respuesta",value:avgResponseHours!==null?`~${avgResponseHours}h`:"N/D",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
             ].map(s=>(
               <Card key={s.label} padding="md" className="flex flex-col gap-2">
                 <div className={clsx("w-7 h-7 rounded-lg bg-muted flex items-center justify-center",s.color)}>{s.icon}</div>
@@ -1166,7 +1259,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
                 <h2 className="text-sm font-semibold">Empresas destacadas</h2>
                 <span className="text-xs text-muted-foreground">· Con mayor respaldo de ImportacionesQ8</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-flow-col auto-cols-[85%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 md:overflow-visible">
                 {featured.map(imp=>(
                   <ImporterCard key={imp.id} imp={imp} featured onViewProfile={onViewProfile} onCreateQuote={onCreateQuote}/>
                 ))}
@@ -1247,6 +1340,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
   const platformCerts=imp.platformCerts??[];
   const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
+  const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
   const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
   const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
@@ -1280,7 +1374,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
           <Card padding="md" className={clsx("mb-5",bannerUrl?"mt-3":"mt-4")}>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
               <div className="flex items-start gap-4">
-                <Avatar initials={imp.initials} size="xl" color={imp.color}/>
+                <Avatar initials={imp.initials} size="xl" color={imp.color} src={logoUrl||undefined}/>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-semibold">{imp.name}</h1>
@@ -1297,8 +1391,8 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp"/>
-                <ContactBtn type="email"/>
+                <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
               </div>
             </div>
@@ -1368,8 +1462,8 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                         <p className="text-xs text-primary mt-0.5">{adv.email}</p>
                       </div>
                       <div className="flex gap-1.5">
-                        <ContactBtn type="whatsapp" label="WA" size="sm"/>
-                        <ContactBtn type="email" label="Email" size="sm"/>
+                        <ContactBtn type="whatsapp" label="WA" size="sm" onClick={()=>openSmartContact({type:"whatsapp",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                        <ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                       </div>
                     </div>
                   ))}
@@ -1407,7 +1501,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 <h3 className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Acciones rápidas</h3>
                 <div className="flex flex-col gap-2">
                   <Button variant="primary" size="sm" fullWidth icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
-                  <ContactBtn type="whatsapp" size="sm" label="Contactar por WhatsApp" className="w-full justify-center"/>
+                  <ContactBtn type="whatsapp" size="sm" label="Contactar por WhatsApp" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                   {relChats.length>0&&<Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChats[0].id)}>Abrir chat</Button>}
                 </div>
               </Card>
@@ -1422,13 +1516,19 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl;quotes:Quote[]}) {
+function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
   const lastQ=quotes[0]??null;
+  const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
+    acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
+    return acc;
+  }, {});
+
   const filtered=quotes.filter(q=>{
     const ms=!search||[q.code,q.product,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     const mst=!statusF||q.status===statusF;const mm=!modeF||q.mode===modeF;
-    const mr=!respF||(respF==="sin");
+    const count=responseCountByQuoteId[q.id]||0;
+    const mr=!respF||(respF==="sin"?count===0:count>0);
     return ms&&mst&&mm&&mr;
   });
   return (
@@ -1454,7 +1554,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;o
                     <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
                     <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
                     <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",lastQ.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">Sin datos</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id]||0}</p></div>
                   </div>
                   <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(lastQ.id)}>Ver detalle</Button></div>
                 </>
@@ -1467,9 +1567,15 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;o
             </Card>
             <Card padding="md">
               <h2 className="text-sm font-semibold mb-4">Estado de respuestas</h2>
-              <div className="py-6 text-center">
-                <ClipboardList className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/>
-                <p className="text-sm text-muted-foreground">No hay endpoint de respuestas asociado a esta bandeja.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Con propuestas</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) > 0).length}</p>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Sin propuestas</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) === 0).length}</p>
+                </div>
               </div>
             </Card>
           </div>
@@ -1498,7 +1604,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes}:{onNewQuote:()=>void;o
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
                         <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
                         <td className="px-4 py-3"><Badge variant={row.status}/></td>
-                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">—</span></td>
+                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id]||0}</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
                         <td className="px-4 py-3"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button></td>
                       </tr>
@@ -1583,8 +1689,15 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
     : proposals;
   const activeProposal=visibleProposals[0]??null;
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
+  const contactAsesorWhatsapp = contactAsesor?.whatsapp || "";
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
   const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
+  const quoteLifecycleIndex = relatedOrder
+    ? inferLifecycleStageIndex(relatedOrder.status || relatedOrder.history[relatedOrder.history.length - 1]?.estado)
+    : visibleProposals.length > 0
+      ? 2
+      : 0;
+  const quoteTimelineStages = buildLifecycleTimeline(quoteLifecycleIndex);
 
   const orderDocByType = (matchers: string[]) => {
     if (!relatedOrder) return null;
@@ -1753,14 +1866,14 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </div>
             </div>
             <div className="w-60 xl:w-64 flex-shrink-0 hidden lg:block space-y-4">
-              <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Línea de tiempo</h3><Timeline stages={QUOTE_TIMELINE}/></Card>
+              <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Línea de tiempo logística</h3><Timeline stages={quoteTimelineStages}/></Card>
               {contactAsesor?<Card padding="md">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor asignado</h3>
                 <div className="flex flex-col gap-3">
                   <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p><p className="text-xs text-muted-foreground">{contactAsesor.whatsapp||"Sin WhatsApp"}</p></div></div>
                   <div className="flex flex-col gap-1.5">
-                    <ContactBtn type="chat" size="sm" className="w-full justify-center"/>
-                    <ContactBtn type="whatsapp" size="sm" className="w-full justify-center"/>
+                    <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
+                    <ContactBtn type="whatsapp" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:contactAsesorWhatsapp,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   </div>
                 </div>
               </Card>:<Card padding="md" className="border-dashed"><div className="py-4 text-center"><p className="text-xs text-muted-foreground">Sin contacto de asesor todavía</p></div></Card>}
@@ -1776,9 +1889,9 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONSE DETAIL — contextual back navigation
 // ─────────────────────────────────────────────────────────────────────────────
-function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb,responses,quotes,chats}:{
+function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb,responses,quotes,chats,importers,orders,onRefreshData}:{
   responseId:string;from:ResponseFrom;fromQuoteId?:string;
-  onBack:()=>void;onBackToQuote:(id:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;responses:QuoteResponse[];quotes:Quote[];chats:ChatConv[];
+  onBack:()=>void;onBackToQuote:(id:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;responses:QuoteResponse[];quotes:Quote[];chats:ChatConv[];importers:Importer[];orders:Order[];onRefreshData?:()=>Promise<void>;
 }) {
   const resp=responses.find(r=>r.id===responseId)||responses[0];
   if(!resp){
@@ -1789,35 +1902,40 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
       </div>
     );
   }
-  const imp=IMPORTERS.find(i=>i.id===resp.importerId)||IMPORTERS[0];
+  const imp=importers.find(i=>i.id===resp.importerId)||importers[0]||null;
   const quote=quotes.find(q=>q.id===resp.quoteId)||quotes[0];
   const relChat=chats.find(c=>c.importerId===resp.importerId&&(c.refId===resp.quoteId||c.type==="cotizacion"));
+  const relatedOrder=orders.find((order)=>order.quoteCode===quote.code)||null;
   const [accepting,setAccepting]=useState(false);
   const [acceptedByMe,setAcceptedByMe]=useState(resp.status==="resp-aceptada");
   const [acceptedByAdvisor,setAcceptedByAdvisor]=useState(resp.status==="resp-aceptada");
-  const [orderCreated,setOrderCreated]=useState(resp.status==="resp-aceptada");
+  const orderCreated=orders.some((order)=>order.quoteCode===quote.code||order.id===quote.id);
   async function handleAccept(){
     setAccepting(true);
     try{
       await businessService.startProposalNegotiation(resp.quoteId, resp.importerId);
       await businessService.preAcceptProposal(resp.id,true);
       setAcceptedByMe(true);
+      setAcceptedByAdvisor(true);
+      if(onRefreshData){
+        await onRefreshData();
+      }
     }finally{
       setAccepting(false);
     }
   }
-  const negotiationStages=[
-    {label:"Cotización enviada",status:"done" as const,icon:<Send className="w-3.5 h-3.5"/>},
-    {label:"Respuesta recibida",status:"done" as const,icon:<ClipboardList className="w-3.5 h-3.5"/>},
-    {label:"Negociación activa",status:(acceptedByMe||acceptedByAdvisor)?"done":"current" as "done"|"current",icon:<Scale className="w-3.5 h-3.5"/>},
-    {label:"Aceptación del solicitante",status:acceptedByMe?"done":"pending" as "done"|"pending",icon:<UserRound className="w-3.5 h-3.5"/>},
-    {label:"Aceptación del asesor",status:acceptedByAdvisor?"done":"pending" as "done"|"pending",icon:<Users className="w-3.5 h-3.5"/>},
-    {label:"Orden creada",status:orderCreated?"done":"pending" as "done"|"pending",icon:<ShoppingCart className="w-3.5 h-3.5"/>},
-  ];
+  const responseLifecycleIndex = relatedOrder
+    ? inferLifecycleStageIndex(relatedOrder.status || relatedOrder.history[relatedOrder.history.length - 1]?.estado)
+    : (acceptedByMe || acceptedByAdvisor)
+      ? 2
+      : 1;
+  const negotiationStages=buildLifecycleTimeline(responseLifecycleIndex);
 
+  const companyName = imp?.name || "Empresa importadora";
+  const importerLogo = imp?.logoUrl ? resolveApiUrl(imp.logoUrl) : "";
   const crumbs=from==="quote-detail"
-    ?[{label:"Cotizaciones",onClick:()=>onBackToQuote(fromQuoteId||quote.id)},{label:quote.code,onClick:()=>onBackToQuote(fromQuoteId||quote.id)},{label:`Respuesta — ${imp.name}`}]
-    :[{label:"Respuestas",onClick:onBack},{label:`Respuesta de ${imp.name}`}];
+    ?[{label:"Cotizaciones",onClick:()=>onBackToQuote(fromQuoteId||quote.id)},{label:quote.code,onClick:()=>onBackToQuote(fromQuoteId||quote.id)},{label:`Respuesta — ${companyName}`}]
+    :[{label:"Respuestas",onClick:onBack},{label:`Respuesta de ${companyName}`}];
 
   const compRows=[
     {label:"Precio objetivo",target:quote.targetPrice,offer:resp.price,         result:"worse" as const},
@@ -1860,11 +1978,11 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-4 flex-1">
-                <Avatar initials={imp.initials} size="xl" color={imp.color}/>
+                <Avatar initials={imp?.initials || "IM"} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/>
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap"><h1 className="text-lg font-semibold">{imp.name}</h1>{imp.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}<Badge variant={resp.status}/></div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
-                  <div className="flex items-center gap-4 mt-1.5 flex-wrap"><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime}</span></div><div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div></div>
+                  <div className="flex items-center gap-2 flex-wrap"><h1 className="text-lg font-semibold">{companyName}</h1>{imp?.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}<Badge variant={resp.status}/></div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"}</p>
+                  <div className="flex items-center gap-4 mt-1.5 flex-wrap"><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp?.responseTime || "N/A"}</span></div><div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp?.country || "N/A"}</span></div></div>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">Cotización: <span className="font-mono font-medium text-foreground">{quote.code}</span></p>
@@ -1873,16 +1991,16 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp.advisor.initials} size="xl" color={imp.advisor.color}/><div><p className="font-semibold">{imp.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{imp.advisor.role}</p><p className="text-xs text-primary mt-0.5">{imp.name}</p></div></div>
+                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
                 <div className="flex gap-2">
-                  <ContactBtn type="whatsapp"/>
-                  <ContactBtn type="chat"/>
-                  <ContactBtn type="email"/>
+                  <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
+                  <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
+                  <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                 </div>
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary"/>Oferta comercial</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">{[["Precio unitario",resp.price],["MOQ",resp.moq],["Plazo",resp.deliveryTime],["Incoterm",resp.incoterm],["País de origen",resp.origin],["Producción",resp.production],["Personalización",resp.customization]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-semibold mt-0.5">{v}</p></div>)}<div className="col-span-2 sm:col-span-3"><p className="text-xs text-muted-foreground">Observaciones</p><p className="text-sm mt-0.5 leading-relaxed">{resp.observations}</p></div></div>
-                <div className="mt-4 pt-4 border-t border-border"><p className="text-xs text-muted-foreground mb-2">Archivos adjuntos</p>{["Ficha técnica.pdf","Certificado de origen.pdf"].map(f=><div key={f} className="flex items-center gap-2 py-1.5"><FileCheck className="w-4 h-4 text-primary flex-shrink-0"/><span className="text-sm text-primary hover:underline cursor-pointer">{f}</span></div>)}</div>
+                <div className="mt-4 pt-4 border-t border-border"><p className="text-xs text-muted-foreground">Los adjuntos reales se consultan desde Chat y Documentos vinculados a esta cotización.</p></div>
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Objetivo vs Oferta</h3>
                 <table className="w-full text-sm"><thead><tr className="border-b border-border">{["Criterio","Tu objetivo","Oferta",""].map(h=><th key={h} className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide pb-2 pr-4">{h}</th>)}</tr></thead>
@@ -1897,7 +2015,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
             <div className="w-64 flex-shrink-0 hidden lg:block space-y-4">
               {/* Negotiation timeline */}
               <Card padding="md">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Flujo de negociación</h3>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Flujo de ciclo de vida</h3>
                 <Timeline stages={negotiationStages}/>
               </Card>
               {/* Accept actions */}
@@ -1922,7 +2040,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
                   </div>
                 </div>
               </Card>
-              <Card padding="md"><div className="space-y-2">{[["Empresa",imp.name],["Miembro desde",imp.memberSince],["Proyectos",imp.projects.toString()],["Resp. prom.",imp.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium text-right">{v}</span></div>)}</div></Card>
+              <Card padding="md"><div className="space-y-2">{[["Empresa",companyName],["Miembro desde",imp?.memberSince || "N/D"],["Proyectos",String(imp?.projects || 0)],["Resp. prom.",imp?.responseTime || "N/D"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium text-right">{v}</span></div>)}</div></Card>
             </div>
           </div>
         </main>
@@ -1934,9 +2052,9 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONSES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function ResponsesScreen({onViewDetail,sb,responses}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[]}) {
+function ResponsesScreen({onViewDetail,sb,responses,importers,quotes}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[empresaF,setEmpresaF]=useState("");
-  const filtered=responses.filter(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId);const q=QUOTES.find(q=>q.id===r.quoteId);
+  const filtered=responses.filter(r=>{const imp=importers.find(i=>i.id===r.importerId);const q=quotes.find(q=>q.id===r.quoteId);
     const ms=!search||[imp?.name||"",q?.product||"",r.price].some(v=>v.toLowerCase().includes(search.toLowerCase()));
     return ms&&(!statusF||r.status===statusF)&&(!empresaF||r.importerId===empresaF);
   });
@@ -1956,25 +2074,25 @@ function ResponsesScreen({onViewDetail,sb,responses}:{onViewDetail:(id:string,fr
           <Card padding="sm"><div className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
             <div className="w-36"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="resp-nueva">Nueva</option><option value="resp-vista">Vista</option><option value="resp-aceptada">Aceptada</option><option value="resp-rechazada">Rechazada</option></Select></div>
-            <div className="w-44"><Select value={empresaF} onChange={e=>setEmpresaF(e.target.value)}><option value="">Empresa</option>{IMPORTERS.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Select></div>
+            <div className="w-44"><Select value={empresaF} onChange={e=>setEmpresaF(e.target.value)}><option value="">Empresa</option>{importers.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Select></div>
             {(search||statusF||empresaF)&&<Button variant="ghost" size="sm" onClick={()=>{setSearch("");setStatusF("");setEmpresaF("");}}>Limpiar</Button>}
           </div></Card>
           <div>
             <p className="text-sm text-muted-foreground mb-3"><span className="font-medium text-foreground">{filtered.length}</span> respuestas</p>
             {filtered.length===0?<Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ClipboardList className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin respuestas</p><p className="text-sm text-muted-foreground">No hay propuestas registradas en backend para tus cotizaciones.</p></div></Card>:(
-              <div className="space-y-3">{filtered.map(r=>{const imp=IMPORTERS.find(i=>i.id===r.importerId)||IMPORTERS[0];const q=QUOTES.find(q=>q.id===r.quoteId)||QUOTES[0];return(
+              <div className="space-y-3">{filtered.map(r=>{const imp=importers.find(i=>i.id===r.importerId)||importers[0]||null;const q=quotes.find(q=>q.id===r.quoteId)||quotes[0]||null;return(
                 <Card key={r.id} padding="md" className="hover:shadow-md transition-all">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <Avatar initials={imp.initials} size="xl" color={imp.color}/>
+                      <Avatar initials={imp?.initials || "IM"} size="xl" color={imp?.color || "bg-slate-600"}/>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap"><p className="font-semibold">{imp.name}</p><Badge variant={r.status}/>{imp.verified&&<span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium"><BadgeCheck className="w-2.5 h-2.5"/>Verificada</span>}</div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{imp.specialty} · {imp.advisor.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Cotización: <span className="font-mono font-medium text-foreground">{q.code}</span></p>
+                        <div className="flex items-center gap-2 flex-wrap"><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><Badge variant={r.status}/>{imp?.verified&&<span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium"><BadgeCheck className="w-2.5 h-2.5"/>Verificada</span>}</div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"} · {imp?.advisor.name || "Asesor"}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Cotización: <span className="font-mono font-medium text-foreground">{q?.code || "N/A"}</span></p>
                         <div className="flex gap-4 mt-2 flex-wrap">{[["Precio",r.price],["Plazo",r.deliveryTime],["Incoterm",r.incoterm],["Fecha",r.date]].map(([k,v])=><div key={k}><span className="text-xs text-muted-foreground">{k}: </span><span className="text-xs font-semibold">{v}</span></div>)}</div>
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-wrap"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(r.id,"responses")}>Ver detalle</Button><Button variant="secondary" size="sm" icon={<GitCompare className="w-3 h-3"/>}>Comparar</Button><ContactBtn type="chat" size="sm" label="Contactar"/></div>
+                    <div className="flex gap-2 flex-wrap"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(r.id,"responses")}>Ver detalle</Button><Button variant="secondary" size="sm" icon={<GitCompare className="w-3 h-3"/>}>Comparar</Button><ContactBtn type="chat" size="sm" label="Contactar" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>onViewDetail(r.id,"responses")})}/></div>
                   </div>
                 </Card>
               );})}</div>
@@ -2069,14 +2187,10 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
     return <CheckCircle2 className="w-3.5 h-3.5"/>;
   };
 
-  const timelineStages: TimelineStage[] = history.length > 0
-    ? history.map((event, index) => ({
-        label: event.estado,
-        icon: mapOrderStateIcon(event.estado),
-        status: index === history.length - 1 ? "current" : "done",
-        date: formatShortDate(event.fecha),
-      }))
-    : [{ label: order.status || "Sin estado", icon: <Clock className="w-3.5 h-3.5"/>, status: "current" }];
+  const orderStateLabelByKey = new Map(ORDER_LIFECYCLE_STEPS.map((step)=>[step.key,step.label]));
+  const timelineStages: TimelineStage[] = buildLifecycleTimeline(
+    inferLifecycleStageIndex(order.status || history[history.length - 1]?.estado),
+  );
 
   const historyEvents = history.length > 0
     ? history
@@ -2096,7 +2210,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
                 <div className="flex gap-6 flex-wrap">{[["Empresa",imp?.name || "Empresa importadora"],["Asesor",advisor?.name || "Asesor"],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" label="Contactar asesor"/>
+                <ContactBtn type="whatsapp" label="Contactar asesor" onClick={()=>openSmartContact({type:"whatsapp",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>}>Ver documentos</Button>
                 {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
                 <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>}>Ver seguimiento</Button>
@@ -2127,9 +2241,13 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary"/>Historial de eventos</h3>
                 <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
-                  <div className="space-y-1">{historyEvents.map((ev,i)=>(
-                    <div key={`${ev.estado}-${ev.fecha}-${i}`} className="flex items-start gap-3"><div className="w-6 h-6 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center flex-shrink-0 z-10 text-primary">{mapOrderStateIcon(ev.estado)}</div><div className="pb-4 flex-1"><div className="flex items-center justify-between"><p className="text-sm">{ev.estado}</p><p className="text-xs text-muted-foreground">{formatShortDate(ev.fecha)}</p></div>{ev.nota&&<p className="text-xs text-muted-foreground mt-1">{ev.nota}</p>}</div></div>
-                  ))}</div>
+                  <div className="space-y-1">{historyEvents.map((ev,i)=>{
+                    const normalized=String(ev.estado||"").trim().toLowerCase();
+                    const label=orderStateLabelByKey.get(normalized)||ev.estado;
+                    return (
+                    <div key={`${ev.estado}-${ev.fecha}-${i}`} className="flex items-start gap-3"><div className="w-6 h-6 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center flex-shrink-0 z-10 text-primary">{mapOrderStateIcon(ev.estado)}</div><div className="pb-4 flex-1"><div className="flex items-center justify-between"><p className="text-sm">{label}</p><p className="text-xs text-muted-foreground">{formatShortDate(ev.fecha)}</p></div>{ev.nota&&<p className="text-xs text-muted-foreground mt-1">{ev.nota}</p>}</div></div>
+                    );
+                  })}</div>
                 </div>
               </Card>
             </div>
@@ -2142,9 +2260,9 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
                 <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
                 <div className="flex gap-1.5">
-                  <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center"/>
-                  <ContactBtn type="chat" size="sm" className="flex-1 justify-center"/>
-                  <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center"/>
+                  <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
+                  <ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
+                  <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 </div>
               </Card>
               <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">{order.status || "En seguimiento"}</span></div><p className="text-xs text-muted-foreground">Última actualización: {history.length>0?formatShortDate(history[history.length-1].fecha):"Reciente"}</p></Card>
@@ -2396,12 +2514,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const refOrderId=conv?.type==="orden"?conv.refId:null;
   const refOrder=conv?.type==="orden"?orders.find((order)=>order.id===conv.refId)||null:null;
   const canManageOrder = currentUserRole === "importadora";
-  const orderStatusOptions = [
-    { value: "en_proceso", label: "En proceso" },
-    { value: "enviada", label: "Enviada" },
-    { value: "entregada", label: "Entregada" },
-    { value: "cancelada", label: "Cancelada" },
-  ];
+  const orderStatusOptions = ORDER_LIFECYCLE_STEPS.map((step) => ({
+    value: step.key,
+    label: step.label,
+  }));
 
   useEffect(() => {
     if (!refOrder) {
@@ -3040,8 +3156,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
                   <div className="flex items-center gap-2"><Avatar initials={imp?.advisor.initials || "AS"} size="sm" color={imp?.advisor.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.advisor.name || "Asesor"}</p><p className="text-[10px] text-muted-foreground">{imp?.advisor.role || "Asesor"}</p></div></div>
                   <div className="flex gap-1 mt-2">
-                    <button className="flex-1 h-7 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-emerald-100 transition-colors"><Phone className="w-2.5 h-2.5"/>WA</button>
-                    <button className="flex-1 h-7 rounded-lg border border-border bg-white text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-muted transition-colors text-foreground"><MailIcon className="w-2.5 h-2.5"/>Email</button>
+                    <button onClick={()=>openSmartContact({type:"whatsapp",email:imp?.advisor.email,onOpenChat:()=>setShowCtx(true)})} className="flex-1 h-7 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-emerald-100 transition-colors"><Phone className="w-2.5 h-2.5"/>WA</button>
+                    <button onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>setShowCtx(true)})} className="flex-1 h-7 rounded-lg border border-border bg-white text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-muted transition-colors text-foreground"><MailIcon className="w-2.5 h-2.5"/>Email</button>
                   </div>
                 </div>
                 <div className="border-t border-border"/>
@@ -3264,8 +3380,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTOS + PAGOS placeholders
 // ─────────────────────────────────────────────────────────────────────────────
-function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,onCreateFolder,onRegisterFile,onSearch,onMoveFile,onMoveFolder,onRenameFile,onRenameFolder,onDeleteFile,onDeleteFolder}:{sb:SidebarCtrl;explorer:BackendExplorerResponse;isLoading:boolean;currentFolderId:string|null;onLoadFolder:(parentId:string|null)=>Promise<void>;onCreateFolder:(name:string,parentId:string|null)=>Promise<void>;onRegisterFile:(file:File,parentId:string|null)=>Promise<void>;onSearch:(query:string)=>Promise<BackendArchivoItem[]>;onMoveFile:(fileId:string,targetFolderId:string|null)=>Promise<void>;onMoveFolder:(folderId:string,targetParentId:string|null)=>Promise<void>;onRenameFile:(fileId:string,newName:string)=>Promise<void>;onRenameFolder:(folderId:string,newName:string)=>Promise<void>;onDeleteFile:(fileId:string)=>Promise<void>;onDeleteFolder:(folderId:string)=>Promise<void>;}) {
-  const [folderName,setFolderName]=useState("");
+function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,onCreateFolder,onRegisterFile,onSearch,onMoveFile,onMoveFolder,onRenameFile,onRenameFolder,onDeleteFile,onDeleteFolder,protectedFolders}:{sb:SidebarCtrl;explorer:BackendExplorerResponse;isLoading:boolean;currentFolderId:string|null;onLoadFolder:(parentId:string|null)=>Promise<void>;onCreateFolder:(name:string,parentId:string|null)=>Promise<void>;onRegisterFile:(file:File,parentId:string|null)=>Promise<void>;onSearch:(query:string)=>Promise<BackendArchivoItem[]>;onMoveFile:(fileId:string,targetFolderId:string|null)=>Promise<void>;onMoveFolder:(folderId:string,targetParentId:string|null)=>Promise<void>;onRenameFile:(fileId:string,newName:string)=>Promise<void>;onRenameFolder:(folderId:string,newName:string)=>Promise<void>;onDeleteFile:(fileId:string)=>Promise<void>;onDeleteFolder:(folderId:string)=>Promise<void>;protectedFolders:Array<{id:string;nombre:string}>;}) {
   const [search,setSearch]=useState("");
   const [searching,setSearching]=useState(false);
   const [isSubmitting,setIsSubmitting]=useState(false);
@@ -3277,8 +3392,8 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
   const [viewMode,setViewMode]=useState<"list"|"grid">("list");
   const [gridPreviewUrls,setGridPreviewUrls]=useState<Record<string,string>>({});
   const [menuState,setMenuState]=useState<{
-    kind:"file"|"folder";
-    id:string;
+    kind:"file"|"folder"|"canvas";
+    id:string|null;
     x:number;
     y:number;
     file?:BackendArchivoItem;
@@ -3287,9 +3402,24 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
   const fileInputRef=useRef<HTMLInputElement>(null);
   const gridPreviewLoadingRef=useRef<Record<string,boolean>>({});
   const gridPreviewRegistryRef=useRef<Record<string,string>>({});
+  const protectedFolderSet=new Set(protectedFolders.map((folder)=>folder.id));
+  const chatRootFolderId=protectedFolders.find((folder)=>normalizeFolderName(folder.nombre)==="chats")?.id||null;
+
+  function isProtectedFolder(folderId:string):boolean{
+    return protectedFolderSet.has(folderId);
+  }
 
   const visibleFiles = searchResults ?? explorer.archivos;
-  const visibleFolders = searchResults ? [] : explorer.carpetas;
+  const visibleFolders = searchResults
+    ? []
+    : currentFolderId===null
+      ? explorer.carpetas.filter((folder,index,all)=>{
+          if(!SYSTEM_ROOT_FOLDER_NAMES.some((name)=>normalizeFolderName(name)===normalizeFolderName(folder.nombre))){
+            return true;
+          }
+          return all.findIndex((candidate)=>normalizeFolderName(candidate.nombre)===normalizeFolderName(folder.nombre))===index;
+        })
+      : explorer.carpetas;
 
   useEffect(() => {
     if (currentFolderId === null) {
@@ -3308,14 +3438,16 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     };
   }, [menuState]);
 
-  async function handleCreateFolder(){
-    if(!folderName.trim())return;
+  async function handleCreateFolderPrompt(){
+    const entered=window.prompt("Nombre de la nueva carpeta","")??"";
+    const normalized=entered.trim();
+    if(!normalized)return;
     setIsSubmitting(true);
     try{
-      await onCreateFolder(folderName.trim(), currentFolderId);
-      setFolderName("");
+      await onCreateFolder(normalized, currentFolderId);
     }finally{
       setIsSubmitting(false);
+      setMenuState(null);
     }
   }
 
@@ -3385,6 +3517,11 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
   }
 
   async function moveFolderTo(folderId: string, targetFolderId: string | null) {
+    if (isProtectedFolder(folderId)) {
+      toast.error("Esta carpeta del sistema no se puede mover.");
+      setMenuState(null);
+      return;
+    }
     setMenuState(null);
     await onMoveFolder(folderId, targetFolderId);
     if (targetFolderId === null) {
@@ -3401,6 +3538,11 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
   }
 
   async function handleDeleteFolder(folderId: string) {
+    if (isProtectedFolder(folderId)) {
+      toast.error("Esta carpeta del sistema no se puede eliminar.");
+      setMenuState(null);
+      return;
+    }
     setMenuState(null);
     await onDeleteFolder(folderId);
   }
@@ -3441,6 +3583,11 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
   }
 
   async function handleRenameFolder(folder: BackendExplorerResponse["carpetas"][number]) {
+    if (isProtectedFolder(folder.id)) {
+      toast.error("Esta carpeta del sistema no se puede renombrar.");
+      setMenuState(null);
+      return;
+    }
     const nextName = window.prompt("Nuevo nombre para la carpeta", folder.nombre) ?? "";
     const normalized = nextName.trim();
     if (!normalized || normalized === folder.nombre) {
@@ -3564,15 +3711,21 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     }
   }
 
-  function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>, payload: { kind: "file"|"folder"; id: string; file?: BackendArchivoItem; folder?: BackendExplorerResponse["carpetas"][number]; }) {
-    const rect = event.currentTarget.getBoundingClientRect();
+  function handleOpenMenuAtPoint(payload: { kind: "file"|"folder"|"canvas"; id: string|null; file?: BackendArchivoItem; folder?: BackendExplorerResponse["carpetas"][number]; }, clientX:number, clientY:number) {
     const menuWidth = 176;
-    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+    const menuHeight = 200;
+    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, clientX));
+    const top = Math.max(8, Math.min(window.innerHeight - menuHeight - 8, clientY));
     setMenuState({
       ...payload,
       x: left,
-      y: rect.bottom + 6,
+      y: top,
     });
+  }
+
+  function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>, payload: { kind: "file"|"folder"; id: string; file?: BackendArchivoItem; folder?: BackendExplorerResponse["carpetas"][number]; }) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    handleOpenMenuAtPoint(payload, rect.right - 170, rect.bottom + 6);
   }
 
   function previewThumb(file: BackendArchivoItem): string | null {
@@ -3648,7 +3801,14 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
       <Sidebar {...sb} active="documentos"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5" onClick={()=>setMenuState(null)}>
+        <main
+          className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
+          onClick={()=>setMenuState(null)}
+          onContextMenu={(event)=>{
+            event.preventDefault();
+            handleOpenMenuAtPoint({kind:"canvas",id:currentFolderId},event.clientX,event.clientY);
+          }}
+        >
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Documentos"}]}/>
             <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
@@ -3657,7 +3817,6 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
                 <Button variant={viewMode==="list"?"secondary":"ghost"} size="sm" onClick={()=>setViewMode("list")}>Lista</Button>
                 <Button variant={viewMode==="grid"?"secondary":"ghost"} size="sm" icon={<LayoutGrid className="w-3.5 h-3.5"/>} onClick={()=>setViewMode("grid")}>Cuadrícula</Button>
                 <Button variant="secondary" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{void onLoadFolder(currentFolderId);}}>Actualizar</Button>
-                <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>fileInputRef.current?.click()} disabled={isSubmitting}>Registrar archivo</Button>
               </div>
             </div>
           </div>
@@ -3687,6 +3846,8 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
                 <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar por nombre de archivo" prefix={<Search className="w-3.5 h-3.5"/>}/>
                 <Button size="sm" onClick={()=>{void handleSearch();}} loading={searching}>Buscar</Button>
                 {searchResults&&<Button size="sm" variant="ghost" onClick={()=>{setSearch("");setSearchResults(null);}}>Limpiar</Button>}
+                <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>{void handleCreateFolderPrompt();}} disabled={isSubmitting}>Nueva carpeta</Button>
+                <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>fileInputRef.current?.click()} disabled={isSubmitting}>Subir archivo</Button>
               </div>
 
               <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -3733,8 +3894,8 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
                 {!isLoading&&visibleFolders.map((folder)=>(
                   <div
                     key={folder.id}
-                    draggable
-                    onDragStart={()=>setDragFolderId(folder.id)}
+                    draggable={!isProtectedFolder(folder.id)}
+                    onDragStart={()=>{ if (!isProtectedFolder(folder.id)) setDragFolderId(folder.id); }}
                     onDragEnd={()=>setDragFolderId(null)}
                     onDragOver={(event)=>event.preventDefault()}
                     onDrop={(event)=>{
@@ -3742,22 +3903,32 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
                       if (dragFileId) {
                         void moveFileTo(dragFileId, folder.id);
                       }
-                      if (dragFolderId && dragFolderId !== folder.id) {
+                      if (dragFolderId && dragFolderId !== folder.id && !isProtectedFolder(dragFolderId)) {
                         void moveFolderTo(dragFolderId, folder.id);
                       }
                       setDragFileId(null);
                       setDragFolderId(null);
                     }}
+                    onContextMenu={(event)=>{
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleOpenMenuAtPoint({kind:"folder",id:folder.id,folder},event.clientX,event.clientY);
+                    }}
                     className={clsx(
-                      "rounded-xl border border-border bg-sky-50/40",
+                      "rounded-xl border",
+                      isProtectedFolder(folder.id)
+                        ? "border-indigo-200 bg-indigo-50/70"
+                        : "border-border bg-sky-50/40",
                       viewMode==="grid"
                         ? "relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
                         : "px-3 py-2.5 flex items-center justify-between gap-3",
                     )}
                   >
                     <button className={clsx("min-w-0",viewMode==="grid"?"w-full h-full flex flex-col items-center justify-center text-center":"text-left w-full")} onClick={()=>{void openFolder(folder);}}>
-                      <FolderTree className={clsx("text-sky-600",viewMode==="grid"?"w-12 h-12 mb-3":"w-4 h-4")}/>
+                      <FolderTree className={clsx(isProtectedFolder(folder.id)?"text-indigo-600":"text-sky-600",viewMode==="grid"?"w-12 h-12 mb-3":"w-4 h-4")}/>
                       <p className={clsx("text-sm font-semibold truncate",viewMode==="grid"?"max-w-full":"flex items-center gap-1.5")}>{folder.nombre}</p>
+                      {isProtectedFolder(folder.id)&&<span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"><LockKeyhole className="w-2.5 h-2.5"/>Sistema</span>}
+                      {chatRootFolderId===currentFolderId&&<p className="text-[10px] text-muted-foreground mt-1">Conversación ID: {folder.id}</p>}
                       <p className="text-xs text-muted-foreground mt-1">Carpeta · {new Date(folder.created_at).toLocaleDateString("es-CO")}</p>
                     </button>
                     <div className={clsx("flex justify-end",viewMode==="grid"?"absolute top-2 right-2":"") }>
@@ -3767,7 +3938,18 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
                 ))}
 
                 {!isLoading&&visibleFiles.map((file)=>(
-                  <div key={file.id} draggable onDragStart={()=>setDragFileId(file.id)} onDragEnd={()=>setDragFileId(null)} className={clsx("rounded-xl border border-border",viewMode==="grid"?"relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center":"px-3 py-2.5 flex items-start justify-between gap-3")}>
+                  <div
+                    key={file.id}
+                    draggable
+                    onDragStart={()=>setDragFileId(file.id)}
+                    onDragEnd={()=>setDragFileId(null)}
+                    onContextMenu={(event)=>{
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleOpenMenuAtPoint({kind:"file",id:file.id,file},event.clientX,event.clientY);
+                    }}
+                    className={clsx("rounded-xl border border-border",viewMode==="grid"?"relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center":"px-3 py-2.5 flex items-start justify-between gap-3")}
+                  >
                     {viewMode==="grid" && (
                       <div className="h-24 w-full rounded-lg border border-border bg-slate-50 mb-3 overflow-hidden flex items-center justify-center">
                         {previewThumb(file)
@@ -3792,18 +3974,13 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
             </Card>
 
             <Card padding="md">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Crear carpeta</p>
-              <div className="flex gap-2">
-                <Input value={folderName} onChange={(e)=>setFolderName(e.target.value)} placeholder="Nombre de carpeta"/>
-                <Button size="sm" onClick={()=>{void handleCreateFolder();}} loading={isSubmitting}>Crear</Button>
-              </div>
-              <div className="mt-4 border-t border-border pt-3">
+              <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ayuda rápida</p>
                 <ul className="text-xs text-muted-foreground space-y-2">
                   <li>Arrastra un archivo sobre una carpeta para moverlo.</li>
                   <li>Arrastra una carpeta sobre otra para anidarla.</li>
                   <li>Arrastra recursos a la miga de pan para moverlos entre niveles.</li>
-                  <li>Usa el menú de 3 puntos para descargar/copiar/mover/eliminar.</li>
+                  <li>Usa clic derecho para abrir acciones contextuales.</li>
                 </ul>
               </div>
             </Card>
@@ -3812,17 +3989,26 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
           {menuState&&(
             <div className="fixed inset-0 z-[70]" onClick={()=>setMenuState(null)}>
               <div className="absolute w-44 rounded-lg border border-border bg-white shadow-lg p-1" style={{left:menuState.x,top:menuState.y}} onClick={(event)=>event.stopPropagation()}>
+                {menuState.kind==="canvas"&&(
+                  <>
+                    <button onClick={()=>{void handleCreateFolderPrompt();}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Nueva carpeta</button>
+                    <button onClick={()=>{fileInputRef.current?.click();setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Subir archivo</button>
+                    <button onClick={()=>{void onLoadFolder(currentFolderId);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Refrescar</button>
+                  </>
+                )}
                 {menuState.kind==="folder"&&menuState.folder&&(
                   <>
                     <button onClick={()=>{void openFolder(menuState.folder!);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Abrir</button>
-                    <button onClick={()=>{void handleRenameFolder(menuState.folder!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>
-                    <button onClick={()=>{void moveFolderTo(menuState.folder!.id,null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Mover a raíz</button>
-                    <button onClick={()=>{void handleDeleteFolder(menuState.folder!.id);}} className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded">Eliminar</button>
+                    <button onClick={()=>{void onLoadFolder(menuState.folder!.id);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Refrescar</button>
+                    {!isProtectedFolder(menuState.folder.id)&&<button onClick={()=>{void handleRenameFolder(menuState.folder!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>}
+                    {!isProtectedFolder(menuState.folder.id)&&<button onClick={()=>{void moveFolderTo(menuState.folder!.id,null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Mover a raíz</button>}
+                    {!isProtectedFolder(menuState.folder.id)&&<button onClick={()=>{void handleDeleteFolder(menuState.folder!.id);}} className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded">Eliminar</button>}
+                    {isProtectedFolder(menuState.folder.id)&&<p className="px-2 py-1.5 text-[11px] text-muted-foreground">Carpeta del sistema protegida.</p>}
                   </>
                 )}
                 {menuState.kind==="file"&&menuState.file&&(
                   <>
-                    {menuState.file.storage_url&&<button onClick={()=>{void handleOpenResource(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Abrir</button>}
+                    {menuState.file.storage_url&&<button onClick={()=>{void handleOpenResource(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Ver</button>}
                     {menuState.file.storage_url&&<button onClick={()=>{void handleDownload(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Descargar</button>}
                     <button onClick={()=>handleCopyLink(menuState.file!.storage_url)} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Copiar enlace</button>
                     <button onClick={()=>{void handleRenameFile(menuState.file!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>
@@ -3894,8 +4080,8 @@ function Stepper({current}:{current:number}) {
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;}
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:""};
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;}
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:""};
 
 function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
@@ -3938,7 +4124,7 @@ function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"
   const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?`${form.minQuantity} u`:""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
   if(modalidad==="dirigida"&&si)return(<div className="space-y-4">
     <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center"/><ContactBtn type="chat" size="sm" className="flex-1 justify-center"/></div></Card>
+    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",email:si.advisor.email})}/><ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>toast.info("El chat se habilita al enviar la cotización.")}/></div></Card>
     {step>=2&&<Summary/>}
     {step===3&&<Card padding="md" className="border-primary/20 bg-primary/5"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse"/><span className="text-xs font-semibold text-primary">Lista para enviar</span></div></Card>}
   </div>);
@@ -3947,16 +4133,34 @@ function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"
   return(<Card padding="md" className="border-dashed"><div className="flex flex-col items-center text-center py-4 gap-2"><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Building className="w-5 h-5 text-muted-foreground/40"/></div><p className="text-sm text-muted-foreground">Selecciona una modalidad.</p></div></Card>);
 }
 
-function Step2({form,setForm}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>}) {
-  const [dragOver,setDragOver]=useState(false);const[fn,setFn]=useState<string|null>(null);
+function Step2({form,setForm,onProductPhotoUploaded}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>;onProductPhotoUploaded:(fileItem:BackendArchivoItem)=>void|Promise<void>}) {
+  const [dragOver,setDragOver]=useState(false);
   const upd=(f:keyof QuoteFormState,v:string)=>setForm(p=>({...p,[f]:v}));
   return (
     <div className="space-y-5">
       <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
         <div className="space-y-4">
           <div><p className="text-sm font-medium mb-1.5">Foto <span className="text-xs text-muted-foreground font-normal">(opcional)</span></p>
-            <div onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)setFn(f.name);}} className={clsx("border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer",dragOver?"border-primary bg-primary/5":"border-border hover:border-primary/40 hover:bg-muted/30")}>
-              {fn?<div className="flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-500"/><span className="text-sm font-medium">{fn}</span><button onClick={()=>setFn(null)} className="text-muted-foreground hover:text-destructive"><X className="w-4 h-4"/></button></div>:<><Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Arrastra o <span className="text-primary font-medium">busca en tu equipo</span></p><p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG hasta 10 MB</p></>}
+            <div onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} className={clsx("border-2 border-dashed rounded-xl p-8 text-center transition-all",dragOver?"border-primary bg-primary/5":"border-border hover:border-primary/40 hover:bg-muted/30")}>
+              {form.productPhotoUrl
+                ?<div className="space-y-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto"/>
+                  <p className="text-sm font-medium">Foto vinculada desde Documentos</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button variant="secondary" size="sm" onClick={()=>window.open(resolveApiUrl(form.productPhotoUrl), "_blank", "noopener,noreferrer")}>Ver</Button>
+                    <Button variant="ghost" size="sm" onClick={()=>upd("productPhotoUrl","")}>Quitar</Button>
+                  </div>
+                </div>
+                :<><Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sube la foto real del producto al módulo documental</p><p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG, JPEG o WebP</p></>
+              }
+              <div className="mt-3 flex justify-center">
+                <DocumentUploadButton
+                  label="Subir foto"
+                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                  origen="cotizacion"
+                  onUploaded={onProductPhotoUploaded}
+                />
+              </div>
             </div>
           </div>
           <Input label="Nombre del producto" placeholder="Ej. Café Verde Colombiano Premium" value={form.productName} onChange={e=>upd("productName",e.target.value)}/>
@@ -4042,6 +4246,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     const payload:CreateCotizacionPayload={
       modalidad,
       ...(modalidad==="dirigida"&&selectedId?{importador_id:selectedId}:{}),
+      ...(form.productPhotoUrl?{foto_producto:form.productPhotoUrl}:{}),
       pais_importacion:form.country,
       nombre_producto:form.productName,
       descripcion_cliente:(form.description||"").length>=10?form.description:`${form.description}...`,
@@ -4080,7 +4285,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
             <div className="mb-8"><Stepper current={step}/></div>
             <div className="flex gap-6 items-start">
               <div className="flex-1 min-w-0">
-                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
+                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
                 {stepError&&<div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"><AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/><p className="text-sm text-destructive">{stepError}</p></div>}
                 <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
                   <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>{step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>}</div>
@@ -4289,6 +4494,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
   const [saveError,setSaveError]=useState("");
   const [bannerUploading,setBannerUploading]=useState(false);
   const [bannerError,setBannerError]=useState("");
+  const [logoUploadError,setLogoUploadError]=useState("");
   const bannerInputRef=useRef<HTMLInputElement>(null);
 
   useEffect(()=>{
@@ -4434,7 +4640,25 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Input label="Razón social" value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)}/>
                   <Input label="Año de fundación" type="number" value={form.year} onChange={e=>f("year",e.target.value)}/>
                   <Input label="Sitio web" value={form.website} onChange={e=>f("website",e.target.value)} prefix={<Globe className="w-4 h-4"/>}/>
-                  <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>f("logoUrl",e.target.value)} prefix={<ImageIcon className="w-4 h-4"/>}/>
+                  <div>
+                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>f("logoUrl",e.target.value)} prefix={<ImageIcon className="w-4 h-4"/>}/>
+                    <div className="mt-2 flex gap-2">
+                      <DocumentUploadButton
+                        label="Subir logo"
+                        accept={BANNER_UPLOAD_ACCEPT}
+                        origen="perfil-empresa"
+                        onUploaded={(fileItem)=>{
+                          setLogoUploadError("");
+                          const path = toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
+                          setForm((prev)=>({...prev,logoUrl:path}));
+                          setSaved(false);
+                        }}
+                        onError={(message)=>setLogoUploadError(message)}
+                      />
+                      {form.logoUrl&&<Button variant="secondary" size="sm" onClick={()=>window.open(resolveApiUrl(form.logoUrl), "_blank", "noopener,noreferrer")}>Ver logo</Button>}
+                    </div>
+                    {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
+                  </div>
                   <Input label="Correo de contacto" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<MailIcon className="w-4 h-4"/>}/>
                   <Input label="Teléfono" value={form.phone} onChange={e=>f("phone",e.target.value)} prefix={<Phone className="w-4 h-4"/>}/>
                   <Input label="Dirección" value={form.address} onChange={e=>f("address",e.target.value)} prefix={<MapPin className="w-4 h-4"/>}/>
@@ -4512,7 +4736,18 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 <p className="font-semibold text-sm mb-4">Vista previa del logo</p>
                 <div className="flex flex-col items-center gap-3">
                   <div className={clsx("w-20 h-20 rounded-xl flex items-center justify-center text-white text-2xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
-                  <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>}>Cambiar logo</Button>
+                  <DocumentUploadButton
+                    label="Cambiar logo"
+                    accept={BANNER_UPLOAD_ACCEPT}
+                    origen="perfil-empresa"
+                    onUploaded={(fileItem)=>{
+                      setLogoUploadError("");
+                      const path = toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
+                      setForm((prev)=>({...prev,logoUrl:path}));
+                      setSaved(false);
+                    }}
+                    onError={(message)=>setLogoUploadError(message)}
+                  />
                 </div>
                 <div className="mt-5 pt-5 border-t border-border space-y-2">
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Certificaciones</span><span className="font-semibold flex items-center gap-1 text-emerald-700"><Shield className="w-3 h-3"/>{form.certs.length}</span></div>
@@ -5078,6 +5313,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
+  const [attachedFiles,setAttachedFiles]=useState<BackendArchivoItem[]>([]);
   const [form,setForm]=useState({
     unitPrice:"",moq:"",totalPrice:"",
     incoterm:"FOB",port:"",productionTime:"",shippingTime:"",totalTime:"",
@@ -5137,6 +5373,14 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
       }else{
         await businessService.createProposal(payload);
         setSubmittedTitle("Respuesta enviada");
+      }
+
+      if(chatConversationId && attachedFiles.length>0){
+        await businessService.shareDocumentsToChat({
+          conversacion_ids:[chatConversationId],
+          archivo_ids:attachedFiles.map((file)=>file.id),
+          mensaje:"Adjuntos de propuesta comercial",
+        });
       }
 
       if(onSubmitted){
@@ -5248,7 +5492,28 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                     <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-center">
                       <Upload className="w-7 h-7 text-muted-foreground/40"/>
                       <p className="text-sm text-muted-foreground">PDF, imágenes, fichas técnicas, cotización oficial</p>
-                      <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>}>Seleccionar archivos</Button>
+                      <DocumentUploadButton
+                        label="Seleccionar archivos"
+                        multiple
+                        origen="propuesta"
+                        onUploaded={(fileItem)=>setAttachedFiles((prev)=>{
+                          if(prev.some((row)=>row.id===fileItem.id)){
+                            return prev;
+                          }
+                          return [...prev,fileItem];
+                        })}
+                        onError={(message)=>setError(message)}
+                      />
+                      {attachedFiles.length>0&&(
+                        <div className="w-full mt-2 space-y-1 text-left">
+                          {attachedFiles.map((file)=>(
+                            <div key={file.id} className="rounded-md border border-border px-2 py-1.5 flex items-center justify-between gap-2">
+                              <p className="text-xs truncate">{file.nombre}</p>
+                              <button className="text-[11px] text-muted-foreground hover:text-destructive" onClick={()=>setAttachedFiles((prev)=>prev.filter((row)=>row.id!==file.id))}>Quitar</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </Card>
                 </div>
@@ -5291,13 +5556,16 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
-function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:"data"|"terms")=>void}) {
+function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:"data"|"terms")=>void;importers:Importer[]}) {
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
+  const featuredImporters=importers.filter(i=>i.verified||(i.platformCerts??[]).length>0).slice(0,6);
+  const uniqueCountries=[...new Set(importers.map((item)=>item.country).filter(Boolean))];
+  const uniqueCategories=[...new Set(importers.flatMap((item)=>item.categories).filter(Boolean))];
   const stats=[
-    {value:"200+",label:"Empresas importadoras"},
-    {value:"50+",label:"Países de origen"},
-    {value:"4,800+",label:"Cotizaciones gestionadas"},
-    {value:"~24h",label:"Tiempo promedio de respuesta"},
+    {value:importers.length.toString(),label:"Empresas importadoras"},
+    {value:uniqueCountries.length.toString(),label:"Países de origen"},
+    {value:importers.filter((item)=>item.verified).length.toString(),label:"Empresas verificadas"},
+    {value:uniqueCategories.length.toString(),label:"Líneas de producto"},
   ];
   const benefits=[
     {icon:<BadgeCheck className="w-6 h-6 text-primary"/>,title:"Importadores verificados",desc:"Todas las empresas pasan por un proceso de verificación antes de ser listadas en la plataforma."},
@@ -5318,8 +5586,6 @@ function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegiste
     {q:"¿Qué pasa si no recibo respuesta?",a:"El sistema notifica a las empresas automáticamente. Si no recibes respuesta en 48h, te recomendamos ampliar tu solicitud a más proveedores."},
     {q:"¿Cómo funciona el seguimiento de la orden?",a:"Una vez creada la orden, el representante de la empresa importadora actualiza el estado en cada etapa: producción, tránsito, aduana y entrega."},
   ];
-  const featuredImporters=IMPORTERS.filter(i=>i.verified).slice(0,3);
-
   return (
     <div className="min-h-screen bg-white" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       {/* NAV */}
@@ -5413,24 +5679,17 @@ function LandingScreen({onLogin,onRegister,onPolicy}:{onLogin:()=>void;onRegiste
             <h2 className="text-2xl font-bold tracking-tight">Empresas importadoras destacadas</h2>
             <p className="text-muted-foreground mt-2">Verificadas, calificadas y listas para atenderte</p>
           </div>
-          <div className="grid sm:grid-cols-3 gap-5">
-            {featuredImporters.map(imp=>(
-              <div key={imp.id} className="bg-white border border-border rounded-2xl p-5 hover:shadow-md transition-shadow">
-                <div className="flex items-start gap-3 mb-3">
-                  <Avatar initials={imp.initials} size="lg" color={imp.color}/>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 flex-wrap"><p className="font-semibold text-sm">{imp.name}</p><BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0"/></div>
-                    <p className="text-xs text-muted-foreground">{imp.specialty}</p>
-                  </div>
-                  
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{IMP_DESCRIPTIONS[imp.id]||""}</p>
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {imp.categories.map(c=><span key={c} className="px-2 py-0.5 bg-muted rounded-md text-[10px] font-medium text-muted-foreground">{c}</span>)}
-                </div>
-              </div>
-            ))}
-          </div>
+          {featuredImporters.length===0?(
+            <Card padding="lg" className="border-dashed">
+              <p className="text-sm text-muted-foreground text-center">No hay empresas visibles en este momento.</p>
+            </Card>
+          ):(
+            <div className="grid grid-flow-col auto-cols-[85%] gap-5 overflow-x-auto pb-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-3 sm:overflow-visible">
+              {featuredImporters.map(imp=>(
+                <ImporterCard key={imp.id} imp={imp} onViewProfile={()=>onLogin()} onCreateQuote={()=>onLogin()} featured/>
+              ))}
+            </div>
+          )}
           <div className="text-center mt-8">
             <Button variant="secondary" size="md" icon={<Building2 className="w-4 h-4"/>} onClick={onLogin}>Ver todas las importadoras</Button>
           </div>
@@ -5905,7 +6164,7 @@ function HelpSupportScreen({sb,role}:{sb:SidebarCtrl;role:UserRole}) {
   );
 }
 
-function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
+function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
   const [form,setForm]=useState(profile);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
@@ -5923,6 +6182,7 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
         nombre:form.nombre,
         telefono:form.telefono,
         whatsapp:form.whatsapp,
+        foto_url:form.fotoUrl?.trim()||undefined,
       });
       setSaved(true);
       setTimeout(()=>setSaved(false),3000);
@@ -5953,6 +6213,19 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
               <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))}/>
               <Input label="Email" value={form.email} disabled/>
               <Input label="WhatsApp" value={form.whatsapp} onChange={e=>setForm(p=>({...p,whatsapp:e.target.value}))}/>
+              <div className="sm:col-span-2">
+                <Input label="Foto de perfil" value={form.fotoUrl} onChange={e=>setForm(p=>({...p,fotoUrl:e.target.value}))} placeholder="URL del archivo"/>
+                <div className="mt-2 flex gap-2">
+                  <DocumentUploadButton
+                    label="Subir foto"
+                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                    origen="perfil-usuario"
+                    onUploaded={(fileItem)=>setForm((prev)=>({...prev,fotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}
+                    onError={(message)=>setError(message)}
+                  />
+                  {form.fotoUrl&&<Button variant="secondary" size="sm" onClick={()=>window.open(resolveApiUrl(form.fotoUrl), "_blank", "noopener,noreferrer")}>Ver foto</Button>}
+                </div>
+              </div>
             </div>
           </Card>
         </main>
@@ -6017,6 +6290,7 @@ export default function App() {
   const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
   const [chatAttachmentsByConversation,setChatAttachmentsByConversation]=useState<Record<string, BackendChatAttachmentItem[]>>({});
   const [documentExplorer,setDocumentExplorer]=useState<BackendExplorerResponse>({ carpetas: [], archivos: [] });
+  const [protectedRootFolders,setProtectedRootFolders]=useState<Array<{id:string;nombre:string}>>([]);
   const [documentCurrentFolderId,setDocumentCurrentFolderId]=useState<string|null>(null);
   const [isDocumentExplorerLoading,setIsDocumentExplorerLoading]=useState(false);
   const documentCurrentFolderRef = useRef<string|null>(null);
@@ -6163,11 +6437,59 @@ export default function App() {
     setChatAttachmentsByConversation(Object.fromEntries(attachmentPairs));
   }, [currentUserProfile?.id]);
 
+  const ensureSystemRootFolders = useCallback(async () => {
+    let rootExplorer = await businessService.listDocumentExplorer(null);
+    const existingRootNames = new Set(rootExplorer.carpetas.map((folder) => normalizeFolderName(folder.nombre)));
+    const missingRootNames = SYSTEM_ROOT_FOLDER_NAMES.filter((name) => !existingRootNames.has(normalizeFolderName(name)));
+
+    if (missingRootNames.length > 0) {
+      await Promise.all(
+        missingRootNames.map(async (name) => {
+          try {
+            await businessService.createDocumentFolder({ nombre: name, parent_id: null });
+          } catch {
+            // Folder may be created concurrently by another session.
+          }
+        }),
+      );
+      rootExplorer = await businessService.listDocumentExplorer(null);
+    }
+
+    const protectedSet = new Set(SYSTEM_ROOT_FOLDER_NAMES.map((name) => normalizeFolderName(name)));
+    const bySystemFolderName = new Map<string, { id: string; nombre: string }>();
+    rootExplorer.carpetas.forEach((folder) => {
+      const normalized = normalizeFolderName(folder.nombre);
+      if (!protectedSet.has(normalized)) {
+        return;
+      }
+      if (!bySystemFolderName.has(normalized)) {
+        bySystemFolderName.set(normalized, { id: folder.id, nombre: folder.nombre });
+      }
+    });
+
+    setProtectedRootFolders(Array.from(bySystemFolderName.values()));
+
+    rootExplorer = {
+      ...rootExplorer,
+      carpetas: rootExplorer.carpetas.filter((folder) => {
+        const normalized = normalizeFolderName(folder.nombre);
+        if (!protectedSet.has(normalized)) {
+          return true;
+        }
+        return bySystemFolderName.get(normalized)?.id === folder.id;
+      }),
+    };
+
+    return rootExplorer;
+  }, []);
+
   const reloadDocumentExplorer = useCallback(async (parentId?: string | null) => {
     const resolvedParent = typeof parentId === "undefined" ? documentCurrentFolderRef.current : parentId;
     setIsDocumentExplorerLoading(true);
     try {
-      const explorer = await businessService.listDocumentExplorer(resolvedParent);
+      const explorer = resolvedParent === null
+        ? await ensureSystemRootFolders()
+        : await businessService.listDocumentExplorer(resolvedParent);
       documentCurrentFolderRef.current = resolvedParent ?? null;
       setDocumentCurrentFolderId(resolvedParent ?? null);
       setDocumentExplorer(explorer);
@@ -6175,7 +6497,7 @@ export default function App() {
     } finally {
       setIsDocumentExplorerLoading(false);
     }
-  }, []);
+  }, [ensureSystemRootFolders]);
 
   const reloadAdvisorAssignedQuotes = useCallback(async () => {
     const rows = await businessService.listMyAssignedQuotes();
@@ -6322,6 +6644,21 @@ export default function App() {
     }
     void reloadImporters();
   }, [isAuthenticated, token, isInitializing, reloadImporters]);
+
+  useEffect(() => {
+    if (isInitializing || isAuthenticated || marketplaceImporters.length > 0) {
+      return;
+    }
+
+    const publicScreens: Screen[] = ["landing", "login", "register"];
+    if (!publicScreens.includes(screen)) {
+      return;
+    }
+
+    void reloadImporters().catch(() => {
+      setMarketplaceImporters([]);
+    });
+  }, [isInitializing, isAuthenticated, marketplaceImporters.length, screen, reloadImporters]);
 
   useEffect(() => {
     if (!isAuthenticated || !token || isInitializing) {
@@ -6648,7 +6985,7 @@ export default function App() {
     await reloadImporters();
   }
 
-  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;whatsapp:string}) {
+  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;whatsapp:string;foto_url?:string}) {
     await businessService.updateMyUserProfile(payload);
     await reloadCurrentUserProfile();
   }
@@ -6770,14 +7107,7 @@ export default function App() {
   }
 
   async function handleAttachOrderDocument(orderId: string, file: File) {
-    const extensionFromName = file.name.includes(".") ? file.name.split(".").pop() || undefined : undefined;
-    const created = await businessService.createDocumentFile({
-      nombre: file.name,
-      extension: extensionFromName,
-      mime_type: file.type || undefined,
-      size_bytes: file.size,
-      origen: "orden",
-    });
+    const created = await businessService.uploadDocumentFile(file, null, "orden");
 
     await businessService.addOrderDocument(orderId, {
       nombre: file.name,
@@ -6901,7 +7231,7 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} importers={marketplaceImporters}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   if(screen==="policy-data")return <LegalPolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
@@ -6939,17 +7269,17 @@ export default function App() {
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
+    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote}/>;
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
-    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses}/>;
-    if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations}/>;
+    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes}/>;
+    if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={setActiveChatId} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters}/>;
-    if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder}/>;
+    if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
-    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
+    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
     return null;
   };
 

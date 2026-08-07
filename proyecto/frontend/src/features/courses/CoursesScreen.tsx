@@ -2027,6 +2027,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                       </Button>
                     ) : null}
                   </div>
+                  {publishForm.portada_url ? (
+                    <div className="rounded-lg border bg-muted/20 p-2">
+                      <img
+                        src={safeHttpUrl(resolveApiUrl(publishForm.portada_url), IMAGE_FALLBACK)}
+                        alt="Portada seleccionada"
+                        className="h-24 w-full rounded-md object-cover"
+                        onError={(event) => { event.currentTarget.src = IMAGE_FALLBACK; }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -2162,6 +2172,11 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                   </Button>
                                 ) : null}
                               </div>
+                              {lesson.video_url ? (
+                                <div className="rounded-lg border bg-black/90 p-2">
+                                  <ProtectedVideoPlayer url={lesson.video_url} />
+                                </div>
+                              ) : null}
                             </div>
                           </div>
 
@@ -2233,6 +2248,20 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                       Quitar
                                     </Button>
                                   </div>
+                                  {resource.url ? (
+                                    <div className="rounded-md border bg-muted/20 p-2 text-[11px] text-muted-foreground">
+                                      {/\.(png|jpe?g|webp|gif|svg)(\?|#|$)/i.test(resource.url) ? (
+                                        <img
+                                          src={safeHttpUrl(resolveApiUrl(resource.url), IMAGE_FALLBACK)}
+                                          alt={resource.nombre || "Recurso"}
+                                          className="h-20 w-full rounded object-cover"
+                                          onError={(event) => { event.currentTarget.src = IMAGE_FALLBACK; }}
+                                        />
+                                      ) : (
+                                        <p className="truncate">{resource.url}</p>
+                                      )}
+                                    </div>
+                                  ) : null}
                                 </div>
                               ))}
                             </div>
