@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from schemas.certificacion import CertificacionOtorgadaResponse
+from utils.shipping_mark import LONGITUD_MAX_PREFIJO, normalizar_segmento
 from utils.urls import canonicalize_resource_url
 
 # Claves de `perfil_publico` que guardan imágenes y se normalizan igual que
@@ -31,6 +32,10 @@ class ImportadorResponse(BaseModel):
     estado: str  # "activo" o "inactivo"
     solo_cotizaciones_directas: bool = False
     verificado: bool = False
+    # Prefijo de la empresa en el shipping mark (ej. "ctl"). Es público a
+    # propósito: el solicitante lo ve al elegir empresa y así entiende cómo
+    # quedará rotulada su carga antes de pedir la cotización.
+    shipping_mark_prefijo: Optional[str] = None
     fecha_registro: datetime
 
     model_config = {"from_attributes": True}
@@ -45,6 +50,27 @@ class ImportadorUpdate(BaseModel):
     capacidad_volumen: Optional[int] = None
     perfil_publico: Optional[Dict[str, Any]] = None
     solo_cotizaciones_directas: Optional[bool] = None
+    shipping_mark_prefijo: Optional[str] = Field(
+        None,
+        max_length=LONGITUD_MAX_PREFIJO,
+        description="Prefijo de la empresa en el shipping mark (ej. 'ctl'). Cadena vacía para quitarlo.",
+    )
+
+    @field_validator("shipping_mark_prefijo")
+    @classmethod
+    def prefijo_normalizado(cls, v: Optional[str]) -> Optional[str]:
+        """El prefijo sí se guarda ya normalizado: es un dato de la empresa que
+        se repite en todos sus embarques, y conviene que sea el mismo texto que
+        acaba impreso en la caja. El sufijo del cliente, en cambio, se conserva
+        tal cual lo escribió para poder mostrárselo."""
+        if v is None:
+            return None
+        if not v.strip():
+            return None  # cadena vacía = quitar el prefijo
+        normalizado = normalizar_segmento(v)
+        if not normalizado:
+            raise ValueError("El prefijo del shipping mark debe contener al menos una letra o un número")
+        return normalizado
 
     @field_validator("logo_url")
     @classmethod
@@ -74,9 +100,24 @@ class AdminCrearImportadorRequest(BaseModel):
     capacidad_volumen: Optional[int] = None
     perfil_publico: Optional[Dict[str, Any]] = None
     solo_cotizaciones_directas: bool = False
+    shipping_mark_prefijo: Optional[str] = Field(
+        None,
+        max_length=LONGITUD_MAX_PREFIJO,
+        description="Prefijo de la empresa en el shipping mark (ej. 'ctl'). La empresa puede cambiarlo después.",
+    )
     email_dueño: EmailStr = Field(..., description="Email de la cuenta dueña de la empresa")
     password_dueño: str = Field(..., min_length=9, description="Contraseña inicial de la cuenta dueña")
     nombre_dueño: Optional[str] = None
+
+    @field_validator("shipping_mark_prefijo")
+    @classmethod
+    def prefijo_normalizado(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        normalizado = normalizar_segmento(v)
+        if not normalizado:
+            raise ValueError("El prefijo del shipping mark debe contener al menos una letra o un número")
+        return normalizado
 
 class AdminCrearImportadorResponse(BaseModel):
     importador: ImportadorResponse

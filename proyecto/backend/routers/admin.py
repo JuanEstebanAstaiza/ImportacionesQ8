@@ -78,6 +78,7 @@ async def crear_importador_con_dueño(
         tiempo_respuesta_promedio=datos.tiempo_respuesta_promedio,
         capacidad_volumen=datos.capacidad_volumen,
         solo_cotizaciones_directas=datos.solo_cotizaciones_directas,
+        shipping_mark_prefijo=datos.shipping_mark_prefijo,
         estado="activo"
     )
     db.add(nuevo_importador)
@@ -301,6 +302,7 @@ async def resolver_disputa(
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
+        shipping_mark=orden.shipping_mark,
         en_disputa=orden.en_disputa,
         motivo_disputa=orden.motivo_disputa,
         historial_estados=[],

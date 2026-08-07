@@ -53,6 +53,10 @@ class Cotizacion(Base):
     precio_objetivo_usd = Column(Float, nullable=True)
     incoterm = Column(String(50), nullable=False)
     notas_adicionales = Column(Text, nullable=True)
+    # Parte del shipping mark que aporta el cliente (ej. "prendas control"). Se
+    # combina con el prefijo de la empresa importadora para rotular las cajas.
+    # Ver `utils/shipping_mark.py`.
+    shipping_mark_sufijo = Column(String(40), nullable=True)
     # Valores de los campos personalizados definidos por el importador (solo aplica
     # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.
     campos_personalizados_valores = Column(JSON, nullable=True)
@@ -89,6 +93,28 @@ class Cotizacion(Base):
         if object_session(self) is None:
             return None
         return str(self.conversacion.id) if self.conversacion else None
+
+    @property
+    def shipping_mark(self):
+        """Marca de embarque completa, o `None` si todavía no se puede formar.
+
+        El prefijo lo pone la empresa importadora, así que en una cotización
+        abierta no existe hasta que una empresa gana la propuesta y queda fijada
+        en `importador_id`. La orden guarda su propia copia (`Orden.shipping_mark`)
+        para que un cambio posterior de prefijo no reescriba embarques ya
+        rotulados.
+        """
+        session = object_session(self)
+        if session is None or not self.importador_id or not self.shipping_mark_sufijo:
+            return None
+
+        from models.importador import Importador
+        from utils.shipping_mark import componer_shipping_mark
+
+        empresa = session.query(Importador).filter(Importador.id == self.importador_id).first()
+        if empresa is None:
+            return None
+        return componer_shipping_mark(empresa.shipping_mark_prefijo, self.shipping_mark_sufijo)
 
     @property
     def contacto_asignado(self):

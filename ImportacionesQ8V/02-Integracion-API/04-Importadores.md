@@ -19,6 +19,8 @@ Array de `ImportadorResponse`:
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -28,6 +30,7 @@ Array de `ImportadorResponse`:
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -116,7 +119,7 @@ Array de `AsesorResponse`:
 }
 ```
 
-**Respuesta (`AsesorResponse`)**
+**Respuesta (`AsesorEstadoResponse`)**
 
 | Campo | Tipo | Req | Descripción |
 |-------|------|-----|-------------|
@@ -126,6 +129,9 @@ Array de `AsesorResponse`:
 | `telefono` | `Optional[string]` | no |  |
 | `activo` | `boolean` | sí |  |
 | `fecha_creacion` | `string` | sí |  |
+| `cotizaciones_reasignadas` | `integer` | no |  |
+| `ordenes_reasignadas` | `integer` | no |  |
+| `conversaciones_reasignadas` | `integer` | no |  |
 
 ---
 
@@ -253,6 +259,8 @@ Array de `ImportadorResponse`:
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -262,7 +270,37 @@ Array de `ImportadorResponse`:
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
+
+---
+
+### `PUT /importadores/cotizaciones/{cotizacion_id}/asignar`
+
+- **Resumen:** Asignar Asesor A Cotizacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `cotizacion_id`
+
+**Body (`AsignarAsesorRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `asesor_id` | `Optional[string]` | no |  |
+
+```json
+{
+  "asesor_id": "<asesor_id>"
+}
+```
+
+**Respuesta (`ReasignacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `cotizaciones_reasignadas` | `integer` | no |  |
+| `ordenes_reasignadas` | `integer` | no |  |
+| `conversaciones_reasignadas` | `integer` | no |  |
 
 ---
 
@@ -282,6 +320,8 @@ Array de `ImportadorResponse`:
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -291,6 +331,7 @@ Array de `ImportadorResponse`:
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -418,6 +459,8 @@ _Sin campos detallados en OpenAPI._
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -427,6 +470,7 @@ _Sin campos detallados en OpenAPI._
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -450,6 +494,7 @@ _Sin campos detallados en OpenAPI._
 | `capacidad_volumen` | `Optional[integer]` | no |  |
 | `perfil_publico` | `Optional[object]` | no |  |
 | `solo_cotizaciones_directas` | `Optional[boolean]` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no | Prefijo de la empresa en el shipping mark (ej. 'ctl'). Cadena vacía para quitarlo. |
 
 ```json
 {
@@ -469,6 +514,8 @@ _Sin campos detallados en OpenAPI._
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -478,6 +525,7 @@ _Sin campos detallados en OpenAPI._
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---

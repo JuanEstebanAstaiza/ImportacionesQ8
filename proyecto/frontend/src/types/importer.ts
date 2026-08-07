@@ -31,6 +31,12 @@ export interface Importer {
   }>;
   /** Suma de pesos de los sellos: el backend ya ordena el catálogo por esto. */
   adScore?: number;
+  /**
+   * Prefijo de la empresa en el shipping mark (ej. "ctl"). Se enseña al
+   * solicitante mientras redacta la cotización para que vea cómo quedará
+   * rotulada su carga antes de enviarla.
+   */
+  shippingMarkPrefix?: string;
   /** Imagen de portada ancha que encabeza la ficha pública. */
   bannerUrl?: string;
   logoUrl?: string;

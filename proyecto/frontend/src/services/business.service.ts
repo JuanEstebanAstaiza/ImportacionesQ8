@@ -27,6 +27,8 @@ export interface BackendImporter {
   solo_cotizaciones_directas?: boolean;
   estado?: string;
   verificado: boolean;
+  /** Prefijo de la empresa en el shipping mark (ej. "ctl"). */
+  shipping_mark_prefijo?: string | null;
   fecha_registro: string;
 }
 
@@ -48,6 +50,10 @@ export interface BackendCotizacion {
   precio_objetivo_usd: number | null;
   incoterm: string;
   notas_adicionales?: string | null;
+  /** Parte del shipping mark que escribe el cliente (ej. "prendas control"). */
+  shipping_mark_sufijo?: string | null;
+  /** Marca ya compuesta ("ctl-prendascontrol"); null mientras no se sepa la empresa. */
+  shipping_mark?: string | null;
   campos_personalizados_valores?: Record<string, unknown> | null;
   asesor_asignado_id?: string | null;
   conversacion_id?: string | null;
@@ -72,6 +78,7 @@ export interface CreateCotizacionPayload {
   precio_objetivo_usd?: number;
   incoterm: string;
   notas_adicionales?: string;
+  shipping_mark_sufijo?: string;
   campos_personalizados_valores?: Record<string, unknown>;
 }
 
@@ -186,6 +193,7 @@ export interface UpdateImporterPayload {
   capacidad_volumen?: number;
   perfil_publico?: Record<string, unknown>;
   solo_cotizaciones_directas?: boolean;
+  shipping_mark_prefijo?: string;
 }
 
 export interface BackendEstadoOrdenItem {
@@ -211,6 +219,8 @@ export interface BackendOrder {
   precio_acordado_usd: number;
   tiempo_estimado_entrega: string | null;
   condiciones_adicionales: string | null;
+  /** Marca de embarque congelada al crear la orden ("ctl-prendascontrol"). */
+  shipping_mark: string | null;
   en_disputa: boolean;
   motivo_disputa: string | null;
   conversacion_id: string | null;

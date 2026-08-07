@@ -17,6 +17,7 @@ from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.importador import Importador
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
+from utils.categorias import categoria_en
 
 logger = logging.getLogger("importacionesq8")
 
@@ -31,6 +32,21 @@ router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
 
 # Router independiente para /propuestas (no anidado bajo /cotizaciones) - ver Tarea 2.1
 propuestas_router = APIRouter(prefix="/propuestas", tags=["Propuestas"])
+
+
+def _empresa_puede_responder_abierta(empresa: Optional[Importador], cotizacion: Cotizacion) -> bool:
+    """¿Tiene sentido ofrecerle a esta empresa una cotización abierta ajena?
+
+    Es el mismo criterio que aplica `POST /propuestas` al validar la propuesta,
+    para que la bandeja de la empresa no muestre nada que después vaya a ser
+    rechazado. Una empresa de "solo cotizaciones directas" queda fuera del
+    circuito abierto por definición.
+    """
+    if empresa is None:
+        return False
+    if empresa.solo_cotizaciones_directas:
+        return False
+    return categoria_en(cotizacion.linea_producto, empresa.especialidad_producto)
 
 @router.get("", response_model=List[CotizacionResponse])
 async def listar_cotizaciones(
@@ -55,7 +71,7 @@ async def listar_cotizaciones(
         # El importador_id de la empresa viene del claim del JWT (no del user_id de
         # la cuenta), para soportar varias cuentas (dueño + asesores) por empresa.
         importador_id_str = current_user.get("importador_id")
-        
+
         # Importador ve cotizaciones dirigidas a él + abiertas disponibles para propuestas
         cotizaciones = db.query(Cotizacion).filter(
             or_(
@@ -69,6 +85,17 @@ async def listar_cotizaciones(
                 )
             )
         ).order_by(Cotizacion.fecha_creacion.desc()).all()
+
+        # Las abiertas se recortan a lo que la empresa puede responder de verdad.
+        # Antes se devolvían todas: la bandeja se llenaba de cotizaciones de otras
+        # categorías y el botón "Responder" terminaba en un 400 de congruencia que
+        # el usuario leía como un fallo de permisos.
+        empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
+        cotizaciones = [
+            c for c in cotizaciones
+            if c.importador_id == importador_id_str
+            or _empresa_puede_responder_abierta(empresa, c)
+        ]
     else:
         # Admin ve todas las cotizaciones
         cotizaciones = db.query(Cotizacion).order_by(
@@ -309,6 +336,21 @@ async def crear_cotizacion(
                 detail="Importador no encontrado o inactivo"
             )
 
+        # La empresa destino tiene que trabajar la línea de producto pedida. Sin
+        # esta comprobación la cotización se creaba igual y era la empresa quien
+        # se topaba después con el 400 de congruencia al intentar responder: un
+        # callejón sin salida para las dos partes. Mejor decírselo al cliente
+        # ahora, que todavía puede elegir otra empresa o la modalidad abierta.
+        if not categoria_en(cotizacion_data.linea_producto, importador.especialidad_producto):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"{importador.nombre_empresa} no trabaja la línea de producto "
+                    f"'{cotizacion_data.linea_producto}'. Elige otra empresa o publica la "
+                    f"cotización en modalidad abierta."
+                )
+            )
+
         # Si la empresa es de "solo cotizaciones directas", validar que se hayan
         # incluido los valores de sus campos personalizados obligatorios.
         if importador.solo_cotizaciones_directas:
@@ -345,6 +387,7 @@ async def crear_cotizacion(
         precio_objetivo_usd=cotizacion_data.precio_objetivo_usd,
         incoterm=cotizacion_data.incoterm,
         notas_adicionales=cotizacion_data.notas_adicionales,
+        shipping_mark_sufijo=cotizacion_data.shipping_mark_sufijo,
         costo_creditos=costo_creditos,
         estado="dirigida" if cotizacion_data.modalidad == "dirigida" else "abierta"
     )
@@ -395,10 +438,15 @@ def _validar_congruencia_categoria(cotizacion: Cotizacion, importador_id_str: st
     especialidad (ej. una empresa de tecnología no puede responder una
     cotización de alimentos y viceversa). Se aplica tanto a propuestas
     dirigidas como a propuestas sobre cotizaciones abiertas.
+
+    La comparación es tolerante a mayúsculas, tildes, plurales y variantes
+    léxicas (`utils.categorias`): el formulario de cotización y el perfil de
+    empresa llegaron a ofrecer listas distintas ("Químicos" / "Química"), y con
+    igualdad exacta la empresa veía la cotización pero no podía responderla.
     """
     importador_empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
     especialidades = (importador_empresa.especialidad_producto or []) if importador_empresa else []
-    if cotizacion.linea_producto not in especialidades:
+    if not categoria_en(cotizacion.linea_producto, especialidades):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -609,6 +657,18 @@ async def enviar_propuesta(
     ).first()
     
     if propuesta_existente:
+        # Distinguir el borrador de un asesor de una propuesta ya enviada: decir
+        # "ya has enviado una propuesta" cuando lo que hay es un borrador ajeno
+        # dejaba al dueño sin entender qué hacer (el camino es revisarlo y
+        # enviarlo con POST /propuestas/{id}/enviar).
+        if propuesta_existente.estado == EstadoPropuesta.borrador.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Tu empresa ya tiene un borrador de propuesta para esta cotización. "
+                    "Revísalo y envíalo desde el panel en lugar de crear otro."
+                )
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ya has enviado una propuesta a esta cotización"
@@ -1274,6 +1334,19 @@ async def pre_aceptar_propuesta(
 
         nueva_orden = db.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
         if not nueva_orden:
+            # La marca de embarque se congela aquí: hasta este momento, en una
+            # cotización abierta ni siquiera se sabía qué empresa pondría el
+            # prefijo. A partir de ahora es un dato del embarque, no del perfil.
+            from utils.shipping_mark import componer_shipping_mark
+
+            empresa_ganadora = db.query(Importador).filter(
+                Importador.id == propuesta.importador_id
+            ).first()
+            marca = componer_shipping_mark(
+                empresa_ganadora.shipping_mark_prefijo if empresa_ganadora else None,
+                cotizacion.shipping_mark_sufijo,
+            )
+
             nueva_orden = Orden(
                 id=str(gen_uuid()),
                 cotizacion_id=cotizacion.id,
@@ -1283,7 +1356,8 @@ async def pre_aceptar_propuesta(
                 estado=EstadoOrden.cotizacion_aceptada,
                 precio_acordado_usd=propuesta.precio_ofrecido_usd,
                 tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
-                condiciones_adicionales=propuesta.condiciones_adicionales
+                condiciones_adicionales=propuesta.condiciones_adicionales,
+                shipping_mark=marca
             )
             db.add(nueva_orden)
             db.flush()

@@ -4,6 +4,19 @@ Uso:
     python scripts/restaurar_backup.py copia.zip            # muestra qué haría
     python scripts/restaurar_backup.py copia.zip --aplicar  # restaura de verdad
 
+Sobre una base de datos **vacía** (el caso real de recuperación ante desastre)
+hay que crear antes el esquema:
+
+    python scripts/restaurar_backup.py copia.zip --crear-esquema --aplicar
+
+`alembic upgrade head` **no** sirve para arrancar una base vacía: la primera
+revisión (`20260713_0001`) es un `Base.metadata.create_all()` de los modelos
+actuales, así que crea ya todas las tablas y la siguiente revisión se estrella
+con "Table 'organizaciones_solicitantes' already exists". El propio arranque de
+la aplicación lo esquiva con el mismo `create_all` + `alembic stamp` que hace
+aquí `--crear-esquema`. Alembic sigue siendo válido para llevar hacia adelante
+una base que ya existe.
+
 Se ejecuta contra la base de datos apuntada por `DATABASE_URL`, así que revisa
 tu `.env` antes: **borra el contenido de las tablas** que vengan en el ZIP y las
 reemplaza por el volcado. Por eso el modo por defecto es un simulacro.
@@ -72,6 +85,38 @@ def _convertir(valor, columna):
             return valor
 
     return valor
+
+
+def _tablas_existentes() -> set:
+    from sqlalchemy import inspect
+
+    try:
+        return set(inspect(engine).get_table_names())
+    except Exception as e:
+        raise SystemExit(f"No se pudo inspeccionar la base de datos destino: {e}")
+
+
+def _crear_esquema(aplicar: bool) -> None:
+    """Crea el esquema en una base vacía y la marca en la revisión actual.
+
+    Es lo mismo que hace `database.init_db()` cuando Alembic falla: `create_all`
+    de los modelos + `alembic stamp head`. Se marca en `head` (no en la revisión
+    del backup) porque las tablas creadas son las de los modelos de HOY; el
+    volcado se adapta ignorando columnas que ya no existan.
+    """
+    if not aplicar:
+        print("  - crear esquema (create_all + alembic stamp head)")
+        return
+
+    Base.metadata.create_all(bind=engine)
+
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+    cfg.set_main_option("sqlalchemy.url", str(engine.url.render_as_string(hide_password=False)))
+    command.stamp(cfg, "head")
+    print(f"  - esquema creado: {len(_tablas_existentes())} tabla(s), marcadas en head")
 
 
 def _restaurar_datos(zf: zipfile.ZipFile, aplicar: bool) -> None:
@@ -147,6 +192,11 @@ def main() -> None:
         help="Ejecuta la restauración. Sin esta bandera solo se muestra qué haría.",
     )
     parser.add_argument("--sin-archivos", action="store_true", help="No restaurar uploads/ ni generated_docs/")
+    parser.add_argument(
+        "--crear-esquema",
+        action="store_true",
+        help="Crear las tablas antes de restaurar (base de datos vacía). No toca una base que ya tenga tablas.",
+    )
     args = parser.parse_args()
 
     if not args.zip.is_file():
@@ -169,6 +219,19 @@ def main() -> None:
         if not args.aplicar:
             print("\n--- SIMULACRO (usa --aplicar para restaurar de verdad) ---")
 
+        existentes = _tablas_existentes()
+        if args.crear_esquema and existentes:
+            print(f"\nEsquema: la base ya tiene {len(existentes)} tabla(s); se omite --crear-esquema.")
+        elif args.crear_esquema:
+            print("\nEsquema:")
+            _crear_esquema(args.aplicar)
+        elif not existentes:
+            raise SystemExit(
+                "La base de datos destino está vacía. Vuelve a ejecutar con --crear-esquema "
+                "para crear las tablas antes de restaurar (`alembic upgrade head` no arranca "
+                "una base vacía: ver la documentación de este script)."
+            )
+
         print("\nDatos:")
         _restaurar_datos(zf, args.aplicar)
 
@@ -178,7 +241,11 @@ def main() -> None:
 
     if args.aplicar:
         print("\nRestauración completada.")
-        print("Si la revisión de esquema del backup es anterior a la actual, ejecuta: alembic upgrade head")
+        if manifiesto.get("revision_alembic") and not args.crear_esquema:
+            print(
+                "Si la revisión de esquema del backup es anterior a la de esta base, "
+                "ejecuta: alembic upgrade head"
+            )
     else:
         print("\nNada se modificó.")
 

@@ -25,6 +25,10 @@ export interface Quote {
   productPhotoUrl?: string;
   personalizationLevel?: string;
   importMode?: string;
+  /** Marca de embarque ya compuesta ("ctl-prendascontrol"), si se conoce la empresa. */
+  shippingMark?: string | null;
+  /** Lo que escribió el cliente antes de normalizar ("prendas control"). */
+  shippingMarkSufijo?: string | null;
   customFields?: Record<string, unknown> | null;
   requesterId?: string;
 }

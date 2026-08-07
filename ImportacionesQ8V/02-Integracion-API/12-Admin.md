@@ -3,6 +3,192 @@
 > Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
 > Lo escrito a mano va en `_preambulos/12-Admin.md`; el resto se sobrescribe.
 
+### `GET /admin/backup`
+
+- **Resumen:** Descargar Backup
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Query:** `incluir_archivos`
+
+---
+
+### `GET /admin/backup/resumen`
+
+- **Resumen:** Resumen Backup
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+---
+
+### `GET /admin/certificaciones`
+
+- **Resumen:** Listar Certificaciones Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Query:** `incluir_inactivas`
+
+**Respuesta (`array[CertificacionResponse]`)**
+
+Array de `CertificacionResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `string` | sí |  |
+| `descripcion` | `string` | no |  |
+| `logo_url` | `Optional[string]` | no |  |
+| `peso_publicidad` | `number` | no |  |
+| `activa` | `boolean` | no |  |
+| `id` | `string` | sí |  |
+| `fecha_creacion` | `Optional[string]` | no |  |
+| `empresas_certificadas` | `integer` | no |  |
+
+---
+
+### `POST /admin/certificaciones`
+
+- **Resumen:** Crear Certificacion
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+
+**Body (`CertificacionCreate`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `string` | sí |  |
+| `descripcion` | `string` | no |  |
+| `logo_url` | `Optional[string]` | no |  |
+| `peso_publicidad` | `number` | no |  |
+| `activa` | `boolean` | no |  |
+
+```json
+{
+  "nombre": "<nombre>"
+}
+```
+
+**Respuesta (`CertificacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `string` | sí |  |
+| `descripcion` | `string` | no |  |
+| `logo_url` | `Optional[string]` | no |  |
+| `peso_publicidad` | `number` | no |  |
+| `activa` | `boolean` | no |  |
+| `id` | `string` | sí |  |
+| `fecha_creacion` | `Optional[string]` | no |  |
+| `empresas_certificadas` | `integer` | no |  |
+
+---
+
+### `DELETE /admin/certificaciones/{certificacion_id}`
+
+- **Resumen:** Retirar Certificacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `certificacion_id`
+
+**Respuesta (`CertificacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `string` | sí |  |
+| `descripcion` | `string` | no |  |
+| `logo_url` | `Optional[string]` | no |  |
+| `peso_publicidad` | `number` | no |  |
+| `activa` | `boolean` | no |  |
+| `id` | `string` | sí |  |
+| `fecha_creacion` | `Optional[string]` | no |  |
+| `empresas_certificadas` | `integer` | no |  |
+
+---
+
+### `PUT /admin/certificaciones/{certificacion_id}`
+
+- **Resumen:** Actualizar Certificacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `certificacion_id`
+
+**Body (`CertificacionUpdate`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `Optional[string]` | no |  |
+| `descripcion` | `Optional[string]` | no |  |
+| `logo_url` | `Optional[string]` | no |  |
+| `peso_publicidad` | `Optional[number]` | no |  |
+| `activa` | `Optional[boolean]` | no |  |
+
+```json
+{
+  "nombre": "<nombre>",
+  "descripcion": "<descripcion>",
+  "logo_url": "<logo_url>",
+  "peso_publicidad": 0,
+  "activa": true
+}
+```
+
+**Respuesta (`CertificacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `string` | sí |  |
+| `descripcion` | `string` | no |  |
+| `logo_url` | `Optional[string]` | no |  |
+| `peso_publicidad` | `number` | no |  |
+| `activa` | `boolean` | no |  |
+| `id` | `string` | sí |  |
+| `fecha_creacion` | `Optional[string]` | no |  |
+| `empresas_certificadas` | `integer` | no |  |
+
+---
+
+### `GET /admin/conversaciones`
+
+- **Resumen:** Listar Conversaciones Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Query:** `buscar`, `importador_id`, `limit`, `offset`
+
+**Respuesta (`ConversacionesAdminResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `items` | `array[ConversacionAdminItem]` | sí |  |
+| `total` | `integer` | sí |  |
+| `limit` | `integer` | sí |  |
+| `offset` | `integer` | sí |  |
+
+---
+
+### `GET /admin/conversaciones/{conversacion_id}/mensajes`
+
+- **Resumen:** Leer Conversacion Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `conversacion_id`
+- **Query:** `limit`
+
+**Respuesta (`array[MensajeAdminItem]`)**
+
+Array de `MensajeAdminItem`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `conversacion_id` | `string` | sí |  |
+| `remitente_id` | `string` | sí |  |
+| `remitente_nombre` | `Optional[string]` | no |  |
+| `remitente_email` | `Optional[string]` | no |  |
+| `remitente_rol` | `Optional[string]` | no |  |
+| `contenido` | `string` | sí |  |
+| `tipo` | `string` | sí |  |
+| `fecha_envio` | `string` | sí |  |
+
+---
+
 ### `GET /admin/cotizaciones-abiertas`
 
 - **Resumen:** Listar Cotizaciones Abiertas
@@ -95,6 +281,7 @@ _Sin campos detallados en OpenAPI._
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -148,6 +335,7 @@ _Sin campos detallados en OpenAPI._
 | `capacidad_volumen` | `Optional[integer]` | no |  |
 | `perfil_publico` | `Optional[object]` | no |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no | Prefijo de la empresa en el shipping mark (ej. 'ctl'). La empresa puede cambiarlo después. |
 | `email_dueño` | `string` | sí | Email de la cuenta dueña de la empresa |
 | `password_dueño` | `string` | sí | Contraseña inicial de la cuenta dueña |
 | `nombre_dueño` | `Optional[string]` | no |  |
@@ -173,6 +361,70 @@ _Sin campos detallados en OpenAPI._
 
 ---
 
+### `GET /admin/importadores/{importador_id}/certificaciones`
+
+- **Resumen:** Listar Certificaciones De Empresa
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `importador_id`
+
+**Respuesta (`CertificacionesDeEmpresaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `puntaje_publicidad` | `number` | no |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+
+---
+
+### `POST /admin/importadores/{importador_id}/certificaciones`
+
+- **Resumen:** Otorgar Certificacion
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+- **Path params:** `importador_id`
+
+**Body (`OtorgarCertificacionRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `certificacion_id` | `string` | sí |  |
+| `notas` | `Optional[string]` | no |  |
+
+```json
+{
+  "certificacion_id": "<certificacion_id>"
+}
+```
+
+**Respuesta (`CertificacionesDeEmpresaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `puntaje_publicidad` | `number` | no |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+
+---
+
+### `DELETE /admin/importadores/{importador_id}/certificaciones/{certificacion_id}`
+
+- **Resumen:** Revocar Certificacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `importador_id`, `certificacion_id`
+
+**Respuesta (`CertificacionesDeEmpresaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `puntaje_publicidad` | `number` | no |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+
+---
+
 ### `PUT /admin/importadores/{importador_id}/estado`
 
 - **Resumen:** Actualizar Estado Importador
@@ -188,6 +440,8 @@ _Sin campos detallados en OpenAPI._
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -197,6 +451,7 @@ _Sin campos detallados en OpenAPI._
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -215,6 +470,8 @@ _Sin campos detallados en OpenAPI._
 | `id` | `string` | sí |  |
 | `nombre_empresa` | `string` | sí |  |
 | `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -224,6 +481,7 @@ _Sin campos detallados en OpenAPI._
 | `estado` | `string` | sí |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---

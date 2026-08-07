@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+from utils.shipping_mark import LONGITUD_MAX_SUFIJO, normalizar_segmento
+
 class ContactoAsignadoResponse(BaseModel):
     """Contacto de la empresa importadora a cargo de negociar una cotización
     (Semana 4 - Fase 7: navegación cruzada / contacto del asesor asignado)."""
@@ -45,9 +47,33 @@ class CotizacionCreate(BaseModel):
     precio_objetivo_usd: Optional[float] = None
     incoterm: str = Field(..., min_length=1, max_length=50, description="Incoterm acordado (FOB, CIF, etc.)")
     notas_adicionales: Optional[str] = None
+    shipping_mark_sufijo: Optional[str] = Field(
+        None,
+        max_length=LONGITUD_MAX_SUFIJO,
+        description=(
+            "Tu parte de la marca de embarque (ej. 'prendas control'). Se une al prefijo "
+            "de la empresa importadora para rotular tus cajas: 'ctl-prendascontrol'."
+        ),
+    )
     campos_personalizados_valores: Optional[Dict[str, Any]] = Field(
         None, description="Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor}"
     )
+
+    @field_validator("shipping_mark_sufijo")
+    @classmethod
+    def sufijo_utilizable(cls, v: Optional[str]) -> Optional[str]:
+        """Se guarda tal cual lo escribe el cliente, pero tiene que dejar algo
+        rotulable: un sufijo de solo signos ("///") produciría un shipping mark
+        vacío y es mejor rechazarlo aquí que descubrirlo en el puerto."""
+        if v is None:
+            return None
+        if not v.strip():
+            return None
+        if not normalizar_segmento(v):
+            raise ValueError(
+                "El sufijo del shipping mark debe contener al menos una letra o un número"
+            )
+        return v.strip()
 
 class CotizacionResponse(BaseModel):
     id: str
@@ -67,6 +93,10 @@ class CotizacionResponse(BaseModel):
     precio_objetivo_usd: Optional[float]
     incoterm: str
     notas_adicionales: Optional[str]
+    shipping_mark_sufijo: Optional[str] = None
+    # Marca de embarque ya compuesta ("ctl-prendascontrol"). Es None mientras no
+    # se sepa qué empresa importará: en modalidad abierta, hasta que una gane.
+    shipping_mark: Optional[str] = None
     campos_personalizados_valores: Optional[Dict[str, Any]] = None
     asesor_asignado_id: Optional[str] = None
     estado: str  # "creada", "dirigida", "abierta", etc.

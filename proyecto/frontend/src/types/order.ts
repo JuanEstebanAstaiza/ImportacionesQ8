@@ -12,6 +12,8 @@ export interface Order {
   incoterm: string;
   originPort: string;
   destPort: string;
+  /** Marca de embarque congelada al crear la orden: lo que va rotulado en las cajas. */
+  shippingMark?: string | null;
 }
 
 export interface OrderDocument {

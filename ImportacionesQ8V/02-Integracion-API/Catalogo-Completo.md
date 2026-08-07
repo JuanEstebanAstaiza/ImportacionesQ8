@@ -1,16 +1,27 @@
 # Catálogo completo de endpoints
 
-Total: **123** operaciones REST exportadas desde OpenAPI.
+Total: **137** operaciones REST exportadas desde OpenAPI.
 
 | Método | Ruta | Tag | Auth | Resumen |
 |--------|------|-----|------|---------|
 | `GET` | `/` | Salud | Público | Root |
+| `GET` | `/admin/backup` | Administración | JWT | Descargar Backup |
+| `GET` | `/admin/backup/resumen` | Administración | JWT | Resumen Backup |
+| `GET` | `/admin/certificaciones` | Administración | JWT | Listar Certificaciones Admin |
+| `POST` | `/admin/certificaciones` | Administración | JWT | Crear Certificacion |
+| `DELETE` | `/admin/certificaciones/{certificacion_id}` | Administración | JWT | Retirar Certificacion |
+| `PUT` | `/admin/certificaciones/{certificacion_id}` | Administración | JWT | Actualizar Certificacion |
+| `GET` | `/admin/conversaciones` | Administración | JWT | Listar Conversaciones Admin |
+| `GET` | `/admin/conversaciones/{conversacion_id}/mensajes` | Administración | JWT | Leer Conversacion Admin |
 | `GET` | `/admin/cotizaciones-abiertas` | Administración | JWT | Listar Cotizaciones Abiertas |
 | `GET` | `/admin/disputas` | Administración | JWT | Listar Disputas |
 | `PUT` | `/admin/disputas-room/{disputa_id}/resolver` | Administración | JWT | Resolver Disputa Por Id |
 | `PUT` | `/admin/disputas/{orden_id}/resolver` | Administración | JWT | Resolver Disputa |
 | `PUT` | `/admin/evidencias/{evidencia_id}/revisar` | Administración | JWT | Revisar Evidencia Importador |
 | `POST` | `/admin/importadores` | Administración | JWT | Crear Importador Con Dueño |
+| `GET` | `/admin/importadores/{importador_id}/certificaciones` | Administración | JWT | Listar Certificaciones De Empresa |
+| `POST` | `/admin/importadores/{importador_id}/certificaciones` | Administración | JWT | Otorgar Certificacion |
+| `DELETE` | `/admin/importadores/{importador_id}/certificaciones/{certificacion_id}` | Administración | JWT | Revocar Certificacion |
 | `PUT` | `/admin/importadores/{importador_id}/estado` | Administración | JWT | Actualizar Estado Importador |
 | `POST` | `/admin/importadores/{importador_id}/verificar` | Administración | JWT | Verificar Importador |
 | `GET` | `/admin/metricas` | Administración | JWT | Obtener Metricas |
@@ -36,6 +47,7 @@ Total: **123** operaciones REST exportadas desde OpenAPI.
 | `POST` | `/chat/mensajes/{mensaje_id}/traducir` | Chat | JWT | Traducir Mensaje |
 | `POST` | `/chat/traducir` | Chat | JWT | Traducir Preview |
 | `POST` | `/chat/ws-ticket` | Chat | JWT | Emitir Ticket Ws |
+| `GET` | `/configuracion-publica` | Salud | JWT | Configuracion Publica |
 | `GET` | `/cotizaciones` | Cotizaciones | JWT | Listar Cotizaciones |
 | `POST` | `/cotizaciones` | Cotizaciones | JWT | Crear Cotizacion |
 | `GET` | `/cotizaciones/pool-empresa` | Cotizaciones | JWT | Listar Pool Empresa |
@@ -52,6 +64,7 @@ Total: **123** operaciones REST exportadas desde OpenAPI.
 | `POST` | `/cursos` | Cursos | JWT | Crear Curso |
 | `DELETE` | `/cursos/{curso_id}` | Cursos | JWT | Eliminar Curso |
 | `PUT` | `/cursos/{curso_id}` | Cursos | JWT | Actualizar Curso |
+| `GET` | `/cursos/{curso_id}/certificado` | Cursos | JWT | Obtener Certificado Curso |
 | `POST` | `/cursos/{curso_id}/comprar` | Cursos | JWT | Comprar Curso |
 | `POST` | `/cursos/{curso_id}/lecciones/{leccion_id}/progreso` | Cursos | JWT | Marcar Progreso Leccion |
 | `GET` | `/cursos/{id_o_slug}` | Cursos | JWT | Obtener Curso |
@@ -86,6 +99,7 @@ Total: **123** operaciones REST exportadas desde OpenAPI.
 | `DELETE` | `/importadores/campos-personalizados/{campo_id}` | Importadores | JWT | Eliminar Campo Personalizado |
 | `PUT` | `/importadores/campos-personalizados/{campo_id}` | Importadores | JWT | Actualizar Campo Personalizado |
 | `GET` | `/importadores/certificados` | Importadores | Público | Listar Importadores Certificados |
+| `PUT` | `/importadores/cotizaciones/{cotizacion_id}/asignar` | Importadores | JWT | Asignar Asesor A Cotizacion |
 | `GET` | `/importadores/destacados` | Importadores | Público | Listar Importadores Destacados |
 | `GET` | `/importadores/evidencias` | Importadores | JWT | Listar Mis Evidencias |
 | `POST` | `/importadores/evidencias` | Importadores | JWT | Crear Evidencia |

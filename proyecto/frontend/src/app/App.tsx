@@ -55,6 +55,12 @@ import {
   type CreatePropuestaPayload,
 } from "@/services/business.service";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
+import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
+import {
+  componerShippingMark,
+  LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
+  LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
+} from "@/lib/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
 
 const RESET_PASSWORD_PATH = "/restablecer-password";
@@ -356,6 +362,8 @@ interface Order {
   incoterm:string;
   originPort:string;
   destPort:string;
+  /** Marca de embarque congelada al crear la orden: lo que va rotulado en las cajas. */
+  shippingMark?:string|null;
   status:string;
   history:OrderHistoryItem[];
   documents:OrderDocumentItem[];
@@ -415,8 +423,12 @@ interface ChatMsg {
 
 const INCOTERMS=["EXW","FCA","FAS","FOB","CFR","CIF","CPT","CIP","DAP","DPU","DDP"];
 const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","Francia","España","Brasil","Corea del Sur","Turquía","México","Colombia"];
-const LINES=["Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Químicos","Automotriz","Construcción","Consumo masivo","Farmacéutico","Seguridad"];
-const ALL_CATEGORIES=["Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad","Química","Software","Confección","Bebidas","Electrónica"];
+// Una sola lista para la línea de producto que pide el cliente y para las
+// categorías que declara la empresa: eran dos listas distintas y el backend
+// compara ambas para decidir si la empresa puede responder. Ver
+// `src/lib/categorias.ts`.
+const LINES=CATEGORIAS_PRODUCTO;
+const ALL_CATEGORIES=CATEGORIAS_PRODUCTO;
 const SYSTEM_ROOT_FOLDER_NAMES=["Órdenes","Cotizaciones","Respuestas","Cursos","Chats"];
 
 function normalizeFolderName(value:string):string{
@@ -599,6 +611,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     verified: Boolean(imp.verificado),
     country: primaryCountry,
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
+    shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
     advisor: {
       name: "Asesor asignado",
       role: "Asesor",
@@ -653,6 +666,8 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     productPhotoUrl: cot.foto_producto ?? "",
     personalizationLevel: cot.nivel_personalizacion ?? "",
     importMode: cot.modalidad_importacion ?? "",
+    shippingMark: cot.shipping_mark ?? null,
+    shippingMarkSufijo: cot.shipping_mark_sufijo ?? null,
     customFields: cot.campos_personalizados_valores ?? null,
     requesterId: cot.solicitante_id,
   };
@@ -875,6 +890,7 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
     incoterm: quote?.incoterm || "N/D",
     originPort: "N/D",
     destPort: "N/D",
+    shippingMark: order.shipping_mark ?? null,
     status: order.estado,
     history,
     documents,
@@ -1744,7 +1760,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3 flex-wrap"><span className="font-mono text-lg font-semibold">{quote.code}</span><Badge variant={quote.status}/><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",quote.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{quote.mode}</span></div>
-                <div className="flex gap-6 flex-wrap">{[["Fecha",quote.date],["País",quote.country],["Incoterm",quote.incoterm]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}{quote.mode==="Dirigida"&&<div><p className="text-xs text-muted-foreground">Empresa</p><p className="text-sm font-medium">{quote.importer}</p></div>}</div>
+                <div className="flex gap-6 flex-wrap">{[["Fecha",quote.date],["País",quote.country],["Incoterm",quote.incoterm],...(quote.shippingMark?[["Shipping mark",quote.shippingMark]]:[])].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}{quote.mode==="Dirigida"&&<div><p className="text-xs text-muted-foreground">Empresa</p><p className="text-sm font-medium">{quote.importer}</p></div>}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button variant="secondary" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>}>Editar</Button>
@@ -2220,7 +2236,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Resumen comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Producto",order.product],["Cantidad",order.quantity],["Precio final",order.unitPrice],["Incoterm",order.incoterm],["Puerto de origen",order.originPort],["Puerto de destino",order.destPort],["Valor total",order.totalValue]].map(([k,v])=>(
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Producto",order.product],["Cantidad",order.quantity],["Precio final",order.unitPrice],["Incoterm",order.incoterm],["Shipping mark",order.shippingMark||"Sin marca"],["Puerto de origen",order.originPort],["Puerto de destino",order.destPort],["Valor total",order.totalValue]].map(([k,v])=>(
                   <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary font-semibold")}>{v}</p></div>
                 ))}</div>
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
@@ -4080,8 +4096,8 @@ function Stepper({current}:{current:number}) {
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;}
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:""};
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:"",shippingMarkSufijo:""};
 
 function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
@@ -4133,7 +4149,7 @@ function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"
   return(<Card padding="md" className="border-dashed"><div className="flex flex-col items-center text-center py-4 gap-2"><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Building className="w-5 h-5 text-muted-foreground/40"/></div><p className="text-sm text-muted-foreground">Selecciona una modalidad.</p></div></Card>);
 }
 
-function Step2({form,setForm,onProductPhotoUploaded}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>;onProductPhotoUploaded:(fileItem:BackendArchivoItem)=>void|Promise<void>}) {
+function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>;onProductPhotoUploaded:(fileItem:BackendArchivoItem)=>void|Promise<void>;importer:Importer|null}) {
   const [dragOver,setDragOver]=useState(false);
   const upd=(f:keyof QuoteFormState,v:string)=>setForm(p=>({...p,[f]:v}));
   return (
@@ -4185,6 +4201,32 @@ function Step2({form,setForm,onProductPhotoUploaded}:{form:QuoteFormState;setFor
             <Select label="Incoterm" value={form.incoterm} onChange={e=>upd("incoterm",e.target.value)}><option value="">Seleccionar</option>{INCOTERMS.map(t=><option key={t}>{t}</option>)}</Select>
           </div>
           <Textarea label="Notas" placeholder="Información adicional..." rows={3} value={form.notes} onChange={e=>upd("notes",e.target.value)}/>
+        </div>
+      </Card>
+      <Card padding="md"><h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</h3>
+        <p className="text-xs text-muted-foreground mb-4">Cómo quieres que se rotulen tus cajas dentro del contenedor de la empresa importadora.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+          <Input
+            label="Tu identificador"
+            placeholder="Prendas Control"
+            maxLength={LONGITUD_MAX_SUFIJO_SHIPPING_MARK}
+            value={form.shippingMarkSufijo}
+            onChange={e=>upd("shippingMarkSufijo",e.target.value)}
+            hint="Opcional. El nombre con el que reconoces tu carga."
+          />
+          <div className="pt-1">
+            <p className="text-sm font-medium mb-1.5">Marca resultante</p>
+            <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
+              {componerShippingMark(importer?.shippingMarkPrefix,form.shippingMarkSufijo)||"—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {importer
+                ?(importer.shippingMarkPrefix
+                  ?`Prefijo de ${importer.name}: ${importer.shippingMarkPrefix}`
+                  :`${importer.name} todavía no configuró su prefijo.`)
+                :"Se completará con el prefijo de la empresa que atienda tu solicitud."}
+            </p>
+          </div>
         </div>
       </Card>
     </div>
@@ -4259,6 +4301,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
       incoterm:form.incoterm,
       notas_adicionales:form.notes||undefined,
+      shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
     };
 
     try{
@@ -4285,7 +4328,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
             <div className="mb-8"><Stepper current={step}/></div>
             <div className="flex gap-6 items-start">
               <div className="flex-1 min-w-0">
-                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
+                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
                 {stepError&&<div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"><AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/><p className="text-sm text-destructive">{stepError}</p></div>}
                 <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
                   <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>{step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>}</div>
@@ -4481,7 +4524,7 @@ const BANNER_FORMATS_LABEL="PNG, JPG o WebP";
 const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 const BANNER_MAX_BYTES=5*1024*1024;
 
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;})=>Promise<void>}) {
   const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({
@@ -4489,6 +4532,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
     phone:"+57 1 234 5678",address:"Calle 90 #15-20, Bogotá, Colombia",
     categories:[] as string[],countries:[] as string[],
     industries:["Retail","Industrial"],avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
+    shippingMarkPrefijo:"",
     certs:["ISO 9001","CE"],banner:"",
   });
   const [saveError,setSaveError]=useState("");
@@ -4531,6 +4575,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         certs:getStringArray("certs", prev.certs),
         banner:getString("banner", ""),
         soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
+        shippingMarkPrefijo:company.shipping_mark_prefijo || "",
       }
     ));
   },[company]);
@@ -4578,6 +4623,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         logo_url:form.logoUrl.trim() || undefined,
         especialidad_producto:form.categories,
         paises_origen:form.countries,
+        shipping_mark_prefijo:form.shippingMarkPrefijo.trim(),
         tiempo_respuesta_promedio:form.avgResponse,
         capacidad_volumen:form.capacityVolume.trim() ? Number.parseInt(form.capacityVolume, 10) : undefined,
         perfil_publico: {
@@ -4689,6 +4735,30 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <div>
                     <p className="text-sm font-medium mb-1.5">Certificaciones</p>
                     <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>{const arr=form.certs.includes(c)?form.certs.filter(x=>x!==c):[...form.certs,c];setForm(p=>({...p,certs:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
+                  </div>
+                </div>
+              </Card>
+              <Card padding="md">
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Prefijo con el que se rotula la carga de tu empresa. Cada cliente añade su propio sufijo
+                  al pedir la cotización, y así se distinguen sus cajas dentro del contenedor.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4 items-start">
+                  <Input
+                    label="Prefijo de la empresa"
+                    placeholder="ctl"
+                    maxLength={LONGITUD_MAX_PREFIJO_SHIPPING_MARK}
+                    value={form.shippingMarkPrefijo}
+                    onChange={e=>f("shippingMarkPrefijo",e.target.value)}
+                    hint="Solo letras y números; se guarda en minúsculas."
+                  />
+                  <div className="pt-1">
+                    <p className="text-sm font-medium mb-1.5">Así quedará</p>
+                    <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
+                      {componerShippingMark(form.shippingMarkPrefijo,"prendas control")||"—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Ejemplo con un cliente llamado «Prendas Control».</p>
                   </div>
                 </div>
               </Card>
@@ -5045,6 +5115,7 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
             <div><p className="text-xs text-muted-foreground">Origen</p><p className="font-medium">{origen || quote.country || "No especificado"}</p></div>
             <div><p className="text-xs text-muted-foreground">Destino</p><p className="font-medium">{destino || "No especificado"}</p></div>
             <div><p className="text-xs text-muted-foreground">Incoterm</p><p className="font-medium">{quote.incoterm || "No especificado"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Shipping mark</p><p className="font-medium font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</p></div>
           </div>
         </Card>
 
@@ -5322,6 +5393,9 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   });
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
 
+  // Solo la cuenta dueña envía; el asesor guarda y deja el borrador listo.
+  const esBorradorPendienteDeEnvio = userRole==="importadora" && existingProposal?.estado==="borrador";
+
   useEffect(()=>{
     if(!existingProposal){
       return;
@@ -5364,9 +5438,18 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
         condiciones_adicionales: observaciones || undefined,
       };
 
+      // El borrador lo redacta el asesor y lo envía la cuenta dueña. Ese envío
+      // (POST /propuestas/{id}/enviar) no lo llamaba ninguna pantalla, así que
+      // el borrador se quedaba atrapado y el solicitante nunca veía la
+      // propuesta. Aquí se cierra el circuito.
       if(existingProposal?.id){
         await businessService.updateProposal(existingProposal.id, payload);
-        setSubmittedTitle("Propuesta actualizada");
+        if(esBorradorPendienteDeEnvio){
+          await businessService.sendProposal(existingProposal.id);
+          setSubmittedTitle("Propuesta enviada al solicitante");
+        }else{
+          setSubmittedTitle(userRole==="asesor"?"Borrador actualizado":"Propuesta actualizada");
+        }
       }else if(userRole==="asesor"){
         await businessService.createProposalDraft(payload);
         setSubmittedTitle("Borrador guardado");
@@ -5440,6 +5523,18 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:"Responder cotización"}]}/>
           <h1 className="text-xl font-semibold mt-3">Responder cotización</h1>
           <p className="text-sm text-muted-foreground mt-0.5 mb-6">{quote.product} · {quote.code}</p>
+          {esBorradorPendienteDeEnvio&&(
+            <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
+              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+              <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el solicitante no la ve.</span>
+            </div>
+          )}
+          {userRole==="asesor"&&(
+            <div className="mb-6 p-3 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground flex items-start gap-2">
+              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+              <span>Tu respuesta se guarda como borrador. La cuenta de la empresa es quien la revisa y la envía al solicitante.</span>
+            </div>
+          )}
           {/* Stepper */}
           <div className="flex items-center gap-2 mb-8">
             {steps.map((s,i)=>(
@@ -5524,10 +5619,17 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                   {step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>setStep(s=>s-1)}>Anterior</Button>}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" icon={<Save className="w-3.5 h-3.5"/>}>Guardar borrador</Button>
                   {step<3
                     ?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={()=>setStep(s=>s+1)}>Continuar</Button>
-                    :<Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={saving} onClick={submit}>Enviar propuesta</Button>
+                    :<Button
+                       variant="primary"
+                       size="md"
+                       icon={userRole==="asesor"?<Save className="w-4 h-4"/>:<Send className="w-4 h-4"/>}
+                       loading={saving}
+                       onClick={submit}
+                     >
+                       {userRole==="asesor"?"Guardar borrador":"Enviar propuesta"}
+                     </Button>
                   }
                 </div>
               </div>
@@ -6550,13 +6652,23 @@ export default function App() {
     );
   }, [marketplaceImporters, quoteStatusOverrides]);
 
+  /**
+   * Índice "cotización → propuesta de mi empresa" (incluye borradores).
+   *
+   * Lo usa tanto el asesor como la cuenta dueña: sin él, la empresa no sabía
+   * que un asesor ya había redactado un borrador, pulsaba "Responder" y el
+   * backend la rechazaba con un 400. Por eso se recorren también las
+   * cotizaciones de la bandeja de la empresa, no solo las del asesor.
+   */
   const reloadAdvisorProposalIndex = useCallback(async () => {
     if (!currentUserProfile?.importador_id) {
       setAdvisorProposalsByQuoteId({});
       return;
     }
 
-    const quoteIds = Array.from(new Set([...advisorAssignedQuotes, ...availableQuotes].map((quote) => quote.id)));
+    const quoteIds = Array.from(
+      new Set([...advisorAssignedQuotes, ...availableQuotes, ...importerQuotes].map((quote) => quote.id)),
+    );
     if (quoteIds.length === 0) {
       setAdvisorProposalsByQuoteId({});
       return;
@@ -6582,7 +6694,7 @@ export default function App() {
     });
 
     setAdvisorProposalsByQuoteId(proposalByQuote);
-  }, [advisorAssignedQuotes, availableQuotes, currentUserProfile?.importador_id]);
+  }, [advisorAssignedQuotes, availableQuotes, importerQuotes, currentUserProfile?.importador_id]);
 
   const reloadNotifications = useCallback(async () => {
     try {
@@ -6708,7 +6820,10 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!isAuthenticated || !token || isInitializing || userRole !== "asesor") {
+    if (!isAuthenticated || !token || isInitializing) {
+      return;
+    }
+    if (userRole !== "asesor" && userRole !== "importadora") {
       return;
     }
     void reloadAdvisorProposalIndex();
@@ -6761,7 +6876,7 @@ export default function App() {
     if (userRole === "solicitante") {
       tareas.push(reloadRequesterQuotes(), reloadRequesterResponses(), reloadRequesterOrders());
     } else if (userRole === "importadora") {
-      tareas.push(reloadImporterQuotes(), reloadCompanyAdvisors(), reloadImporterOrders());
+      tareas.push(reloadImporterQuotes(), reloadCompanyAdvisors(), reloadImporterOrders(), reloadAdvisorProposalIndex());
     } else if (userRole === "asesor") {
       tareas.push(reloadAdvisorAssignedQuotes(), reloadAdvisorAvailableQuotes(), reloadAdvisorProposalIndex());
     }
@@ -6976,7 +7091,7 @@ export default function App() {
     return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }

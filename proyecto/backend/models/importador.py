@@ -31,6 +31,11 @@ class Importador(Base):
     # `estado`: una empresa puede estar activa sin estar verificada. Solo el
     # admin puede fijarlo (`POST /admin/importadores/{id}/verificar`).
     verificado = Column(Boolean, default=False, nullable=False)
+    # Prefijo fijo de la empresa en el shipping mark de sus embarques (ej. "ctl").
+    # Se combina con el sufijo que aporta cada cliente en su cotización para
+    # rotular las cajas: "ctl" + "prendas control" → "ctl-prendascontrol".
+    # Ver `utils/shipping_mark.py`.
+    shipping_mark_prefijo = Column(String(12), nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

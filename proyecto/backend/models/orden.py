@@ -38,6 +38,11 @@ class Orden(Base):
     precio_acordado_usd = Column(Float, nullable=False)
     tiempo_estimado_entrega = Column(String(100), nullable=True)
     condiciones_adicionales = Column(Text, nullable=True)
+    # Copia congelada de la marca de embarque en el momento de crear la orden
+    # ("ctl-prendascontrol"). Se guarda y no se recalcula: si la empresa cambia
+    # su prefijo más adelante, las cajas ya rotuladas y los documentos emitidos
+    # tienen que seguir cuadrando. Ver `utils/shipping_mark.py`.
+    shipping_mark = Column(String(60), nullable=True)
     # Disputas (Tarea 3.4, versión ligera): el solicitante puede reportar un problema
     # y el equipo de administración lo revisa/resuelve desde el panel admin.
     en_disputa = Column(Boolean, default=False, nullable=False)

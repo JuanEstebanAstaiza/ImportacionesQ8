@@ -551,7 +551,7 @@
           "Importadores"
         ],
         "summary": "Actualizar Estado Asesor",
-        "description": "Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa).",
+        "description": "Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa).\n\nAl desactivarlo, toda su carga de trabajo (cotizaciones, órdenes y chats)\npasa a la cuenta dueña para que ninguna negociación quede huérfana.",
         "operationId": "actualizar_estado_asesor_importadores_asesores__asesor_id__estado_put",
         "security": [
           {
@@ -585,7 +585,65 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AsesorResponse"
+                  "$ref": "#/components/schemas/AsesorEstadoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/importadores/cotizaciones/{cotizacion_id}/asignar": {
+      "put": {
+        "tags": [
+          "Importadores"
+        ],
+        "summary": "Asignar Asesor A Cotizacion",
+        "description": "La cuenta dueña asigna (o reasigna) el responsable de una cotización.\n\nHasta ahora el único mecanismo era el reclamo por orden de llegada, sin\nmanera de corregirlo: si el asesor equivocado reclamaba una cotización,\nnadie podía moverla. Con `asesor_id = null` la cotización vuelve al pool.",
+        "operationId": "asignar_asesor_a_cotizacion_importadores_cotizaciones__cotizacion_id__asignar_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cotizacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cotizacion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignarAsesorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasignacionResponse"
                 }
               }
             }
@@ -850,7 +908,7 @@
           "Importadores"
         ],
         "summary": "Listar Importadores Destacados",
-        "description": "Top empresas importadoras activas por calificación promedio, para la sección\n\"Mejor calificados\" del dashboard del solicitante.",
+        "description": "Empresas destacadas del dashboard del solicitante.\n\nEl criterio es el peso de las certificaciones que la plataforma les otorgó,\nno una calificación promedio: ese campo nunca se alimentó de reseñas reales.",
         "operationId": "listar_importadores_destacados_importadores_destacados_get",
         "parameters": [
           {
@@ -1613,7 +1671,7 @@
           "Cotizaciones"
         ],
         "summary": "Listar Propuestas",
-        "description": "Listar todas las propuestas recibidas para una cotización. Solo el solicitante de la cotización puede verlas.\n\n- **cotizacion_id**: ID de la cotización (UUID)",
+        "description": "Listar las propuestas de una cotización.\n\n- **solicitante** dueño de la cotización: ve todas las propuestas enviadas\n  por las empresas (los borradores en redacción siguen ocultos).\n- **empresa** (dueño o asesor): ve **solo las propuestas de su propia\n  empresa**, incluidos sus borradores. Antes recibía un 403 aquí y no tenía\n  forma de consultar por API lo que ella misma había enviado.\n\n- **cotizacion_id**: ID de la cotización (UUID)",
         "operationId": "listar_propuestas_cotizaciones__cotizacion_id__propuestas_get",
         "security": [
           {
@@ -1876,7 +1934,7 @@
           "Propuestas"
         ],
         "summary": "Crear Borrador Propuesta",
-        "description": "Un asesor redacta un borrador de propuesta para una cotización que reclamó\n(`POST /cotizaciones/{id}/reclamar`). El borrador no es visible para el\nsolicitante hasta que la cuenta dueña lo envíe (`POST /propuestas/{id}/enviar`).",
+        "description": "Redacta un borrador de propuesta para una cotización de la empresa.\n\nUn **asesor** solo puede redactar sobre lo que reclamó\n(`POST /cotizaciones/{id}/reclamar`). El **dueño** puede redactar sobre\ncualquier cotización de su empresa: también reclama cotizaciones, y limitar\neste endpoint al rol \"asesor\" lo dejaba con un 403 sobre su propio trabajo.\n\nEl borrador no es visible para el solicitante hasta que la cuenta dueña lo\nenvíe (`POST /propuestas/{id}/enviar`).",
         "operationId": "crear_borrador_propuesta_propuestas_borrador_post",
         "requestBody": {
           "content": {
@@ -2707,7 +2765,7 @@
           "Asesores"
         ],
         "summary": "Listar Mis Cotizaciones Asignadas",
-        "description": "Cotizaciones que el asesor autenticado ha reclamado (pantalla \"cuántas\ntengo asignadas\" del panel de empresa).",
+        "description": "Cotizaciones que la cuenta autenticada ha reclamado (pantalla \"cuántas\ntengo asignadas\" del panel de empresa).\n\nAcepta al dueño además del asesor: `POST /cotizaciones/{id}/reclamar` permite\nreclamar a ambos, así que limitar esta consulta a \"asesor\" dejaba al dueño con\nun 403 en la pantalla que lista justamente lo que él acababa de reclamar.",
         "operationId": "listar_mis_cotizaciones_asignadas_asesores_me_cotizaciones_get",
         "responses": {
           "200": {
@@ -2738,7 +2796,7 @@
           "Asesores"
         ],
         "summary": "Dashboard Stats Asesor",
-        "description": "Métricas de rendimiento del asesor: cotizaciones respondidas, tasa de\naceptación, volumen cotizado y órdenes asociadas.",
+        "description": "Métricas de rendimiento de la cuenta de empresa autenticada: cotizaciones\nrespondidas, tasa de aceptación, volumen cotizado y órdenes asociadas.\n\nEl dueño también reclama y responde cotizaciones, así que ve sus propias\nmétricas con el mismo cálculo que un asesor.",
         "operationId": "dashboard_stats_asesor_asesores_dashboard_stats_get",
         "responses": {
           "200": {
@@ -3741,6 +3799,607 @@
         }
       }
     },
+    "/admin/backup": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Descargar Backup",
+        "description": "Descarga un ZIP con toda la plataforma: base de datos + archivos subidos.\n\nPensado para tomar una foto antes de actualizar y poder volver atrás sin\ndepender de integración continua. Se restaura con\n`python scripts/restaurar_backup.py <archivo.zip>`.\n\nOjo: el ZIP contiene datos personales y hashes de contraseña de toda la\nplataforma. Trátalo como un secreto.",
+        "operationId": "descargar_backup_admin_backup_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "incluir_archivos",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Incluir uploads/ y generated_docs/ en el ZIP",
+              "default": true,
+              "title": "Incluir Archivos"
+            },
+            "description": "Incluir uploads/ y generated_docs/ en el ZIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/backup/resumen": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Resumen Backup",
+        "description": "Qué contendría el backup, sin generarlo: filas por tabla y peso de los archivos.",
+        "operationId": "resumen_backup_admin_backup_resumen_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/certificaciones": {
+      "post": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Crear Certificacion",
+        "description": "Crea un sello desde cero: nombre, descripción, logo y peso publicitario.",
+        "operationId": "crear_certificacion_admin_certificaciones_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificacionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificacionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar Certificaciones Admin",
+        "description": "Catálogo completo de sellos, con cuántas empresas tiene cada uno.",
+        "operationId": "listar_certificaciones_admin_admin_certificaciones_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "incluir_inactivas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Incluir sellos retirados del catálogo",
+              "default": true,
+              "title": "Incluir Inactivas"
+            },
+            "description": "Incluir sellos retirados del catálogo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CertificacionResponse"
+                  },
+                  "title": "Response Listar Certificaciones Admin Admin Certificaciones Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/certificaciones/{certificacion_id}": {
+      "put": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Actualizar Certificacion",
+        "description": "Edita el sello. Cambiar `peso_publicidad` reordena el catálogo al instante.",
+        "operationId": "actualizar_certificacion_admin_certificaciones__certificacion_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "certificacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Certificacion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificacionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificacionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Retirar Certificacion",
+        "description": "Retira el sello del catálogo sin borrarlo.\n\nNo se elimina de verdad: eso perdería el registro de a qué empresas se les\nhabía otorgado y por qué aparecían destacadas en su momento.",
+        "operationId": "retirar_certificacion_admin_certificaciones__certificacion_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "certificacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Certificacion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificacionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/importadores/{importador_id}/certificaciones": {
+      "post": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Otorgar Certificacion",
+        "description": "Respalda a una empresa con un sello de la plataforma.",
+        "operationId": "otorgar_certificacion_admin_importadores__importador_id__certificaciones_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "importador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Importador Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtorgarCertificacionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificacionesDeEmpresaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar Certificaciones De Empresa",
+        "operationId": "listar_certificaciones_de_empresa_admin_importadores__importador_id__certificaciones_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "importador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Importador Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificacionesDeEmpresaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/importadores/{importador_id}/certificaciones/{certificacion_id}": {
+      "delete": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Revocar Certificacion",
+        "description": "Retira el respaldo a una empresa. La empresa baja en el catálogo al instante.",
+        "operationId": "revocar_certificacion_admin_importadores__importador_id__certificaciones__certificacion_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "importador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Importador Id"
+            }
+          },
+          {
+            "name": "certificacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Certificacion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificacionesDeEmpresaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/conversaciones": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar Conversaciones Admin",
+        "description": "Todas las conversaciones de la plataforma, para supervisión del equipo.\n\nReemplaza el uso de `GET /chat/conversaciones`, que para un admin devolvía\nlas 50 más recientes sin filtros ni paginación ni datos de los participantes.",
+        "operationId": "listar_conversaciones_admin_admin_conversaciones_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "buscar",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtra por nombre o email de solicitante/empresa",
+              "title": "Buscar"
+            },
+            "description": "Filtra por nombre o email de solicitante/empresa"
+          },
+          {
+            "name": "importador_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Solo conversaciones de esta empresa",
+              "title": "Importador Id"
+            },
+            "description": "Solo conversaciones de esta empresa"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversacionesAdminResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/conversaciones/{conversacion_id}/mensajes": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Leer Conversacion Admin",
+        "description": "Historial completo de una conversación. Solo lectura: el admin supervisa,\nno interviene en la negociación.",
+        "operationId": "leer_conversacion_admin_admin_conversaciones__conversacion_id__mensajes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversacion Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MensajeAdminItem"
+                  },
+                  "title": "Response Leer Conversacion Admin Admin Conversaciones  Conversacion Id  Mensajes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/metricas": {
       "get": {
         "tags": [
@@ -4480,7 +5139,7 @@
           "Cursos"
         ],
         "summary": "Comprar Curso",
-        "description": "Registra la compra/inscripción del solicitante en el curso.\nIdempotente: si ya compró, devuelve la inscripción existente.\n\nNota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en\nauditoría 2026-07-28 (A04 diseño de pagos).",
+        "description": "Registra la compra/inscripción del usuario en el curso.\nIdempotente: si ya compró, devuelve la inscripción existente.\n\nCualquier cuenta de negocio puede inscribirse (no solo el solicitante):\nrestringirlo al rol \"solicitante\" devolvía 403 a los asesores y dueños de\nempresa que quisieran tomar un curso de otra importadora.\n\nNota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en\nauditoría 2026-07-28 (A04 diseño de pagos).",
         "operationId": "comprar_curso_cursos__curso_id__comprar_post",
         "security": [
           {
@@ -4603,6 +5262,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProgresoLeccionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cursos/{curso_id}/certificado": {
+      "get": {
+        "tags": [
+          "Cursos"
+        ],
+        "summary": "Obtener Certificado Curso",
+        "description": "Certificado de finalización del alumno que completó el 100% del curso.\n\nEs idempotente: el PDF se emite una sola vez y queda en la carpeta\n`Certificados` de su gestión documental; las llamadas siguientes devuelven\nel mismo archivo.",
+        "operationId": "obtener_certificado_curso_cursos__curso_id__certificado_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "curso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Curso Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificadoCursoResponse"
                 }
               }
             }
@@ -5738,6 +6445,26 @@
         }
       }
     },
+    "/configuracion-publica": {
+      "get": {
+        "tags": [
+          "Salud"
+        ],
+        "summary": "Configuracion Publica",
+        "description": "Flags que el frontend necesita conocer antes de dibujar la navegación.\n\nFuente única de verdad: el frontend no duplica estas banderas en su propio\n`.env`, así que encender o apagar un módulo se hace en un solo sitio.",
+        "operationId": "configuracion_publica_configuracion_publica_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -5881,6 +6608,19 @@
             "type": "boolean",
             "title": "Solo Cotizaciones Directas",
             "default": false
+          },
+          "shipping_mark_prefijo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark Prefijo",
+            "description": "Prefijo de la empresa en el shipping mark (ej. 'ctl'). La empresa puede cambiarlo después."
           },
           "email_dueño": {
             "type": "string",
@@ -6190,6 +6930,73 @@
         ],
         "title": "AsesorCreate"
       },
+      "AsesorEstadoResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "cotizaciones_reasignadas": {
+            "type": "integer",
+            "title": "Cotizaciones Reasignadas",
+            "default": 0
+          },
+          "ordenes_reasignadas": {
+            "type": "integer",
+            "title": "Ordenes Reasignadas",
+            "default": 0
+          },
+          "conversaciones_reasignadas": {
+            "type": "integer",
+            "title": "Conversaciones Reasignadas",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "activo",
+          "fecha_creacion"
+        ],
+        "title": "AsesorEstadoResponse",
+        "description": "Estado del asesor + qué se movió al desactivarlo.\n\nExtiende `AsesorResponse` en vez de envolverlo para no romper a los clientes\nque ya leen `activo`/`id` en la raíz de la respuesta."
+      },
       "AsesorEstadoUpdate": {
         "properties": {
           "activo": {
@@ -6253,6 +7060,24 @@
           "fecha_creacion"
         ],
         "title": "AsesorResponse"
+      },
+      "AsignarAsesorRequest": {
+        "properties": {
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          }
+        },
+        "type": "object",
+        "title": "AsignarAsesorRequest",
+        "description": "Reasignación explícita del responsable de una cotización.\n\n`asesor_id = None` devuelve la cotización al pool de la empresa."
       },
       "Body_subir_archivo_documentos_archivos_upload_post": {
         "properties": {
@@ -6546,6 +7371,307 @@
         "type": "object",
         "title": "CarpetaUpdate"
       },
+      "CertificacionCreate": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Descripcion",
+            "default": ""
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "peso_publicidad": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Peso Publicidad",
+            "default": 0.0
+          },
+          "activa": {
+            "type": "boolean",
+            "title": "Activa",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "title": "CertificacionCreate"
+      },
+      "CertificacionOtorgadaResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "certificacion_id": {
+            "type": "string",
+            "title": "Certificacion Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "type": "string",
+            "title": "Descripcion",
+            "default": ""
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "peso_publicidad": {
+            "type": "number",
+            "title": "Peso Publicidad",
+            "default": 0.0
+          },
+          "fecha_otorgada": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Otorgada"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "certificacion_id",
+          "nombre"
+        ],
+        "title": "CertificacionOtorgadaResponse",
+        "description": "Sello vigente de una empresa, tal como lo ve el solicitante."
+      },
+      "CertificacionResponse": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Descripcion",
+            "default": ""
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "peso_publicidad": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Peso Publicidad",
+            "default": 0.0
+          },
+          "activa": {
+            "type": "boolean",
+            "title": "Activa",
+            "default": true
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "fecha_creacion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Creacion"
+          },
+          "empresas_certificadas": {
+            "type": "integer",
+            "title": "Empresas Certificadas",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "id"
+        ],
+        "title": "CertificacionResponse"
+      },
+      "CertificacionUpdate": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "peso_publicidad": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peso Publicidad"
+          },
+          "activa": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activa"
+          }
+        },
+        "type": "object",
+        "title": "CertificacionUpdate"
+      },
+      "CertificacionesDeEmpresaResponse": {
+        "properties": {
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "puntaje_publicidad": {
+            "type": "number",
+            "title": "Puntaje Publicidad",
+            "default": 0.0
+          },
+          "certificaciones": {
+            "items": {
+              "$ref": "#/components/schemas/CertificacionOtorgadaResponse"
+            },
+            "type": "array",
+            "title": "Certificaciones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "importador_id"
+        ],
+        "title": "CertificacionesDeEmpresaResponse"
+      },
+      "CertificadoCursoResponse": {
+        "properties": {
+          "curso_id": {
+            "type": "string",
+            "title": "Curso Id"
+          },
+          "curso_titulo": {
+            "type": "string",
+            "title": "Curso Titulo"
+          },
+          "archivo_id": {
+            "type": "string",
+            "title": "Archivo Id"
+          },
+          "url_descarga": {
+            "type": "string",
+            "title": "Url Descarga"
+          },
+          "fecha_emision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Emision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "curso_id",
+          "curso_titulo",
+          "archivo_id",
+          "url_descarga"
+        ],
+        "title": "CertificadoCursoResponse"
+      },
       "ChatAttachmentItem": {
         "properties": {
           "archivo_id": {
@@ -6575,6 +7701,17 @@
           "tipo_recurso": {
             "type": "string",
             "title": "Tipo Recurso"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
           },
           "storage_url": {
             "anyOf": [
@@ -6796,6 +7933,146 @@
         "title": "ContactoAsignadoResponse",
         "description": "Contacto de la empresa importadora a cargo de negociar una cotización\n(Semana 4 - Fase 7: navegación cruzada / contacto del asesor asignado)."
       },
+      "ConversacionAdminItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "orden_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden Id"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "solicitante_id": {
+            "type": "string",
+            "title": "Solicitante Id"
+          },
+          "solicitante_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitante Nombre"
+          },
+          "solicitante_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitante Email"
+          },
+          "importador_usuario_id": {
+            "type": "string",
+            "title": "Importador Usuario Id"
+          },
+          "importador_usuario_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importador Usuario Nombre"
+          },
+          "importador_usuario_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importador Usuario Email"
+          },
+          "importador_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importador Id"
+          },
+          "empresa_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empresa Nombre"
+          },
+          "total_mensajes": {
+            "type": "integer",
+            "title": "Total Mensajes",
+            "default": 0
+          },
+          "ultimo_mensaje_texto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Mensaje Texto"
+          },
+          "ultimo_mensaje_fecha": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Mensaje Fecha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cotizacion_id",
+          "fecha_creacion",
+          "solicitante_id",
+          "importador_usuario_id"
+        ],
+        "title": "ConversacionAdminItem",
+        "description": "Fila del supervisor de chats del panel de administración."
+      },
       "ConversacionChatResponse": {
         "properties": {
           "id": {
@@ -6850,6 +8127,37 @@
           "fecha_creacion"
         ],
         "title": "ConversacionChatResponse"
+      },
+      "ConversacionesAdminResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversacionAdminItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ConversacionesAdminResponse"
       },
       "CotizacionAsignadaItem": {
         "properties": {
@@ -7054,6 +8362,19 @@
             ],
             "title": "Notas Adicionales"
           },
+          "shipping_mark_sufijo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark Sufijo",
+            "description": "Tu parte de la marca de embarque (ej. 'prendas control'). Se une al prefijo de la empresa importadora para rotular tus cajas: 'ctl-prendascontrol'."
+          },
           "campos_personalizados_valores": {
             "anyOf": [
               {
@@ -7198,6 +8519,28 @@
               }
             ],
             "title": "Notas Adicionales"
+          },
+          "shipping_mark_sufijo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark Sufijo"
+          },
+          "shipping_mark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark"
           },
           "campos_personalizados_valores": {
             "anyOf": [
@@ -7707,6 +9050,21 @@
               }
             ],
             "title": "Estado"
+          },
+          "modulos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModuloCreate"
+                },
+                "type": "array",
+                "maxItems": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modulos"
           }
         },
         "type": "object",
@@ -8429,6 +9787,18 @@
             ],
             "title": "Logo Url"
           },
+          "certificaciones": {
+            "items": {
+              "$ref": "#/components/schemas/CertificacionOtorgadaResponse"
+            },
+            "type": "array",
+            "title": "Certificaciones"
+          },
+          "puntaje_publicidad": {
+            "type": "number",
+            "title": "Puntaje Publicidad",
+            "default": 0.0
+          },
           "especialidad_producto": {
             "items": {
               "type": "string"
@@ -8486,6 +9856,17 @@
             "type": "boolean",
             "title": "Verificado",
             "default": false
+          },
+          "shipping_mark_prefijo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark Prefijo"
           },
           "fecha_registro": {
             "type": "string",
@@ -8605,6 +9986,19 @@
               }
             ],
             "title": "Solo Cotizaciones Directas"
+          },
+          "shipping_mark_prefijo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark Prefijo",
+            "description": "Prefijo de la empresa en el shipping mark (ej. 'ctl'). Cadena vacía para quitarlo."
           }
         },
         "type": "object",
@@ -8694,6 +10088,18 @@
       },
       "LeccionCreate": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "titulo": {
             "type": "string",
             "maxLength": 255,
@@ -8960,6 +10366,78 @@
         ],
         "title": "MatchingStatusResponse",
         "description": "Estado de difusión de una cotización abierta a la red de importadores."
+      },
+      "MensajeAdminItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "conversacion_id": {
+            "type": "string",
+            "title": "Conversacion Id"
+          },
+          "remitente_id": {
+            "type": "string",
+            "title": "Remitente Id"
+          },
+          "remitente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remitente Nombre"
+          },
+          "remitente_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remitente Email"
+          },
+          "remitente_rol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remitente Rol"
+          },
+          "contenido": {
+            "type": "string",
+            "title": "Contenido"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "fecha_envio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Envio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "conversacion_id",
+          "remitente_id",
+          "contenido",
+          "tipo",
+          "fecha_envio"
+        ],
+        "title": "MensajeAdminItem"
       },
       "MensajeChatCreate": {
         "properties": {
@@ -9284,6 +10762,18 @@
       },
       "ModuloCreate": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "titulo": {
             "type": "string",
             "maxLength": 255,
@@ -9563,6 +11053,17 @@
             ],
             "title": "Condiciones Adicionales"
           },
+          "shipping_mark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Mark"
+          },
           "en_disputa": {
             "type": "boolean",
             "title": "En Disputa",
@@ -9658,6 +11159,31 @@
           "activo"
         ],
         "title": "OrganizacionResponse"
+      },
+      "OtorgarCertificacionRequest": {
+        "properties": {
+          "certificacion_id": {
+            "type": "string",
+            "title": "Certificacion Id"
+          },
+          "notas": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "certificacion_id"
+        ],
+        "title": "OtorgarCertificacionRequest"
       },
       "PagoResponse": {
         "properties": {
@@ -9938,8 +11464,41 @@
         ],
         "title": "PropuestaResponse"
       },
+      "ReasignacionResponse": {
+        "properties": {
+          "cotizaciones_reasignadas": {
+            "type": "integer",
+            "title": "Cotizaciones Reasignadas",
+            "default": 0
+          },
+          "ordenes_reasignadas": {
+            "type": "integer",
+            "title": "Ordenes Reasignadas",
+            "default": 0
+          },
+          "conversaciones_reasignadas": {
+            "type": "integer",
+            "title": "Conversaciones Reasignadas",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ReasignacionResponse"
+      },
       "RecursoLeccionCreate": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "nombre": {
             "type": "string",
             "maxLength": 255,

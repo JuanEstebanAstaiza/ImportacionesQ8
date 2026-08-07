@@ -11,6 +11,14 @@
 
 ---
 
+### `GET /configuracion-publica`
+
+- **Resumen:** Configuracion Publica
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+---
+
 ### `GET /health`
 
 - **Resumen:** Health Check

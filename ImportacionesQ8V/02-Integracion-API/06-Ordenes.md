@@ -24,6 +24,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -52,6 +53,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -82,6 +84,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -110,6 +113,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
