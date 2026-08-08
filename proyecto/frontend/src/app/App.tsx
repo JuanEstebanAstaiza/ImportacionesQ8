@@ -4826,35 +4826,63 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
   const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||(imp.certs??[]).length>0;return ms&&mc&&mcat&&mr;});
   const hasF=cs||cc||ccat||cr;
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[{m:"dirigida"as const,icon:Building2,title:"Cotización dirigida",desc:"Elige una empresa importadora específica para enviar directamente tu solicitud."},{m:"abierta"as const,icon:Globe,title:"Cotización abierta",desc:"La solicitud se distribuirá automáticamente entre importadores compatibles."}].map(({m,icon:Icon,title,desc})=>(
-        <button key={m} onClick={()=>{setModalidad(m);if(m==="abierta")setSelectedId(null);}} className={clsx("p-5 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",modalidad===m?"border-primary bg-primary/5 shadow-md":"border-border bg-white hover:border-primary/40")}>
-          <div className={clsx("w-10 h-10 rounded-lg flex items-center justify-center mb-3",modalidad===m?"bg-primary":"bg-muted")}><Icon className={clsx("w-5 h-5",modalidad===m?"text-white":"text-muted-foreground")}/></div>
-          <h3 className="font-semibold text-sm mb-1.5">{title}</h3><p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-          {modalidad===m&&<div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium"><Check className="w-3.5 h-3.5"/>Seleccionada</div>}
-        </button>
-      ))}</div>
-      {modalidad==="dirigida"&&<div>
-        <h3 className="text-sm font-semibold mb-3">Selecciona una importadora</h3>
-        <Card padding="sm" className="mb-4"><div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-          <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
-          <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
-          <div className="w-44"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Certificación</option><option value="certificadas">Con certificaciones</option></Select></div>
-          {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
-        </div></Card>
-        {fi.length===0?<Card padding="lg" className="border-dashed"><div className="py-6 text-center"><p className="text-sm text-muted-foreground">No se encontraron empresas</p></div></Card>:(
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">{fi.map(imp=>{const sel=selectedId===imp.id;return(
-            <div key={imp.id} onClick={()=>setSelectedId(sel?null:imp.id)} className={clsx("relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200",sel?"border-primary shadow-lg bg-white":"border-border bg-white hover:border-primary/40 hover:shadow-md")}>
-              {sel&&<div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-white"/></div>}
-              <div className="flex items-start gap-3 mb-3"><Avatar initials={imp.initials} size="lg" color={imp.color}/><div className="min-w-0"><div className="flex items-start gap-1"><p className="font-semibold text-sm leading-tight">{imp.name}</p>{imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5 leading-tight">{imp.specialty}</p><p className="text-xs text-muted-foreground/70 mt-0.5">{imp.country}</p></div></div>
-              <div className="flex items-center justify-between text-xs mb-3"><div className="flex items-center gap-1 text-emerald-700">{(imp.certs??[]).length>0&&(<><Shield className="w-3 h-3"/><span className="font-medium">{(imp.certs??[]).length} cert.</span></>)}</div><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span>{imp.responseTime}</span></div></div>
-              <button onClick={e=>{e.stopPropagation();setSelectedId(sel?null:imp.id);}} className={clsx("w-full h-8 rounded-lg text-xs font-medium transition-all",sel?"bg-primary text-white":"bg-muted text-foreground hover:bg-primary/10")}>{sel?"Seleccionada":"Seleccionar"}</button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[{m:"dirigida" as const,icon:Building2,title:"Cotización dirigida",desc:"Elige una empresa importadora específica para enviar directamente tu solicitud."},{m:"abierta" as const,icon:Globe,title:"Cotización abierta",desc:"La solicitud se distribuirá automáticamente entre importadores compatibles."}].map(({m,icon:Icon,title,desc})=>(
+          <button key={m} onClick={()=>{setModalidad(m);if(m==="abierta")setSelectedId(null);}} className={clsx("p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",modalidad===m?"border-primary bg-primary/5 shadow-md":"border-border bg-white hover:border-primary/40")}>
+            <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center mb-2.5",modalidad===m?"bg-primary":"bg-muted")}><Icon className={clsx("w-5 h-5",modalidad===m?"text-white":"text-muted-foreground")}/></div>
+            <h3 className="font-semibold text-sm mb-1.5">{title}</h3><p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+            {modalidad===m&&<div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium"><Check className="w-3.5 h-3.5"/>Seleccionada</div>}
+          </button>
+        ))}
+      </div>
+
+      {modalidad==="dirigida"&& (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Selecciona una importadora</h3>
+          <Card padding="sm" className="mb-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
+              <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
+              <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
+              <div className="w-44"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Certificación</option><option value="certificadas">Con certificaciones</option></Select></div>
+              {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
             </div>
-          );})}</div>
-        )}
-      </div>}
+          </Card>
+
+          {fi.length===0 ? (
+            <Card padding="lg" className="border-dashed">
+              <div className="py-6 text-center"><p className="text-sm text-muted-foreground">No se encontraron empresas</p></div>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {fi.map(imp=>{
+                const sel=selectedId===imp.id;
+                return(
+                  <div key={imp.id} onClick={()=>setSelectedId(sel?null:imp.id)} className={clsx("relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200",sel?"border-primary shadow-lg bg-white":"border-border bg-white hover:border-primary/40 hover:shadow-md")}>
+                    {sel&&<div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-white"/></div>}
+                    <div className="flex items-start gap-3 mb-3">
+                      <Avatar initials={imp.initials} size="lg" color={imp.color}/>
+                      <div className="min-w-0">
+                        <div className="flex items-start gap-1"><p className="font-semibold text-sm leading-tight">{imp.name}</p>{imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{imp.specialty}</p>
+                        <p className="text-xs text-muted-foreground/70 mt-0.5">{imp.country}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs mb-3">
+                      <div className="flex items-center gap-1 text-emerald-700">{(imp.certs??[]).length>0&&(<><Shield className="w-3 h-3"/><span className="font-medium">{(imp.certs??[]).length} cert.</span></>)}</div>
+                      <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span>{imp.responseTime}</span></div>
+                    </div>
+                    <button onClick={e=>{e.stopPropagation();setSelectedId(sel?null:imp.id);}} className={clsx("w-full h-8 rounded-lg text-xs font-medium transition-all",sel?"bg-primary text-white":"bg-muted text-foreground hover:bg-primary/10")}>{sel?"Seleccionada":"Seleccionar"}</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -5073,24 +5101,77 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
       <Sidebar {...sb} active="quotes"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
-        {submitted?(<div className="flex-1 flex items-center justify-center p-6"><div className="flex flex-col items-center text-center gap-4 max-w-sm"><div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500"/></div><div><h2 className="text-lg font-semibold">Solicitud enviada</h2><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Tu cotización ha sido registrada exitosamente.</p></div><Button variant="primary" onClick={onBack}>Ver mis cotizaciones</Button></div></div>):(
-          <main className="flex-1 overflow-y-auto px-6 py-6">
-            <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Cotizaciones",onClick:onBack},{label:"Nueva cotización"}]}/>
-            <h1 className="text-xl font-semibold mt-3">Nueva cotización</h1><p className="text-sm text-muted-foreground mt-1 mb-7">Solicita una nueva cotización para importar productos desde proveedores internacionales.</p>
-            <div className="mb-8"><Stepper current={step}/></div>
-            <div className="flex gap-6 items-start">
-              <div className="flex-1 min-w-0">
-                <div style={slideStyle}>{step===1&&<Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}{step===2&&<Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}{step===3&&modalidad==="dirigida"&&si&&<Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}{step===3&&modalidad==="abierta"&&<Step3Abierta/>}</div>
-                {stepError&&<div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"><AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/><p className="text-sm text-destructive">{stepError}</p></div>}
-                <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
-                  <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>{step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>}</div>
-                  <div className="flex items-center gap-2">{step<3?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext}>Continuar</Button>:<Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} onClick={handleSubmit}>Solicitar cotización</Button>}</div>
+        {submitted ? (
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="flex flex-col items-center text-center gap-4 max-w-sm">
+              <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                <CheckCircle2 className="w-7 h-7 text-emerald-500"/>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Solicitud enviada</h2>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">Tu cotización ha sido registrada exitosamente.</p>
+              </div>
+              <Button variant="primary" onClick={onBack}>Ver mis cotizaciones</Button>
+            </div>
+          </div>
+        ) : (
+          <main className="flex-1 overflow-hidden px-6 pt-6 pb-4 flex flex-col min-h-0">
+            {/* Header del Formulario / Stepper (Fijos arriba) */}
+            <div className="flex-shrink-0">
+              <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Cotizaciones",onClick:onBack},{label:"Nueva cotización"}]}/>
+              <h1 className="text-xl font-semibold mt-3">Nueva cotización</h1>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">Solicita una nueva cotización para importar productos desde proveedores internacionales.</p>
+              <div className="mb-4"><Stepper current={step}/></div>
+            </div>
+
+            {/* Área Central Scrolleable (Formulario + Panel Lateral) */}
+            <div className="flex gap-6 items-start flex-1 min-h-0 overflow-hidden">
+              
+              {/* Columna Izquierda: Formulario (Con scroll independiente) */}
+              <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+                  <div style={slideStyle}>
+                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}
+                    {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}
+                    {step===3 && modalidad==="dirigida" && si && <Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}
+                    {step===3 && modalidad==="abierta" && <Step3Abierta/>}
+                  </div>
+                  {stepError && (
+                    <div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/>
+                      <p className="text-sm text-destructive">{stepError}</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="w-64 xl:w-72 flex-shrink-0 hidden lg:block"><RightPanel step={step} modalidad={modalidad} si={si} form={form}/></div>
+
+              {/* Columna Derecha: Panel Lateral (Con scroll independiente para importadoras/filtros) */}
+              <div className="w-64 xl:w-72 flex-shrink-0 hidden lg:block h-full overflow-y-auto pr-1">
+                <RightPanel step={step} modalidad={modalidad} si={si} form={form}/>
+              </div>
             </div>
+
+            {/* Barra Inferior de Navegación (SIEMPRE FIJA EN EL BOTTOM) */}
+            <div className="pt-3 mt-3 border-t border-border flex-shrink-0 bg-background z-10">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>
+                  {step > 1 && (
+                    <Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>
+                  )}
+                </div>
+                <div className="w-full sm:w-auto">
+                  {step < 3 ? (
+                    <Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext} className="w-full sm:w-auto justify-center">Continuar</Button>
+                  ) : (
+                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} onClick={handleSubmit} className="w-full sm:w-auto justify-center">Solicitar cotización</Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
           </main>
         )}
       </div>
