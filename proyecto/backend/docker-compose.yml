@@ -68,6 +68,14 @@ services:
       RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-5/minute}
       RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-10/minute}
       RATE_LIMIT_FORGOT_PASSWORD: ${RATE_LIMIT_FORGOT_PASSWORD:-5/minute}
+    # Los archivos subidos y los PDF generados viven en el sistema de ficheros,
+    # no en MySQL. Sin estos volúmenes se quedaban en la capa de escritura del
+    # contenedor: cada `docker compose build backend` + recreación los borraba y
+    # dejaba las filas de `archivos` apuntando a binarios inexistentes, con un
+    # 404 "No hay contenido descargable" al abrirlos.
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_generated_docs:/app/generated_docs
     depends_on:
       mysql:
         condition: service_healthy
@@ -127,4 +135,10 @@ volumes:
   mysql_data:
     driver: local
   redis_data:
+    driver: local
+  # Sobreviven a `docker compose down` y a reconstruir la imagen; solo
+  # `docker compose down -v` los borra.
+  backend_uploads:
+    driver: local
+  backend_generated_docs:
     driver: local
