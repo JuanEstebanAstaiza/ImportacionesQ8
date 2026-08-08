@@ -271,6 +271,8 @@ export interface BackendCarpetaItem {
   owner_user_id: string;
   parent_id: string | null;
   nombre: string;
+  is_system?: boolean;
+  is_protected?: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -1,4 +1,5 @@
 import json
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -58,6 +59,14 @@ LOCAL_STORAGE_ROOTS = [
     BACKEND_ROOT / "media",
 ]
 LOCAL_UPLOADS_DIR = BACKEND_ROOT / "uploads" / "documentos"
+SYSTEM_ROOT_FOLDER_NAMES = {
+    "documentos",
+    "cotizaciones",
+    "ordenes",
+    "chats",
+    "cursos",
+    "empresa",
+}
 
 
 def _current_user_id(current_user: dict) -> str:
@@ -75,6 +84,34 @@ def _folder_owner_check(folder: Carpeta, user_id: str) -> None:
 def _file_owner_check(file_row: Archivo, user_id: str) -> None:
     if file_row.owner_user_id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado sobre este archivo")
+
+
+def _normalize_folder_name(value: str) -> str:
+    cleaned = unicodedata.normalize("NFKD", str(value or ""))
+    cleaned = "".join(ch for ch in cleaned if not unicodedata.combining(ch))
+    return " ".join(cleaned.strip().lower().split())
+
+
+def _is_system_folder(folder: Carpeta) -> bool:
+    return folder.parent_id is None and _normalize_folder_name(folder.nombre) in SYSTEM_ROOT_FOLDER_NAMES
+
+
+def _to_folder_items(folders: List[Carpeta]) -> List[CarpetaItem]:
+    items: List[CarpetaItem] = []
+    for folder in folders:
+        items.append(
+            CarpetaItem(
+                id=folder.id,
+                owner_user_id=folder.owner_user_id,
+                parent_id=folder.parent_id,
+                nombre=folder.nombre,
+                is_system=_is_system_folder(folder),
+                is_protected=_is_system_folder(folder),
+                created_at=folder.created_at,
+                updated_at=folder.updated_at,
+            )
+        )
+    return items
 
 
 def _is_favorite_map(db: Session, user_id: str, recurso_tipo: str, ids: List[str]) -> Dict[str, bool]:
@@ -175,16 +212,24 @@ async def listar_explorador(
 ):
     user_id = _current_user_id(current_user)
 
-    folders = (
+    raw_folders = (
         db.query(Carpeta)
         .filter(
             Carpeta.owner_user_id == user_id,
             Carpeta.parent_id == parent_id,
             Carpeta.deleted_at.is_(None),
         )
-        .order_by(Carpeta.nombre.asc())
+        .order_by(Carpeta.nombre.asc(), Carpeta.created_at.asc(), Carpeta.id.asc())
         .all()
     )
+    deduped_folders: List[Carpeta] = []
+    seen_folder_names: set[str] = set()
+    for folder in raw_folders:
+        key = _normalize_folder_name(folder.nombre)
+        if key in seen_folder_names:
+            continue
+        seen_folder_names.add(key)
+        deduped_folders.append(folder)
     files = (
         db.query(Archivo)
         .filter(
@@ -197,7 +242,7 @@ async def listar_explorador(
     )
 
     return ExplorerResponse(
-        carpetas=[CarpetaItem.model_validate(folder) for folder in folders],
+        carpetas=_to_folder_items(deduped_folders),
         archivos=_to_archivo_items(db, files, user_id),
     )
 
@@ -216,11 +261,27 @@ async def crear_carpeta(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Carpeta padre no encontrada")
         _folder_owner_check(parent, user_id)
 
-    folder = Carpeta(id=str(uuid4()), owner_user_id=user_id, parent_id=payload.parent_id, nombre=payload.nombre.strip())
+    normalized_name = payload.nombre.strip()
+    normalized_key = _normalize_folder_name(normalized_name)
+    siblings = (
+        db.query(Carpeta)
+        .filter(
+            Carpeta.owner_user_id == user_id,
+            Carpeta.parent_id == payload.parent_id,
+            Carpeta.deleted_at.is_(None),
+        )
+        .order_by(Carpeta.created_at.asc(), Carpeta.id.asc())
+        .all()
+    )
+    existing = next((row for row in siblings if _normalize_folder_name(row.nombre) == normalized_key), None)
+    if existing:
+        return _to_folder_items([existing])[0]
+
+    folder = Carpeta(id=str(uuid4()), owner_user_id=user_id, parent_id=payload.parent_id, nombre=normalized_name)
     db.add(folder)
     db.commit()
     db.refresh(folder)
-    return CarpetaItem.model_validate(folder)
+    return _to_folder_items([folder])[0]
 
 
 @router.patch("/carpetas/{carpeta_id}", response_model=CarpetaItem)
@@ -238,8 +299,26 @@ async def actualizar_carpeta(
 
     provided_fields = payload.model_fields_set
 
+    target_parent_id = payload.parent_id if "parent_id" in provided_fields else folder.parent_id
     if payload.nombre is not None:
-        folder.nombre = payload.nombre.strip()
+        next_name = payload.nombre.strip()
+        normalized_target = _normalize_folder_name(next_name)
+        siblings = (
+            db.query(Carpeta)
+            .filter(
+                Carpeta.owner_user_id == user_id,
+                Carpeta.parent_id == target_parent_id,
+                Carpeta.deleted_at.is_(None),
+                Carpeta.id != folder.id,
+            )
+            .all()
+        )
+        if any(_normalize_folder_name(row.nombre) == normalized_target for row in siblings):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe una carpeta con ese nombre en este nivel",
+            )
+        folder.nombre = next_name
     if "parent_id" in provided_fields:
         if payload.parent_id == carpeta_id:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Una carpeta no puede ser su propio padre")
@@ -252,7 +331,7 @@ async def actualizar_carpeta(
 
     db.commit()
     db.refresh(folder)
-    return CarpetaItem.model_validate(folder)
+    return _to_folder_items([folder])[0]
 
 
 @router.delete("/carpetas/{carpeta_id}", response_model=dict)
@@ -316,6 +395,9 @@ async def subir_archivo(
     current_user: dict = Depends(get_current_user),
 ):
     user_id = _current_user_id(current_user)
+
+    if carpeta_id is not None:
+        carpeta_id = carpeta_id.strip() or None
 
     if carpeta_id:
         folder = db.query(Carpeta).filter(Carpeta.id == carpeta_id, Carpeta.deleted_at.is_(None)).first()

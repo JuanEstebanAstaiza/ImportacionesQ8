@@ -126,10 +126,10 @@ function Button({variant="primary",size="md",loading=false,fullWidth=false,icon,
 type ContactType="whatsapp"|"chat"|"email"|"phone";
 function ContactBtn({type,size="sm",label,className,onClick,disabled,title}:{type:ContactType;size?:"sm"|"md";label?:string;className?:string;onClick?:()=>void;disabled?:boolean;title?:string}) {
   const cfg:Record<ContactType,{icon:React.FC<{className?:string}>;defaultLabel:string;cls:string}>={
-    whatsapp:{icon:Phone,         defaultLabel:"WhatsApp",cls:"border-emerald-200 hover:bg-emerald-50 text-emerald-700"},
-    chat:    {icon:MessageCircle, defaultLabel:"Chat",    cls:"border-border hover:bg-muted text-foreground"},
-    email:   {icon:MailIcon,      defaultLabel:"Correo",  cls:"border-border hover:bg-muted text-foreground"},
-    phone:   {icon:Phone,         defaultLabel:"Llamar",  cls:"border-slate-200 hover:bg-slate-50 text-slate-700"},
+    whatsapp:{icon:Phone,         defaultLabel:"WhatsApp",cls:"border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"},
+    chat:    {icon:MessageCircle, defaultLabel:"Chat",    cls:"border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"},
+    email:   {icon:MailIcon,      defaultLabel:"Correo",  cls:"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"},
+    phone:   {icon:Phone,         defaultLabel:"Llamar",  cls:"border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"},
   };
   const c=cfg[type];const Icon=c.icon;
   const iconSize=size==="sm"?"w-3.5 h-3.5":"w-4 h-4";
@@ -145,7 +145,11 @@ function normalizePhoneForWa(value:string|undefined|null):string{
 
 function openSmartContact({type,whatsapp,email,onOpenChat}:{type:ContactType;whatsapp?:string|null;email?:string|null;onOpenChat?:()=>void}){
   if(type==="chat"){
-    onOpenChat?.();
+    if(onOpenChat){
+      onOpenChat();
+      return;
+    }
+    toast.error("No hay chat disponible para esta conversación.");
     return;
   }
 
@@ -155,18 +159,18 @@ function openSmartContact({type,whatsapp,email,onOpenChat}:{type:ContactType;wha
     return;
   }
 
+  if(type==="whatsapp"||type==="phone"){
+    toast.error("No hay número de WhatsApp disponible.");
+    return;
+  }
+
   const normalizedEmail=String(email||"").trim();
-  if(normalizedEmail){
+  if(type==="email"&&normalizedEmail){
     window.open(`mailto:${normalizedEmail}`, "_blank", "noopener,noreferrer");
     return;
   }
 
-  if(onOpenChat){
-    onOpenChat();
-    return;
-  }
-
-  toast.error("No hay un canal de contacto disponible.");
+  toast.error("No hay correo disponible para este contacto.");
 }
 
 type InputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>,"prefix"> & {
@@ -217,9 +221,14 @@ function Select({label,children,className,id,...props}:SelectProps) {
   );
 }
 
-function Card({children,className,padding="md"}:{children:React.ReactNode;className?:string;padding?:"none"|"sm"|"md"|"lg"}) {
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  children:React.ReactNode;
+  padding?:"none"|"sm"|"md"|"lg";
+};
+
+function Card({children,className,padding="md",...props}:CardProps) {
   const p={none:"",sm:"p-4",md:"p-5",lg:"p-6"};
-  return <div className={clsx("bg-white border border-border rounded-xl shadow-sm",p[padding],className)}>{children}</div>;
+  return <div className={clsx("bg-white border border-border rounded-xl shadow-sm",p[padding],className)} {...props}>{children}</div>;
 }
 
 function Avatar({initials,size="md",color="bg-primary",src}:{initials:string;size?:"sm"|"md"|"lg"|"xl";color?:string;src?:string}) {
@@ -413,6 +422,13 @@ interface ChatConv {
   // `refId` pasa a apuntar a la orden en cuanto existe; la cotización se guarda
   // aparte porque es lo que identifica al responsable que se puede reasignar.
   quoteId:string;
+  importerName?:string;
+  advisorName?:string;
+  advisorRole?:string;
+  advisorEmail?:string;
+  advisorPhone?:string;
+  advisorInitials?:string;
+  advisorColor?:string;
   status:"activa"|"archivada";unread:number;lastMsg:string;lastDate:string;
 }
 type MsgFileType="pdf"|"excel"|"word"|"image";
@@ -585,11 +601,31 @@ function readPerfilPublicoStringArray(perfil: Record<string, unknown> | null | u
   return [];
 }
 
+function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | undefined, companyName: string) {
+  const advisorName =
+    readPerfilPublicoString(perfil, "advisor_name", "asesor_nombre", "contact_name", "nombre_contacto") ||
+    "Asesor asignado";
+  const advisorRole =
+    readPerfilPublicoString(perfil, "advisor_role", "asesor_rol", "cargo_contacto", "contact_role") ||
+    "Asesor";
+  const advisorEmail = readPerfilPublicoString(perfil, "advisor_email", "asesor_email", "email", "correo");
+  const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono", "whatsapp");
+
+  return {
+    advisorName,
+    advisorRole,
+    advisorEmail,
+    advisorPhone,
+    advisorInitials: initialsFromName(advisorName || companyName),
+  };
+}
+
 function mapBackendImporterToUi(imp: BackendImporter): Importer {
   const primaryCategory = imp.especialidad_producto[0] ?? "General";
   const primaryCountry = imp.paises_origen[0] ?? "N/A";
   const name = imp.nombre_empresa;
   const perfil = imp.perfil_publico ?? null;
+  const advisorProfile = resolveImporterAdvisorProfile(perfil, name);
   return {
     description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
     certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
@@ -617,11 +653,12 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
     shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
     advisor: {
-      name: "Asesor asignado",
-      role: "Asesor",
-      initials: "AS",
+      name: advisorProfile.advisorName,
+      role: advisorProfile.advisorRole,
+      initials: advisorProfile.advisorInitials,
       color: "bg-slate-600",
-      email: "asesor@importacionesq8.co",
+      email: advisorProfile.advisorEmail,
+      phone: advisorProfile.advisorPhone,
     },
   };
 }
@@ -1411,7 +1448,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp.advisor.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
               </div>
@@ -1482,7 +1519,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                         <p className="text-xs text-primary mt-0.5">{adv.email}</p>
                       </div>
                       <div className="flex gap-1.5">
-                        <ContactBtn type="whatsapp" label="WA" size="sm" onClick={()=>openSmartContact({type:"whatsapp",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                        <ContactBtn type="whatsapp" label="WA" size="sm" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:adv.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                         <ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                       </div>
                     </div>
@@ -1521,7 +1558,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 <h3 className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Acciones rápidas</h3>
                 <div className="flex flex-col gap-2">
                   <Button variant="primary" size="sm" fullWidth icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
-                  <ContactBtn type="whatsapp" size="sm" label="Contactar por WhatsApp" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                  <ContactBtn type="whatsapp" size="sm" label="Contactar por WhatsApp" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp.advisor.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                   {relChats.length>0&&<Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChats[0].id)}>Abrir chat</Button>}
                 </div>
               </Card>
@@ -2011,7 +2048,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
                 <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
                 <div className="flex gap-2">
-                  <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
+                  <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp?.advisor.phone,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                 </div>
@@ -2233,7 +2270,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
                 <div className="flex gap-6 flex-wrap">{[["Empresa",imp?.name || "Empresa importadora"],["Asesor",advisor?.name || "Asesor"],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" label="Contactar asesor" onClick={()=>openSmartContact({type:"whatsapp",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
+                <ContactBtn type="whatsapp" label="Contactar asesor" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:advisor?.phone,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>irA(documentosRef)}>Ver documentos</Button>
                 {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
                 <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>} onClick={()=>irA(seguimientoRef)}>Ver seguimiento</Button>
@@ -2285,7 +2322,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
                 <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
                 <div className="flex gap-1.5">
-                  <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
+                  <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:advisor?.phone,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                   <ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                   <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 </div>
@@ -2353,11 +2390,15 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [resourceLoading,setResourceLoading]=useState(false);
   const [resourceSearch,setResourceSearch]=useState("");
   const [resourceSearching,setResourceSearching]=useState(false);
+  const [resourceUploading,setResourceUploading]=useState(false);
+  const [resourceDropOver,setResourceDropOver]=useState(false);
   const [resourceSearchResults,setResourceSearchResults]=useState<BackendArchivoItem[]|null>(null);
   const [resourceTargetConversationId,setResourceTargetConversationId]=useState("");
+  const [resourceViewMode,setResourceViewMode]=useState<"grid"|"list">("grid");
   const [resourcePreviewUrls,setResourcePreviewUrls]=useState<Record<string,string>>({});
   const fileInputRef=useRef<HTMLInputElement>(null);
   const imageInputRef=useRef<HTMLInputElement>(null);
+  const resourceUploadInputRef=useRef<HTMLInputElement>(null);
   const orderDocumentInputRef=useRef<HTMLInputElement>(null);
   const messagesEndRef=useRef<HTMLDivElement>(null);
   const resourcePreviewLoadingRef=useRef<Record<string,boolean>>({});
@@ -2391,6 +2432,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   const conv=selectedId?conversations.find(c=>c.id===selectedId)||null:null;
   const imp=conv?importers.find(i=>i.id===conv.importerId)||null:null;
+  const chatCompanyName = conv?.importerName || imp?.name || "Empresa importadora";
+  const chatAdvisorName = conv?.advisorName || imp?.advisor.name || "Asesor";
+  const chatAdvisorRole = conv?.advisorRole || imp?.advisor.role || "Asesor";
+  const chatAdvisorEmail = conv?.advisorEmail || imp?.advisor.email || "";
+  const chatAdvisorWhatsapp = conv?.advisorPhone || imp?.advisor.phone || "";
+  const chatAdvisorInitials = conv?.advisorInitials || imp?.advisor.initials || "AS";
+  const chatAdvisorColor = conv?.advisorColor || imp?.advisor.color || "bg-slate-500";
 
   const filteredConvs=conversations.filter(c=>{
     if(filter==="ordenes"&&c.type!=="orden")return false;
@@ -2400,7 +2448,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
       const cImp=importers.find(i=>i.id===c.importerId);
       const q=c.type==="cotizacion"?quotes.find((quote)=>quote.id===c.refId):null;
       const ord=c.type==="orden"?orders.find((order)=>order.id===c.refId):null;
-      const terms=[c.refCode,cImp?.name||"",cImp?.advisor.name||"",q?.product||"",ord?.product||""];
+      const terms=[c.refCode,c.importerName||cImp?.name||"",c.advisorName||cImp?.advisor.name||"",q?.product||"",ord?.product||""];
       if(!terms.some(t=>t.toLowerCase().includes(searchConv.toLowerCase())))return false;
     }
     return true;
@@ -2734,6 +2782,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     setResourceSearch("");
     setResourceSearchResults(null);
     setResourceFolderTrail([{ id: null, name: "Raiz" }]);
+    setResourceViewMode("grid");
     setResourceTargetConversationId(selectedId || "");
     await loadResourceFolder(null);
   }
@@ -2764,6 +2813,33 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     setIsResourcePickerOpen(false);
   }
 
+  async function handleUploadResourceToCurrentFolder(file: File) {
+    setResourceUploading(true);
+    try {
+      await businessService.uploadDocumentFile(file, resourceCurrentFolderId, "chat");
+      await loadResourceFolder(resourceCurrentFolderId);
+      toast.success("Archivo subido correctamente en esta carpeta");
+    } catch (error) {
+      console.error("No se pudo subir el recurso desde el modal:", error);
+      toast.error("No se pudo subir el archivo");
+    } finally {
+      setResourceUploading(false);
+      setResourceDropOver(false);
+    }
+  }
+
+  async function handleResourceUploadPick(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await handleUploadResourceToCurrentFolder(file);
+    event.target.value = "";
+  }
+
+  async function reloadResourcePickerFolder() {
+    await loadResourceFolder(resourceCurrentFolderId);
+    toast.success("Carpeta recargada");
+  }
+
   function resourcePreviewThumb(file: BackendArchivoItem): string | null {
     const mime = String(file.mime_type || "").toLowerCase();
     if (mime.startsWith("image/") && file.storage_url && resourcePreviewUrls[file.id]) {
@@ -2774,7 +2850,12 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
   const pickerVisibleFiles = resourceSearchResults ?? resourceExplorer.archivos;
-  const pickerVisibleFolders = resourceSearchResults ? [] : resourceExplorer.carpetas;
+  const pickerVisibleFolders = resourceSearchResults
+    ? []
+    : resourceExplorer.carpetas.filter((folder, index, all) => {
+        const normalized = normalizeFolderName(folder.nombre);
+        return all.findIndex((candidate) => normalizeFolderName(candidate.nombre) === normalized) === index;
+      });
 
   useEffect(() => {
     const attachmentIds = new Set(convAttachments.map((attachment) => attachment.archivo_id));
@@ -2915,6 +2996,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 </div>
               ):filteredConvs.map(c=>{
                 const cImp=importers.find(i=>i.id===c.importerId);
+                const companyName = c.importerName || cImp?.name || "Empresa importadora";
                 const isSelected=selectedId===c.id;
                 return (
                   <button key={c.id} onClick={()=>setSelectedId(c.id)}
@@ -2928,7 +3010,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
                           <p className={clsx("text-xs font-semibold truncate",isSelected?"text-primary":"text-foreground")}>{c.refCode}</p>
-                          <p className="text-xs text-muted-foreground truncate">{cImp?.name || "Empresa importadora"}</p>
+                          <p className="text-xs text-muted-foreground truncate">{companyName}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">{c.lastDate}</span>
@@ -2962,9 +3044,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 <Avatar initials={imp?.initials || "NA"} size="md" color={imp?.color || "bg-slate-500"}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-foreground">{imp?.advisor.name || "Asesor"}</p>
+                    <p className="font-semibold text-sm text-foreground">{chatAdvisorName}</p>
                     <span className="text-muted-foreground/40 text-xs">·</span>
-                    <p className="text-xs text-muted-foreground">{imp?.name || "Empresa importadora"}</p>
+                    <p className="text-xs text-muted-foreground">{chatCompanyName}</p>
                     <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
                       conv.type==="orden"?"bg-purple-50 text-purple-700":"bg-blue-50 text-blue-700")}>
                       {conv.type==="orden"?"Orden":"Cotización"} · {conv.refCode}
@@ -3003,7 +3085,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         </div>
                       )}
                       <div className={clsx("flex gap-2 items-end mb-0.5",isClient?"justify-end":"justify-start")}>
-                        {!isClient&&<Avatar initials={imp?.advisor.initials || "AS"} size="sm" color={imp?.color || "bg-slate-500"}/>}
+                        {!isClient&&<Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/>}
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
                           {messageAttachments.length>0 && (
@@ -3174,14 +3256,14 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               <div className="p-3 space-y-3 flex-1">
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
-                  <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.name || "Empresa importadora"}</p></div></div>
+                  <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{chatCompanyName}</p></div></div>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
-                  <div className="flex items-center gap-2"><Avatar initials={imp?.advisor.initials || "AS"} size="sm" color={imp?.advisor.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{imp?.advisor.name || "Asesor"}</p><p className="text-[10px] text-muted-foreground">{imp?.advisor.role || "Asesor"}</p></div></div>
+                  <div className="flex items-center gap-2"><Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/><div><p className="text-xs font-semibold">{chatAdvisorName}</p><p className="text-[10px] text-muted-foreground">{chatAdvisorRole}</p></div></div>
                   <div className="flex gap-1 mt-2">
-                    <button onClick={()=>openSmartContact({type:"whatsapp",email:imp?.advisor.email,onOpenChat:()=>setShowCtx(true)})} className="flex-1 h-7 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-emerald-100 transition-colors"><Phone className="w-2.5 h-2.5"/>WA</button>
-                    <button onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>setShowCtx(true)})} className="flex-1 h-7 rounded-lg border border-border bg-white text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-muted transition-colors text-foreground"><MailIcon className="w-2.5 h-2.5"/>Email</button>
+                    <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
+                    <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
                   </div>
                 </div>
                 <div className="border-t border-border"/>
@@ -3337,6 +3419,14 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
           width="max-w-5xl"
         >
           <div className="space-y-4">
+            <input
+              ref={resourceUploadInputRef}
+              type="file"
+              className="hidden"
+              onChange={(event) => {
+                void handleResourceUploadPick(event);
+              }}
+            />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2 flex gap-2">
                 <Input value={resourceSearch} onChange={(event)=>setResourceSearch(event.target.value)} placeholder="Buscar recurso por nombre" prefix={<Search className="w-3.5 h-3.5"/>}/>
@@ -3347,9 +3437,37 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 <option value="">Selecciona chat destino</option>
                 {conversations.map((conversation)=>{
                   const importer = importers.find((row)=>row.id===conversation.importerId);
-                  return <option key={conversation.id} value={conversation.id}>{conversation.refCode} · {importer?.name || "Chat"}</option>;
+                  return <option key={conversation.id} value={conversation.id}>{conversation.refCode} · {conversation.importerName || importer?.name || "Chat"}</option>;
                 })}
               </Select>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border">
+                <Button
+                  variant={resourceViewMode === "list" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setResourceViewMode("list")}
+                >
+                  Lista
+                </Button>
+                <Button
+                  variant={resourceViewMode === "grid" ? "secondary" : "ghost"}
+                  size="sm"
+                  icon={<LayoutGrid className="w-3.5 h-3.5" />}
+                  onClick={() => setResourceViewMode("grid")}
+                >
+                  Cuadrícula
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={()=>{void reloadResourcePickerFolder();}}>
+                  Recargar
+                </Button>
+                <Button size="sm" icon={<Upload className="w-3.5 h-3.5" />} loading={resourceUploading} onClick={()=>resourceUploadInputRef.current?.click()}>
+                  Subir aquí
+                </Button>
+              </div>
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -3364,27 +3482,76 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[58vh] overflow-y-auto pr-1">
+            <div
+              className="relative"
+              onDragOver={(event) => {
+                if (event.dataTransfer.types.includes("Files")) {
+                  event.preventDefault();
+                  setResourceDropOver(true);
+                }
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                  setResourceDropOver(false);
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const file = event.dataTransfer.files?.[0];
+                if (file) {
+                  void handleUploadResourceToCurrentFolder(file);
+                }
+              }}
+            >
+              {resourceDropOver && (
+                <div className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-primary bg-primary/10 flex items-center justify-center pointer-events-none">
+                  <p className="text-sm font-semibold text-primary">Suelta el archivo para subirlo en esta carpeta</p>
+                </div>
+              )}
+
+            <div className={clsx(
+              "max-h-[58vh] overflow-y-auto pr-1",
+              resourceViewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" : "space-y-2"
+            )}>
               {resourceLoading&&<p className="text-sm text-muted-foreground">Cargando recursos...</p>}
 
               {!resourceLoading&&pickerVisibleFolders.map((folder)=>(
-                <button key={folder.id} onClick={()=>{void openResourceFolder(folder);}} className="rounded-xl border border-border bg-sky-50/40 p-4 text-left hover:bg-sky-50 transition-colors">
+                <button
+                  key={folder.id}
+                  onClick={()=>{void openResourceFolder(folder);}}
+                  className={clsx(
+                    "rounded-xl border border-border bg-sky-50/40 text-left hover:bg-sky-50 transition-colors",
+                    resourceViewMode === "grid" ? "p-4" : "px-3 py-2.5 flex items-center justify-between gap-3"
+                  )}
+                >
                   <FolderTree className="w-8 h-8 text-sky-600 mb-2"/>
-                  <p className="text-sm font-semibold truncate">{folder.nombre}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Carpeta</p>
+                  <div className={clsx("min-w-0", resourceViewMode === "grid" ? "" : "flex-1") }>
+                    <p className="text-sm font-semibold truncate">{folder.nombre}</p>
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                      Carpeta
+                      {(folder.is_protected || folder.is_system) && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          <LockKeyhole className="w-2.5 h-2.5" />
+                          Sistema
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </button>
               ))}
 
               {!resourceLoading&&pickerVisibleFiles.map((file)=>(
-                <div key={file.id} className="rounded-xl border border-border p-3 bg-white">
-                  <div className="h-24 w-full rounded-lg border border-border bg-slate-50 mb-2 overflow-hidden flex items-center justify-center">
+                <div key={file.id} className={clsx("rounded-xl border border-border bg-white", resourceViewMode === "grid" ? "p-3" : "px-3 py-2.5 flex items-center justify-between gap-3")}>
+                  <div className={clsx("rounded-lg border border-border bg-slate-50 overflow-hidden flex items-center justify-center", resourceViewMode === "grid" ? "h-24 w-full mb-2" : "w-12 h-12 flex-shrink-0")}>
                     {resourcePreviewThumb(file)
                       ? <img src={resourcePreviewThumb(file) || ""} alt={file.nombre} className="w-full h-full object-cover"/>
                       : <FileIcon className="w-10 h-10 text-muted-foreground/40"/>}
                   </div>
-                  <p className="text-sm font-semibold truncate">{file.nombre}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {new Date(file.created_at).toLocaleDateString("es-CO")}</p>
-                  <div className="mt-3 flex items-center gap-1.5">
+                  <div className={clsx("min-w-0", resourceViewMode === "grid" ? "" : "flex-1") }>
+                    <p className="text-sm font-semibold truncate">{file.nombre}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {new Date(file.created_at).toLocaleDateString("es-CO")}</p>
+                  </div>
+                  <div className={clsx("flex items-center gap-1.5", resourceViewMode === "grid" ? "mt-3" : "flex-shrink-0")}>
                     <Button size="sm" variant="secondary" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadResource(file.storage_url, file.nombre);}}>Descargar</Button>
                     <Button size="sm" variant="secondary" onClick={()=>{void handleOpenResource(file.storage_url, file.nombre);}}>Abrir</Button>
                     <Button size="sm" onClick={()=>{void handleShareExistingResourceToChat(file);}}>Compartir</Button>
@@ -3393,6 +3560,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               ))}
 
               {!resourceLoading&&pickerVisibleFolders.length===0&&pickerVisibleFiles.length===0&&<p className="text-sm text-muted-foreground">No se encontraron recursos.</p>}
+            </div>
             </div>
           </div>
         </Modal>
@@ -3473,7 +3641,10 @@ function DocumentosScreen({
     protectedFolders.find((folder) => normalizeFolderName(folder.nombre) === "chats")?.id || null;
 
   function isProtectedFolder(folderId: string): boolean {
-    return protectedFolderSet.has(folderId);
+    if (protectedFolderSet.has(folderId)) {
+      return true;
+    }
+    return Boolean(explorer.carpetas.find((folder) => folder.id === folderId)?.is_protected);
   }
 
   const visibleFiles = searchResults ?? explorer.archivos;
@@ -4579,7 +4750,7 @@ function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"
   const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?`${form.minQuantity} u`:""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
   if(modalidad==="dirigida"&&si)return(<div className="space-y-4">
     <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",email:si.advisor.email})}/><ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>toast.info("El chat se habilita al enviar la cotización.")}/></div></Card>
+    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:si.advisor.phone})}/><ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>toast.info("El chat se habilita al enviar la cotización.")}/></div></Card>
     {step>=2&&<Summary/>}
     {step===3&&<Card padding="md" className="border-primary/20 bg-primary/5"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse"/><span className="text-xs font-semibold text-primary">Lista para enviar</span></div></Card>}
   </div>);
@@ -6991,18 +7162,30 @@ export default function App() {
       businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
     ]);
     const importerByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.importador_id]));
-    const mappedConversations: ChatConv[] = rows.map((row) => ({
-      id: row.id,
-      type: row.orden_id ? "orden" : "cotizacion",
-      refCode: row.orden_id ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}` : `COT-${row.cotizacion_id.slice(0, 8).toUpperCase()}`,
-      refId: row.orden_id ?? row.cotizacion_id,
-      quoteId: row.cotizacion_id,
-      importerId: importerByQuoteId.get(row.cotizacion_id) || row.importador_usuario_id,
-      status: "activa",
-      unread: 0,
-      lastMsg: row.ultimo_mensaje?.contenido || "Sin mensajes",
-      lastDate: row.ultimo_mensaje?.fecha_envio ? formatShortDate(row.ultimo_mensaje.fecha_envio) : formatShortDate(row.fecha_creacion),
-    }));
+    const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
+    const mappedConversations: ChatConv[] = rows.map((row) => {
+      const importerId = importerByQuoteId.get(row.cotizacion_id) || row.importador_usuario_id;
+      const importer = importerById.get(importerId);
+      return {
+        id: row.id,
+        type: row.orden_id ? "orden" : "cotizacion",
+        refCode: row.orden_id ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}` : `COT-${row.cotizacion_id.slice(0, 8).toUpperCase()}`,
+        refId: row.orden_id ?? row.cotizacion_id,
+        quoteId: row.cotizacion_id,
+        importerId,
+        importerName: importer?.name,
+        advisorName: importer?.advisor.name,
+        advisorRole: importer?.advisor.role,
+        advisorEmail: importer?.advisor.email,
+        advisorPhone: importer?.advisor.phone,
+        advisorInitials: importer?.advisor.initials,
+        advisorColor: importer?.advisor.color,
+        status: "activa",
+        unread: 0,
+        lastMsg: row.ultimo_mensaje?.contenido || "Sin mensajes",
+        lastDate: row.ultimo_mensaje?.fecha_envio ? formatShortDate(row.ultimo_mensaje.fecha_envio) : formatShortDate(row.fecha_creacion),
+      };
+    });
     setChatConversations(mappedConversations);
 
     const messagePairs = await Promise.all(
@@ -7031,12 +7214,15 @@ export default function App() {
       }),
     );
     setChatAttachmentsByConversation(Object.fromEntries(attachmentPairs));
-  }, [currentUserProfile?.id]);
+  }, [currentUserProfile?.id, marketplaceImporters]);
 
   const ensureSystemRootFolders = useCallback(async () => {
     let rootExplorer = await businessService.listDocumentExplorer(null);
+    const backendProtectedRoots = rootExplorer.carpetas.filter((folder) => folder.is_protected || folder.is_system);
     const existingRootNames = new Set(rootExplorer.carpetas.map((folder) => normalizeFolderName(folder.nombre)));
-    const missingRootNames = SYSTEM_ROOT_FOLDER_NAMES.filter((name) => !existingRootNames.has(normalizeFolderName(name)));
+    const missingRootNames = backendProtectedRoots.length > 0
+      ? []
+      : SYSTEM_ROOT_FOLDER_NAMES.filter((name) => !existingRootNames.has(normalizeFolderName(name)));
 
     if (missingRootNames.length > 0) {
       await Promise.all(
@@ -7051,7 +7237,9 @@ export default function App() {
       rootExplorer = await businessService.listDocumentExplorer(null);
     }
 
-    const protectedSet = new Set(SYSTEM_ROOT_FOLDER_NAMES.map((name) => normalizeFolderName(name)));
+    const protectedSet = backendProtectedRoots.length > 0
+      ? new Set(backendProtectedRoots.map((folder) => normalizeFolderName(folder.nombre)))
+      : new Set(SYSTEM_ROOT_FOLDER_NAMES.map((name) => normalizeFolderName(name)));
     const bySystemFolderName = new Map<string, { id: string; nombre: string }>();
     rootExplorer.carpetas.forEach((folder) => {
       const normalized = normalizeFolderName(folder.nombre);

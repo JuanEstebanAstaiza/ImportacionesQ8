@@ -1,6 +1,7 @@
 import mimetypes
 import os
 import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -27,6 +28,12 @@ VIDEO_MIME_TYPES = {
     "mov": "video/quicktime",
     "m4v": "video/x-m4v",
 }
+
+
+def _normalize_folder_name(value: str) -> str:
+    cleaned = unicodedata.normalize("NFKD", str(value or ""))
+    cleaned = "".join(ch for ch in cleaned if not unicodedata.combining(ch))
+    return " ".join(cleaned.strip().lower().split())
 
 
 def infer_file_type(extension: str) -> str:
@@ -211,16 +218,18 @@ def ensure_folder_path(
         name = str(raw_name or "").strip()
         if not name:
             continue
-        folder = (
+        siblings = (
             db.query(Carpeta)
             .filter(
                 Carpeta.owner_user_id == owner_user_id,
                 Carpeta.parent_id == parent_id,
-                Carpeta.nombre == name,
                 Carpeta.deleted_at.is_(None),
             )
-            .first()
+            .order_by(Carpeta.created_at.asc(), Carpeta.id.asc())
+            .all()
         )
+        normalized_target = _normalize_folder_name(name)
+        folder = next((row for row in siblings if _normalize_folder_name(row.nombre) == normalized_target), None)
         if folder is None:
             folder = Carpeta(
                 owner_user_id=owner_user_id,

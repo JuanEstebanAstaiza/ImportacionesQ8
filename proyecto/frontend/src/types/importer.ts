@@ -46,5 +46,6 @@ export interface Importer {
     initials: string;
     color: string;
     email: string;
+    phone?: string;
   };
 }
