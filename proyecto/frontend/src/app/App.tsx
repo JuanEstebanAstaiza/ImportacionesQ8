@@ -56,6 +56,7 @@ import {
 } from "@/services/business.service";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
+import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
 import {
   componerShippingMark,
   LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
@@ -1795,8 +1796,8 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                         <span className={clsx("text-[11px] font-medium px-2 py-0.5 rounded",doc.url?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-700")}>{doc.status}</span>
                         {doc.url && (
                           <>
-                            <a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>}>Ver PDF</Button></a>
-                            <a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>}>Descargar</Button></a>
+                            <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>{void abrirArchivoEnPestana(doc.url);}}>Ver PDF</Button>
+                            <Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void descargarArchivo(doc.url, doc.name);}}>Descargar</Button>
                           </>
                         )}
                       </div>
@@ -2249,7 +2250,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
                     <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date}</p></div></div>
                     <div className="flex items-center gap-2">
                       <span className={clsx("text-xs font-medium px-2 py-0.5 rounded",doc.status==="Disponible"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500")}>{doc.status}</span>
-                      {doc.status==="Disponible"&&<><a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs">Ver</Button></a><a href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer"><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs">Descargar</Button></a></>}
+                      {doc.status==="Disponible"&&<><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs" onClick={()=>{void abrirArchivoEnPestana(doc.url);}}>Ver</Button><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs" onClick={()=>{void descargarArchivo(doc.url, doc.name);}}>Descargar</Button></>}
                     </div>
                   </div>
                 ))}</div>
@@ -3262,10 +3263,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     <div className="mt-3 space-y-1.5">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos de la orden</p>
                       {(refOrder?.documents || []).slice(0,6).map((doc)=>(
-                        <a key={`${doc.name}-${doc.date}-${doc.url}`} href={resolveApiUrl(doc.url)} target="_blank" rel="noreferrer" className="block rounded-lg border border-border px-2 py-1.5 hover:bg-muted transition-colors">
+                        <button key={`${doc.name}-${doc.date}-${doc.url}`} type="button" onClick={()=>{void abrirArchivoEnPestana(doc.url);}} className="block w-full text-left rounded-lg border border-border px-2 py-1.5 hover:bg-muted transition-colors">
                           <p className="text-[11px] font-medium truncate">{doc.name}</p>
                           <p className="text-[10px] text-muted-foreground">{doc.type || "documento"} · {doc.date}</p>
-                        </a>
+                        </button>
                       ))}
                       {(!refOrder?.documents || refOrder.documents.length===0)&&<p className="text-[10px] text-muted-foreground">Sin documentos adicionales.</p>}
                     </div>
@@ -4163,7 +4164,7 @@ function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormSta
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto"/>
                   <p className="text-sm font-medium">Foto vinculada desde Documentos</p>
                   <div className="flex items-center justify-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={()=>window.open(resolveApiUrl(form.productPhotoUrl), "_blank", "noopener,noreferrer")}>Ver</Button>
+                    <Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.productPhotoUrl);}}>Ver</Button>
                     <Button variant="ghost" size="sm" onClick={()=>upd("productPhotoUrl","")}>Quitar</Button>
                   </div>
                 </div>
@@ -4701,7 +4702,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                         }}
                         onError={(message)=>setLogoUploadError(message)}
                       />
-                      {form.logoUrl&&<Button variant="secondary" size="sm" onClick={()=>window.open(resolveApiUrl(form.logoUrl), "_blank", "noopener,noreferrer")}>Ver logo</Button>}
+                      {form.logoUrl&&<Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.logoUrl);}}>Ver logo</Button>}
                     </div>
                     {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
                   </div>
@@ -6325,7 +6326,7 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
                     onUploaded={(fileItem)=>setForm((prev)=>({...prev,fotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}
                     onError={(message)=>setError(message)}
                   />
-                  {form.fotoUrl&&<Button variant="secondary" size="sm" onClick={()=>window.open(resolveApiUrl(form.fotoUrl), "_blank", "noopener,noreferrer")}>Ver foto</Button>}
+                  {form.fotoUrl&&<Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.fotoUrl);}}>Ver foto</Button>}
                 </div>
               </div>
             </div>

@@ -11,6 +11,7 @@ from sqlalchemy import String, and_, func, or_
 from sqlalchemy.orm import Session
 
 import config
+from utils.security_middleware import MAX_UPLOAD_BYTES
 from models.chat import ConversacionChat, MensajeChat
 from models.curso import CompraCurso, Curso, EstadoCurso, LeccionCurso
 from models.certificacion import Certificacion
@@ -331,11 +332,35 @@ async def subir_archivo(
     # ninguna fila en base de datos que lo respaldara.
     extension = infer_extension(original_name)
 
-    file_bytes = await archivo.read()
+    # Se vuelca por trozos y no con `await archivo.read()`: un vídeo de curso
+    # puede pesar cientos de MB y cargarlo entero en memoria multiplicaba ese
+    # peso por cada worker que estuviera recibiendo una subida a la vez.
     LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     stored_name = f"{uuid4()}_{original_name}"
     storage_path = LOCAL_UPLOADS_DIR / stored_name
-    storage_path.write_bytes(file_bytes)
+
+    size_bytes = 0
+    try:
+        with storage_path.open("wb") as destino:
+            while trozo := await archivo.read(1024 * 1024):
+                size_bytes += len(trozo)
+                # El middleware ya corta por `Content-Length`, pero esa cabecera
+                # puede faltar (transfer-encoding: chunked) o mentir: el tope se
+                # vuelve a comprobar sobre lo que realmente llega.
+                if size_bytes > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(
+                            f"El archivo supera el máximo de "
+                            f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB."
+                        ),
+                    )
+                destino.write(trozo)
+    except Exception:
+        # Sin esto, un archivo rechazado a mitad de subida dejaba su binario
+        # huérfano en uploads/ sin ninguna fila que lo respaldara.
+        storage_path.unlink(missing_ok=True)
+        raise
 
     file_row = create_document_file(
         db,
@@ -344,7 +369,7 @@ async def subir_archivo(
         carpeta_id=carpeta_id,
         extension=extension,
         mime_type=archivo.content_type or None,
-        size_bytes=len(file_bytes),
+        size_bytes=size_bytes,
         storage_url=None,
         storage_path=str(storage_path.relative_to(BACKEND_ROOT)),
         origen=origen,

@@ -2,6 +2,11 @@ import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
+// El config lo ejecuta Node, pero el proyecto no trae @types/node: se accede a
+// las variables de entorno por globalThis con un tipo local en vez de añadir
+// una dependencia solo para esto.
+const envNode = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}
+
 const srcAssetsBase = new URL('./src/assets/', import.meta.url)
 const srcBase = new URL('./src/', import.meta.url)
 
@@ -42,10 +47,20 @@ export default defineConfig({
     // El browser remoto no alcanza localhost:8000: todo el tráfico de API y de
     // archivos viaja por este mismo origen y el proxy lo reenvía al backend.
     allowedHosts: ['.devtunnels.ms', '.use.devtunnels.ms', '.ngrok-free.app', '.ngrok.io', '.trycloudflare.com'],
+    // Los eventos de archivo del host no cruzan el bind mount de Docker en
+    // Windows/macOS, así que dentro del contenedor la recarga en caliente no se
+    // enteraba de ningún cambio. El sondeo cuesta CPU, de modo que se activa
+    // solo ahí (VITE_USE_POLLING en docker-compose.yml).
+    watch: envNode.VITE_USE_POLLING === 'true'
+      ? { usePolling: true, interval: 300 }
+      : undefined,
     proxy: {
       '/api': {
-        // Apunta al contenedor de Docker en tu máquina local
-        target: 'http://localhost:8000',
+        // Dónde vive FastAPI visto DESDE el proceso de Vite (no desde el browser):
+        // en el host es `localhost:8000`, pero si Vite corre en un contenedor ahí
+        // `localhost` es el propio contenedor y hay que apuntar al servicio
+        // (`http://backend:8000`, ver VITE_PROXY_TARGET en docker-compose.yml).
+        target: envNode.VITE_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         // Elimina el prefijo /api antes de enviar la petición a FastAPI

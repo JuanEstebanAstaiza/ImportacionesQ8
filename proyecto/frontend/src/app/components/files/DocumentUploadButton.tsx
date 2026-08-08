@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 
 import { businessService, type BackendArchivoItem } from "@/services/business.service";
+import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
 
 type DocumentUploadButtonProps = {
   label: string;
@@ -58,6 +59,19 @@ export function DocumentUploadButton({
     setIsUploading(true);
 
     try {
+      // Se comprueba el tamaño antes de transferir nada: subir un vídeo entero
+      // para que el servidor lo rechace al final es una espera perdida, y el
+      // rechazo llegaba disfrazado de error de CORS.
+      const limite = await obtenerLimiteSubida();
+      const grande = files.find((file) => file.size > limite);
+      if (grande) {
+        onError?.(
+          `«${grande.name}» pesa ${formatearTamano(grande.size)} y el máximo por archivo es `
+          + `${formatearTamano(limite)}. Comprime el archivo o súbelo en partes.`,
+        );
+        return;
+      }
+
       for (const file of files) {
         const uploaded = await businessService.uploadDocumentFile(file, carpetaId, origen);
         await onUploaded(uploaded);

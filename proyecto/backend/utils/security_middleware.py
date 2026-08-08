@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from starlette.responses import JSONResponse, Response
 from starlette.datastructures import MutableHeaders
@@ -10,7 +11,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = logging.getLogger("importacionesq8")
 
 # 2 MiB: suficiente para JSON de negocio; evita body bombs DoS
-MAX_BODY_BYTES = 2 * 1024 * 1024
+MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", str(2 * 1024 * 1024)))
+
+# Los endpoints de subida necesitan otro orden de magnitud: la plataforma exige
+# que los vídeos de los cursos se alojen aquí (no enlaces externos), y con el
+# tope general de 2 MiB no entraba ninguno. El límite se comprueba por prefijo
+# de ruta para no relajar el resto de la API.
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(300 * 1024 * 1024)))
+
+PREFIJOS_DE_SUBIDA = ("/documentos/archivos/upload",)
 
 
 class SecurityHeadersMiddleware:
@@ -90,11 +99,33 @@ class TrailingSlashNormalizationMiddleware:
 
 
 class RequestSizeLimitMiddleware:
-    """Rechaza bodies > MAX_BODY_BYTES (anti DoS)."""
+    """Rechaza bodies demasiado grandes (anti DoS), con un tope mayor para subidas.
 
-    def __init__(self, app: ASGIApp, max_bytes: int = MAX_BODY_BYTES):
+    El tope general (`MAX_BODY_BYTES`) protege una API que solo intercambia JSON.
+    Aplicárselo también a `POST /documentos/archivos/upload` hacía imposible subir
+    un vídeo de curso, que es justo lo que la plataforma exige alojar aquí; por eso
+    esas rutas usan `MAX_UPLOAD_BYTES`.
+
+    Este middleware va **por dentro** de CORS a propósito: su 413 tiene que llevar
+    los headers de CORS. Si no, el navegador no ve el 413 sino un
+    "No 'Access-Control-Allow-Origin' header is present" y el motivo real
+    (archivo demasiado grande) queda invisible para quien está subiendo.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int = MAX_BODY_BYTES,
+        max_upload_bytes: int = MAX_UPLOAD_BYTES,
+    ):
         self.app = app
         self.max_bytes = max_bytes
+        self.max_upload_bytes = max_upload_bytes
+
+    def _limite_para(self, path: str) -> int:
+        if any(path.startswith(prefijo) for prefijo in PREFIJOS_DE_SUBIDA):
+            return self.max_upload_bytes
+        return self.max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -107,13 +138,18 @@ class RequestSizeLimitMiddleware:
         }
         cl = headers.get("content-length")
         if cl:
+            limite = self._limite_para(scope.get("path", ""))
             try:
-                if int(cl) > self.max_bytes:
+                if int(cl) > limite:
+                    mb = limite / (1024 * 1024)
                     response = JSONResponse(
                         status_code=413,
                         content={
                             "success": False,
                             "error": "Payload demasiado grande",
+                            # El mensaje dice el tope: sin él, quien sube un vídeo
+                            # solo sabe que "falló" y no cuánto tiene que recortar.
+                            "detail": f"El tamaño máximo permitido para esta ruta es {mb:.0f} MB.",
                         },
                     )
                     await response(scope, receive, send)

@@ -74,6 +74,7 @@ import {
   type BackendArchivoItem,
   type BackendExplorerResponse,
 } from "@/services/business.service";
+import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
 
 type CoursesScreenProps = {
   role: "solicitante" | "importadora";
@@ -1148,6 +1149,18 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
     }
 
     try {
+      // El tamaño se comprueba antes de transferir: un vídeo de clase tarda en
+      // subir y esperar todo ese rato para recibir un rechazo del servidor —
+      // que además llegaba disfrazado de error de CORS — no es aceptable.
+      const limiteSubida = await obtenerLimiteSubida();
+      if (file.size > limiteSubida) {
+        setActionError(
+          `El archivo pesa ${formatearTamano(file.size)} y el máximo es ${formatearTamano(limiteSubida)}. `
+          + "Comprime el video o divídelo en varias lecciones.",
+        );
+        return;
+      }
+
       const created = await businessService.uploadDocumentFile(file, resourceCurrentFolderId, "curso");
       applyDocumentToTarget(resourceUploadTarget, created);
       await loadResourceFolder(resourceCurrentFolderId);
