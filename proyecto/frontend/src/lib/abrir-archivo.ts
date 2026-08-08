@@ -18,7 +18,12 @@ import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client"
  * cual: nunca se les manda nuestro token.
  */
 
-type Resultado = { ok: true } | { ok: false; motivo: string };
+/**
+ * `motivo` va como opcional en vez de como unión discriminada porque el
+ * proyecto compila con `strict: false`, y ahí TypeScript no estrecha
+ * `{ok: true} | {ok: false; motivo: string}` al comprobar `!resultado.ok`.
+ */
+export type ResultadoArchivo = { ok: boolean; motivo?: string };
 
 function esRecursoDelBackend(rutaCanonica: string): boolean {
   return rutaCanonica.startsWith("/");
@@ -39,7 +44,7 @@ async function descargarComoBlob(destino: string, token: string): Promise<Blob> 
 }
 
 /** Abre el archivo en una pestaña nueva, autenticando la petición. */
-export async function abrirArchivoEnPestana(valor: string | null | undefined): Promise<Resultado> {
+export async function abrirArchivoEnPestana(valor: string | null | undefined): Promise<ResultadoArchivo> {
   const canonica = toApiPath(valor);
   if (!canonica) {
     return { ok: false, motivo: "El archivo no tiene una dirección válida." };
@@ -80,7 +85,7 @@ export async function abrirArchivoEnPestana(valor: string | null | undefined): P
 export async function descargarArchivo(
   valor: string | null | undefined,
   nombreSugerido?: string,
-): Promise<Resultado> {
+): Promise<ResultadoArchivo> {
   const canonica = toApiPath(valor);
   if (!canonica) {
     return { ok: false, motivo: "El archivo no tiene una dirección válida." };

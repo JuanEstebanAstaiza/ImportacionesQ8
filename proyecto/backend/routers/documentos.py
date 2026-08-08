@@ -883,9 +883,18 @@ async def descargar_archivo(
 
     if not allowed:
         if current_user is None:
+            # Este 401 se ve sobre todo al pegar la dirección en la barra del
+            # navegador: al navegar a una URL no se manda la cabecera
+            # `Authorization` (el token no es una cookie), así que la petición
+            # llega sin sesión aunque el usuario la tenga abierta. El mensaje lo
+            # dice, porque "inicia sesión" a secas confunde a quien acaba de
+            # iniciarla.
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Se requiere iniciar sesión para acceder a este archivo",
+                detail=(
+                    "Este archivo requiere una sesión válida. Ábrelo desde la plataforma: "
+                    "pegar la dirección en el navegador no envía tu token de acceso."
+                ),
                 headers={"WWW-Authenticate": "Bearer"},
             )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para descargar este archivo")

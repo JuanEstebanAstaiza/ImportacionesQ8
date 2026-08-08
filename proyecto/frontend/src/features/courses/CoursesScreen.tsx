@@ -75,6 +75,7 @@ import {
   type BackendExplorerResponse,
 } from "@/services/business.service";
 import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
+import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
 
 type CoursesScreenProps = {
   role: "solicitante" | "importadora";
@@ -276,50 +277,6 @@ function formatCurrency(value: number): string {
  */
 function normalizeVideoUrl(value: string | null | undefined): string {
   return resolveApiUrl(value);
-}
-
-/**
- * La descarga del backend exige Authorization, así que un enlace directo daría
- * 401. Se resuelve la ruta, se descarga con token y se abre desde un blob.
- * Los recursos externos (CDN) se abren tal cual, sin enviarles nuestro token.
- */
-async function openResourceInNewTab(value: string | null | undefined): Promise<boolean> {
-  const canonical = toApiPath(value);
-  if (!canonical) {
-    return false;
-  }
-
-  const target = resolveApiUrl(canonical);
-  const token = getStoredToken();
-  const isBackendResource = canonical.startsWith("/");
-
-  if (!isBackendResource || !token) {
-    window.open(target, "_blank", "noopener,noreferrer");
-    return true;
-  }
-
-  // Se abre la pestaña antes del await para no chocar con el bloqueo de popups.
-  const popup = window.open("about:blank", "_blank");
-
-  try {
-    const response = await fetch(target, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) {
-      popup?.close();
-      return false;
-    }
-
-    const objectUrl = window.URL.createObjectURL(await response.blob());
-    if (popup) {
-      popup.location.replace(objectUrl);
-    } else {
-      window.open(objectUrl, "_blank", "noopener,noreferrer");
-    }
-    window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000);
-    return true;
-  } catch {
-    popup?.close();
-    return false;
-  }
 }
 
 function resolvePlayableVideoSource(url: string):
@@ -676,9 +633,12 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
     setIsDownloadingCertificate(true);
     try {
       const certificado = await coursesService.getCertificate(courseId);
-      const abierto = await openResourceInNewTab(certificado.url_descarga);
-      if (!abierto) {
-        setCertificateError("El certificado se generó, pero no se pudo abrir. Búscalo en Documentos › Certificados.");
+      const abierto = await abrirArchivoEnPestana(certificado.url_descarga);
+      if (!abierto.ok) {
+        setCertificateError(
+          `El certificado se generó, pero no se pudo abrir: ${abierto.motivo} `
+          + "Búscalo en Documentos › Certificados.",
+        );
       }
     } catch (error) {
       setCertificateError(error instanceof Error && error.message.trim() ? error.message : "No se pudo generar el certificado.");
@@ -1805,8 +1765,8 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                               className="w-full justify-between"
                               disabled={!isSafeHttpUrl(resolveApiUrl(resource.url))}
                               onClick={() => {
-                                void openResourceInNewTab(resource.url).then((ok) => {
-                                  if (!ok) setActionError("No se pudo abrir el recurso desde el backend.");
+                                void abrirArchivoEnPestana(resource.url).then((resultado) => {
+                                  if (!resultado.ok) setActionError(resultado.motivo);
                                 });
                               }}
                             >
@@ -2035,8 +1995,8 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                       Subir imagen
                     </Button>
                     {publishForm.portada_url ? (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={resolveApiUrl(publishForm.portada_url)} target="_blank" rel="noreferrer">Ver</a>
+                      <Button variant="outline" size="sm" onClick={() => { void abrirArchivoEnPestana(publishForm.portada_url); }}>
+                        Ver
                       </Button>
                     ) : null}
                   </div>
@@ -2176,9 +2136,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                     variant="outline"
                                     size="sm"
                                     onClick={() => {
-                                      void openResourceInNewTab(lesson.video_url).then((ok) => {
-                                        if (!ok) setActionError("No se pudo abrir el video desde el backend.");
-                                      });
+                                      void abrirArchivoEnPestana(lesson.video_url).then((resultado) => {
+                                  if (!resultado.ok) setActionError(resultado.motivo);
+                                });
                                     }}
                                   >
                                     Abrir video
@@ -2249,9 +2209,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                                         variant="outline"
                                         size="sm"
                                         onClick={() => {
-                                          void openResourceInNewTab(resource.url).then((ok) => {
-                                            if (!ok) setActionError("No se pudo abrir el recurso desde el backend.");
-                                          });
+                                          void abrirArchivoEnPestana(resource.url).then((resultado) => {
+                                  if (!resultado.ok) setActionError(resultado.motivo);
+                                });
                                         }}
                                       >
                                         Abrir
@@ -2370,9 +2330,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        void openResourceInNewTab(file.storage_url).then((ok) => {
-                          if (!ok) setActionError("No se pudo abrir el recurso desde el backend.");
-                        });
+                        void abrirArchivoEnPestana(file.storage_url).then((resultado) => {
+                                  if (!resultado.ok) setActionError(resultado.motivo);
+                                });
                       }}
                     >
                       Abrir

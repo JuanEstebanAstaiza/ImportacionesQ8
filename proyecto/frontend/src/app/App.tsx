@@ -431,6 +431,9 @@ const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","
 const LINES=CATEGORIAS_PRODUCTO;
 const ALL_CATEGORIES=CATEGORIAS_PRODUCTO;
 const SYSTEM_ROOT_FOLDER_NAMES=["Órdenes","Cotizaciones","Respuestas","Cursos","Chats"];
+// Buzón al que escribe quien quiere dar de alta una empresa importadora: el
+// alta la hace el equipo de la plataforma, no hay auto-registro.
+const CORREO_ADMINISTRACION="administracion@importacionesq8.com";
 
 function normalizeFolderName(value:string):string{
   return value
@@ -1640,7 +1643,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTE DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[]}) {
+function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders,onDuplicate}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[];onDuplicate:(quote:Quote)=>void}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;
   const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
   const [loadingProposals,setLoadingProposals]=useState(true);
@@ -1764,10 +1767,8 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                 <div className="flex gap-6 flex-wrap">{[["Fecha",quote.date],["País",quote.country],["Incoterm",quote.incoterm],...(quote.shippingMark?[["Shipping mark",quote.shippingMark]]:[])].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}{quote.mode==="Dirigida"&&<div><p className="text-xs text-muted-foreground">Empresa</p><p className="text-sm font-medium">{quote.importer}</p></div>}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <Button variant="secondary" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>}>Editar</Button>
-                <Button variant="secondary" size="sm" icon={<Copy className="w-3.5 h-3.5"/>}>Duplicar</Button>
+                <Button variant="secondary" size="sm" icon={<Copy className="w-3.5 h-3.5"/>} onClick={()=>onDuplicate(quote)}>Duplicar</Button>
                 {relChat&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Chat</Button>}
-                <Button variant="danger" size="sm" icon={<Ban className="w-3.5 h-3.5"/>}>Cancelar</Button>
               </div>
             </div>
           </Card>
@@ -2050,7 +2051,6 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
                     :<Button variant="secondary" fullWidth icon={<CheckCircle2 className="w-4 h-4 text-emerald-600"/>} disabled>Propuesta aceptada</Button>
                   }
                   <Button variant="secondary" fullWidth icon={<MessageCircle className="w-4 h-4"/>} onClick={()=>relChat&&onOpenChat(relChat.id)}>Negociar por chat</Button>
-                  {!acceptedByMe&&<Button variant="danger" fullWidth icon={<X className="w-4 h-4"/>}>Rechazar</Button>}
                   <div className="pt-2 border-t border-border flex flex-col gap-1.5">
                     <Button variant="ghost" fullWidth icon={<ExternalLink className="w-3.5 h-3.5"/>} className="text-primary hover:text-blue-700 hover:bg-primary/5" onClick={()=>onBackToQuote(resp.quoteId)}>Ver cotización</Button>
                     {relChat&&<Button variant="ghost" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} className="text-foreground hover:bg-muted" onClick={()=>onOpenChat(relChat.id)}>Ver chat</Button>}
@@ -2069,7 +2069,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONSES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function ResponsesScreen({onViewDetail,sb,responses,importers,quotes}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[]}) {
+function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[];onViewQuote:(quoteId:string)=>void}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[empresaF,setEmpresaF]=useState("");
   const filtered=responses.filter(r=>{const imp=importers.find(i=>i.id===r.importerId);const q=quotes.find(q=>q.id===r.quoteId);
     const ms=!search||[imp?.name||"",q?.product||"",r.price].some(v=>v.toLowerCase().includes(search.toLowerCase()));
@@ -2109,7 +2109,7 @@ function ResponsesScreen({onViewDetail,sb,responses,importers,quotes}:{onViewDet
                         <div className="flex gap-4 mt-2 flex-wrap">{[["Precio",r.price],["Plazo",r.deliveryTime],["Incoterm",r.incoterm],["Fecha",r.date]].map(([k,v])=><div key={k}><span className="text-xs text-muted-foreground">{k}: </span><span className="text-xs font-semibold">{v}</span></div>)}</div>
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-wrap"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(r.id,"responses")}>Ver detalle</Button><Button variant="secondary" size="sm" icon={<GitCompare className="w-3 h-3"/>}>Comparar</Button><ContactBtn type="chat" size="sm" label="Contactar" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>onViewDetail(r.id,"responses")})}/></div>
+                    <div className="flex gap-2 flex-wrap"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(r.id,"responses")}>Ver detalle</Button><Button variant="secondary" size="sm" icon={<GitCompare className="w-3 h-3"/>} disabled={!r.quoteId} title="Comparar todas las propuestas de esta cotizacion" onClick={()=>r.quoteId&&onViewQuote(r.quoteId)}>Comparar</Button><ContactBtn type="chat" size="sm" label="Contactar" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>onViewDetail(r.id,"responses")})}/></div>
                   </div>
                 </Card>
               );})}</div>
@@ -2161,7 +2161,13 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[]}) {
+function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onViewImporterProfile}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];onViewImporterProfile:(id:string)=>void}) {
+  // Anclas de las tarjetas a las que saltan los botones de la cabecera: la
+  // información ya está en esta misma pantalla, solo hay que llevar al
+  // usuario hasta ella.
+  const documentosRef=useRef<HTMLDivElement|null>(null);
+  const seguimientoRef=useRef<HTMLDivElement|null>(null);
+  const irA=(ref:React.RefObject<HTMLDivElement|null>)=>ref.current?.scrollIntoView({behavior:"smooth",block:"start"});
   if(isLoading){
     return (
       <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -2228,9 +2234,9 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
               </div>
               <div className="flex gap-2 flex-wrap">
                 <ContactBtn type="whatsapp" label="Contactar asesor" onClick={()=>openSmartContact({type:"whatsapp",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
-                <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>}>Ver documentos</Button>
+                <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>irA(documentosRef)}>Ver documentos</Button>
                 {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
-                <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>}>Ver seguimiento</Button>
+                <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>} onClick={()=>irA(seguimientoRef)}>Ver seguimiento</Button>
               </div>
             </div>
           </Card>
@@ -2242,9 +2248,11 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
                 ))}</div>
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3><Timeline stages={timelineStages}/></Card>
+              <div ref={seguimientoRef}>
+                <Card padding="md"><h3 className="text-sm font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3><Timeline stages={timelineStages}/></Card>
+              </div>
               <Card padding="none">
-                <div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
+                <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
                 <div className="divide-y divide-border/60">{documents.map(doc=>(
                   <div key={doc.name} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date}</p></div></div>
@@ -2272,7 +2280,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers}:{ord
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa importadora</h3>
                 <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/><div><div className="flex items-start gap-1"><p className="font-semibold text-sm">{imp?.name || "Empresa importadora"}</p>{imp?.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Sin especialidad"}</p></div></div>
                 <div className="space-y-1.5 pt-3 border-t border-border mb-3">{[["Años en plataforma","5+"],["Proyectos",imp?.projects?.toString() || "N/D"],["Resp. prom.",imp?.responseTime || "N/D"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div>
-                <Button variant="secondary" size="sm" fullWidth>Ver perfil</Button>
+                <Button variant="secondary" size="sm" fullWidth disabled={!imp?.id} onClick={()=>imp?.id&&onViewImporterProfile(imp.id)}>Ver perfil</Button>
               </Card>
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
                 <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
@@ -2311,7 +2319,6 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
         <p className="text-xs font-medium text-foreground truncate">{file.name}</p>
         <p className="text-[10px] text-muted-foreground">{cfg.label} · {file.size}</p>
       </div>
-      <button className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"><Download className="w-3.5 h-3.5"/></button>
     </div>
   );
 }
@@ -4256,11 +4263,13 @@ function Step3Abierta() {
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload)=>Promise<void>}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload)=>Promise<void>;prefill?:Partial<QuoteFormState>}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
-  const [form,setForm]=useState<QuoteFormState>(EMPTY_FORM);
+  // `prefill` llega al duplicar una cotización existente: se copian sus datos
+  // y el usuario solo ajusta lo que cambie.
+  const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
   const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
   const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
   const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
@@ -4333,7 +4342,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                 {stepError&&<div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"><AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/><p className="text-sm text-destructive">{stepError}</p></div>}
                 <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
                   <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>{step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>}</div>
-                  <div className="flex items-center gap-2"><Button variant="secondary" size="sm" icon={<Save className="w-3.5 h-3.5"/>}>Guardar borrador</Button>{step<3?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext}>Continuar</Button>:<Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} onClick={handleSubmit}>Solicitar cotización</Button>}</div>
+                  <div className="flex items-center gap-2">{step<3?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext}>Continuar</Button>:<Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} onClick={handleSubmit}>Solicitar cotización</Button>}</div>
                 </div>
               </div>
               <div className="w-64 xl:w-72 flex-shrink-0 hidden lg:block"><RightPanel step={step} modalidad={modalidad} si={si} form={form}/></div>
@@ -4878,6 +4887,15 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
     setAdvisors(prev=>[created,...prev]);
     setShowModal(false);
   }
+  async function reiniciarClave(asesor:CompanyAdvisor){
+    try{
+      await authService.forgotPassword({email:asesor.email});
+      setStatusMessage(`Se envió a ${asesor.email} un enlace para que ${asesor.name} defina una contraseña nueva.`);
+    }catch(err){
+      setStatusMessage(err instanceof Error ? err.message : "No se pudo enviar el correo de restablecimiento.");
+    }
+  }
+
   async function toggle(id:string){
     const target = advisors.find((advisor) => advisor.id === id);
     if (!target) {
@@ -4968,7 +4986,7 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>openEdit(a)}/>
-                        <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Reiniciar contraseña"/>
+                        <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Enviar enlace para restablecer la contraseña" onClick={()=>{void reiniciarClave(a);}}/>
                         <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>{void toggle(a.id);}}/>
                         <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5 text-destructive"/>} onClick={()=>{void deactivate(a.id);}}/>
                       </div>
@@ -5009,9 +5027,26 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond,quotes}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[]}) {
+function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
   const [search,setSearch]=useState("");
+  const [detalle,setDetalle]=useState<Quote|null>(null);
+  const [asignando,setAsignando]=useState<Quote|null>(null);
+  const [mensaje,setMensaje]=useState("");
+  // La conversacion de una cotizacion solo existe cuando ya se abrio la
+  // negociacion; hasta entonces no hay chat al que llevar al usuario.
+  const chatDe=(quoteId:string)=>chats.find((c)=>c.type==="cotizacion"&&c.refId===quoteId);
+
+  async function asignar(quote:Quote,advisorId:string|null){
+    try{
+      await onAssignAdvisor(quote.id,advisorId);
+      setMensaje(advisorId?"Asesor asignado a la cotizacion.":"La cotizacion volvio al pool de la empresa.");
+    }catch(err){
+      setMensaje(err instanceof Error?err.message:"No se pudo reasignar la cotizacion.");
+    }finally{
+      setAsignando(null);
+    }
+  }
   const tabs=["todas","disponibles","asignadas","respondidas","vencidas","abiertas","dirigidas"];
   const filtered=quotes.filter(q=>{
     const ms=!search||[q.product,q.code,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
@@ -5062,9 +5097,9 @@ function ImporterQuotesScreen({sb,onRespond,quotes}:{sb:SidebarCtrl;onRespond:(i
                     <td className="px-3 py-3"><Badge variant={q.status}/></td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle"/>
-                        <Button variant="ghost" size="sm" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor"/>
-                        <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title="Abrir chat"/>
+                        <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
+                        <Button variant="ghost" size="sm" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
+                        <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
                         <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>
@@ -5074,8 +5109,33 @@ function ImporterQuotesScreen({sb,onRespond,quotes}:{sb:SidebarCtrl;onRespond:(i
             </table>
             {filtered.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No hay cotizaciones para este filtro.</div>}
           </Card>
+          {mensaje&&<div className="p-3 rounded-lg border border-border bg-muted/40 text-sm">{mensaje}</div>}
         </main>
       </div>
+      <AdvisorQuoteDetailModal quote={detalle} open={Boolean(detalle)} onClose={()=>setDetalle(null)}/>
+      <Modal open={Boolean(asignando)} onClose={()=>setAsignando(null)} title="Asignar asesor">
+        <p className="text-sm text-muted-foreground mb-4">
+          Elige quien de tu equipo se hace cargo de esta cotizacion. Devolverla al pool permite que
+          cualquier asesor la reclame.
+        </p>
+        <div className="space-y-2">
+          {advisors.filter((a)=>a.status==="activo").map((a)=>(
+            <button key={a.id} type="button" onClick={()=>{if(asignando) void asignar(asignando,a.id);}}
+              className="w-full flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-left hover:border-primary/40 hover:bg-muted/40 transition-colors">
+              <Avatar initials={a.initials} size="sm" color={a.color}/>
+              <div className="min-w-0"><p className="text-sm font-medium truncate">{a.name}</p><p className="text-xs text-muted-foreground truncate">{a.email}</p></div>
+            </button>
+          ))}
+          {advisors.filter((a)=>a.status==="activo").length===0&&(
+            <p className="text-sm text-muted-foreground">No hay asesores activos en tu empresa.</p>
+          )}
+        </div>
+        <div className="mt-4 pt-3 border-t border-border">
+          <Button variant="secondary" size="sm" fullWidth onClick={()=>{if(asignando) void asignar(asignando,null);}}>
+            Devolver al pool de la empresa
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -5317,8 +5377,9 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>}) {
+function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void}) {
   const myQuotes=quotes.slice(0,20);
+  const chatDe=(quoteId:string)=>chats.find((c)=>c.type==="cotizacion"&&c.refId===quoteId);
   const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -5353,7 +5414,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
                     <td className="px-3 py-3 text-xs hidden lg:table-cell text-muted-foreground">{q.updatedAt}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title="Abrir chat"/>
+                        <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
                         <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Ver Detalle Completo</Button>
                         {existingProposalByQuoteId[q.id] ? (
                           <Button variant="secondary" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Ver/Editar Propuesta</Button>
@@ -6056,7 +6117,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     <h2 className="font-semibold mb-2">Registro de empresa importadora</h2>
                     <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">Actualmente las empresas importadoras son registradas directamente por el equipo administrativo. Contáctanos para iniciar el proceso.</p>
                   </div>
-                  <Button variant="primary" size="md" icon={<MailIcon className="w-4 h-4"/>}>Contactar al equipo administrativo</Button>
+                  <Button variant="primary" size="md" icon={<MailIcon className="w-4 h-4"/>} onClick={()=>openSmartContact({type:"email",email:CORREO_ADMINISTRACION})}>Contactar al equipo administrativo</Button>
                   <button onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Volver al inicio</button>
                 </div>
               ):(
@@ -6368,6 +6429,7 @@ export default function App() {
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   const [selectedImporterId,setSelectedImporterId]=useState("");
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
+  const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>();
   const [sidebarPinned,setSidebarPinned]=useState(true);
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
@@ -7020,7 +7082,32 @@ export default function App() {
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
   }
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
-  function openNewQuote(importerId?:string){setPreselectedImporterId(importerId);goTo("new-quote");}
+  function openNewQuote(importerId?:string){setQuotePrefill(undefined);setPreselectedImporterId(importerId);goTo("new-quote");}
+
+  /**
+   * Duplicar una cotización: se abre el formulario con sus datos copiados.
+   * No hay endpoint de duplicado en el backend ni hace falta — lo que se
+   * envía después es una cotización nueva y corriente.
+   */
+  function duplicateQuote(quote:Quote){
+    setQuotePrefill({
+      productName:quote.product||"",
+      description:quote.description||"",
+      referenceLink:quote.referenceLink||"",
+      productPhotoUrl:quote.productPhotoUrl||"",
+      country:quote.country||"",
+      productLine:quote.productLine||"",
+      quality:quote.quality||"",
+      customization:quote.personalizationLevel||"",
+      minQuantity:quote.minQuantity||"",
+      targetPrice:quote.targetPrice||"",
+      incoterm:quote.incoterm||"",
+      notes:quote.notes||"",
+      shippingMarkSufijo:quote.shippingMarkSufijo||"",
+    });
+    setPreselectedImporterId(quote.importadorId||undefined);
+    goTo("new-quote");
+  }
   function markNotif(id:string){
     setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
     void businessService.markNotificationAsRead(id).catch(() => undefined);
@@ -7207,6 +7294,16 @@ export default function App() {
     await Promise.all([reloadChatData(), reloadCompanyAdvisors(), reloadImporterQuotes()]);
   }
 
+  /**
+   * Reasigna el responsable de una cotizacion desde la tabla de la empresa.
+   * Con `advisorId` en null la cotizacion vuelve al pool y cualquier asesor
+   * puede reclamarla.
+   */
+  async function handleAssignAdvisorToQuote(quoteId: string, advisorId: string | null) {
+    await businessService.assignAdvisorToQuote(quoteId, advisorId);
+    await Promise.all([reloadImporterQuotes(), reloadChatData()]);
+  }
+
   async function handleUpdateOrderStatus(orderId: string, statusValue: string) {
     await businessService.updateOrderStatus(orderId, { estado: statusValue });
     await Promise.all([reloadRequesterOrders(), reloadImporterOrders(), reloadChatData()]);
@@ -7359,12 +7456,12 @@ export default function App() {
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} orders={importerOrders} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""} averageResponseHours={importerAverageResponseHours}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
     if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount}/>;
     if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat}/>;
 
     if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists}/>;
 
@@ -7386,13 +7483,13 @@ export default function App() {
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote}/>;
-    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists}/>;
-    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
+    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
+    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={setActiveChatId} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
-    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters}/>;
+    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
     if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
