@@ -3394,55 +3394,129 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   );
 }
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTOS + PAGOS placeholders
 // ─────────────────────────────────────────────────────────────────────────────
-function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,onCreateFolder,onRegisterFile,onSearch,onMoveFile,onMoveFolder,onRenameFile,onRenameFolder,onDeleteFile,onDeleteFolder,protectedFolders}:{sb:SidebarCtrl;explorer:BackendExplorerResponse;isLoading:boolean;currentFolderId:string|null;onLoadFolder:(parentId:string|null)=>Promise<void>;onCreateFolder:(name:string,parentId:string|null)=>Promise<void>;onRegisterFile:(file:File,parentId:string|null)=>Promise<void>;onSearch:(query:string)=>Promise<BackendArchivoItem[]>;onMoveFile:(fileId:string,targetFolderId:string|null)=>Promise<void>;onMoveFolder:(folderId:string,targetParentId:string|null)=>Promise<void>;onRenameFile:(fileId:string,newName:string)=>Promise<void>;onRenameFolder:(folderId:string,newName:string)=>Promise<void>;onDeleteFile:(fileId:string)=>Promise<void>;onDeleteFolder:(folderId:string)=>Promise<void>;protectedFolders:Array<{id:string;nombre:string}>;}) {
-  const [search,setSearch]=useState("");
-  const [searching,setSearching]=useState(false);
-  const [isSubmitting,setIsSubmitting]=useState(false);
-  const [isDragOverUpload,setIsDragOverUpload]=useState(false);
-  const [dragFileId,setDragFileId]=useState<string|null>(null);
-  const [dragFolderId,setDragFolderId]=useState<string|null>(null);
-  const [searchResults,setSearchResults]=useState<BackendArchivoItem[]|null>(null);
-  const [folderTrail,setFolderTrail]=useState<Array<{id:string|null;name:string}>>([{ id: null, name: "Raíz" }]);
-  const [viewMode,setViewMode]=useState<"list"|"grid">("list");
-  const [gridPreviewUrls,setGridPreviewUrls]=useState<Record<string,string>>({});
-  const [menuState,setMenuState]=useState<{
-    kind:"file"|"folder"|"canvas";
-    id:string|null;
-    x:number;
-    y:number;
-    file?:BackendArchivoItem;
-    folder?:BackendExplorerResponse["carpetas"][number];
-  }|null>(null);
-  const fileInputRef=useRef<HTMLInputElement>(null);
-  const gridPreviewLoadingRef=useRef<Record<string,boolean>>({});
-  const gridPreviewRegistryRef=useRef<Record<string,string>>({});
-  const protectedFolderSet=new Set(protectedFolders.map((folder)=>folder.id));
-  const chatRootFolderId=protectedFolders.find((folder)=>normalizeFolderName(folder.nombre)==="chats")?.id||null;
+function DocumentosScreen({
+  sb,
+  explorer,
+  isLoading,
+  currentFolderId,
+  onLoadFolder,
+  onCreateFolder,
+  onRegisterFile,
+  onSearch,
+  onMoveFile,
+  onMoveFolder,
+  onRenameFile,
+  onRenameFolder,
+  onDeleteFile,
+  onDeleteFolder,
+  protectedFolders,
+}: {
+  sb: SidebarCtrl;
+  explorer: BackendExplorerResponse;
+  isLoading: boolean;
+  currentFolderId: string | null;
+  onLoadFolder: (parentId: string | null) => Promise<void>;
+  onCreateFolder: (name: string, parentId: string | null) => Promise<void>;
+  onRegisterFile: (file: File, parentId: string | null) => Promise<void>;
+  onSearch: (query: string) => Promise<BackendArchivoItem[]>;
+  onMoveFile: (fileId: string, targetFolderId: string | null) => Promise<void>;
+  onMoveFolder: (folderId: string, targetParentId: string | null) => Promise<void>;
+  onRenameFile: (fileId: string, newName: string) => Promise<void>;
+  onRenameFolder: (folderId: string, newName: string) => Promise<void>;
+  onDeleteFile: (fileId: string) => Promise<void>;
+  onDeleteFolder: (folderId: string) => Promise<void>;
+  protectedFolders: Array<{ id: string; nombre: string }>;
+}) {
+  const [search, setSearch] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Drag & drop estados para carga external
+  const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
+  const [dragHoverFolderId, setDragHoverFolderId] = useState<string | null>(null);
 
-  function isProtectedFolder(folderId:string):boolean{
+  // Drag & drop estados para mover elementos internos
+  const [dragFileId, setDragFileId] = useState<string | null>(null);
+  const [dragFolderId, setDragFolderId] = useState<string | null>(null);
+
+  const [searchResults, setSearchResults] = useState<BackendArchivoItem[] | null>(null);
+  const [folderTrail, setFolderTrail] = useState<Array<{ id: string | null; name: string }>>([
+    { id: null, name: "Raíz" },
+  ]);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [gridPreviewUrls, setGridPreviewUrls] = useState<Record<string, string>>({});
+  const [menuState, setMenuState] = useState<{
+    kind: "file" | "folder" | "canvas";
+    id: string | null;
+    x: number;
+    y: number;
+    file?: BackendArchivoItem;
+    folder?: BackendExplorerResponse["carpetas"][number];
+  } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const gridPreviewLoadingRef = useRef<Record<string, boolean>>({});
+  const gridPreviewRegistryRef = useRef<Record<string, string>>({});
+  const protectedFolderSet = new Set(protectedFolders.map((folder) => folder.id));
+  const chatRootFolderId =
+    protectedFolders.find((folder) => normalizeFolderName(folder.nombre) === "chats")?.id || null;
+
+  function isProtectedFolder(folderId: string): boolean {
     return protectedFolderSet.has(folderId);
   }
 
   const visibleFiles = searchResults ?? explorer.archivos;
   const visibleFolders = searchResults
     ? []
-    : currentFolderId===null
-      ? explorer.carpetas.filter((folder,index,all)=>{
-          if(!SYSTEM_ROOT_FOLDER_NAMES.some((name)=>normalizeFolderName(name)===normalizeFolderName(folder.nombre))){
-            return true;
-          }
-          return all.findIndex((candidate)=>normalizeFolderName(candidate.nombre)===normalizeFolderName(folder.nombre))===index;
-        })
-      : explorer.carpetas;
+    : currentFolderId === null
+    ? explorer.carpetas.filter((folder, index, all) => {
+        if (
+          !SYSTEM_ROOT_FOLDER_NAMES.some(
+            (name) => normalizeFolderName(name) === normalizeFolderName(folder.nombre)
+          )
+        ) {
+          return true;
+        }
+        return (
+          all.findIndex(
+            (candidate) =>
+              normalizeFolderName(candidate.nombre) === normalizeFolderName(folder.nombre)
+          ) === index
+        );
+      })
+    : explorer.carpetas;
 
   useEffect(() => {
     if (currentFolderId === null) {
       setFolderTrail([{ id: null, name: "Raíz" }]);
     }
   }, [currentFolderId]);
+
+  // Búsqueda en tiempo real con debounce
+  useEffect(() => {
+    const query = search.trim();
+    if (!query) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await onSearch(query);
+        setSearchResults(rows);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search, onSearch]);
 
   useEffect(() => {
     if (!menuState) return;
@@ -3455,55 +3529,49 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     };
   }, [menuState]);
 
-  async function handleCreateFolderPrompt(){
-    const entered=window.prompt("Nombre de la nueva carpeta","")??"";
-    const normalized=entered.trim();
-    if(!normalized)return;
+  async function handleCreateFolderPrompt() {
+    const entered = window.prompt("Nombre de la nueva carpeta", "") ?? "";
+    const normalized = entered.trim();
+    if (!normalized) return;
     setIsSubmitting(true);
-    try{
+    try {
       await onCreateFolder(normalized, currentFolderId);
-    }finally{
+    } finally {
       setIsSubmitting(false);
       setMenuState(null);
     }
   }
 
-  async function handleFilePick(event:React.ChangeEvent<HTMLInputElement>){
-    const file=event.target.files?.[0];
-    if(!file)return;
-    setIsSubmitting(true);
-    try{
-      await onRegisterFile(file, currentFolderId);
-    }finally{
-      setIsSubmitting(false);
-      event.target.value="";
-    }
-  }
-
-  async function handleDropUpload(event:React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsDragOverUpload(false);
-    const file = event.dataTransfer.files?.[0];
+  async function handleFilePick(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     if (!file) return;
     setIsSubmitting(true);
     try {
       await onRegisterFile(file, currentFolderId);
     } finally {
       setIsSubmitting(false);
+      event.target.value = "";
     }
   }
 
-  async function handleSearch(){
-    if(!search.trim()){
-      setSearchResults(null);
-      return;
-    }
-    setSearching(true);
-    try{
-      const rows=await onSearch(search.trim());
-      setSearchResults(rows);
-    }finally{
-      setSearching(false);
+  // Carga al soltar un archivo externo en el canvas o sobre una carpeta
+  async function handleDropUpload(
+    event: React.DragEvent<HTMLDivElement>,
+    targetFolderId: string | null = currentFolderId
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOverCanvas(false);
+    setDragHoverFolderId(null);
+
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+
+    setIsSubmitting(true);
+    try {
+      await onRegisterFile(file, targetFolderId);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -3578,10 +3646,11 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     };
 
     const { base, ext } = splitName(file.nombre);
-    const nextBase = window.prompt(
-      ext ? `Nuevo nombre del archivo (sin .${ext})` : "Nuevo nombre del archivo",
-      base,
-    ) ?? "";
+    const nextBase =
+      window.prompt(
+        ext ? `Nuevo nombre del archivo (sin .${ext})` : "Nuevo nombre del archivo",
+        base
+      ) ?? "";
     const normalizedBase = nextBase.trim();
 
     if (!normalizedBase) {
@@ -3615,12 +3684,12 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     setMenuState(null);
   }
 
-  function fmtBytes(bytes:number|null):string{
-    if(!bytes||bytes<=0)return "0 B";
-    if(bytes<1024)return `${bytes} B`;
-    const kb=bytes/1024;
-    if(kb<1024)return `${kb.toFixed(1)} KB`;
-    return `${(kb/1024).toFixed(1)} MB`;
+  function fmtBytes(bytes: number | null): string {
+    if (!bytes || bytes <= 0) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    return `${(kb / 1024).toFixed(1)} MB`;
   }
 
   function absoluteResourceUrl(url: string | null): string {
@@ -3691,7 +3760,8 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     const popup = window.open("about:blank", "_blank");
     if (popup) {
       popup.document.title = `Abriendo ${fileName}...`;
-      popup.document.body.innerHTML = "<p style=\"font-family: system-ui, sans-serif; padding: 16px;\">Cargando recurso...</p>";
+      popup.document.body.innerHTML =
+        '<p style="font-family: system-ui, sans-serif; padding: 16px;">Cargando recurso...</p>';
     }
     try {
       const blob = await fetchProtectedBlob(url);
@@ -3728,7 +3798,16 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     }
   }
 
-  function handleOpenMenuAtPoint(payload: { kind: "file"|"folder"|"canvas"; id: string|null; file?: BackendArchivoItem; folder?: BackendExplorerResponse["carpetas"][number]; }, clientX:number, clientY:number) {
+  function handleOpenMenuAtPoint(
+    payload: {
+      kind: "file" | "folder" | "canvas";
+      id: string | null;
+      file?: BackendArchivoItem;
+      folder?: BackendExplorerResponse["carpetas"][number];
+    },
+    clientX: number,
+    clientY: number
+  ) {
     const menuWidth = 176;
     const menuHeight = 200;
     const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, clientX));
@@ -3740,7 +3819,15 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     });
   }
 
-  function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>, payload: { kind: "file"|"folder"; id: string; file?: BackendArchivoItem; folder?: BackendExplorerResponse["carpetas"][number]; }) {
+  function handleOpenMenu(
+    event: React.MouseEvent<HTMLButtonElement>,
+    payload: {
+      kind: "file" | "folder";
+      id: string;
+      file?: BackendArchivoItem;
+      folder?: BackendExplorerResponse["carpetas"][number];
+    }
+  ) {
     const rect = event.currentTarget.getBoundingClientRect();
     handleOpenMenuAtPoint(payload, rect.right - 170, rect.bottom + 6);
   }
@@ -3764,7 +3851,7 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
     });
 
     setGridPreviewUrls((current) => {
-      const next: Record<string,string> = {};
+      const next: Record<string, string> = {};
       visibleFiles.forEach((file) => {
         if (current[file.id]) {
           next[file.id] = current[file.id];
@@ -3814,223 +3901,567 @@ function DocumentosScreen({sb,explorer,isLoading,currentFolderId,onLoadFolder,on
   }, []);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
-      <Sidebar {...sb} active="documentos"/>
+    <div
+      className="flex h-screen bg-background overflow-hidden"
+      style={{ fontFamily: "Inter,system-ui,sans-serif" }}
+    >
+      <Sidebar {...sb} active="documentos" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
+        <AppHeader user={USER} sb={sb} />
         <main
           className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
-          onClick={()=>setMenuState(null)}
-          onContextMenu={(event)=>{
+          onClick={() => setMenuState(null)}
+          onContextMenu={(event) => {
             event.preventDefault();
-            handleOpenMenuAtPoint({kind:"canvas",id:currentFolderId},event.clientX,event.clientY);
+            handleOpenMenuAtPoint({ kind: "canvas", id: currentFolderId }, event.clientX, event.clientY);
           }}
         >
           <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Documentos"}]}/>
+            <Breadcrumb
+              items={[
+                { label: "Inicio", onClick: () => sb.onNav(sb.navItems[0]?.key || "dashboard") },
+                { label: "Documentos" },
+              ]}
+            />
             <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
               <h1 className="text-xl font-semibold tracking-tight">Gestión Documental</h1>
-              <div className="flex items-center gap-2">
-                <Button variant={viewMode==="list"?"secondary":"ghost"} size="sm" onClick={()=>setViewMode("list")}>Lista</Button>
-                <Button variant={viewMode==="grid"?"secondary":"ghost"} size="sm" icon={<LayoutGrid className="w-3.5 h-3.5"/>} onClick={()=>setViewMode("grid")}>Cuadrícula</Button>
-                <Button variant="secondary" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{void onLoadFolder(currentFolderId);}}>Actualizar</Button>
-              </div>
             </div>
           </div>
 
-          <input ref={fileInputRef} type="file" className="hidden" onChange={(event)=>{void handleFilePick(event);}}/>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              void handleFilePick(event);
+            }}
+          />
 
-          <Card padding="md" className="border-dashed">
-            <div
-              onDragOver={(event)=>{event.preventDefault();setIsDragOverUpload(true);}}
-              onDragLeave={()=>setIsDragOverUpload(false)}
-              onDrop={(event)=>{void handleDropUpload(event);}}
-              className={clsx("rounded-xl border-2 border-dashed px-5 py-6 transition-colors",isDragOverUpload?"border-primary bg-primary/5":"border-border")}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><Upload className="w-5 h-5"/></div>
-                <div>
-                  <p className="text-sm font-semibold">Arrastra y suelta archivos aquí</p>
-                  <p className="text-xs text-muted-foreground">Soporta documentos, imágenes y video MP4. También puedes usar "Registrar archivo".</p>
+          <Card
+            padding="md"
+            className="overflow-visible relative"
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("Files")) {
+                event.preventDefault();
+                setIsDragOverCanvas(true);
+              }
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                setIsDragOverCanvas(false);
+              }
+            }}
+            onDrop={(event) => {
+              if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                void handleDropUpload(event);
+              }
+            }}
+          >
+            {/* Superposición cuando se arrastran archivos externos al canvas general */}
+            {isDragOverCanvas && (
+              <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm border-2 border-dashed border-primary rounded-xl flex flex-col items-center justify-center pointer-events-none transition-all">
+                <Upload className="w-10 h-10 text-primary animate-bounce mb-2" />
+                <p className="text-base font-semibold text-primary">
+                  Suelta el archivo para subirlo aquí
+                </p>
+              </div>
+            )}
+
+            {/* Barra de Búsqueda y Botones de Acción Integrados */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 mb-4">
+              <div className="w-full md:w-72">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por nombre..."
+                  prefix={
+                    searching ? (
+                      <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )
+                  }
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+                <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border">
+                  <Button
+                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                  >
+                    Lista
+                  </Button>
+                  <Button
+                    variant={viewMode === "grid" ? "secondary" : "ghost"}
+                    size="sm"
+                    icon={<LayoutGrid className="w-3.5 h-3.5" />}
+                    onClick={() => setViewMode("grid")}
+                  >
+                    Cuadrícula
+                  </Button>
                 </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    void onLoadFolder(currentFolderId);
+                  }}
+                >
+                  Actualizar
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<FolderOpen className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    void handleCreateFolderPrompt();
+                  }}
+                  disabled={isSubmitting}
+                >
+                  Nueva carpeta
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Upload className="w-3.5 h-3.5" />}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                >
+                  Subir archivo
+                </Button>
               </div>
             </div>
-          </Card>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <Card padding="md" className="xl:col-span-2 overflow-visible">
-              <div className="flex items-center gap-2 mb-3">
-                <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar por nombre de archivo" prefix={<Search className="w-3.5 h-3.5"/>}/>
-                <Button size="sm" onClick={()=>{void handleSearch();}} loading={searching}>Buscar</Button>
-                {searchResults&&<Button size="sm" variant="ghost" onClick={()=>{setSearch("");setSearchResults(null);}}>Limpiar</Button>}
-                <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>{void handleCreateFolderPrompt();}} disabled={isSubmitting}>Nueva carpeta</Button>
-                <Button variant="secondary" size="sm" icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>fileInputRef.current?.click()} disabled={isSubmitting}>Subir archivo</Button>
-              </div>
+            {/* Breadcrumb de carpetas */}
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              {folderTrail.map((node, index) => (
+                <button
+                  key={`${node.id || "root"}-${index}`}
+                  onClick={() => {
+                    void jumpToTrail(index);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (dragFileId) {
+                      void moveFileTo(dragFileId, node.id);
+                    }
+                    if (dragFolderId) {
+                      void moveFolderTo(dragFolderId, node.id);
+                    }
+                    setDragFileId(null);
+                    setDragFolderId(null);
+                  }}
+                  className={clsx(
+                    "text-xs px-2 py-1 rounded-md border transition-colors",
+                    index === folderTrail.length - 1
+                      ? "bg-primary/10 text-primary border-primary/20 font-medium"
+                      : "bg-white text-muted-foreground border-border hover:text-foreground"
+                  )}
+                >
+                  {node.name}
+                </button>
+              ))}
+            </div>
 
-              <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-                {folderTrail.map((node,index)=>(
-                  <button
-                    key={`${node.id || "root"}-${index}`}
-                    onClick={()=>{void jumpToTrail(index);}}
-                    onDragOver={(event)=>event.preventDefault()}
-                    onDrop={(event)=>{
-                      event.preventDefault();
-                      if (dragFileId) {
-                        void moveFileTo(dragFileId, node.id);
-                      }
-                      if (dragFolderId) {
-                        void moveFolderTo(dragFolderId, node.id);
-                      }
-                      setDragFileId(null);
-                      setDragFolderId(null);
-                    }}
-                    className={clsx("text-xs px-2 py-1 rounded-md border",index===folderTrail.length-1?"bg-primary/10 text-primary border-primary/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
-                  >
-                    {node.name}
-                  </button>
-                ))}
-              </div>
+            {/* Contenido principal (Carpetas y Archivos) */}
+            <div
+              className={clsx(
+                "max-h-[60vh] overflow-y-auto overflow-x-visible pr-1",
+                viewMode === "grid" ? "grid grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2"
+              )}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (dragFileId) {
+                  void moveFileTo(dragFileId, null);
+                }
+                if (dragFolderId) {
+                  void moveFolderTo(dragFolderId, null);
+                }
+                setDragFileId(null);
+                setDragFolderId(null);
+              }}
+            >
+              {isLoading && (
+                <p className="text-sm text-muted-foreground col-span-full py-4 text-center">
+                  Cargando documentos...
+                </p>
+              )}
 
-              <div
-                className={clsx("max-h-[60vh] overflow-y-auto overflow-x-visible pr-1", viewMode==="grid"?"grid grid-cols-2 lg:grid-cols-3 gap-3":"space-y-2")}
-                onDragOver={(event)=>event.preventDefault()}
-                onDrop={(event)=>{
-                  event.preventDefault();
-                  if (dragFileId) {
-                    void moveFileTo(dragFileId, null);
-                  }
-                  if (dragFolderId) {
-                    void moveFolderTo(dragFolderId, null);
-                  }
-                  setDragFileId(null);
-                  setDragFolderId(null);
-                }}
-              >
-                {isLoading&&<p className="text-sm text-muted-foreground">Cargando documentos...</p>}
+              {!isLoading &&
+                visibleFolders.map((folder) => {
+                  const isHoveredForUpload = dragHoverFolderId === folder.id;
 
-                {!isLoading&&visibleFolders.map((folder)=>(
-                  <div
-                    key={folder.id}
-                    draggable={!isProtectedFolder(folder.id)}
-                    onDragStart={()=>{ if (!isProtectedFolder(folder.id)) setDragFolderId(folder.id); }}
-                    onDragEnd={()=>setDragFolderId(null)}
-                    onDragOver={(event)=>event.preventDefault()}
-                    onDrop={(event)=>{
-                      event.preventDefault();
-                      if (dragFileId) {
-                        void moveFileTo(dragFileId, folder.id);
-                      }
-                      if (dragFolderId && dragFolderId !== folder.id && !isProtectedFolder(dragFolderId)) {
-                        void moveFolderTo(dragFolderId, folder.id);
-                      }
-                      setDragFileId(null);
-                      setDragFolderId(null);
-                    }}
-                    onContextMenu={(event)=>{
-                      event.preventDefault();
-                      event.stopPropagation();
-                      handleOpenMenuAtPoint({kind:"folder",id:folder.id,folder},event.clientX,event.clientY);
-                    }}
-                    className={clsx(
-                      "rounded-xl border",
-                      isProtectedFolder(folder.id)
-                        ? "border-indigo-200 bg-indigo-50/70"
-                        : "border-border bg-sky-50/40",
-                      viewMode==="grid"
-                        ? "relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
-                        : "px-3 py-2.5 flex items-center justify-between gap-3",
-                    )}
-                  >
-                    <button className={clsx("min-w-0",viewMode==="grid"?"w-full h-full flex flex-col items-center justify-center text-center":"text-left w-full")} onClick={()=>{void openFolder(folder);}}>
-                      <FolderTree className={clsx(isProtectedFolder(folder.id)?"text-indigo-600":"text-sky-600",viewMode==="grid"?"w-12 h-12 mb-3":"w-4 h-4")}/>
-                      <p className={clsx("text-sm font-semibold truncate",viewMode==="grid"?"max-w-full":"flex items-center gap-1.5")}>{folder.nombre}</p>
-                      {isProtectedFolder(folder.id)&&<span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"><LockKeyhole className="w-2.5 h-2.5"/>Sistema</span>}
-                      {chatRootFolderId===currentFolderId&&<p className="text-[10px] text-muted-foreground mt-1">Conversación ID: {folder.id}</p>}
-                      <p className="text-xs text-muted-foreground mt-1">Carpeta · {new Date(folder.created_at).toLocaleDateString("es-CO")}</p>
-                    </button>
-                    <div className={clsx("flex justify-end",viewMode==="grid"?"absolute top-2 right-2":"") }>
-                      <button onClick={(event)=>{event.stopPropagation();handleOpenMenu(event,{kind:"folder",id:folder.id,folder});}} className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"><MoreHorizontal className="w-4 h-4"/></button>
+                  return (
+                    <div
+                      key={folder.id}
+                      draggable={!isProtectedFolder(folder.id)}
+                      onDragStart={() => {
+                        if (!isProtectedFolder(folder.id)) setDragFolderId(folder.id);
+                      }}
+                      onDragEnd={() => setDragFolderId(null)}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        if (event.dataTransfer.types.includes("Files")) {
+                          setDragHoverFolderId(folder.id);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dragHoverFolderId === folder.id) {
+                          setDragHoverFolderId(null);
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setDragHoverFolderId(null);
+
+                        // Si es un archivo local arrastrado externamente
+                        if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                          void handleDropUpload(event, folder.id);
+                          return;
+                        }
+
+                        // Si es un mover interno de archivo o carpeta
+                        if (dragFileId) {
+                          void moveFileTo(dragFileId, folder.id);
+                        }
+                        if (
+                          dragFolderId &&
+                          dragFolderId !== folder.id &&
+                          !isProtectedFolder(dragFolderId)
+                        ) {
+                          void moveFolderTo(dragFolderId, folder.id);
+                        }
+                        setDragFileId(null);
+                        setDragFolderId(null);
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handleOpenMenuAtPoint(
+                          { kind: "folder", id: folder.id, folder },
+                          event.clientX,
+                          event.clientY
+                        );
+                      }}
+                      className={clsx(
+                        "rounded-xl border transition-all relative",
+                        isHoveredForUpload
+                          ? "border-primary bg-primary/20 scale-[1.01]"
+                          : isProtectedFolder(folder.id)
+                          ? "border-indigo-200 bg-indigo-50/70"
+                          : "border-border bg-sky-50/40 hover:bg-sky-50/80",
+                        viewMode === "grid"
+                          ? "min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
+                          : "px-3 py-2.5 flex items-center justify-between gap-3"
+                      )}
+                    >
+                      <button
+                        className={clsx(
+                          "min-w-0",
+                          viewMode === "grid"
+                            ? "w-full h-full flex flex-col items-center justify-center text-center"
+                            : "text-left w-full"
+                        )}
+                        onClick={() => {
+                          void openFolder(folder);
+                        }}
+                      >
+                        <FolderTree
+                          className={clsx(
+                            isProtectedFolder(folder.id) ? "text-indigo-600" : "text-sky-600",
+                            viewMode === "grid" ? "w-12 h-12 mb-3" : "w-4 h-4"
+                          )}
+                        />
+                        <p
+                          className={clsx(
+                            "text-sm font-semibold truncate",
+                            viewMode === "grid" ? "max-w-full" : "flex items-center gap-1.5"
+                          )}
+                        >
+                          {folder.nombre}
+                        </p>
+                        {isProtectedFolder(folder.id) && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                            <LockKeyhole className="w-2.5 h-2.5" />
+                            Sistema
+                          </span>
+                        )}
+                        {chatRootFolderId === currentFolderId && (
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Conversación ID: {folder.id}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Carpeta · {new Date(folder.created_at).toLocaleDateString("es-CO")}
+                        </p>
+                      </button>
+
+                      <div
+                        className={clsx(
+                          "flex justify-end",
+                          viewMode === "grid" ? "absolute top-2 right-2" : ""
+                        )}
+                      >
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenMenu(event, { kind: "folder", id: folder.id, folder });
+                          }}
+                          className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
-                {!isLoading&&visibleFiles.map((file)=>(
+              {!isLoading &&
+                visibleFiles.map((file) => (
                   <div
                     key={file.id}
                     draggable
-                    onDragStart={()=>setDragFileId(file.id)}
-                    onDragEnd={()=>setDragFileId(null)}
-                    onContextMenu={(event)=>{
+                    onDragStart={() => setDragFileId(file.id)}
+                    onDragEnd={() => setDragFileId(null)}
+                    onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      handleOpenMenuAtPoint({kind:"file",id:file.id,file},event.clientX,event.clientY);
+                      handleOpenMenuAtPoint(
+                        { kind: "file", id: file.id, file },
+                        event.clientX,
+                        event.clientY
+                      );
                     }}
-                    className={clsx("rounded-xl border border-border",viewMode==="grid"?"relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center":"px-3 py-2.5 flex items-start justify-between gap-3")}
+                    className={clsx(
+                      "rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors",
+                      viewMode === "grid"
+                        ? "relative min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
+                        : "px-3 py-2.5 flex items-start justify-between gap-3"
+                    )}
                   >
-                    {viewMode==="grid" && (
+                    {viewMode === "grid" && (
                       <div className="h-24 w-full rounded-lg border border-border bg-slate-50 mb-3 overflow-hidden flex items-center justify-center">
-                        {previewThumb(file)
-                          ? <img src={previewThumb(file) || ""} alt={file.nombre} className="w-full h-full object-cover"/>
-                          : <FileIcon className="w-12 h-12 text-muted-foreground/40"/>}
+                        {previewThumb(file) ? (
+                          <img
+                            src={previewThumb(file) || ""}
+                            alt={file.nombre}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FileIcon className="w-12 h-12 text-muted-foreground/40" />
+                        )}
                       </div>
                     )}
-                    <div className={clsx("min-w-0",viewMode==="grid"?"w-full text-center":"flex-1")}>
+                    <div
+                      className={clsx(
+                        "min-w-0",
+                        viewMode === "grid" ? "w-full text-center" : "flex-1"
+                      )}
+                    >
                       <p className="text-sm font-semibold truncate">{file.nombre}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {fmtBytes(file.size_bytes)}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{new Date(file.created_at).toLocaleDateString("es-CO")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {file.extension.toUpperCase()} · {fmtBytes(file.size_bytes)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(file.created_at).toLocaleDateString("es-CO")}
+                      </p>
                     </div>
-                    <div className={clsx("flex items-center gap-1",viewMode==="grid"?"absolute top-2 right-2":"")}>
-                      {viewMode!=="grid"&&file.storage_url&&<button onClick={()=>{void handleOpenResource(file.storage_url,file.nombre);}} className="text-xs text-primary hover:underline whitespace-nowrap">Abrir</button>}
-                      <button onClick={(event)=>{event.stopPropagation();handleOpenMenu(event,{kind:"file",id:file.id,file});}} className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"><MoreHorizontal className="w-4 h-4"/></button>
+                    <div
+                      className={clsx(
+                        "flex items-center gap-1",
+                        viewMode === "grid" ? "absolute top-2 right-2" : ""
+                      )}
+                    >
+                      {viewMode !== "grid" && file.storage_url && (
+                        <button
+                          onClick={() => {
+                            void handleOpenResource(file.storage_url, file.nombre);
+                          }}
+                          className="text-xs text-primary hover:underline whitespace-nowrap"
+                        >
+                          Abrir
+                        </button>
+                      )}
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleOpenMenu(event, { kind: "file", id: file.id, file });
+                        }}
+                        className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}
 
-                {!isLoading&&visibleFolders.length===0&&visibleFiles.length===0&&<p className="text-sm text-muted-foreground">No hay elementos en esta carpeta.</p>}
-              </div>
-            </Card>
+              {!isLoading && visibleFolders.length === 0 && visibleFiles.length === 0 && (
+                <p className="text-sm text-muted-foreground col-span-full py-8 text-center">
+                  No hay elementos en esta carpeta.
+                </p>
+              )}
+            </div>
+          </Card>
 
-            <Card padding="md">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ayuda rápida</p>
-                <ul className="text-xs text-muted-foreground space-y-2">
-                  <li>Arrastra un archivo sobre una carpeta para moverlo.</li>
-                  <li>Arrastra una carpeta sobre otra para anidarla.</li>
-                  <li>Arrastra recursos a la miga de pan para moverlos entre niveles.</li>
-                  <li>Usa clic derecho para abrir acciones contextuales.</li>
-                </ul>
-              </div>
-            </Card>
-          </div>
-
-          {menuState&&(
-            <div className="fixed inset-0 z-[70]" onClick={()=>setMenuState(null)}>
-              <div className="absolute w-44 rounded-lg border border-border bg-white shadow-lg p-1" style={{left:menuState.x,top:menuState.y}} onClick={(event)=>event.stopPropagation()}>
-                {menuState.kind==="canvas"&&(
+          {/* Menú Contextual / Desplegable */}
+          {menuState && (
+            <div className="fixed inset-0 z-[70]" onClick={() => setMenuState(null)}>
+              <div
+                className="absolute w-44 rounded-lg border border-border bg-white shadow-lg p-1"
+                style={{ left: menuState.x, top: menuState.y }}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {menuState.kind === "canvas" && (
                   <>
-                    <button onClick={()=>{void handleCreateFolderPrompt();}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Nueva carpeta</button>
-                    <button onClick={()=>{fileInputRef.current?.click();setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Subir archivo</button>
-                    <button onClick={()=>{void onLoadFolder(currentFolderId);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Refrescar</button>
+                    <button
+                      onClick={() => {
+                        void handleCreateFolderPrompt();
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Nueva carpeta
+                    </button>
+                    <button
+                      onClick={() => {
+                        fileInputRef.current?.click();
+                        setMenuState(null);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Subir archivo
+                    </button>
+                    <button
+                      onClick={() => {
+                        void onLoadFolder(currentFolderId);
+                        setMenuState(null);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Refrescar
+                    </button>
                   </>
                 )}
-                {menuState.kind==="folder"&&menuState.folder&&(
+                {menuState.kind === "folder" && menuState.folder && (
                   <>
-                    <button onClick={()=>{void openFolder(menuState.folder!);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Abrir</button>
-                    <button onClick={()=>{void onLoadFolder(menuState.folder!.id);setMenuState(null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Refrescar</button>
-                    {!isProtectedFolder(menuState.folder.id)&&<button onClick={()=>{void handleRenameFolder(menuState.folder!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>}
-                    {!isProtectedFolder(menuState.folder.id)&&<button onClick={()=>{void moveFolderTo(menuState.folder!.id,null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Mover a raíz</button>}
-                    {!isProtectedFolder(menuState.folder.id)&&<button onClick={()=>{void handleDeleteFolder(menuState.folder!.id);}} className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded">Eliminar</button>}
-                    {isProtectedFolder(menuState.folder.id)&&<p className="px-2 py-1.5 text-[11px] text-muted-foreground">Carpeta del sistema protegida.</p>}
+                    <button
+                      onClick={() => {
+                        void openFolder(menuState.folder!);
+                        setMenuState(null);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Abrir
+                    </button>
+                    <button
+                      onClick={() => {
+                        void onLoadFolder(menuState.folder!.id);
+                        setMenuState(null);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Refrescar
+                    </button>
+                    {!isProtectedFolder(menuState.folder.id) && (
+                      <button
+                        onClick={() => {
+                          void handleRenameFolder(menuState.folder!);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                      >
+                        Renombrar
+                      </button>
+                    )}
+                    {!isProtectedFolder(menuState.folder.id) && (
+                      <button
+                        onClick={() => {
+                          void moveFolderTo(menuState.folder!.id, null);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                      >
+                        Mover a raíz
+                      </button>
+                    )}
+                    {!isProtectedFolder(menuState.folder.id) && (
+                      <button
+                        onClick={() => {
+                          void handleDeleteFolder(menuState.folder!.id);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                    {isProtectedFolder(menuState.folder.id) && (
+                      <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                        Carpeta del sistema protegida.
+                      </p>
+                    )}
                   </>
                 )}
-                {menuState.kind==="file"&&menuState.file&&(
+                {menuState.kind === "file" && menuState.file && (
                   <>
-                    {menuState.file.storage_url&&<button onClick={()=>{void handleOpenResource(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Ver</button>}
-                    {menuState.file.storage_url&&<button onClick={()=>{void handleDownload(menuState.file!.storage_url,menuState.file!.nombre);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Descargar</button>}
-                    <button onClick={()=>handleCopyLink(menuState.file!.storage_url)} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Copiar enlace</button>
-                    <button onClick={()=>{void handleRenameFile(menuState.file!);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Renombrar</button>
-                    <button onClick={()=>{void moveFileTo(menuState.file!.id,null);}} className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded">Mover a raíz</button>
-                    <button onClick={()=>{void handleDeleteFile(menuState.file!.id);}} className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded">Eliminar</button>
+                    {menuState.file.storage_url && (
+                      <button
+                        onClick={() => {
+                          void handleOpenResource(
+                            menuState.file!.storage_url,
+                            menuState.file!.nombre
+                          );
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                      >
+                        Ver
+                      </button>
+                    )}
+                    {menuState.file.storage_url && (
+                      <button
+                        onClick={() => {
+                          void handleDownload(
+                            menuState.file!.storage_url,
+                            menuState.file!.nombre
+                          );
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                      >
+                        Descargar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleCopyLink(menuState.file!.storage_url)}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Copiar enlace
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleRenameFile(menuState.file!);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Renombrar
+                    </button>
+                    <button
+                      onClick={() => {
+                        void moveFileTo(menuState.file!.id, null);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                    >
+                      Mover a raíz
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleDeleteFile(menuState.file!.id);
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded"
+                    >
+                      Eliminar
+                    </button>
                   </>
                 )}
               </div>
