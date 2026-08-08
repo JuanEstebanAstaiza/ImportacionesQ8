@@ -4825,6 +4825,327 @@
       ]
     },
     {
+      "name": "Reseñas",
+      "item": [
+        {
+          "name": "Crear Resena",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas"
+              ]
+            },
+            "description": "Publica una reseña sobre la empresa de una orden propia ya entregada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Resenas De Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/importador/:importador_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "importador",
+                ":importador_id"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Reseñas públicas de una empresa. No exige sesión: el catálogo es público\ny quien está eligiendo proveedor todavía puede no haberse registrado."
+          },
+          "response": []
+        },
+        {
+          "name": "Resumen De Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/importador/:importador_id/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "importador",
+                ":importador_id",
+                "resumen"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Promedio, total y reparto por estrellas para la cabecera de la ficha."
+          },
+          "response": []
+        },
+        {
+          "name": "Mis Resenas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/mias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "mias"
+              ]
+            },
+            "description": "Reseñas escritas por el solicitante, o recibidas por su empresa.\n\nUn mismo endpoint sirve a los dos lados porque la pregunta es la misma\n(\"¿qué reseñas me tocan?\") y la respuesta depende del rol de quien pregunta."
+          },
+          "response": []
+        },
+        {
+          "name": "Ordenes Pendientes De Resena",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/pendientes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "pendientes"
+              ]
+            },
+            "description": "Órdenes entregadas del solicitante que todavía no tienen reseña.\n\nEs lo que alimenta el aviso de \"cuéntanos qué tal fue\": sin esta lista, el\nusuario tendría que acordarse por su cuenta de volver a puntuar."
+          },
+          "response": []
+        },
+        {
+          "name": "Editar Resena",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/:resena_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                ":resena_id"
+              ],
+              "variable": [
+                {
+                  "key": "resena_id",
+                  "value": "{{resena_id}}"
+                }
+              ]
+            },
+            "description": "Corrige la propia reseña. La opinión puede cambiar; el derecho a opinar no.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Moderar Resena",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/:resena_id/moderar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                ":resena_id",
+                "moderar"
+              ],
+              "variable": [
+                {
+                  "key": "resena_id",
+                  "value": "{{resena_id}}"
+                }
+              ]
+            },
+            "description": "Oculta o restaura una reseña. No se borra: se conserva la trazabilidad.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder Resena",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/:resena_id/responder",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                ":resena_id",
+                "responder"
+              ],
+              "variable": [
+                {
+                  "key": "resena_id",
+                  "value": "{{resena_id}}"
+                }
+              ]
+            },
+            "description": "Derecho de réplica de la empresa reseñada.\n\nUna reseña pública sin posibilidad de responder deja a la empresa sin\ndefensa ante una crítica injusta, y al lector sin la otra versión.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Salud",
       "item": [
         {

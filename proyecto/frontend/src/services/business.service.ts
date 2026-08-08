@@ -209,6 +209,103 @@ export interface BackendDocumentoOrdenItem {
   fecha_subida: string;
 }
 
+/* ------------------------------------------------------------------
+ * Resenas de empresas importadoras
+ * ---------------------------------------------------------------- */
+
+export interface BackendResena {
+  id: string;
+  importador_id: string;
+  orden_id: string;
+  calificacion: number;
+  comentario?: string | null;
+  puntualidad?: number | null;
+  calidad_producto?: number | null;
+  comunicacion?: number | null;
+  respuesta_empresa?: string | null;
+  fecha_respuesta?: string | null;
+  visible: boolean;
+  /** Nombre de pila de quien la escribio; el backend no expone su correo ni su id. */
+  autor_nombre?: string | null;
+  fecha_creacion: string;
+}
+
+export interface BackendResumenResenas {
+  promedio: number;
+  total: number;
+  /** Reparto por estrellas: {"5": 12, "4": 3, ...} */
+  reparto: Record<string, number>;
+  puntualidad?: number | null;
+  calidad_producto?: number | null;
+  comunicacion?: number | null;
+}
+
+/** Orden ya entregada que todavia no tiene resena. */
+export interface BackendOrdenResenable {
+  orden_id: string;
+  importador_id: string;
+  nombre_empresa: string;
+  producto: string;
+  fecha_creacion: string;
+}
+
+export interface CrearResenaPayload {
+  orden_id: string;
+  calificacion: number;
+  comentario?: string;
+  puntualidad?: number;
+  calidad_producto?: number;
+  comunicacion?: number;
+}
+
+/* ------------------------------------------------------------------
+ * Presentacion de la empresa (video breve y fotos)
+ * ---------------------------------------------------------------- */
+
+export type TipoEvidenciaImportador =
+  | "certificado"
+  | "foto_fabrica"
+  | "catalogo"
+  | "moq_doc"
+  | "video_presentacion"
+  | "foto_producto"
+  | "otro";
+
+export interface BackendEvidenciaImportador {
+  id: string;
+  importador_id: string;
+  tipo: TipoEvidenciaImportador;
+  titulo: string;
+  descripcion?: string | null;
+  url: string;
+  /** "pendiente" | "aprobada" | "rechazada": solo las aprobadas salen en la ficha publica. */
+  estado: string;
+  nota_revision?: string | null;
+  fecha_creacion?: string | null;
+  fecha_revision?: string | null;
+}
+
+export interface CrearEvidenciaPayload {
+  tipo: TipoEvidenciaImportador;
+  titulo: string;
+  descripcion?: string;
+  url: string;
+}
+
+/* ------------------------------------------------------------------
+ * Referidos
+ * ---------------------------------------------------------------- */
+
+export interface BackendCodigoReferido {
+  codigo: string;
+  activo?: boolean;
+}
+
+export interface BackendEstadisticasReferido {
+  total_referidos: number;
+  creditos_ganados: number;
+}
+
 export interface BackendOrder {
   id: string;
   cotizacion_id: string;
@@ -627,6 +724,71 @@ export const businessService = {
       method: "PUT",
       body: { importador_id: importadorId } satisfies StartNegotiationPayload,
     });
+  },
+
+  /* ---------------- Resenas de empresas importadoras ---------------- */
+
+  /** Resenas publicas de una empresa. No exige sesion: el catalogo es publico. */
+  listImporterReviews(importadorId: string): Promise<BackendResena[]> {
+    return apiRequest<BackendResena[]>(`/resenas/importador/${importadorId}`, { method: "GET" });
+  },
+
+  getImporterReviewsSummary(importadorId: string): Promise<BackendResumenResenas> {
+    return apiRequest<BackendResumenResenas>(`/resenas/importador/${importadorId}/resumen`, { method: "GET" });
+  },
+
+  /** Ordenes entregadas del solicitante que todavia no ha valorado. */
+  listPendingReviews(): Promise<BackendOrdenResenable[]> {
+    return apiRequest<BackendOrdenResenable[]>("/resenas/pendientes", { method: "GET" });
+  },
+
+  listMyReviews(): Promise<BackendResena[]> {
+    return apiRequest<BackendResena[]>("/resenas/mias", { method: "GET" });
+  },
+
+  createReview(payload: CrearResenaPayload): Promise<BackendResena> {
+    return apiRequest<BackendResena>("/resenas", { method: "POST", body: payload });
+  },
+
+  updateReview(resenaId: string, payload: Partial<CrearResenaPayload>): Promise<BackendResena> {
+    return apiRequest<BackendResena>(`/resenas/${resenaId}`, { method: "PUT", body: payload });
+  },
+
+  /** Derecho de replica de la empresa resenada. */
+  replyToReview(resenaId: string, respuesta: string): Promise<BackendResena> {
+    return apiRequest<BackendResena>(`/resenas/${resenaId}/responder`, {
+      method: "POST",
+      body: { respuesta },
+    });
+  },
+
+  /* ---------------- Presentacion de la empresa ---------------- */
+
+  listMyImporterEvidence(): Promise<BackendEvidenciaImportador[]> {
+    return apiRequest<BackendEvidenciaImportador[]>("/importadores/evidencias", { method: "GET" });
+  },
+
+  /** Presentacion aprobada y visible en la ficha publica de una empresa. */
+  listPublicImporterEvidence(importadorId: string): Promise<BackendEvidenciaImportador[]> {
+    return apiRequest<BackendEvidenciaImportador[]>(`/importadores/${importadorId}/evidencias`, { method: "GET" });
+  },
+
+  createImporterEvidence(payload: CrearEvidenciaPayload): Promise<BackendEvidenciaImportador> {
+    return apiRequest<BackendEvidenciaImportador>("/importadores/evidencias", { method: "POST", body: payload });
+  },
+
+  deleteImporterEvidence(evidenciaId: string): Promise<void> {
+    return apiRequest<void>(`/importadores/evidencias/${evidenciaId}`, { method: "DELETE" });
+  },
+
+  /* ---------------- Referidos ---------------- */
+
+  getMyReferralCode(): Promise<BackendCodigoReferido> {
+    return apiRequest<BackendCodigoReferido>("/referidos/mi-codigo", { method: "GET" });
+  },
+
+  getReferralStats(): Promise<BackendEstadisticasReferido> {
+    return apiRequest<BackendEstadisticasReferido>("/referidos/estadisticas", { method: "GET" });
   },
 
   listNotifications(soloNoLeidas = false): Promise<BackendNotificationsListResponse> {

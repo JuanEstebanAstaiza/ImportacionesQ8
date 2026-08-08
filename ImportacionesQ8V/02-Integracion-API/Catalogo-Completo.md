@@ -1,6 +1,6 @@
 # Catálogo completo de endpoints
 
-Total: **137** operaciones REST exportadas desde OpenAPI.
+Total: **145** operaciones REST exportadas desde OpenAPI.
 
 | Método | Ruta | Tag | Auth | Resumen |
 |--------|------|-----|------|---------|
@@ -139,6 +139,14 @@ Total: **137** operaciones REST exportadas desde OpenAPI.
 | `POST` | `/propuestas/{propuesta_id}/pre-aceptar` | Propuestas | JWT | Pre Aceptar Propuesta |
 | `GET` | `/referidos/estadisticas` | Referidos | JWT | Estadisticas |
 | `GET` | `/referidos/mi-codigo` | Referidos | JWT | Mi Codigo |
+| `POST` | `/resenas` | Reseñas | JWT | Crear Resena |
+| `GET` | `/resenas/importador/{importador_id}` | Reseñas | JWT | Listar Resenas De Importador |
+| `GET` | `/resenas/importador/{importador_id}/resumen` | Reseñas | JWT | Resumen De Importador |
+| `GET` | `/resenas/mias` | Reseñas | JWT | Mis Resenas |
+| `GET` | `/resenas/pendientes` | Reseñas | JWT | Ordenes Pendientes De Resena |
+| `PUT` | `/resenas/{resena_id}` | Reseñas | JWT | Editar Resena |
+| `PUT` | `/resenas/{resena_id}/moderar` | Reseñas | JWT | Moderar Resena |
+| `POST` | `/resenas/{resena_id}/responder` | Reseñas | JWT | Responder Resena |
 | `GET` | `/usuarios/me` | Usuarios | JWT | Obtener Mi Perfil |
 | `PUT` | `/usuarios/me` | Usuarios | JWT | Actualizar Mi Perfil |
 

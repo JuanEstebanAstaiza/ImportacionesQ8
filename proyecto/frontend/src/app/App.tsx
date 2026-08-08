@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
+  Film,
+  Star,
   Eye, EyeOff, Mail, Lock, UserRound, Building2, LogIn,
   Moon, Sun, Info, AlertCircle, CheckCircle2, Loader2, Package2,
   FileText, ShoppingCart, FolderOpen, CreditCard, ChevronRight,
@@ -57,6 +59,10 @@ import {
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
+import { ResenasImportador } from "@/features/resenas/ResenasImportador";
+import { PendientesDeResena } from "@/features/resenas/PendientesDeResena";
+import { PresentacionPublica, EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
+import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
 import {
   componerShippingMark,
   LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
@@ -1431,6 +1437,16 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 </div>
               </Card>
 
+              {/* Presentacion en video y fotos que sube la propia empresa. El
+                  componente no pinta nada si todavia no hay material aprobado. */}
+              <PresentacionPublica importadorId={imp.id}/>
+
+              <Card padding="md">
+                <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Star className="w-4 h-4 text-primary"/>Reseñas de clientes</h3>
+                <p className="text-xs text-muted-foreground mb-4">Solo las escriben clientes que ya recibieron una importación con esta empresa.</p>
+                <ResenasImportador importadorId={imp.id}/>
+              </Card>
+
               {/* Respaldo de la plataforma: distinto de las certificaciones que
                   la propia empresa declara, porque este lo otorga ImportacionesQ8. */}
               {platformCerts.length>0&&(
@@ -2132,6 +2148,7 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Órdenes"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Órdenes</h1></div>
+          <PendientesDeResena/>
           {orders.length===0 ? (
             <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin órdenes</p><p className="text-sm text-muted-foreground">No tienes órdenes activas en backend.</p></div></Card>
           ) : (
@@ -2515,7 +2532,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   function handleKey(e:React.KeyboardEvent){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}
 
   const convMsgs=selectedId?msgs[selectedId]||[]:[];
-  const convAttachments=selectedId?chatAttachmentsByConversation[selectedId]||[]:[];
+  const convAttachments=useMemo(
+    ()=>(selectedId?chatAttachmentsByConversation[selectedId]||[]:[]),
+    [selectedId,chatAttachmentsByConversation],
+  );
   const attachmentsByMessage = convAttachments.reduce<Record<string, BackendChatAttachmentItem[]>>((acc, attachment) => {
     if (!acc[attachment.mensaje_id]) {
       acc[attachment.mensaje_id] = [];
@@ -2793,7 +2813,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
           next[attachment.archivo_id] = current[attachment.archivo_id];
         }
       });
-      return next;
+      const iguales = Object.keys(next).length === Object.keys(current).length
+        && Object.keys(next).every((clave) => next[clave] === current[clave]);
+      return iguales ? current : next;
     });
 
     convAttachments.forEach((attachment) => {
@@ -2842,7 +2864,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
           next[file.id] = current[file.id];
         }
       });
-      return next;
+      const iguales = Object.keys(next).length === Object.keys(current).length
+        && Object.keys(next).every((clave) => next[clave] === current[clave]);
+      return iguales ? current : next;
     });
 
     pickerVisibleFiles.forEach((file) => {
@@ -4276,10 +4300,39 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   const si=importers.find(i=>i.id===selectedId)??null;
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
-  function goNext(){if(step===1){if(!modalidad){setStepError("Selecciona una modalidad.");return;}if(modalidad==="dirigida"&&!selectedId){setStepError("Selecciona una empresa importadora.");return;}}if(step===2&&!form.productName.trim()){setStepError("El nombre del producto es requerido.");return;}setStepError("");navigate(step+1,"fwd");}
+  // El backend exige una descripcion de al menos 10 caracteres. Se comprueba
+  // aqui, en el paso donde se escribe, y no al enviar: llegar al final del
+  // formulario para que la peticion muera en un 422 no ayuda a nadie.
+  const DESCRIPCION_MINIMA=10;
+
+  function goNext(){
+    if(step===1){
+      if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+      if(modalidad==="dirigida"&&!selectedId){setStepError("Selecciona una empresa importadora.");return;}
+    }
+    if(step===2){
+      if(!form.productName.trim()){setStepError("El nombre del producto es requerido.");return;}
+      const descripcion=form.description.trim();
+      if(descripcion.length<DESCRIPCION_MINIMA){
+        setStepError(`Describe el producto con al menos ${DESCRIPCION_MINIMA} caracteres (llevas ${descripcion.length}).`);
+        return;
+      }
+      if(!form.country){setStepError("Selecciona el pais de importacion.");return;}
+      if(!form.productLine){setStepError("Selecciona la linea de producto.");return;}
+      if(!form.incoterm){setStepError("Selecciona el incoterm.");return;}
+    }
+    setStepError("");
+    navigate(step+1,"fwd");
+  }
   async function handleSubmit(){
     if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
     if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+
+    if(form.description.trim().length<DESCRIPCION_MINIMA){
+      setStepError(`Describe el producto con al menos ${DESCRIPCION_MINIMA} caracteres.`);
+      setStep(2);
+      return;
+    }
 
     const parsedMinQuantity=Number.parseInt(form.minQuantity,10);
     if(Number.isNaN(parsedMinQuantity)||parsedMinQuantity<1){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
@@ -4301,7 +4354,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       ...(form.productPhotoUrl?{foto_producto:form.productPhotoUrl}:{}),
       pais_importacion:form.country,
       nombre_producto:form.productName,
-      descripcion_cliente:(form.description||"").length>=10?form.description:`${form.description}...`,
+      descripcion_cliente:form.description.trim(),
       link_referencia:form.referenceLink||undefined,
       linea_producto:form.productLine,
       tipo_calidad:tipoCalidad,
@@ -4771,6 +4824,14 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     <p className="text-xs text-muted-foreground mt-1">Ejemplo con un cliente llamado «Prendas Control».</p>
                   </div>
                 </div>
+              </Card>
+              <Card padding="md">
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Film className="w-4 h-4 text-primary"/>Presentación de la empresa</p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Un video corto de tu taller y algunas fotos de producto. Es lo primero que mira un cliente
+                  al abrir tu ficha; nuestro equipo lo revisa antes de publicarlo.
+                </p>
+                <EditorPresentacion/>
               </Card>
               <Card padding="md">
                 <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary"/>Banner de portada</p>
@@ -5980,6 +6041,9 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
     const telefono=(personType==="natural"?form.phone:form.repPhone).trim();
     const indicativo=(personType==="natural"?form.country:form.repCountry).trim();
 
+    // Codigo de quien invito, leido del enlace compartido (?ref=Q8ABC12345).
+    const codigoReferido = leerCodigoReferidoDeLaUrl();
+
     const payload: RegisterRequest = personType === "natural"
       ? {
           email,
@@ -5993,6 +6057,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
           indicativo_pais_telefono: indicativo,
           telefono,
           acepto_politica_datos: accepted,
+          ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
         }
       : {
           email,
@@ -6004,6 +6069,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
           indicativo_pais_telefono: indicativo,
           telefono,
           acepto_politica_datos: accepted,
+          ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
         };
 
     try{
@@ -6371,6 +6437,9 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
             <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
           </div>
           {error&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{error}</p></Card>}
+          {/* Solo aparece para el rol solicitante: el propio componente se
+              oculta si el backend no le devuelve codigo. */}
+          <div className="max-w-2xl"><TarjetaReferidos/></div>
           <Card padding="md" className="max-w-2xl">
             <div className="grid sm:grid-cols-2 gap-4">
               <Input label="Nombre" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>

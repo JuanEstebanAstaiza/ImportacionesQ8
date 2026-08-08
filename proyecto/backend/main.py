@@ -22,6 +22,7 @@ from routers.legal import router as legal_router
 from routers.organizaciones import router as organizaciones_router
 from routers.disputas import router as disputas_router
 from routers.referidos import router as referidos_router
+from routers.resenas import router as resenas_router
 from routers.cursos import router as cursos_router
 from routers.notificaciones import router as notificaciones_router
 from routers.documentos import router as documentos_router
@@ -180,6 +181,7 @@ app.include_router(legal_router)
 app.include_router(organizaciones_router)
 app.include_router(disputas_router)
 app.include_router(referidos_router)
+app.include_router(resenas_router)
 app.include_router(cursos_router)
 app.include_router(notificaciones_router)
 app.include_router(documentos_router)

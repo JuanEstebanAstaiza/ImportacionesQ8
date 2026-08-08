@@ -10,7 +10,21 @@ class TipoEvidenciaImportador(str, enum.Enum):
     foto_fabrica = "foto_fabrica"
     catalogo = "catalogo"
     moq_doc = "moq_doc"
+    # Presentacion breve de la empresa: lo que el solicitante ve al abrir la
+    # ficha para decidir si le encaja como proveedor. Un video de medio minuto
+    # dice mas del taller que tres parrafos de texto.
+    video_presentacion = "video_presentacion"
+    foto_producto = "foto_producto"
     otro = "otro"
+
+
+# Tipos que se muestran en la ficha publica como presentacion de la empresa
+# (una vez aprobados por el equipo de la plataforma).
+TIPOS_DE_PRESENTACION = (
+    TipoEvidenciaImportador.video_presentacion.value,
+    TipoEvidenciaImportador.foto_producto.value,
+    TipoEvidenciaImportador.foto_fabrica.value,
+)
 
 
 class EstadoEvidenciaImportador(str, enum.Enum):

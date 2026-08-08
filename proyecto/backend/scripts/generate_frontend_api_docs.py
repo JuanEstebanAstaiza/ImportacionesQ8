@@ -39,6 +39,9 @@ TAG_FILES = {
     "Organizaciones solicitantes": "09-Organizaciones.md",
     "Disputas": "10-Disputas.md",
     "Referidos": "11-Referidos.md",
+    # Reputación de las empresas importadoras: se documenta junto a ellas
+    # porque es lo que ordena y explica el catálogo.
+    "Reseñas": "04-Importadores.md",
     "Administración": "12-Admin.md",
 }
 

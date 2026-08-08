@@ -15,6 +15,7 @@ from utils.security_middleware import MAX_UPLOAD_BYTES
 from models.chat import ConversacionChat, MensajeChat
 from models.curso import CompraCurso, Curso, EstadoCurso, LeccionCurso
 from models.certificacion import Certificacion
+from models.evidencia import EstadoEvidenciaImportador, EvidenciaImportador
 from models.importador import Importador
 from models.documental import (
     Archivo,
@@ -827,7 +828,25 @@ def _es_imagen_publica_de_empresa(db: Session, archivo_id: str) -> bool:
         .filter(Certificacion.activa.is_(True), Certificacion.logo_url.like(patron))
         .first()
     )
-    return sello is not None
+    if sello is not None:
+        return True
+
+    # Presentación de la empresa (video breve y fotos) ya aprobada por el equipo
+    # de la plataforma. Va en la ficha pública, que se ve sin sesión: exigir
+    # token aquí dejaba el reproductor en un 401 al primer visitante.
+    # Las evidencias pendientes o rechazadas NO se sirven: la moderación existe
+    # precisamente para que no se publique cualquier cosa.
+    presentacion = (
+        db.query(EvidenciaImportador.id)
+        .join(Importador, Importador.id == EvidenciaImportador.importador_id)
+        .filter(
+            Importador.estado == "activo",
+            EvidenciaImportador.estado == EstadoEvidenciaImportador.aprobada.value,
+            EvidenciaImportador.url.like(patron),
+        )
+        .first()
+    )
+    return presentacion is not None
 
 
 def _tiene_acceso_por_curso(db: Session, archivo_id: str, current_user: dict) -> bool:

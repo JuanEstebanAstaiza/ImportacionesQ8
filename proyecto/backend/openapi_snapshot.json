@@ -4888,6 +4888,403 @@
         ]
       }
     },
+    "/resenas/pendientes": {
+      "get": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Ordenes Pendientes De Resena",
+        "description": "Órdenes entregadas del solicitante que todavía no tienen reseña.\n\nEs lo que alimenta el aviso de \"cuéntanos qué tal fue\": sin esta lista, el\nusuario tendría que acordarse por su cuenta de volver a puntuar.",
+        "operationId": "ordenes_pendientes_de_resena_resenas_pendientes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrdenResenableItem"
+                  },
+                  "type": "array",
+                  "title": "Response Ordenes Pendientes De Resena Resenas Pendientes Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/resenas/importador/{importador_id}": {
+      "get": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Listar Resenas De Importador",
+        "description": "Reseñas públicas de una empresa. No exige sesión: el catálogo es público\ny quien está eligiendo proveedor todavía puede no haberse registrado.",
+        "operationId": "listar_resenas_de_importador_resenas_importador__importador_id__get",
+        "parameters": [
+          {
+            "name": "importador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Importador Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ResenaResponse"
+                  },
+                  "title": "Response Listar Resenas De Importador Resenas Importador  Importador Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resenas/importador/{importador_id}/resumen": {
+      "get": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Resumen De Importador",
+        "description": "Promedio, total y reparto por estrellas para la cabecera de la ficha.",
+        "operationId": "resumen_de_importador_resenas_importador__importador_id__resumen_get",
+        "parameters": [
+          {
+            "name": "importador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Importador Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenResenasResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resenas": {
+      "post": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Crear Resena",
+        "description": "Publica una reseña sobre la empresa de una orden propia ya entregada.",
+        "operationId": "crear_resena_resenas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResenaCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/resenas/{resena_id}": {
+      "put": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Editar Resena",
+        "description": "Corrige la propia reseña. La opinión puede cambiar; el derecho a opinar no.",
+        "operationId": "editar_resena_resenas__resena_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resena_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resena Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResenaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resenas/{resena_id}/responder": {
+      "post": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Responder Resena",
+        "description": "Derecho de réplica de la empresa reseñada.\n\nUna reseña pública sin posibilidad de responder deja a la empresa sin\ndefensa ante una crítica injusta, y al lector sin la otra versión.",
+        "operationId": "responder_resena_resenas__resena_id__responder_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resena_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resena Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespuestaEmpresaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resenas/{resena_id}/moderar": {
+      "put": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Moderar Resena",
+        "description": "Oculta o restaura una reseña. No se borra: se conserva la trazabilidad.",
+        "operationId": "moderar_resena_resenas__resena_id__moderar_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resena_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resena Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OcultarResenaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resenas/mias": {
+      "get": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Mis Resenas",
+        "description": "Reseñas escritas por el solicitante, o recibidas por su empresa.\n\nUn mismo endpoint sirve a los dos lados porque la pregunta es la misma\n(\"¿qué reseñas me tocan?\") y la respuesta depende del rol de quien pregunta.",
+        "operationId": "mis_resenas_resenas_mias_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResenaResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Mis Resenas Resenas Mias Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/cursos": {
       "get": {
         "tags": [
@@ -9506,6 +9903,8 @@
               "foto_fabrica",
               "catalogo",
               "moq_doc",
+              "video_presentacion",
+              "foto_producto",
               "otro"
             ],
             "title": "Tipo"
@@ -9519,13 +9918,15 @@
           "descripcion": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 600
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Descripcion"
+            "title": "Descripcion",
+            "description": "Descripcion breve que acompana al video o a la foto en la ficha publica"
           },
           "url": {
             "type": "string",
@@ -10994,6 +11395,65 @@
         ],
         "title": "NotificacionesListaResponse"
       },
+      "OcultarResenaRequest": {
+        "properties": {
+          "visible": {
+            "type": "boolean",
+            "title": "Visible",
+            "default": true
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "title": "OcultarResenaRequest",
+        "description": "Moderación: se oculta, no se borra, para no perder la trazabilidad."
+      },
+      "OrdenResenableItem": {
+        "properties": {
+          "orden_id": {
+            "type": "string",
+            "title": "Orden Id"
+          },
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "nombre_empresa": {
+            "type": "string",
+            "title": "Nombre Empresa"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orden_id",
+          "importador_id",
+          "nombre_empresa",
+          "producto",
+          "fecha_creacion"
+        ],
+        "title": "OrdenResenableItem",
+        "description": "Orden ya entregada que todavía no tiene reseña."
+      },
       "OrdenResponse": {
         "properties": {
           "id": {
@@ -11780,6 +12240,268 @@
         ],
         "title": "ReportarProblemaRequest"
       },
+      "ResenaCreate": {
+        "properties": {
+          "orden_id": {
+            "type": "string",
+            "title": "Orden Id",
+            "description": "Orden que da derecho a opinar: solo se reseña lo que se importó"
+          },
+          "calificacion": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Calificacion",
+            "description": "Valoración global, de 1 a 5 estrellas"
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario",
+            "description": "Qué tal fue la experiencia. Opcional, pero es lo que de verdad le sirve al siguiente cliente."
+          },
+          "puntualidad": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Puntualidad"
+          },
+          "calidad_producto": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calidad Producto"
+          },
+          "comunicacion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comunicacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orden_id",
+          "calificacion"
+        ],
+        "title": "ResenaCreate",
+        "description": "Reseña que escribe el solicitante sobre la empresa que le atendió."
+      },
+      "ResenaResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "orden_id": {
+            "type": "string",
+            "title": "Orden Id"
+          },
+          "calificacion": {
+            "type": "integer",
+            "title": "Calificacion"
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "puntualidad": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Puntualidad"
+          },
+          "calidad_producto": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calidad Producto"
+          },
+          "comunicacion": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comunicacion"
+          },
+          "respuesta_empresa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respuesta Empresa"
+          },
+          "fecha_respuesta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Respuesta"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible",
+            "default": true
+          },
+          "autor_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autor Nombre"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "importador_id",
+          "orden_id",
+          "calificacion",
+          "fecha_creacion"
+        ],
+        "title": "ResenaResponse"
+      },
+      "ResenaUpdate": {
+        "properties": {
+          "calificacion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calificacion"
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "puntualidad": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Puntualidad"
+          },
+          "calidad_producto": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calidad Producto"
+          },
+          "comunicacion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comunicacion"
+          }
+        },
+        "type": "object",
+        "title": "ResenaUpdate"
+      },
       "ResetPasswordRequest": {
         "properties": {
           "token": {
@@ -11880,6 +12602,79 @@
         },
         "type": "object",
         "title": "ResourceTagAssign"
+      },
+      "RespuestaEmpresaRequest": {
+        "properties": {
+          "respuesta": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Respuesta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "respuesta"
+        ],
+        "title": "RespuestaEmpresaRequest",
+        "description": "Derecho de réplica de la empresa reseñada."
+      },
+      "ResumenResenasResponse": {
+        "properties": {
+          "promedio": {
+            "type": "number",
+            "title": "Promedio",
+            "default": 0.0
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "reparto": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Reparto"
+          },
+          "puntualidad": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Puntualidad"
+          },
+          "calidad_producto": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calidad Producto"
+          },
+          "comunicacion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comunicacion"
+          }
+        },
+        "type": "object",
+        "title": "ResumenResenasResponse",
+        "description": "Lo que se pinta en la cabecera de la ficha pública."
       },
       "RevisarEvidenciaRequest": {
         "properties": {

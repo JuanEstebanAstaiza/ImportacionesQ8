@@ -373,7 +373,7 @@ Array de `EvidenciaImportadorResponse`:
 |-------|------|-----|-------------|
 | `tipo` | `string` | sí |  |
 | `titulo` | `string` | sí |  |
-| `descripcion` | `Optional[string]` | no |  |
+| `descripcion` | `Optional[string]` | no | Descripcion breve que acompana al video o a la foto en la ficha publica |
 | `url` | `string` | sí |  |
 
 ```json
@@ -609,5 +609,274 @@ _Sin campos detallados en OpenAPI._
 **Respuesta (`array`)**
 
 _Sin campos detallados en OpenAPI._
+
+---
+
+### `POST /resenas`
+
+- **Resumen:** Crear Resena
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+
+**Body (`ResenaCreate`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `orden_id` | `string` | sí | Orden que da derecho a opinar: solo se reseña lo que se importó |
+| `calificacion` | `integer` | sí | Valoración global, de 1 a 5 estrellas |
+| `comentario` | `Optional[string]` | no | Qué tal fue la experiencia. Opcional, pero es lo que de verdad le sirve al siguiente cliente. |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+
+```json
+{
+  "orden_id": "<orden_id>",
+  "calificacion": 0
+}
+```
+
+**Respuesta (`ResenaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `orden_id` | `string` | sí |  |
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+| `respuesta_empresa` | `Optional[string]` | no |  |
+| `fecha_respuesta` | `Optional[string]` | no |  |
+| `visible` | `boolean` | no |  |
+| `autor_nombre` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `GET /resenas/importador/{importador_id}`
+
+- **Resumen:** Listar Resenas De Importador
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `importador_id`
+- **Query:** `limit`, `offset`
+
+**Respuesta (`array[ResenaResponse]`)**
+
+Array de `ResenaResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `orden_id` | `string` | sí |  |
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+| `respuesta_empresa` | `Optional[string]` | no |  |
+| `fecha_respuesta` | `Optional[string]` | no |  |
+| `visible` | `boolean` | no |  |
+| `autor_nombre` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `GET /resenas/importador/{importador_id}/resumen`
+
+- **Resumen:** Resumen De Importador
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `importador_id`
+
+**Respuesta (`ResumenResenasResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `promedio` | `number` | no |  |
+| `total` | `integer` | no |  |
+| `reparto` | `object` | no |  |
+| `puntualidad` | `Optional[number]` | no |  |
+| `calidad_producto` | `Optional[number]` | no |  |
+| `comunicacion` | `Optional[number]` | no |  |
+
+---
+
+### `GET /resenas/mias`
+
+- **Resumen:** Mis Resenas
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`array[ResenaResponse]`)**
+
+Array de `ResenaResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `orden_id` | `string` | sí |  |
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+| `respuesta_empresa` | `Optional[string]` | no |  |
+| `fecha_respuesta` | `Optional[string]` | no |  |
+| `visible` | `boolean` | no |  |
+| `autor_nombre` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `GET /resenas/pendientes`
+
+- **Resumen:** Ordenes Pendientes De Resena
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`array[OrdenResenableItem]`)**
+
+Array de `OrdenResenableItem`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `orden_id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `nombre_empresa` | `string` | sí |  |
+| `producto` | `string` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `PUT /resenas/{resena_id}`
+
+- **Resumen:** Editar Resena
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `resena_id`
+
+**Body (`ResenaUpdate`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+
+```json
+{
+  "calificacion": 0,
+  "comentario": "<comentario>",
+  "puntualidad": 0,
+  "calidad_producto": 0,
+  "comunicacion": 0
+}
+```
+
+**Respuesta (`ResenaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `orden_id` | `string` | sí |  |
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+| `respuesta_empresa` | `Optional[string]` | no |  |
+| `fecha_respuesta` | `Optional[string]` | no |  |
+| `visible` | `boolean` | no |  |
+| `autor_nombre` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `PUT /resenas/{resena_id}/moderar`
+
+- **Resumen:** Moderar Resena
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `resena_id`
+
+**Body (`OcultarResenaRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `visible` | `boolean` | no |  |
+| `motivo` | `Optional[string]` | no |  |
+
+```json
+{
+  "visible": true,
+  "motivo": "<motivo>"
+}
+```
+
+**Respuesta (`ResenaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `orden_id` | `string` | sí |  |
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+| `respuesta_empresa` | `Optional[string]` | no |  |
+| `fecha_respuesta` | `Optional[string]` | no |  |
+| `visible` | `boolean` | no |  |
+| `autor_nombre` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `POST /resenas/{resena_id}/responder`
+
+- **Resumen:** Responder Resena
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `resena_id`
+
+**Body (`RespuestaEmpresaRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `respuesta` | `string` | sí |  |
+
+```json
+{
+  "respuesta": "<respuesta>"
+}
+```
+
+**Respuesta (`ResenaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `importador_id` | `string` | sí |  |
+| `orden_id` | `string` | sí |  |
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+| `puntualidad` | `Optional[integer]` | no |  |
+| `calidad_producto` | `Optional[integer]` | no |  |
+| `comunicacion` | `Optional[integer]` | no |  |
+| `respuesta_empresa` | `Optional[string]` | no |  |
+| `fecha_respuesta` | `Optional[string]` | no |  |
+| `visible` | `boolean` | no |  |
+| `autor_nombre` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
 
 ---

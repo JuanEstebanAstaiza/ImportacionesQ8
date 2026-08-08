@@ -24,6 +24,7 @@ from .curso import (
     CertificadoCurso, NivelCurso, TipoRecursoLeccion, EstadoCurso,
 )
 from .certificacion import Certificacion, CertificacionImportador
+from .resena import ResenaImportador
 from .notificacion import Notificacion, TipoNotificacion
 from .documental import (
     Carpeta,
@@ -87,6 +88,7 @@ __all__ = [
     "CertificadoCurso",
     "Certificacion",
     "CertificacionImportador",
+    "ResenaImportador",
     "NivelCurso",
     "TipoRecursoLeccion",
     "EstadoCurso",
