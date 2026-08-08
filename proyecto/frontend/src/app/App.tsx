@@ -2453,7 +2453,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [resourceSearching,setResourceSearching]=useState(false);
   const [resourceUploading,setResourceUploading]=useState(false);
   const [resourceDropOver,setResourceDropOver]=useState(false);
-  const [resourceSearchResults,setResourceSearchResults]=useState<BackendArchivoItem[]|null>(null);
+  const [resourceSearchResults,setResourceSearchResults]=useState<{
+    files: BackendArchivoItem[];
+    folders: BackendExplorerResponse["carpetas"];
+  }|null>(null);
   const [resourceTargetConversationId,setResourceTargetConversationId]=useState("");
   const [resourceViewMode,setResourceViewMode]=useState<"grid"|"list">("grid");
   const [resourcePreviewUrls,setResourcePreviewUrls]=useState<Record<string,string>>({});
@@ -2827,20 +2830,6 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     }
   }
 
-  async function handleSearchResources() {
-    if (!resourceSearch.trim()) {
-      setResourceSearchResults(null);
-      return;
-    }
-    setResourceSearching(true);
-    try {
-      const rows = await businessService.searchDocumentFiles(resourceSearch.trim());
-      setResourceSearchResults(rows);
-    } finally {
-      setResourceSearching(false);
-    }
-  }
-
   async function openResourcePicker() {
     setIsResourcePickerOpen(true);
     setResourceSearch("");
@@ -2913,13 +2902,52 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   }
 
   const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
-  const pickerVisibleFiles = resourceSearchResults ?? resourceExplorer.archivos;
+  const pickerVisibleFiles = resourceSearchResults?.files ?? resourceExplorer.archivos;
   const pickerVisibleFolders = resourceSearchResults
-    ? []
+    ? resourceSearchResults.folders
     : resourceExplorer.carpetas.filter((folder, index, all) => {
         const normalized = normalizeFolderName(folder.nombre);
         return all.findIndex((candidate) => normalizeFolderName(candidate.nombre) === normalized) === index;
       });
+
+  useEffect(() => {
+    if (!isResourcePickerOpen) {
+      return;
+    }
+
+    const query = resourceSearch.trim();
+    if (!query) {
+      setResourceSearchResults(null);
+      setResourceSearching(false);
+      return;
+    }
+
+    setResourceSearching(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const rows = await businessService.searchDocumentFiles(query);
+          const normalizedQuery = normalizeFolderName(query);
+          const matchedFolders = resourceExplorer.carpetas.filter((folder) =>
+            normalizeFolderName(folder.nombre).includes(normalizedQuery),
+          );
+          if (!cancelled) {
+            setResourceSearchResults({ files: rows, folders: matchedFolders });
+          }
+        } finally {
+          if (!cancelled) {
+            setResourceSearching(false);
+          }
+        }
+      })();
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [resourceSearch, isResourcePickerOpen, resourceExplorer.carpetas]);
 
   useEffect(() => {
     const attachmentIds = new Set(convAttachments.map((attachment) => attachment.archivo_id));
@@ -3496,10 +3524,17 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               }}
             />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2 flex gap-2">
-                <Input value={resourceSearch} onChange={(event)=>setResourceSearch(event.target.value)} placeholder="Buscar recurso por nombre" prefix={<Search className="w-3.5 h-3.5"/>}/>
-                <Button size="sm" onClick={()=>{void handleSearchResources();}} loading={resourceSearching}>Buscar</Button>
-                {resourceSearchResults&&<Button size="sm" variant="ghost" onClick={()=>{setResourceSearch("");setResourceSearchResults(null);}}>Limpiar</Button>}
+              <div className="md:col-span-2">
+                <Input
+                  value={resourceSearch}
+                  onChange={(event)=>setResourceSearch(event.target.value)}
+                  placeholder="Buscar recurso o carpeta por nombre..."
+                  prefix={
+                    resourceSearching
+                      ? <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      : <Search className="w-3.5 h-3.5"/>
+                  }
+                />
               </div>
               <Select value={resourceTargetConversationId} onChange={(event)=>setResourceTargetConversationId(event.target.value)}>
                 <option value="">Selecciona chat destino</option>
@@ -3689,7 +3724,10 @@ function DocumentosScreen({
   const [dragFileId, setDragFileId] = useState<string | null>(null);
   const [dragFolderId, setDragFolderId] = useState<string | null>(null);
 
-  const [searchResults, setSearchResults] = useState<BackendArchivoItem[] | null>(null);
+  const [searchResults, setSearchResults] = useState<{
+    files: BackendArchivoItem[];
+    folders: BackendExplorerResponse["carpetas"];
+  } | null>(null);
   const [folderTrail, setFolderTrail] = useState<Array<{ id: string | null; name: string }>>([
     { id: null, name: "Raíz" },
   ]);
@@ -3718,9 +3756,9 @@ function DocumentosScreen({
     return Boolean(explorer.carpetas.find((folder) => folder.id === folderId)?.is_protected);
   }
 
-  const visibleFiles = searchResults ?? explorer.archivos;
+  const visibleFiles = searchResults?.files ?? explorer.archivos;
   const visibleFolders = searchResults
-    ? []
+    ? searchResults.folders
     : currentFolderId === null
     ? explorer.carpetas.filter((folder, index, all) => {
         if (
@@ -3758,14 +3796,18 @@ function DocumentosScreen({
     const timer = setTimeout(async () => {
       try {
         const rows = await onSearch(query);
-        setSearchResults(rows);
+        const normalizedQuery = normalizeFolderName(query);
+        const folderRows = explorer.carpetas.filter((folder) =>
+          normalizeFolderName(folder.nombre).includes(normalizedQuery),
+        );
+        setSearchResults({ files: rows, folders: folderRows });
       } finally {
         setSearching(false);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [search, onSearch]);
+  }, [search, onSearch, explorer.carpetas]);
 
   useEffect(() => {
     if (!menuState) return;
