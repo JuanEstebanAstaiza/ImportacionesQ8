@@ -446,7 +446,7 @@ const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","
 // `src/lib/categorias.ts`.
 const LINES=CATEGORIAS_PRODUCTO;
 const ALL_CATEGORIES=CATEGORIAS_PRODUCTO;
-const SYSTEM_ROOT_FOLDER_NAMES=["Órdenes","Cotizaciones","Respuestas","Cursos","Chats"];
+const SYSTEM_ROOT_FOLDER_NAMES=["Órdenes","Cotizaciones","Respuestas","Cursos","Chats","Certificados"];
 // Buzón al que escribe quien quiere dar de alta una empresa importadora: el
 // alta la hace el equipo de la plataforma, no hay auto-registro.
 const CORREO_ADMINISTRACION="administracion@importacionesq8.com";
@@ -457,6 +457,50 @@ function normalizeFolderName(value:string):string{
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getFileFormatToken(extension: string, mimeType: string): { label: string; classes: string } {
+  const ext = String(extension || "").trim().toLowerCase();
+  const mime = String(mimeType || "").toLowerCase();
+
+  if (mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext)) {
+    return { label: "IMG", classes: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700" };
+  }
+  if (mime.startsWith("video/") || ["mp4", "webm", "mov", "m4v"].includes(ext)) {
+    return { label: "VID", classes: "border-indigo-200 bg-indigo-50 text-indigo-700" };
+  }
+  if (ext === "pdf") {
+    return { label: "PDF", classes: "border-red-200 bg-red-50 text-red-700" };
+  }
+  if (["xlsx", "xls", "csv"].includes(ext)) {
+    return { label: "XLS", classes: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  }
+  if (["doc", "docx", "odt", "rtf"].includes(ext)) {
+    return { label: "DOC", classes: "border-blue-200 bg-blue-50 text-blue-700" };
+  }
+  if (["ppt", "pptx"].includes(ext)) {
+    return { label: "PPT", classes: "border-amber-200 bg-amber-50 text-amber-700" };
+  }
+
+  const fallback = (ext || "FILE").slice(0, 4).toUpperCase();
+  return { label: fallback, classes: "border-slate-200 bg-slate-100 text-slate-700" };
+}
+
+function FormatFileIcon({ extension, mimeType, compact = false }: { extension: string; mimeType: string; compact?: boolean }) {
+  const token = getFileFormatToken(extension, mimeType);
+  return (
+    <div
+      className={clsx(
+        "rounded-lg border font-semibold tracking-wide flex items-center justify-center",
+        compact ? "w-10 h-10 text-[10px]" : "w-12 h-12 text-[11px]",
+        token.classes,
+      )}
+      title={`Formato ${token.label}`}
+      aria-label={`Formato ${token.label}`}
+    >
+      {token.label}
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3520,11 +3564,14 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   key={folder.id}
                   onClick={()=>{void openResourceFolder(folder);}}
                   className={clsx(
-                    "rounded-xl border border-border bg-sky-50/40 text-left hover:bg-sky-50 transition-colors",
+                    "rounded-xl border text-left transition-colors w-full",
+                    folder.is_protected || folder.is_system
+                      ? "border-indigo-200 bg-indigo-50/70 hover:bg-indigo-50"
+                      : "border-border bg-sky-50/40 hover:bg-sky-50",
                     resourceViewMode === "grid" ? "p-4" : "px-3 py-2.5 flex items-center justify-between gap-3"
                   )}
                 >
-                  <FolderTree className="w-8 h-8 text-sky-600 mb-2"/>
+                  <FolderTree className={clsx("w-8 h-8", folder.is_protected || folder.is_system ? "text-indigo-600" : "text-sky-600", resourceViewMode === "grid" ? "mb-2" : "mb-0")}/>
                   <div className={clsx("min-w-0", resourceViewMode === "grid" ? "" : "flex-1") }>
                     <p className="text-sm font-semibold truncate">{folder.nombre}</p>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
@@ -3545,7 +3592,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   <div className={clsx("rounded-lg border border-border bg-slate-50 overflow-hidden flex items-center justify-center", resourceViewMode === "grid" ? "h-24 w-full mb-2" : "w-12 h-12 flex-shrink-0")}>
                     {resourcePreviewThumb(file)
                       ? <img src={resourcePreviewThumb(file) || ""} alt={file.nombre} className="w-full h-full object-cover"/>
-                      : <FileIcon className="w-10 h-10 text-muted-foreground/40"/>}
+                      : <FormatFileIcon extension={file.extension} mimeType={file.mime_type} compact={resourceViewMode === "list"}/>}
                   </div>
                   <div className={clsx("min-w-0", resourceViewMode === "grid" ? "" : "flex-1") }>
                     <p className="text-sm font-semibold truncate">{file.nombre}</p>
@@ -4249,7 +4296,7 @@ function DocumentosScreen({
             <div
               className={clsx(
                 "max-h-[60vh] overflow-y-auto overflow-x-visible pr-1",
-                viewMode === "grid" ? "grid grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2"
+                viewMode === "grid" ? "grid grid-cols-2 lg:grid-cols-4 gap-3" : "space-y-2"
               )}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
@@ -4432,7 +4479,7 @@ function DocumentosScreen({
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <FileIcon className="w-12 h-12 text-muted-foreground/40" />
+                          <FormatFileIcon extension={file.extension} mimeType={file.mime_type} />
                         )}
                       </div>
                     )}

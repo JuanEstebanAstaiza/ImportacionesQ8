@@ -63,8 +63,10 @@ SYSTEM_ROOT_FOLDER_NAMES = {
     "documentos",
     "cotizaciones",
     "ordenes",
+    "respuestas",
     "chats",
     "cursos",
+    "certificados",
     "empresa",
 }
 
