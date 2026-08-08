@@ -57,6 +57,8 @@ class CarpetaItem(BaseModel):
     owner_user_id: str
     parent_id: Optional[str] = None
     nombre: str
+    is_system: bool = False
+    is_protected: bool = False
     created_at: datetime
     updated_at: datetime
 
