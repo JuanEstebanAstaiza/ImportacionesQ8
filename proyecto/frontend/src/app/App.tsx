@@ -5373,6 +5373,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
   const [saveError,setSaveError]=useState("");
   const [bannerUploading,setBannerUploading]=useState(false);
   const [bannerError,setBannerError]=useState("");
+  const [bannerPendienteDeGuardar,setBannerPendienteDeGuardar]=useState(false);
   const [logoUploadError,setLogoUploadError]=useState("");
   const bannerInputRef=useRef<HTMLInputElement>(null);
 
@@ -5442,6 +5443,10 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       const url=toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
       setForm(p=>({...p,banner:url}));
       setSaved(false);
+      // La subida solo deja la imagen en el formulario: hasta que no se guarda
+      // el perfil, el banner no existe para nadie mas. Sin este aviso el usuario
+      // veia la vista previa, se iba de la pantalla y el banner desaparecia.
+      setBannerPendienteDeGuardar(true);
     }catch(err){
       setBannerError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir la imagen del banner.");
     }finally{
@@ -5475,6 +5480,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         solo_cotizaciones_directas:form.soloCotizacionesDirectas,
       });
       setSaved(true);
+      setBannerPendienteDeGuardar(false);
       setTimeout(()=>setSaved(false),3000);
     }catch(err){
       setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
@@ -5641,6 +5647,11 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 )}
 
                 {bannerError&&<p className="text-xs text-destructive mt-3">{bannerError}</p>}
+                {bannerPendienteDeGuardar&&!bannerError&&(
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                    Imagen cargada. Pulsa <strong>Guardar cambios</strong> para que aparezca en tu perfil público.
+                  </p>
+                )}
                 {form.banner&&!saved&&<p className="text-xs text-muted-foreground mt-3">Recuerda pulsar «Guardar cambios» para publicar el banner.</p>}
               </Card>
             </div>
