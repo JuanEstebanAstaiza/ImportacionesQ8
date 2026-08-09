@@ -69,7 +69,7 @@ import {
   LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
 } from "@/lib/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
-import { RUTA_RESTABLECER, destinoDe, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
+import { RUTA_RESTABLECER, destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 const SHOW_PAYMENTS_MODULE = false;
@@ -8260,14 +8260,12 @@ export default function App() {
   function goTo(s:Screen){setPrevScreen(screen);setScreen(s);}
 
   function handleNav(key:string){
-    const all:Record<string,Screen>={
-      dashboard:"dashboard","imp-dashboard":"imp-dashboard","adv-dashboard":"adv-dashboard","admin-dashboard":"admin-dashboard",
-      quotes:"quotes","imp-quotes":"imp-quotes","adv-available":"adv-available","adv-my-quotes":"adv-my-quotes",
-      responses:"responses",chats:"chats",orders:"orders",documentos:"documentos",pagos:"pagos",courses:"courses",
-      "imp-advisors":"imp-advisors","imp-profile":"imp-profile",notifications:"notifications",
-    };
+    // La clave de cada entrada del menú ES el nombre de la pantalla, así que se
+    // valida contra la tabla de rutas. Antes había aquí una segunda lista
+    // escrita a mano y cualquier entrada nueva del sidebar nacía muerta: el
+    // botón existía pero no navegaba a ninguna parte.
     if(key==="courses"&&!moduloEducativoHabilitado)return;
-    const s=all[key];if(s)goTo(s);
+    if(esPantalla(key))goTo(key);
   }
 
   function getNavItems():NavItem[]{

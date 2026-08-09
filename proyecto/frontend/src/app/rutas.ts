@@ -113,6 +113,20 @@ export const RUTAS: Ruta[] = [
 
 export const RUTA_RESTABLECER = "/restablecer-password";
 
+const PANTALLAS = new Set<string>(RUTAS.map((r) => r.screen));
+
+/**
+ * ¿Es `valor` una pantalla conocida?
+ *
+ * Lo usa la navegación del sidebar para no tener que mantener una segunda lista
+ * de pantallas a mano: esa duplicación hacía que una entrada nueva del menú
+ * quedara muerta —el botón no hacía nada— hasta acordarse de añadirla también
+ * allí.
+ */
+export function esPantalla(valor: string): valor is Screen {
+  return PANTALLAS.has(valor);
+}
+
 export interface DestinoRuta {
   screen: Screen;
   param?: ParamRuta;
