@@ -37,13 +37,30 @@ export interface AdminCotizacionAbierta {
   fecha_creacion: string;
 }
 
+/**
+ * Orden con un incidente abierto reportado por el solicitante. `id` ES el id de
+ * la orden: la disputa vive en la propia orden (`en_disputa`), no en una tabla
+ * aparte, y es ese id el que espera `resolveDispute`.
+ */
+export interface AdminDisputa {
+  id: string;
+  cotizacion_id: string;
+  importador_id: string;
+  solicitante_id: string;
+  estado: string;
+  motivo_disputa: string | null;
+  fecha_actualizacion: string;
+}
+
 /** Fila del supervisor de chats: una conversación con sus dos participantes. */
 export interface AdminConversacion {
   id: string;
-  cotizacion_id: string;
+  /** "negociacion" o "interna" (coordinación de una empresa con su asesor). */
+  tipo: string;
+  cotizacion_id: string | null;
   orden_id: string | null;
   fecha_creacion: string;
-  solicitante_id: string;
+  solicitante_id: string | null;
   solicitante_nombre: string | null;
   solicitante_email: string | null;
   importador_usuario_id: string;
@@ -210,9 +227,33 @@ export const adminService = {
     return apiRequest<AdminConversacionesResponse>(`/admin/conversaciones?${query.toString()}`, { method: "GET" });
   },
 
-  /** Historial completo de una conversación. Solo lectura: el admin no interviene. */
+  /** Historial completo de una conversación, para atender el caso desde soporte. */
   getConversationMessages(conversacionId: string): Promise<AdminMensaje[]> {
     return apiRequest<AdminMensaje[]>(`/admin/conversaciones/${conversacionId}/mensajes`, { method: "GET" });
+  },
+
+  /**
+   * Responde en la conversación como equipo de la plataforma. Queda marcado
+   * como mensaje de sistema y avisa a las dos partes.
+   */
+  replyAsSupport(conversacionId: string, contenido: string): Promise<AdminMensaje> {
+    return apiRequest<AdminMensaje>(`/admin/conversaciones/${conversacionId}/mensajes`, {
+      method: "POST",
+      body: { contenido },
+    });
+  },
+
+  /** Órdenes con un incidente abierto reportado por el solicitante. */
+  listDisputes(): Promise<AdminDisputa[]> {
+    return apiRequest<AdminDisputa[]>("/admin/disputas", { method: "GET" });
+  },
+
+  /** Cierra el incidente dejando constancia de la resolución aplicada. */
+  resolveDispute(ordenId: string, resolucion: string): Promise<unknown> {
+    return apiRequest<unknown>(`/admin/disputas/${ordenId}/resolver`, {
+      method: "PUT",
+      body: { resolucion },
+    });
   },
 
   listOpenQuotes(): Promise<AdminCotizacionAbierta[]> {

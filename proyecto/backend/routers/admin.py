@@ -26,6 +26,7 @@ from schemas.admin import (
     ConversacionAdminItem,
     ConversacionesAdminResponse,
     MensajeAdminItem,
+    MensajeSoporteRequest,
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
@@ -876,8 +877,7 @@ async def leer_conversacion_admin(
     limit: int = Query(200, ge=1, le=500),
     current_user: dict = Depends(require_rol("admin")),
 ):
-    """Historial completo de una conversación. Solo lectura: el admin supervisa,
-    no interviene en la negociación."""
+    """Historial completo de una conversación, para atender el caso desde soporte."""
     from models.chat import ConversacionChat, MensajeChat
 
     conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
@@ -907,6 +907,75 @@ async def leer_conversacion_admin(
         )
         for mensaje, remitente in filas
     ]
+
+
+@router.post(
+    "/conversaciones/{conversacion_id}/mensajes",
+    response_model=MensajeAdminItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def responder_conversacion_admin(
+    conversacion_id: str,
+    datos: MensajeSoporteRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Interviene en una conversación desde soporte.
+
+    Es lo que se necesita para resolver una duda de un solicitante o mediar en un
+    incidente con una empresa sin sacar a las partes del hilo donde ya está todo
+    el contexto. El mensaje se marca como `sistema` para que se distinga de la
+    negociación entre las partes, y **avisa a los dos** participantes: si solo se
+    notificara a uno, la mitad implicada se enteraría por casualidad.
+    """
+    from models.chat import ConversacionChat, MensajeChat, TipoMensajeChat
+    from services.notificacion_service import notificar
+
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
+    if not conversacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
+
+    texto = datos.contenido.strip()
+    mensaje = MensajeChat(
+        id=str(uuid4()),
+        conversacion_id=conversacion.id,
+        remitente_id=current_user["user_id"],
+        contenido=f"[Soporte ImportacionesQ8] {texto}",
+        tipo=TipoMensajeChat.sistema.value,
+    )
+    db.add(mensaje)
+
+    destinatarios = {
+        str(conversacion.solicitante_id or ""),
+        str(conversacion.importador_usuario_id or ""),
+    } - {"", str(current_user["user_id"])}
+
+    for destinatario_id in destinatarios:
+        notificar(
+            db,
+            usuario_id=destinatario_id,
+            tipo="soporte",
+            titulo="Mensaje del equipo de ImportacionesQ8",
+            mensaje=texto[:160],
+            data={"conversacion_id": str(conversacion.id)},
+            enlace_relativo="/chats",
+        )
+
+    db.commit()
+    db.refresh(mensaje)
+
+    remitente = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    return MensajeAdminItem(
+        id=str(mensaje.id),
+        conversacion_id=str(mensaje.conversacion_id),
+        remitente_id=str(mensaje.remitente_id),
+        remitente_nombre=remitente.nombre if remitente else None,
+        remitente_email=remitente.email if remitente else None,
+        remitente_rol=remitente.rol if remitente else None,
+        contenido=mensaje.contenido,
+        tipo=str(mensaje.tipo),
+        fecha_envio=mensaje.fecha_envio,
+    )
 
 
 @router.get("/metricas", response_model=MetricasResponse)

@@ -7,6 +7,7 @@ import {
   type AdminCertificacion,
   type AdminConversacion,
   type AdminCotizacionAbierta,
+  type AdminDisputa,
   type AdminMensaje,
   type AdminMetricas,
   type AdminUser,
@@ -16,7 +17,7 @@ import { businessService } from "@/services/business.service";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "empresas" | "usuarios" | "metricas" | "chats" | "certificaciones";
+type AdminTab = "metricas" | "empresas" | "usuarios" | "soporte" | "certificaciones";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin";
 
 type CompanyUiDetails = {
@@ -57,12 +58,17 @@ interface AdminDashboardProps {
   onRefreshGlobal?: () => Promise<void>;
 }
 
-const ADMIN_TABS: Array<{ id: AdminTab; label: string }> = [
-  { id: "metricas", label: "Resumen / General" },
-  { id: "empresas", label: "Empresas / Importadores" },
-  { id: "usuarios", label: "Usuarios y Roles" },
-  { id: "chats", label: "Supervisión de chats" },
-  { id: "certificaciones", label: "Certificaciones y respaldo" },
+/**
+ * Cada pestaña muestra SOLO su sección. Antes todas se renderizaban a la vez y
+ * los botones se limitaban a hacer scroll, así que el panel era una única
+ * página larguísima donde todo convivía mezclado.
+ */
+const ADMIN_TABS: Array<{ id: AdminTab; label: string; hint: string }> = [
+  { id: "metricas", label: "Resumen", hint: "Cómo va la plataforma" },
+  { id: "empresas", label: "Empresas", hint: "Alta y estado de importadoras" },
+  { id: "usuarios", label: "Usuarios", hint: "Cuentas, roles y acceso" },
+  { id: "soporte", label: "Soporte", hint: "Incidentes y dudas" },
+  { id: "certificaciones", label: "Certificaciones", hint: "Sellos y respaldo" },
 ];
 
 const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "admin"] as const;
@@ -194,13 +200,19 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
   const usersSectionRef = useRef<HTMLElement | null>(null);
   const chatsSectionRef = useRef<HTMLElement | null>(null);
 
-  // Supervisión de chats (solo lectura).
+  // Soporte: conversaciones e incidentes.
   const [conversations, setConversations] = useState<AdminConversacion[]>([]);
   const [conversationsTotal, setConversationsTotal] = useState(0);
   const [conversationSearch, setConversationSearch] = useState("");
   const [openConversation, setOpenConversation] = useState<AdminConversacion | null>(null);
   const [conversationMessages, setConversationMessages] = useState<AdminMensaje[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [supportReply, setSupportReply] = useState("");
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [disputes, setDisputes] = useState<AdminDisputa[]>([]);
+  const [resolvingDispute, setResolvingDispute] = useState<AdminDisputa | null>(null);
+  const [disputeResolution, setDisputeResolution] = useState("");
+  const [isResolvingDispute, setIsResolvingDispute] = useState(false);
 
   // Certificaciones de plataforma y copia de seguridad.
   const certificationsSectionRef = useRef<HTMLElement | null>(null);
@@ -262,7 +274,7 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
     setIsLoading(true);
     setError("");
     try {
-      const [companyRows, userRows, metricsRow, openQuoteRows, conversationRows, certificationRows, backupRow] =
+      const [companyRows, userRows, metricsRow, openQuoteRows, conversationRows, certificationRows, disputeRows, backupRow] =
         await Promise.all([
           adminService.listCompanies(),
           adminService.listUsers(userFilters),
@@ -270,6 +282,7 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
           adminService.listOpenQuotes(),
           adminService.listConversations({ buscar: conversationSearch }),
           adminService.listCertifications(),
+          adminService.listDisputes().catch(() => [] as AdminDisputa[]),
           // El resumen del backup es informativo: que falle no debe tumbar el panel.
           adminService.getBackupSummary().catch(() => null),
         ]);
@@ -281,6 +294,7 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
       setConversations(conversationRows.items);
       setConversationsTotal(conversationRows.total);
       setCertifications(certificationRows);
+      setDisputes(disputeRows);
       setBackupSummary(backupRow);
     } catch (requestError) {
       const errorMessage = requestError instanceof Error ? requestError.message : "No se pudo cargar el panel de administracion.";
@@ -437,6 +451,7 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
   const openConversationDetail = useCallback(async (conversation: AdminConversacion) => {
     setOpenConversation(conversation);
     setConversationMessages([]);
+    setSupportReply("");
     setIsLoadingMessages(true);
     try {
       setConversationMessages(await adminService.getConversationMessages(conversation.id));
@@ -447,6 +462,47 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
       setIsLoadingMessages(false);
     }
   }, []);
+
+  /** Responde en el hilo como equipo de la plataforma; avisa a las dos partes. */
+  async function handleSendSupportReply() {
+    const texto = supportReply.trim();
+    if (!openConversation || !texto) {
+      return;
+    }
+    setError("");
+    setIsSendingReply(true);
+    try {
+      const enviado = await adminService.replyAsSupport(openConversation.id, texto);
+      setConversationMessages((prev) => [...prev, enviado]);
+      setSupportReply("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo enviar la respuesta.");
+    } finally {
+      setIsSendingReply(false);
+    }
+  }
+
+  /** Cierra el incidente dejando por escrito qué se hizo. */
+  async function handleResolveDispute() {
+    const texto = disputeResolution.trim();
+    if (!resolvingDispute || texto.length < 5) {
+      setError("Describe la resolución aplicada (mínimo 5 caracteres).");
+      return;
+    }
+    setError("");
+    setIsResolvingDispute(true);
+    try {
+      await adminService.resolveDispute(resolvingDispute.id, texto);
+      setStatusMessage(`Incidente de la orden ${resolvingDispute.id.slice(0, 8).toUpperCase()} resuelto.`);
+      setResolvingDispute(null);
+      setDisputeResolution("");
+      await reloadAdminData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo resolver el incidente.");
+    } finally {
+      setIsResolvingDispute(false);
+    }
+  }
 
   useEffect(() => {
     if (!isAdmin) {
@@ -589,20 +645,11 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
   }
 
   function focusSection(nextTab: AdminTab): void {
+    // Cambiar de pestaña ya cambia lo que se ve; el scroll de antes existía
+    // solo porque todas las secciones estaban montadas a la vez.
     setTab(nextTab);
-
-    const target =
-      nextTab === "metricas"
-        ? metricsSectionRef.current
-        : nextTab === "empresas"
-          ? companiesSectionRef.current
-          : nextTab === "chats"
-            ? chatsSectionRef.current
-            : nextTab === "certificaciones"
-              ? certificationsSectionRef.current
-              : usersSectionRef.current;
-
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setStatusMessage("");
+    setError("");
   }
 
   return (
@@ -610,8 +657,10 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Panel de Administracion</h1>
-            <p className="text-sm text-muted-foreground">Gestion centralizada de empresas, usuarios y estado operativo.</p>
+            <h1 className="text-2xl font-semibold text-foreground">Panel de administración</h1>
+            <p className="text-sm text-muted-foreground">
+              {ADMIN_TABS.find((item) => item.id === tab)?.hint ?? "Gestión de la plataforma"}
+            </p>
           </div>
           <button
             type="button"
@@ -653,6 +702,7 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{statusMessage}</div>
       ) : null}
 
+      {tab === "metricas" ? (
       <section ref={metricsSectionRef} className="space-y-4 scroll-mt-6">
         <div className="flex items-center justify-between rounded-xl border border-border bg-white p-4 shadow-sm">
           <div>
@@ -723,7 +773,9 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {tab === "empresas" ? (
       <section ref={companiesSectionRef} className="space-y-4 scroll-mt-6">
           <div className="flex items-center justify-between rounded-xl border border-border bg-white p-4 shadow-sm">
             <div>
@@ -810,7 +862,9 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
             </table>
           </div>
         </section>
+      ) : null}
 
+      {tab === "usuarios" ? (
       <section ref={usersSectionRef} className="space-y-4 scroll-mt-6">
           <div className="flex items-center justify-between rounded-xl border border-border bg-white p-4 shadow-sm">
             <div>
@@ -923,19 +977,65 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
             </div>
           </div>
         </section>
+      ) : null}
 
+      {tab === "soporte" ? (
       <section ref={chatsSectionRef} className="space-y-4 scroll-mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm">
           <div>
             <p className="flex items-center gap-2 text-base font-semibold">
               <MessageSquare className="h-4 w-4 text-primary" />
-              Supervisión de chats
+              Soporte y gestión de incidentes
             </p>
             <p className="text-sm text-muted-foreground">
-              Todas las conversaciones entre cotizantes y empresas. Solo lectura: el equipo supervisa, no interviene en la negociación.
+              Atiende dudas de solicitantes y media en incidentes con empresas importadoras. Puedes responder
+              dentro de la conversación como equipo de la plataforma.
             </p>
           </div>
           <span className="text-xs text-muted-foreground">{conversationsTotal} conversaciones</span>
+        </div>
+
+        {/* Los incidentes son lo urgente: van primero y con acción, no como una
+            cifra suelta en el resumen. */}
+        <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Shield className="h-4 w-4 text-amber-600" />
+              Incidentes abiertos
+            </p>
+            <span className="text-xs text-muted-foreground">{disputes.length} sin resolver</span>
+          </div>
+
+          {disputes.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+              No hay incidentes abiertos.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {disputes.map((dispute) => (
+                <div key={dispute.id} className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        Orden {dispute.id.slice(0, 8).toUpperCase()} · estado {dispute.estado}
+                      </p>
+                      <p className="mt-0.5 text-xs text-amber-900">{dispute.motivo_disputa || "Sin motivo indicado"}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Reportado el {formatDate(dispute.fecha_actualizacion)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setResolvingDispute(dispute)}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                    >
+                      Resolver
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
@@ -975,8 +1075,18 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
                 {conversations.map((conversation) => (
                   <tr key={conversation.id} className="border-b border-border/60 align-top">
                     <td className="py-3 pr-3">
-                      <p className="font-medium text-foreground">{conversation.solicitante_nombre || "Sin nombre"}</p>
-                      <p className="text-xs text-muted-foreground">{conversation.solicitante_email || conversation.solicitante_id}</p>
+                      {conversation.tipo === "interna" ? (
+                        <span className="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                          Canal interno de empresa
+                        </span>
+                      ) : (
+                        <>
+                          <p className="font-medium text-foreground">{conversation.solicitante_nombre || "Sin nombre"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {conversation.solicitante_email || conversation.solicitante_id}
+                          </p>
+                        </>
+                      )}
                     </td>
                     <td className="py-3 pr-3">
                       <p className="font-medium text-foreground">{conversation.empresa_nombre || "Empresa no identificada"}</p>
@@ -1020,7 +1130,9 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {tab === "certificaciones" ? (
       <section ref={certificationsSectionRef} className="space-y-4 scroll-mt-6">
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
           <p className="flex items-center gap-2 text-base font-semibold">
@@ -1370,6 +1482,7 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
           ) : null}
         </div>
       </section>
+      ) : null}
 
       {openConversation ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -1380,7 +1493,10 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
                   {openConversation.solicitante_nombre || openConversation.solicitante_email} · {openConversation.empresa_nombre || "Empresa"}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Cotización {openConversation.cotizacion_id.slice(0, 8).toUpperCase()}
+                  {/* Los hilos internos de una empresa no cuelgan de ninguna cotización. */}
+                  {openConversation.cotizacion_id
+                    ? `Cotización ${openConversation.cotizacion_id.slice(0, 8).toUpperCase()}`
+                    : "Canal interno de la empresa"}
                   {openConversation.orden_id ? ` · Orden ${openConversation.orden_id.slice(0, 8).toUpperCase()}` : ""}
                 </p>
               </div>
@@ -1429,8 +1545,93 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
               })}
             </div>
 
-            <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
-              Vista de solo lectura para auditoría. Los participantes no ven que estás consultando el hilo.
+            <div className="space-y-2 border-t border-border p-3">
+              <p className="text-[11px] text-muted-foreground">
+                Lo que escribas aquí entra en el hilo como <strong>equipo de ImportacionesQ8</strong> y avisa a las dos
+                partes. Consultar el hilo sin escribir no deja rastro.
+              </p>
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={supportReply}
+                  onChange={(event) => setSupportReply(event.target.value)}
+                  rows={2}
+                  maxLength={2000}
+                  placeholder="Responder como soporte…"
+                  className="flex-1 resize-none rounded-lg border border-border px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={isSendingReply || !supportReply.trim()}
+                  onClick={() => {
+                    void handleSendSupportReply();
+                  }}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {isSendingReply ? "Enviando…" : "Enviar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {resolvingDispute ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-border bg-white p-5 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Resolver incidente</h2>
+                <p className="text-xs text-muted-foreground">
+                  Orden {resolvingDispute.id.slice(0, 8).toUpperCase()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setResolvingDispute(null);
+                  setDisputeResolution("");
+                }}
+                className="rounded-md border border-border p-1.5 hover:bg-muted"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="font-medium">Motivo reportado</p>
+              <p className="mt-1">{resolvingDispute.motivo_disputa || "Sin motivo indicado"}</p>
+            </div>
+
+            <textarea
+              value={disputeResolution}
+              onChange={(event) => setDisputeResolution(event.target.value)}
+              rows={4}
+              placeholder="Qué se hizo para resolverlo. Queda registrado en la orden y en la sala del incidente."
+              className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResolvingDispute(null);
+                  setDisputeResolution("");
+                }}
+                className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isResolvingDispute || disputeResolution.trim().length < 5}
+                onClick={() => {
+                  void handleResolveDispute();
+                }}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {isResolvingDispute ? "Resolviendo…" : "Marcar como resuelto"}
+              </button>
             </div>
           </div>
         </div>

@@ -398,6 +398,44 @@ const ORDER_LIFECYCLE_STEPS=[
   {key:"entregado",label:"Entregado",icon:<CheckCircle className="w-3.5 h-3.5"/>},
 ];
 
+// Los estados REALES de una orden en el backend (`EstadoOrden`), en el orden en
+// que ocurren. La línea de tiempo de arriba es una vista comercial más detallada
+// del ciclo completo (incluye pasos previos a la orden y un "en ruta" que el
+// backend no distingue); usar sus claves para escribir era el motivo de que
+// actualizar el estado no hiciera nada: el backend las rechazaba por inválidas.
+const ORDER_STATES=[
+  {key:"cotizacion_aceptada",     label:"Cotización aceptada"},
+  {key:"en_produccion",           label:"En producción"},
+  {key:"transito_internacional",  label:"Tránsito internacional"},
+  {key:"aduana_nacionalizacion",  label:"Aduana / nacionalización"},
+  {key:"bodega_local",            label:"Bodega local"},
+  {key:"entregado",               label:"Entregado"},
+] as const;
+
+const ORDER_DOCUMENT_LABELS:Record<string,string>={
+  factura_proforma:"Factura proforma",
+  factura_comercial:"Factura comercial",
+  packing_list:"Packing list",
+  comprobante_pago:"Comprobante de pago",
+};
+
+function orderDocumentTypeLabel(tipo:string|undefined|null):string{
+  return ORDER_DOCUMENT_LABELS[String(tipo||"")]||"Documento";
+}
+
+function orderStateLabel(key:string|undefined|null):string{
+  const found=ORDER_STATES.find((s)=>s.key===String(key||""));
+  return found?found.label:(key?String(key):"Sin estado");
+}
+
+/** Único estado al que el backend deja avanzar desde el actual (cadena lineal). */
+function nextOrderState(current:string|undefined|null):{key:string;label:string}|null{
+  const index=ORDER_STATES.findIndex((s)=>s.key===String(current||""));
+  if(index<0||index>=ORDER_STATES.length-1)return null;
+  const next=ORDER_STATES[index+1];
+  return {key:next.key,label:next.label};
+}
+
 function inferLifecycleStageIndex(rawState:string|undefined|null):number{
   const normalized=String(rawState||"").trim().toLowerCase();
   if(!normalized)return 0;
@@ -958,14 +996,23 @@ function mapBackendProposalToUiResponse(p: BackendPropuesta): QuoteResponse {
 
 function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
   const code = `ORD-${order.id.slice(0, 8).toUpperCase()}`;
-  const history = (order.historial_estados ?? []).map((item) => ({
-    estado: item.estado,
-    fecha: item.fecha,
-    nota: item.nota ?? null,
-  }));
+  // El backend no ordena el historial (la relación sale en orden de clave, que
+  // es un UUID aleatorio), así que llegaba mezclado: se ordena por fecha para
+  // que el seguimiento se lea de arriba abajo y `created` sea la creación real.
+  const history = (order.historial_estados ?? [])
+    .slice()
+    .sort((a, b) => String(a.fecha_cambio).localeCompare(String(b.fecha_cambio)))
+    .map((item) => ({
+      estado: item.estado_nuevo,
+      fecha: item.fecha_cambio,
+      // De dónde venía, para poder leer el salto en el seguimiento.
+      nota: item.estado_anterior ? `Desde ${orderStateLabel(item.estado_anterior)}` : null,
+    }));
   const documents = (order.documentos_adjuntos ?? []).map((doc) => ({
     name: doc.nombre,
-    date: formatShortDate(doc.fecha_subida),
+    // El backend no fecha los documentos de la orden; mostrar una fecha
+    // inventada sería peor que no mostrar ninguna.
+    date: "",
     status: doc.url ? "Disponible" : "Pendiente",
     url: doc.url,
     type: doc.tipo,
@@ -977,7 +1024,7 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
     quoteCode: quote?.code || `COT-${order.cotizacion_id.slice(0, 8).toUpperCase()}`,
     product: quote?.product || "Producto no disponible",
     importerId: order.importador_id,
-    created: formatShortDate(order.historial_estados?.[0]?.fecha || new Date().toISOString()),
+    created: formatShortDate(history[0]?.fecha || new Date().toISOString()),
     estimated: order.tiempo_estimado_entrega || "N/D",
     quantity: quote?.minQuantity ? `${quote.minQuantity} unidades` : "N/D",
     unitPrice: `${order.precio_acordado_usd} USD/u`,
@@ -2263,7 +2310,10 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onViewImporterProfile}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];onViewImporterProfile:(id:string)=>void}) {
+function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onViewImporterProfile,canManageOrder,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
+  const [isAdvancing,setIsAdvancing]=useState(false);
+  const [advanceMessage,setAdvanceMessage]=useState("");
+  const [advanceError,setAdvanceError]=useState("");
   // Anclas de las tarjetas a las que saltan los botones de la cabecera: la
   // información ya está en esta misma pantalla, solo hay que llevar al
   // usuario hasta ella.
@@ -2312,10 +2362,26 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
     return <CheckCircle2 className="w-3.5 h-3.5"/>;
   };
 
-  const orderStateLabelByKey = new Map(ORDER_LIFECYCLE_STEPS.map((step)=>[step.key,step.label]));
   const timelineStages: TimelineStage[] = buildLifecycleTimeline(
     inferLifecycleStageIndex(order.status || history[history.length - 1]?.estado),
   );
+
+  const siguienteEstadoOrden = nextOrderState(order.status);
+
+  async function avanzarEstado(){
+    if(!order||!siguienteEstadoOrden)return;
+    setAdvanceMessage("");
+    setAdvanceError("");
+    setIsAdvancing(true);
+    try{
+      await onUpdateOrderStatus(order.id, siguienteEstadoOrden.key);
+      setAdvanceMessage(`Orden marcada como «${siguienteEstadoOrden.label}».`);
+    }catch(error){
+      setAdvanceError(error instanceof Error&&error.message.trim()?error.message:"No se pudo actualizar el estado.");
+    }finally{
+      setIsAdvancing(false);
+    }
+  }
 
   const historyEvents = history.length > 0
     ? history
@@ -2351,13 +2417,42 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
               <div ref={seguimientoRef}>
-                <Card padding="md"><h3 className="text-sm font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3><Timeline stages={timelineStages}/></Card>
+                <Card padding="md">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
+                    <h3 className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">{orderStateLabel(order.status)}</span>
+                  </div>
+                  <Timeline stages={timelineStages}/>
+                  {/* La empresa y el asesor asignado mueven el embarque desde
+                      aquí; antes solo se podía desde el panel del chat. */}
+                  {canManageOrder&&(
+                    <div className="mt-5 pt-4 border-t border-border">
+                      {siguienteEstadoOrden?(
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Button variant="primary" size="sm" loading={isAdvancing}
+                            onClick={()=>{void avanzarEstado();}}>
+                            Marcar «{siguienteEstadoOrden.label}»
+                          </Button>
+                          <p className="text-xs text-muted-foreground">
+                            El cliente lo verá en el chat de seguimiento y recibirá el aviso.
+                          </p>
+                        </div>
+                      ):(
+                        <p className="text-xs text-muted-foreground">
+                          {order.status==="entregado"?"La orden está entregada: no hay más pasos.":"Sin siguiente estado disponible."}
+                        </p>
+                      )}
+                      {advanceMessage&&<p className="text-xs text-emerald-600 mt-2">{advanceMessage}</p>}
+                      {advanceError&&<p className="text-xs text-destructive mt-2">{advanceError}</p>}
+                    </div>
+                  )}
+                </Card>
               </div>
               <Card padding="none">
                 <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
                 <div className="divide-y divide-border/60">{documents.map(doc=>(
                   <div key={doc.name} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date}</p></div></div>
+                    <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date||orderDocumentTypeLabel(doc.type)}</p></div></div>
                     <div className="flex items-center gap-2">
                       <span className={clsx("text-xs font-medium px-2 py-0.5 rounded",doc.status==="Disponible"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500")}>{doc.status}</span>
                       {doc.status==="Disponible"&&<><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs" onClick={()=>{void abrirArchivoEnPestana(doc.url);}}>Ver</Button><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs" onClick={()=>{void descargarArchivo(doc.url, doc.name);}}>Descargar</Button></>}
@@ -2369,8 +2464,9 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary"/>Historial de eventos</h3>
                 <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
                   <div className="space-y-1">{historyEvents.map((ev,i)=>{
-                    const normalized=String(ev.estado||"").trim().toLowerCase();
-                    const label=orderStateLabelByKey.get(normalized)||ev.estado;
+                    // Los eventos guardan el estado real de la orden
+                    // (`en_produccion`), no las claves de la línea comercial.
+                    const label=orderStateLabel(ev.estado);
                     return (
                     <div key={`${ev.estado}-${ev.fecha}-${i}`} className="flex items-start gap-3"><div className="w-6 h-6 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center flex-shrink-0 z-10 text-primary">{mapOrderStateIcon(ev.estado)}</div><div className="pb-4 flex-1"><div className="flex items-center justify-between"><p className="text-sm">{label}</p><p className="text-xs text-muted-foreground">{formatShortDate(ev.fecha)}</p></div>{ev.nota&&<p className="text-xs text-muted-foreground mt-1">{ev.nota}</p>}</div></div>
                     );
@@ -2438,10 +2534,12 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [isTransferring,setIsTransferring]=useState(false);
   const [transferMessage,setTransferMessage]=useState("");
   const [transferError,setTransferError]=useState("");
-  const [orderStatusDraft,setOrderStatusDraft]=useState("");
   const [isUpdatingOrderStatus,setIsUpdatingOrderStatus]=useState(false);
   const [isAttachingOrderDoc,setIsAttachingOrderDoc]=useState(false);
   const [orderActionMessage,setOrderActionMessage]=useState("");
+  // Sin esto, un 400/403 del backend se perdía y la pantalla se quedaba igual
+  // sin decir nada: parecía que el botón no hacía nada.
+  const [orderActionError,setOrderActionError]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
@@ -2661,19 +2759,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // empresa le indica por el canal interno cuándo hacerlo. El backend comprueba
   // que sea el asignado a esa orden.
   const canManageOrder = currentUserRole === "importadora" || currentUserRole === "asesor";
-  const orderStatusOptions = ORDER_LIFECYCLE_STEPS.map((step) => ({
-    value: step.key,
-    label: step.label,
-  }));
+  // El backend solo admite avanzar un paso en la cadena, así que ofrecer la
+  // lista completa era ofrecer seis destinos inválidos y uno bueno.
+  const siguienteEstado = nextOrderState(refOrder?.status);
 
   useEffect(() => {
-    if (!refOrder) {
-      setOrderStatusDraft("");
-      setOrderActionMessage("");
-      return;
-    }
-    setOrderStatusDraft(refOrder.status || "");
     setOrderActionMessage("");
+    setOrderActionError("");
   }, [refOrder?.id, refOrder?.status]);
 
   async function handleTransferConversation() {
@@ -2693,12 +2785,15 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   }
 
   async function handleOrderStatusUpdate() {
-    if (!refOrderId || !orderStatusDraft.trim()) return;
+    if (!refOrderId || !siguienteEstado) return;
     setOrderActionMessage("");
+    setOrderActionError("");
     setIsUpdatingOrderStatus(true);
     try {
-      await onUpdateOrderStatus(refOrderId, orderStatusDraft.trim());
-      setOrderActionMessage("Estado actualizado correctamente.");
+      await onUpdateOrderStatus(refOrderId, siguienteEstado.key);
+      setOrderActionMessage(`Orden marcada como «${siguienteEstado.label}».`);
+    } catch (error) {
+      setOrderActionError(error instanceof Error && error.message.trim() ? error.message : "No se pudo actualizar el estado.");
     } finally {
       setIsUpdatingOrderStatus(false);
     }
@@ -3464,19 +3559,21 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   <div>
                     <input ref={orderDocumentInputRef} type="file" className="hidden" onChange={(event)=>{void handleOrderDocumentPick(event);}}/>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Orden</p>
-                    <div className="space-y-1.5">{[["Código",`ORD-${refOrderId.slice(0, 8).toUpperCase()}`],["Estado",refOrder?.status || orderStatusDraft || "En seguimiento"],["Canal","Chat API"]].map(([k,v])=>(
+                    <div className="space-y-1.5">{[["Código",`ORD-${refOrderId.slice(0, 8).toUpperCase()}`],["Estado",orderStateLabel(refOrder?.status)],["Canal","Chat API"]].map(([k,v])=>(
                       <div key={k} className="flex justify-between items-start gap-1"><span className="text-[10px] text-muted-foreground">{k}</span><span className="text-[10px] font-medium text-foreground text-right">{v}</span></div>
                     ))}</div>
 
                     {canManageOrder && (
                       <div className="mt-3 space-y-2">
-                        <Select value={orderStatusDraft} onChange={(event)=>setOrderStatusDraft(event.target.value)}>
-                          <option value="">Selecciona estado manual</option>
-                          {orderStatusOptions.map((row)=><option key={row.value} value={row.value}>{row.label}</option>)}
-                        </Select>
-                        <Button variant="secondary" size="sm" fullWidth loading={isUpdatingOrderStatus} disabled={!orderStatusDraft.trim()} onClick={()=>{void handleOrderStatusUpdate();}}>
-                          Actualizar estado
-                        </Button>
+                        {siguienteEstado?(
+                          <Button variant="primary" size="sm" fullWidth loading={isUpdatingOrderStatus} onClick={()=>{void handleOrderStatusUpdate();}}>
+                            Marcar «{siguienteEstado.label}»
+                          </Button>
+                        ):(
+                          <p className="text-[10px] text-muted-foreground">
+                            {refOrder?.status==="entregado"?"La orden ya está entregada.":"Sin siguiente estado disponible."}
+                          </p>
+                        )}
                         <Button variant="secondary" size="sm" fullWidth loading={isAttachingOrderDoc} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>orderDocumentInputRef.current?.click()}>
                           Adjuntar documento
                         </Button>
@@ -3484,6 +3581,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     )}
 
                     {orderActionMessage&&<p className="text-[10px] text-emerald-600 mt-2">{orderActionMessage}</p>}
+                    {orderActionError&&<p className="text-[10px] text-destructive mt-2">{orderActionError}</p>}
 
                     <div className="mt-3 space-y-1.5">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos de la orden</p>
@@ -8571,7 +8669,7 @@ export default function App() {
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={setActiveChatId} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
-    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}}/>;
+    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
     if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;

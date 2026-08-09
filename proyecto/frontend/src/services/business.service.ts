@@ -196,17 +196,26 @@ export interface UpdateImporterPayload {
   shipping_mark_prefijo?: string;
 }
 
+/**
+ * Una entrada del historial tal y como la devuelve `EstadoOrdenItem` del
+ * backend. Antes se declaraba `{estado, fecha, nota}`, campos que el backend
+ * nunca ha enviado: el historial llegaba entero como `undefined` y el
+ * seguimiento salía vacío en pantalla.
+ */
 export interface BackendEstadoOrdenItem {
-  estado: string;
-  fecha: string;
-  nota: string | null;
+  id: string;
+  orden_id: string;
+  estado_anterior: string | null;
+  estado_nuevo: string;
+  fecha_cambio: string;
 }
 
 export interface BackendDocumentoOrdenItem {
+  id: string;
+  orden_id: string;
   nombre: string;
   url: string;
   tipo: string;
-  fecha_subida: string;
 }
 
 /* ------------------------------------------------------------------

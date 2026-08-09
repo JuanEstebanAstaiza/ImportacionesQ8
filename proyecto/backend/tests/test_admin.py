@@ -299,3 +299,96 @@ class TestCotizacionesAbiertasAdmin:
         response = client.get("/admin/cotizaciones-abiertas", headers=auth_headers_admin)
         assert response.status_code == status.HTTP_200_OK
         assert any(c["id"] == str(cotizacion.id) for c in response.json())
+
+
+class TestSoporteEnConversacion:
+    """El panel no solo mira: soporte tiene que poder contestar en el hilo.
+
+    Resolver una duda o mediar en un incidente fuera de la conversación obliga a
+    las partes a reconstruir el contexto en otro sitio.
+    """
+
+    def _conversacion(self, db_session, solicitante, importador, dueño):
+        from models.chat import ConversacionChat, TipoConversacion
+
+        cotizacion = Cotizacion(
+            id=str(uuid4()), solicitante_id=solicitante.id, importador_id=importador.id,
+            modalidad="dirigida", pais_importacion="China", nombre_producto="Producto Soporte",
+            descripcion_cliente="Descripción de prueba para la intervención de soporte",
+            linea_producto="Textiles", tipo_calidad="estandar", cantidad_minima=100,
+            precio_objetivo_usd=1.0, incoterm="FOB", estado=EstadoCotizacion.propuestas_recibidas,
+        )
+        db_session.add(cotizacion)
+
+        conversacion = ConversacionChat(
+            id=str(uuid4()), tipo=TipoConversacion.negociacion.value,
+            cotizacion_id=cotizacion.id, solicitante_id=solicitante.id,
+            importador_usuario_id=str(dueño.id),
+        )
+        db_session.add(conversacion)
+        db_session.commit()
+        return conversacion
+
+    def test_admin_responde_y_queda_marcado_como_soporte(self, client, db_session, solicitante, empresa, auth_headers_admin):
+        importador, dueño = empresa
+        conversacion = self._conversacion(db_session, solicitante, importador, dueño)
+
+        response = client.post(
+            f"/admin/conversaciones/{conversacion.id}/mensajes",
+            json={"contenido": "Revisamos el caso: la empresa reenvía el lote esta semana."},
+            headers=auth_headers_admin,
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        cuerpo = response.json()
+        # Marcado como sistema para que no se confunda con la negociación.
+        assert cuerpo["tipo"] == "sistema"
+        assert cuerpo["contenido"].startswith("[Soporte ImportacionesQ8]")
+
+    def test_ambas_partes_reciben_aviso(self, client, db_session, solicitante, empresa, auth_headers_admin):
+        from models.notificacion import Notificacion
+
+        importador, dueño = empresa
+        conversacion = self._conversacion(db_session, solicitante, importador, dueño)
+
+        client.post(
+            f"/admin/conversaciones/{conversacion.id}/mensajes",
+            json={"contenido": "Mediamos en el incidente."},
+            headers=auth_headers_admin,
+        )
+
+        avisados = {
+            str(fila[0])
+            for fila in db_session.query(Notificacion.usuario_id).filter(
+                Notificacion.tipo == "soporte"
+            ).all()
+        }
+        assert str(solicitante.id) in avisados
+        assert str(dueño.id) in avisados
+
+    def test_el_mensaje_aparece_en_el_hilo_de_las_partes(self, client, db_session, solicitante, empresa, auth_headers_admin):
+        importador, dueño = empresa
+        conversacion = self._conversacion(db_session, solicitante, importador, dueño)
+
+        client.post(
+            f"/admin/conversaciones/{conversacion.id}/mensajes",
+            json={"contenido": "Queda resuelto por nuestra parte."},
+            headers=auth_headers_admin,
+        )
+
+        visto = client.get(
+            f"/chat/conversaciones/{conversacion.id}/mensajes",
+            headers=auth_headers_for(solicitante),
+        )
+        assert visto.status_code == status.HTTP_200_OK
+        assert any("Soporte ImportacionesQ8" in m["contenido"] for m in visto.json())
+
+    def test_una_empresa_no_puede_escribir_como_soporte(self, client, db_session, solicitante, empresa):
+        importador, dueño = empresa
+        conversacion = self._conversacion(db_session, solicitante, importador, dueño)
+
+        response = client.post(
+            f"/admin/conversaciones/{conversacion.id}/mensajes",
+            json={"contenido": "Suplantando al equipo de la plataforma"},
+            headers=auth_headers_for(dueño),
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN

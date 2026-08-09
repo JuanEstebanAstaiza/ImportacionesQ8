@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -70,6 +70,11 @@ class MensajeAdminItem(BaseModel):
     contenido: str
     tipo: str
     fecha_envio: datetime
+
+
+class MensajeSoporteRequest(BaseModel):
+    """Intervención del equipo de la plataforma en una conversación."""
+    contenido: str = Field(..., min_length=1, max_length=2000)
 
 
 class MetricasResponse(BaseModel):
