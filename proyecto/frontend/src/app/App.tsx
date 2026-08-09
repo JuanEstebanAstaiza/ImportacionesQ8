@@ -17,7 +17,7 @@ import {
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video,
-  LockKeyhole,
+  LockKeyhole, LifeBuoy,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -69,8 +69,9 @@ import {
   LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
 } from "@/lib/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
+import { RUTA_RESTABLECER, destinoDe, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 
-const RESET_PASSWORD_PATH = "/restablecer-password";
+const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 const SHOW_PAYMENTS_MODULE = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -586,10 +587,17 @@ const NAV_ASESOR=[
 // ─── Portal data ──────────────────────────────────────────────────────────────
 type UserRole="solicitante"|"importadora"|"asesor"|"admin";
 
+// Cada área del panel es una entrada del sidebar, igual que en los demás
+// perfiles: así se navega con el mismo mecanismo que el resto de la aplicación
+// y cada una tiene su propia URL.
 const NAV_ADMIN=[
-  {icon:LayoutGrid,    label:"Panel de administracion", key:"admin-dashboard"},
-  {icon:MessageSquare, label:"Chats",        key:"chats"},
-  {icon:FolderOpen,    label:"Documentos",   key:"documentos"},
+  {icon:LayoutGrid,    label:"Resumen",         key:"admin-dashboard"},
+  {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
+  {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
+  {icon:LifeBuoy,      label:"Soporte",         key:"admin-soporte"},
+  {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
+  {icon:MessageSquare, label:"Chats",           key:"chats"},
+  {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
 
 type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin";
@@ -7290,24 +7298,36 @@ function ResetPasswordScreen({ token, onBackToLogin }: { token: string; onBackTo
   );
 }
 
-function AdminDashboardScreen({sb,onRefreshGlobal}:{sb:SidebarCtrl;onRefreshGlobal?:()=>Promise<void>}) {
+/** Qué área del panel corresponde a cada entrada del sidebar del admin. */
+const ADMIN_SECTION_BY_SCREEN = {
+  "admin-dashboard": "metricas",
+  "admin-empresas": "empresas",
+  "admin-usuarios": "usuarios",
+  "admin-soporte": "soporte",
+  "admin-certificaciones": "certificaciones",
+} as const;
+
+type AdminScreen = keyof typeof ADMIN_SECTION_BY_SCREEN;
+
+function AdminDashboardScreen({sb,onRefreshGlobal,screen}:{sb:SidebarCtrl;onRefreshGlobal?:()=>Promise<void>;screen:AdminScreen}) {
   const mainRef = useRef<HTMLElement | null>(null);
+  const section = ADMIN_SECTION_BY_SCREEN[screen];
 
   useEffect(() => {
     if (!mainRef.current) {
       return;
     }
     mainRef.current.scrollTo({ top: 0, behavior: "auto" });
-  }, []);
+  }, [section]);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
-      <Sidebar {...sb} active="admin-dashboard"/>
+      <Sidebar {...sb} active={screen}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F0F2F5]">
         <AppHeader user={USER} sb={sb}/>
         <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-6">
           <div className="max-w-6xl mx-auto">
-          <AdminDashboard onRefreshGlobal={onRefreshGlobal}/>
+          <AdminDashboard onRefreshGlobal={onRefreshGlobal} section={section}/>
           </div>
         </main>
         </div>
@@ -7479,36 +7499,44 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
-type Screen="landing"|"login"|"register"|"reset-password"|"policy-data"|"policy-terms"|"dashboard"|"importer-profile"|"quotes"|"new-quote"|"quote-detail"|"responses"|"response-detail"|"chats"|"orders"|"order-detail"|"documentos"|"pagos"|"courses"|"imp-dashboard"|"imp-profile"|"imp-advisors"|"imp-quotes"|"adv-dashboard"|"adv-available"|"adv-my-quotes"|"admin-dashboard"|"create-response"|"notifications"|"user-profile"|"help-support";
+// `Screen` y la correspondencia con las URL viven en `@/app/rutas`.
 
 export default function App() {
   const storedRole = normalizeStoredRole(getStoredRole());
   const hasStoredSession = Boolean(getStoredToken() && storedRole);
 
   const { isAuthenticated, isInitializing, appRole, signOut, token } = useAuth();
-  const [screen,setScreen]=useState<Screen>(() =>
-    window.location.pathname === RESET_PASSWORD_PATH
-      ? "reset-password"
-      : hasStoredSession
-        ? getHomeScreenForRole(storedRole!)
-        : "landing",
-  );
+
+  // La dirección manda al entrar: es lo que hace que un enlace a una cotización
+  // abra esa cotización, y que recargar no devuelva al inicio. Solo la raíz se
+  // resuelve por sesión, porque "/" no identifica ninguna pantalla concreta.
+  const destinoInicial = destinoDe(window.location.pathname);
+  const [screen,setScreen]=useState<Screen>(() => {
+    if (destinoInicial && destinoInicial.screen !== "landing") {
+      return destinoInicial.screen;
+    }
+    return hasStoredSession ? getHomeScreenForRole(storedRole!) : "landing";
+  });
   const [loginPrefillEmail,setLoginPrefillEmail]=useState("");
   const [resetToken,setResetToken]=useState<string>(() =>
     new URLSearchParams(window.location.search).get("token") ?? "",
   );
   const [userRole,setUserRole]=useState<UserRole|"admin">(storedRole ?? "solicitante");
-  const [selectedQuoteId,setSelectedQuoteId]=useState("");
-  const [selectedResponseId,setSelectedResponseId]=useState("");
+  /** Identificador que traía la dirección de entrada, si era de ese tipo. */
+  const idInicialDe=(param:ParamRuta)=>destinoInicial?.param===param?(destinoInicial.id ?? ""):"";
+  const [selectedQuoteId,setSelectedQuoteId]=useState(()=>idInicialDe("quote"));
+  const [selectedResponseId,setSelectedResponseId]=useState(()=>idInicialDe("response"));
   const [responseFrom,setResponseFrom]=useState<ResponseFrom>("responses");
   const [responseFromQuoteId,setResponseFromQuoteId]=useState("");
-  const [selectedOrderId,setSelectedOrderId]=useState("");
+  const [selectedOrderId,setSelectedOrderId]=useState(()=>idInicialDe("order"));
   const [selectedOrderDetail,setSelectedOrderDetail]=useState<Order|null>(null);
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
-  const [selectedImporterId,setSelectedImporterId]=useState("");
+  const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
-  const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>();
+  const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>(
+    ()=>idInicialDe("conversation") || undefined,
+  );
   const [sidebarPinned,setSidebarPinned]=useState(true);
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
   const [hiddenOpenQuotesByCompany,setHiddenOpenQuotesByCompany]=useState<Record<string, string[]>>(() => loadHiddenOpenQuotesByCompany());
@@ -7543,6 +7571,68 @@ export default function App() {
   const [prevScreen,setPrevScreen]=useState<Screen>(() =>
     window.location.pathname === RESET_PASSWORD_PATH ? "login" : "dashboard",
   );
+
+  // ── Dirección del navegador ────────────────────────────────────────────────
+  // Identificador que la pantalla actual pone en su URL. Solo las de detalle
+  // tienen uno; el resto se dirigen con la ruta a secas.
+  const idEnLaRuta =
+    screen === "quote-detail" || screen === "create-response" ? selectedQuoteId
+    : screen === "response-detail" ? selectedResponseId
+    : screen === "order-detail" ? selectedOrderId
+    : screen === "importer-profile" ? selectedImporterId
+    : screen === "chats" ? (activeChatId || initialChatConvId || "")
+    : "";
+
+  const rutaActual = rutaDe(screen, idEnLaRuta || undefined);
+  // Pantalla con la que se escribió la última vez, para decidir entre apilar una
+  // entrada nueva o reemplazarla.
+  const ultimaPantallaEscritaRef = useRef<Screen|null>(null);
+
+  useEffect(() => {
+    const actual = window.location.pathname.replace(/\/+$/, "") || "/";
+    const destino = rutaActual.replace(/\/+$/, "") || "/";
+    if (actual === destino) {
+      ultimaPantallaEscritaRef.current = screen;
+      return;
+    }
+
+    // El token de restablecimiento y el código de referido viajan en la query;
+    // se conservan mientras se esté en las pantallas que los usan.
+    const conservaQuery = screen === "reset-password" || screen === "landing" || screen === "register";
+    const url = `${rutaActual}${conservaQuery ? window.location.search : ""}`;
+
+    // Moverse dentro de la misma pantalla (abrir otra conversación del chat) no
+    // merece una entrada de historial propia: se reemplaza.
+    if (ultimaPantallaEscritaRef.current === screen) {
+      window.history.replaceState({}, "", url);
+    } else {
+      window.history.pushState({}, "", url);
+    }
+    ultimaPantallaEscritaRef.current = screen;
+  }, [rutaActual, screen]);
+
+  useEffect(() => {
+    function alNavegarAtrasOAdelante() {
+      const destino = destinoDe(window.location.pathname);
+      if (!destino) {
+        return;
+      }
+      // Se marca antes de tocar el estado para que el efecto de arriba no
+      // vuelva a apilar la entrada que el navegador acaba de consumir.
+      ultimaPantallaEscritaRef.current = destino.screen;
+      setScreen(destino.screen);
+
+      const id = destino.id ?? "";
+      if (destino.param === "quote") setSelectedQuoteId(id);
+      if (destino.param === "response") setSelectedResponseId(id);
+      if (destino.param === "order") { setSelectedOrderDetail(null); setSelectedOrderId(id); }
+      if (destino.param === "importer") setSelectedImporterId(id);
+      if (destino.param === "conversation") setInitialChatConvId(id || undefined);
+    }
+
+    window.addEventListener("popstate", alNavegarAtrasOAdelante);
+    return () => window.removeEventListener("popstate", alNavegarAtrasOAdelante);
+  }, []);
 
   const reloadImporters = useCallback(async () => {
     const rows = await businessService.listImporters();
@@ -8551,6 +8641,10 @@ export default function App() {
     "user-profile": ["solicitante", "asesor"],
     "help-support": ["solicitante", "importadora", "asesor"],
     "admin-dashboard": ["admin"],
+    "admin-empresas": ["admin"],
+    "admin-usuarios": ["admin"],
+    "admin-soporte": ["admin"],
+    "admin-certificaciones": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -8643,7 +8737,7 @@ export default function App() {
     if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
     if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat}/>;
 
-    if(screen==="admin-dashboard")return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists}/>;
+    if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
     // ── Shared ────────────────────────────────────────────────────────────────
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;

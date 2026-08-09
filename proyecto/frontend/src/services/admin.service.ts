@@ -165,8 +165,12 @@ export interface InviteSolicitantePayload {
 }
 
 export const adminService = {
+  /**
+   * `/importadores` pagina con un tope por defecto de 50: sin pedir el máximo,
+   * el panel de administración dejaba fuera empresas sin avisar.
+   */
   listCompanies(): Promise<BackendImporter[]> {
-    return apiRequest<BackendImporter[]>("/importadores", { method: "GET" });
+    return apiRequest<BackendImporter[]>("/importadores?limit=200&offset=0", { method: "GET" });
   },
 
   createImporterWithOwner(payload: CreateImporterWithOwnerPayload): Promise<CreateImporterWithOwnerResponse> {

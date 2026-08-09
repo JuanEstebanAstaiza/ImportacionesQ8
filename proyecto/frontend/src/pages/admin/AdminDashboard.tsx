@@ -56,20 +56,22 @@ type UserFormState = {
 
 interface AdminDashboardProps {
   onRefreshGlobal?: () => Promise<void>;
+  /** Área a mostrar. La elige el sidebar de la aplicación, no este componente. */
+  section: AdminTab;
 }
 
 /**
- * Cada pestaña muestra SOLO su sección. Antes todas se renderizaban a la vez y
- * los botones se limitaban a hacer scroll, así que el panel era una única
- * página larguísima donde todo convivía mezclado.
+ * Qué hace cada área. La navegación entre ellas es el sidebar de la aplicación
+ * —igual que en los demás perfiles—, y cada una tiene su propia URL; aquí solo
+ * queda el subtítulo que explica dónde está el usuario.
  */
-const ADMIN_TABS: Array<{ id: AdminTab; label: string; hint: string }> = [
-  { id: "metricas", label: "Resumen", hint: "Cómo va la plataforma" },
-  { id: "empresas", label: "Empresas", hint: "Alta y estado de importadoras" },
-  { id: "usuarios", label: "Usuarios", hint: "Cuentas, roles y acceso" },
-  { id: "soporte", label: "Soporte", hint: "Incidentes y dudas" },
-  { id: "certificaciones", label: "Certificaciones", hint: "Sellos y respaldo" },
-];
+const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
+  metricas: { label: "Resumen", hint: "Cómo va la plataforma" },
+  empresas: { label: "Empresas", hint: "Alta y estado de importadoras" },
+  usuarios: { label: "Usuarios", hint: "Cuentas, roles y acceso" },
+  soporte: { label: "Soporte", hint: "Incidentes y dudas" },
+  certificaciones: { label: "Certificaciones", hint: "Sellos y respaldo" },
+};
 
 const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "admin"] as const;
 
@@ -77,6 +79,8 @@ type RoleFilter = (typeof ROLE_OPTIONS)[number];
 type ActiveFilter = "todos" | "activos" | "inactivos";
 
 const ADMIN_COMPANY_DETAILS_STORAGE_KEY = "admin-company-ui-details";
+
+const CONVERSACIONES_POR_PAGINA = 25;
 
 const EMPTY_IMPORTER_FORM: CompanyFormState = {
   nombre_empresa: "",
@@ -172,8 +176,8 @@ function saveCompanyUiDetails(next: Record<string, CompanyUiDetails>): void {
   localStorage.setItem(ADMIN_COMPANY_DETAILS_STORAGE_KEY, JSON.stringify(next));
 }
 
-export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
-  const [tab, setTab] = useState<AdminTab>("metricas");
+export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps) {
+  const tab = section;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const { user, appRole } = useAuth();
@@ -204,6 +208,9 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
   const [conversations, setConversations] = useState<AdminConversacion[]>([]);
   const [conversationsTotal, setConversationsTotal] = useState(0);
   const [conversationSearch, setConversationSearch] = useState("");
+  // Sin esto el panel pedía 50 y se quedaba con esas: con 645 conversaciones,
+  // 595 eran invisibles y nada lo indicaba.
+  const [conversationPage, setConversationPage] = useState(0);
   const [openConversation, setOpenConversation] = useState<AdminConversacion | null>(null);
   const [conversationMessages, setConversationMessages] = useState<AdminMensaje[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -280,7 +287,11 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
           adminService.listUsers(userFilters),
           adminService.getMetricas(),
           adminService.listOpenQuotes(),
-          adminService.listConversations({ buscar: conversationSearch }),
+          adminService.listConversations({
+            buscar: conversationSearch,
+            limit: CONVERSACIONES_POR_PAGINA,
+            offset: conversationPage * CONVERSACIONES_POR_PAGINA,
+          }),
           adminService.listCertifications(),
           adminService.listDisputes().catch(() => [] as AdminDisputa[]),
           // El resumen del backup es informativo: que falle no debe tumbar el panel.
@@ -302,7 +313,13 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, userFilters, conversationSearch]);
+  }, [isAdmin, userFilters, conversationSearch, conversationPage]);
+
+  // Buscar reinicia la paginación: si no, con la página 3 abierta una búsqueda
+  // con pocos resultados se vería vacía.
+  useEffect(() => {
+    setConversationPage(0);
+  }, [conversationSearch]);
 
   /**
    * Sube el logo del sello a gestión documental. Tiene que vivir en la
@@ -644,23 +661,13 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
     }
   }
 
-  function focusSection(nextTab: AdminTab): void {
-    // Cambiar de pestaña ya cambia lo que se ve; el scroll de antes existía
-    // solo porque todas las secciones estaban montadas a la vez.
-    setTab(nextTab);
-    setStatusMessage("");
-    setError("");
-  }
-
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Panel de administración</h1>
-            <p className="text-sm text-muted-foreground">
-              {ADMIN_TABS.find((item) => item.id === tab)?.hint ?? "Gestión de la plataforma"}
-            </p>
+            <h1 className="text-2xl font-semibold text-foreground">{ADMIN_SECTION_HINTS[tab].label}</h1>
+            <p className="text-sm text-muted-foreground">{ADMIN_SECTION_HINTS[tab].hint}</p>
           </div>
           <button
             type="button"
@@ -672,21 +679,6 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
             <RefreshCw className="h-4 w-4" />
             Refrescar
           </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {ADMIN_TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => focusSection(item.id)}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                tab === item.id ? "bg-primary text-white" : "bg-muted text-foreground hover:bg-slate-200"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -1128,6 +1120,33 @@ export function AdminDashboard({ onRefreshGlobal }: AdminDashboardProps) {
               </tbody>
             </table>
           </div>
+
+          {conversationsTotal > CONVERSACIONES_POR_PAGINA ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
+                {conversationPage * CONVERSACIONES_POR_PAGINA + 1}–
+                {Math.min((conversationPage + 1) * CONVERSACIONES_POR_PAGINA, conversationsTotal)} de {conversationsTotal}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={conversationPage === 0}
+                  onClick={() => setConversationPage((prev) => Math.max(0, prev - 1))}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40"
+                >
+                  Anteriores
+                </button>
+                <button
+                  type="button"
+                  disabled={(conversationPage + 1) * CONVERSACIONES_POR_PAGINA >= conversationsTotal}
+                  onClick={() => setConversationPage((prev) => prev + 1)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40"
+                >
+                  Siguientes
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
       ) : null}
