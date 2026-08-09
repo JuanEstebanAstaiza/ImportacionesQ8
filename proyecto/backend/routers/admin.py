@@ -27,6 +27,7 @@ from schemas.admin import (
     ConversacionesAdminResponse,
     MensajeAdminItem,
     MensajeSoporteRequest,
+    CrearAgenteSoporteRequest,
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
@@ -43,7 +44,12 @@ from services.certificacion_service import (
     certificaciones_por_importador,
     puntaje_de,
 )
-from utils.dependencies import get_db, require_rol
+from utils.dependencies import get_db, require_rol, require_rol_in
+
+# Lo que el equipo de atención al cliente comparte con la administración: la
+# supervisión de conversaciones y la resolución de incidentes. Todo lo demás de
+# este router sigue siendo exclusivo de `admin`.
+require_equipo = require_rol_in("admin", "soporte")
 from utils.security import hash_password
 
 logger = logging.getLogger("importacionesq8")
@@ -107,6 +113,54 @@ async def crear_importador_con_dueño(
         importador=adjuntar_certificaciones(db, [nuevo_importador])[0],
         usuario_dueño_id=str(nuevo_dueño.id),
         email_dueño=nuevo_dueño.email
+    )
+
+
+# ==================== Equipo de atención al cliente ====================
+
+@router.post("/equipo-soporte", response_model=UsuarioAdminResponse, status_code=status.HTTP_201_CREATED)
+async def crear_agente_soporte(
+    datos: CrearAgenteSoporteRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Da de alta una cuenta del equipo de atención al cliente.
+
+    Estas cuentas atienden los tickets y resuelven incidentes de órdenes, pero
+    **no administran la plataforma**: no dan de alta empresas ni usuarios, no
+    tocan certificaciones ni copias de seguridad. Por eso son un rol propio y no
+    administradores con una nota al margen.
+
+    Solo un administrador puede crearlas: si un agente pudiera crear agentes, el
+    control de quién tiene acceso interno dejaría de estar en un único sitio.
+    """
+    if db.query(Usuario).filter(Usuario.email == datos.email).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email ya está registrado")
+
+    agente = Usuario(
+        id=str(uuid4()),
+        email=datos.email,
+        password_hash=hash_password(datos.password),
+        rol="soporte",
+        nombre=datos.nombre,
+        telefono=datos.telefono,
+        activo=True,
+        email_verificado=True,
+        perfil_completo=True,
+    )
+    db.add(agente)
+    db.commit()
+    db.refresh(agente)
+
+    return UsuarioAdminResponse(
+        id=str(agente.id),
+        email=agente.email,
+        rol=agente.rol,
+        importador_id=agente.importador_id,
+        nombre=agente.nombre,
+        activo=agente.activo,
+        perfil_completo=agente.perfil_completo,
+        fecha_creacion=agente.fecha_creacion,
     )
 
 
@@ -234,7 +288,7 @@ async def listar_cotizaciones_abiertas(
 @router.get("/disputas", response_model=List[DisputaOrdenResponse])
 async def listar_disputas(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("admin"))
+    current_user: dict = Depends(require_equipo)
 ):
     """Lista las órdenes con una disputa abierta reportada por el solicitante."""
     ordenes = db.query(Orden).filter(Orden.en_disputa == True).order_by(Orden.fecha_actualizacion.desc()).all()
@@ -258,7 +312,7 @@ async def resolver_disputa(
     orden_id: str,
     datos: ResolverDisputaRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("admin"))
+    current_user: dict = Depends(require_equipo)
 ):
     """Resuelve disputa por orden_id (compat). También actualiza el modelo Disputa si existe."""
     from models.disputa import Disputa, EstadoDisputa, MensajeDisputa, TipoMensajeDisputa
@@ -316,7 +370,7 @@ async def resolver_disputa_por_id(
     disputa_id: str,
     datos: ResolverDisputaRoomRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("admin")),
+    current_user: dict = Depends(require_equipo),
 ):
     from models.disputa import Disputa, EstadoDisputa, MensajeDisputa, TipoMensajeDisputa
 
@@ -795,7 +849,7 @@ async def listar_conversaciones_admin(
     importador_id: Optional[str] = Query(None, description="Solo conversaciones de esta empresa"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: dict = Depends(require_rol("admin")),
+    current_user: dict = Depends(require_equipo),
 ):
     """Todas las conversaciones de la plataforma, para supervisión del equipo.
 
@@ -875,7 +929,7 @@ async def leer_conversacion_admin(
     conversacion_id: str,
     db: Session = Depends(get_db),
     limit: int = Query(200, ge=1, le=500),
-    current_user: dict = Depends(require_rol("admin")),
+    current_user: dict = Depends(require_equipo),
 ):
     """Historial completo de una conversación, para atender el caso desde soporte."""
     from models.chat import ConversacionChat, MensajeChat
@@ -918,7 +972,7 @@ async def responder_conversacion_admin(
     conversacion_id: str,
     datos: MensajeSoporteRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("admin")),
+    current_user: dict = Depends(require_equipo),
 ):
     """Interviene en una conversación desde soporte.
 

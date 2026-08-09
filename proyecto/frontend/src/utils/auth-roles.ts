@@ -1,4 +1,4 @@
-export type AppUserRole = "solicitante" | "importadora" | "asesor" | "admin";
+export type AppUserRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
 
 function normalizeRole(role: string): string {
   return role
@@ -28,7 +28,13 @@ export function mapBackendRoleToAppRole(role: string | null | undefined): AppUse
     return "admin";
   }
 
-  if (normalizedRole === "solicitante" || normalizedRole === "asesor") {
+  if (
+    normalizedRole === "solicitante"
+    || normalizedRole === "asesor"
+    // Equipo de atención al cliente: personal de la plataforma, pero sin las
+    // facultades de administración.
+    || normalizedRole === "soporte"
+  ) {
     return normalizedRole;
   }
 

@@ -1,18 +1,25 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 import config
-from models.chat import ConversacionChat, MensajeChat, TipoConversacion, TipoMensajeChat
+from models.chat import (
+    ConversacionChat, LecturaConversacion, MensajeChat, PESO_URGENCIA,
+    TipoConversacion, TipoMensajeChat, UrgenciaSoporte,
+)
 from models.documental import Archivo, MensajeAdjunto
 from schemas.chat import (
     MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
-    IniciarChatInternoRequest,
+    IniciarChatInternoRequest, AbrirSoporteRequest, CerrarTicketRequest,
 )
 from schemas.features import TraducirRequest, TraducirResponse
 from utils.dependencies import get_db, get_current_user, require_rol_in
@@ -24,7 +31,7 @@ from services.documental_service import (
     create_document_file,
     ensure_folder_path,
 )
-from models.usuario import Usuario
+from models.usuario import ROLES_PLATAFORMA, Usuario
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from pydantic import BaseModel
@@ -62,8 +69,26 @@ async def emitir_ticket_ws(
     return WsTicketResponse(ticket=ticket)
 
 
+def _es_equipo_plataforma(rol: str) -> bool:
+    """¿Es una cuenta interna de ImportacionesQ8 (administración o soporte)?
+
+    Los agentes de soporte atienden los mismos hilos que un administrador; lo
+    que no pueden es administrar la plataforma. Esa distinción vive en los
+    endpoints, no aquí.
+    """
+    return rol in ROLES_PLATAFORMA
+
+
+def _tipo_de(conversacion: ConversacionChat) -> str:
+    return str(conversacion.tipo or TipoConversacion.negociacion.value)
+
+
 def _es_interna(conversacion: ConversacionChat) -> bool:
-    return str(conversacion.tipo or TipoConversacion.negociacion.value) == TipoConversacion.interna.value
+    return _tipo_de(conversacion) == TipoConversacion.interna.value
+
+
+def _es_soporte(conversacion: ConversacionChat) -> bool:
+    return _tipo_de(conversacion) == TipoConversacion.soporte.value
 
 
 def _verificar_acceso_conversacion(
@@ -77,6 +102,11 @@ def _verificar_acceso_conversacion(
     user_id = current_user["user_id"]
     rol = current_user["rol"]
 
+    if _es_soporte(conversacion):
+        # Un ticket lo ven quien lo abrió y el equipo de la plataforma. Nadie más:
+        # el usuario puede haber contado ahí datos de su operación.
+        return _es_equipo_plataforma(rol) or conversacion.solicitante_id == user_id
+
     if _es_interna(conversacion):
         # Canal de coordinación de la empresa: el cliente nunca entra, ni
         # siquiera al hilo interno de la orden que él mismo encargó.
@@ -87,7 +117,7 @@ def _verificar_acceso_conversacion(
                 conversacion.importador_id
                 and current_user.get("importador_id") == conversacion.importador_id
             )
-        return rol == "admin"
+        return _es_equipo_plataforma(rol)
 
     if rol == "solicitante":
         return conversacion.solicitante_id == user_id
@@ -105,7 +135,7 @@ def _verificar_acceso_conversacion(
             Usuario.id == conversacion.importador_usuario_id
         ).first()
         return bool(contraparte and contraparte.importador_id == importador_id)
-    return rol == "admin"
+    return _es_equipo_plataforma(rol)
 
 
 def _nombre_de_usuario(db: Session, usuario_id: Optional[str]) -> Optional[str]:
@@ -117,6 +147,31 @@ def _nombre_de_usuario(db: Session, usuario_id: Optional[str]) -> Optional[str]:
     return usuario.nombre or usuario.email
 
 
+def _contar_no_leidos(db: Session, conversacion_id: str, usuario_id: str) -> int:
+    """Mensajes ajenos posteriores a la última lectura de este usuario.
+
+    Sin marca de lectura cuentan todos los ajenos: una conversación que nunca se
+    ha abierto está entera sin leer.
+    """
+    lectura = (
+        db.query(LecturaConversacion)
+        .filter(
+            LecturaConversacion.conversacion_id == conversacion_id,
+            LecturaConversacion.usuario_id == str(usuario_id),
+        )
+        .first()
+    )
+
+    consulta = db.query(func.count(MensajeChat.id)).filter(
+        MensajeChat.conversacion_id == conversacion_id,
+        MensajeChat.remitente_id != str(usuario_id),
+    )
+    if lectura is not None:
+        consulta = consulta.filter(MensajeChat.fecha_envio > lectura.fecha_ultima_lectura)
+
+    return int(consulta.scalar() or 0)
+
+
 def _nombre_contraparte(db: Session, conversacion: ConversacionChat, current_user: dict) -> Optional[str]:
     """Con quién habla quien consulta.
 
@@ -125,6 +180,13 @@ def _nombre_contraparte(db: Session, conversacion: ConversacionChat, current_use
     chats sería exponer más de lo necesario.
     """
     user_id = current_user.get("user_id")
+
+    if _es_soporte(conversacion):
+        # Para el equipo de soporte la contraparte es quien pidió ayuda; para el
+        # usuario, la plataforma.
+        if conversacion.solicitante_id == user_id:
+            return "Soporte ImportacionesQ8"
+        return _nombre_de_usuario(db, conversacion.solicitante_id)
 
     if _es_interna(conversacion):
         if conversacion.importador_usuario_id == user_id:
@@ -149,15 +211,28 @@ def _respuesta_conversacion(
     current_user: dict,
     ultimo: Optional[MensajeChat] = None,
 ) -> ConversacionChatResponse:
+    rol_solicitante = None
+    if _es_soporte(conversacion) and conversacion.solicitante_id:
+        autor = db.query(Usuario).filter(Usuario.id == conversacion.solicitante_id).first()
+        rol_solicitante = autor.rol if autor else None
+
     return ConversacionChatResponse(
         id=str(conversacion.id),
-        tipo=str(conversacion.tipo or TipoConversacion.negociacion.value),
+        tipo=_tipo_de(conversacion),
+        cerrada=bool(conversacion.cerrada),
+        resolucion=conversacion.resolucion,
+        cerrada_por_nombre=_nombre_de_usuario(db, conversacion.cerrada_por_usuario_id),
+        fecha_cierre=conversacion.fecha_cierre,
         cotizacion_id=conversacion.cotizacion_id,
         orden_id=conversacion.orden_id,
         solicitante_id=conversacion.solicitante_id,
         importador_usuario_id=conversacion.importador_usuario_id,
         importador_id=conversacion.importador_id,
         contraparte_nombre=_nombre_contraparte(db, conversacion, current_user),
+        asunto=conversacion.asunto,
+        urgencia=conversacion.urgencia,
+        solicitante_rol=rol_solicitante,
+        no_leidos=_contar_no_leidos(db, str(conversacion.id), current_user["user_id"]),
         fecha_creacion=conversacion.fecha_creacion,
         ultimo_mensaje=ultimo,
     )
@@ -463,6 +538,237 @@ async def iniciar_chat_interno(
     return _respuesta_conversacion(db, conversacion, current_user, ultimo)
 
 
+@router.post("/soporte", response_model=ConversacionChatResponse, status_code=status.HTTP_201_CREATED)
+async def abrir_ticket_soporte(
+    datos: AbrirSoporteRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("solicitante", "importador", "asesor")),
+):
+    """Abre un ticket de soporte con el equipo de la plataforma.
+
+    Lo puede pedir cualquier usuario de la plataforma —cliente, cuenta dueña o
+    asesor—; hasta ahora no había ningún camino para hacerlo y las dudas se
+    quedaban sin canal.
+
+    Cada petición es un ticket propio: agrupar todo en un único hilo por usuario
+    mezclaría problemas distintos y haría imposible priorizar por urgencia.
+    """
+    user_id = current_user["user_id"]
+
+    conversacion = ConversacionChat(
+        id=str(uuid4()),
+        tipo=TipoConversacion.soporte.value,
+        solicitante_id=user_id,
+        asunto=datos.asunto.strip()[:160],
+        urgencia=datos.urgencia,
+    )
+    db.add(conversacion)
+    db.flush()
+
+    if datos.mensaje and datos.mensaje.strip():
+        db.add(MensajeChat(
+            id=str(uuid4()),
+            conversacion_id=conversacion.id,
+            remitente_id=user_id,
+            contenido=datos.mensaje.strip()[:2000],
+            tipo=TipoMensajeChat.texto.value,
+        ))
+
+    quien = db.query(Usuario).filter(Usuario.id == user_id).first()
+    nombre = (quien.nombre or quien.email) if quien else "Un usuario"
+
+    # Aviso a todo el equipo de la plataforma: no hay asignación de tickets, así
+    # que dirigirlo a un administrador concreto dejaría el resto a ciegas.
+    from services.notificacion_service import crear_notificacion_best_effort
+
+    administradores = db.query(Usuario).filter(
+        Usuario.rol.in_(ROLES_PLATAFORMA),
+        Usuario.activo.is_(True),
+    ).all()
+    for admin in administradores:
+        crear_notificacion_best_effort(
+            db,
+            usuario_id=str(admin.id),
+            tipo="soporte",
+            titulo=f"Soporte {datos.urgencia}: {datos.asunto.strip()[:80]}",
+            mensaje=f"{nombre} pidió ayuda.",
+            data={"conversacion_id": str(conversacion.id), "urgencia": datos.urgencia},
+        )
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+def _ticket_o_404(db: Session, conversacion_id: str) -> ConversacionChat:
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
+    if not conversacion or not _es_soporte(conversacion):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket de soporte no encontrado")
+    return conversacion
+
+
+@router.post("/soporte/{conversacion_id}/cerrar", response_model=ConversacionChatResponse)
+async def cerrar_ticket_soporte(
+    conversacion_id: str,
+    datos: CerrarTicketRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("admin", "soporte")),
+):
+    """Cierra un ticket dejando escrito qué se hizo.
+
+    El hilo no se borra ni se oculta a quien lo abrió: baja del listado de
+    pendientes y queda consultable, que es lo que hace falta cuando el mismo
+    problema reaparece semanas después.
+    """
+    conversacion = _ticket_o_404(db, conversacion_id)
+    if conversacion.cerrada:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El ticket ya está cerrado")
+
+    conversacion.cerrada = True
+    conversacion.resolucion = datos.resolucion.strip()[:2000]
+    conversacion.cerrada_por_usuario_id = current_user["user_id"]
+    conversacion.fecha_cierre = datetime.utcnow()
+
+    quien = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    nombre = (quien.nombre or quien.email) if quien else "El equipo de soporte"
+
+    db.add(MensajeChat(
+        id=str(uuid4()),
+        conversacion_id=conversacion.id,
+        remitente_id=current_user["user_id"],
+        contenido=f"Ticket cerrado por {nombre}. Resolución: {conversacion.resolucion}",
+        tipo=TipoMensajeChat.sistema.value,
+    ))
+
+    from services.notificacion_service import notificar
+
+    if conversacion.solicitante_id:
+        notificar(
+            db,
+            usuario_id=str(conversacion.solicitante_id),
+            tipo="soporte",
+            titulo="Tu solicitud de soporte quedó resuelta",
+            mensaje=conversacion.resolucion[:160],
+            data={"conversacion_id": str(conversacion.id)},
+            enlace_relativo="/chats",
+        )
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+@router.post("/soporte/{conversacion_id}/reabrir", response_model=ConversacionChatResponse)
+async def reabrir_ticket_soporte(
+    conversacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Reabre un ticket cerrado.
+
+    Lo puede hacer el equipo de la plataforma o quien lo abrió: si el problema no
+    quedó resuelto, obligarle a empezar un ticket nuevo pierde todo el hilo de lo
+    ya hablado.
+    """
+    conversacion = _ticket_o_404(db, conversacion_id)
+
+    es_dueño = conversacion.solicitante_id == current_user["user_id"]
+    if not _es_equipo_plataforma(current_user["rol"]) and not es_dueño:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado sobre este ticket")
+
+    if not conversacion.cerrada:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El ticket ya está abierto")
+
+    conversacion.cerrada = False
+    conversacion.fecha_cierre = None
+    conversacion.cerrada_por_usuario_id = None
+
+    quien = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    nombre = (quien.nombre or quien.email) if quien else "Un participante"
+
+    db.add(MensajeChat(
+        id=str(uuid4()),
+        conversacion_id=conversacion.id,
+        remitente_id=current_user["user_id"],
+        contenido=f"{nombre} reabrió el ticket: el asunto sigue sin resolverse.",
+        tipo=TipoMensajeChat.sistema.value,
+    ))
+
+    if es_dueño:
+        from services.notificacion_service import crear_notificacion_best_effort
+
+        for miembro in db.query(Usuario).filter(
+            Usuario.rol.in_(ROLES_PLATAFORMA), Usuario.activo.is_(True)
+        ).all():
+            crear_notificacion_best_effort(
+                db,
+                usuario_id=str(miembro.id),
+                tipo="soporte",
+                titulo=f"Ticket reabierto: {conversacion.asunto or 'sin asunto'}",
+                mensaje=f"{nombre} indica que el problema sigue.",
+                data={"conversacion_id": str(conversacion.id)},
+            )
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+@router.post("/conversaciones/{conversacion_id}/leida", status_code=status.HTTP_204_NO_CONTENT)
+async def marcar_conversacion_leida(
+    conversacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Deja constancia de que este usuario ya leyó el hilo hasta ahora."""
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
+    if not conversacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
+    if not _verificar_acceso_conversacion(conversacion, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para ver esta conversación")
+
+    user_id = str(current_user["user_id"])
+    lectura = (
+        db.query(LecturaConversacion)
+        .filter(
+            LecturaConversacion.conversacion_id == conversacion_id,
+            LecturaConversacion.usuario_id == user_id,
+        )
+        .first()
+    )
+    if lectura is None:
+        db.add(LecturaConversacion(
+            id=str(uuid4()),
+            conversacion_id=conversacion_id,
+            usuario_id=user_id,
+            fecha_ultima_lectura=datetime.utcnow(),
+        ))
+    else:
+        lectura.fecha_ultima_lectura = datetime.utcnow()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Dos pestañas abriendo el mismo hilo a la vez: la marca ya existe y da
+        # igual cuál de las dos ganó.
+        db.rollback()
+
+    return None
+
+
 @router.get("/conversaciones", response_model=List[ConversacionChatResponse])
 async def listar_mis_conversaciones(
     db: Session = Depends(get_db),
@@ -478,12 +784,27 @@ async def listar_mis_conversaciones(
         rol = current_user["rol"]
 
         query = db.query(ConversacionChat)
-        if rol == "solicitante":
+        if _es_equipo_plataforma(rol):
+            # La bandeja del equipo de la plataforma son los tickets de soporte,
+            # no las conversaciones ajenas: para supervisar existe el panel de
+            # administración, que además pagina y filtra.
+            query = query.filter(ConversacionChat.tipo == TipoConversacion.soporte.value)
+        elif rol == "solicitante":
             # `solicitante_id` es NULL en las internas, así que este filtro ya
-            # las deja fuera por sí solo.
+            # las deja fuera por sí solo; sus tickets de soporte sí entran,
+            # porque en ellos es quien pidió ayuda.
             query = query.filter(ConversacionChat.solicitante_id == user_id_str)
         elif rol == "asesor":
-            query = query.filter(ConversacionChat.importador_usuario_id == user_id_str)
+            query = query.filter(
+                or_(
+                    ConversacionChat.importador_usuario_id == user_id_str,
+                    # Sus propios tickets de soporte.
+                    and_(
+                        ConversacionChat.tipo == TipoConversacion.soporte.value,
+                        ConversacionChat.solicitante_id == user_id_str,
+                    ),
+                )
+            )
         elif rol == "importador":
             # El dueño ve además las conversaciones de sus asesores: si un asesor
             # queda desactivado, su hilo seguía existiendo pero desaparecía de la
@@ -497,18 +818,45 @@ async def listar_mis_conversaciones(
                         Usuario.importador_id == importador_id
                     ).all()
                 ] or [user_id_str]
-            query = query.filter(ConversacionChat.importador_usuario_id.in_(cuentas_empresa))
+            query = query.filter(
+                or_(
+                    ConversacionChat.importador_usuario_id.in_(cuentas_empresa),
+                    and_(
+                        ConversacionChat.tipo == TipoConversacion.soporte.value,
+                        ConversacionChat.solicitante_id == user_id_str,
+                    ),
+                )
+            )
         else:
             query = query.limit(50)
 
         conversaciones = query.order_by(ConversacionChat.fecha_creacion.desc()).all()
 
-        resultado = []
-        for c in conversaciones:
-            ultimo = db.query(MensajeChat).filter(
-                MensajeChat.conversacion_id == c.id
-            ).order_by(MensajeChat.fecha_envio.desc()).first()
-            resultado.append(_respuesta_conversacion(db, c, current_user, ultimo))
+        resultado = [
+            _respuesta_conversacion(
+                db,
+                c,
+                current_user,
+                db.query(MensajeChat)
+                .filter(MensajeChat.conversacion_id == c.id)
+                .order_by(MensajeChat.fecha_envio.desc())
+                .first(),
+            )
+            for c in conversaciones
+        ]
+
+        # Los tickets de soporte se atienden por urgencia, no por antigüedad: uno
+        # crítico abierto hace un minuto va antes que uno bajo de la semana
+        # pasada. Lo ya cerrado baja del todo. El resto conserva el orden por
+        # fecha.
+        resultado.sort(
+            key=lambda r: (
+                0 if r.cerrada else 1,
+                PESO_URGENCIA.get(r.urgencia or "", 0),
+                r.fecha_creacion.timestamp() if r.fecha_creacion else 0,
+            ),
+            reverse=True,
+        )
         return resultado
     except HTTPException:
         raise
@@ -557,7 +905,25 @@ def _notificar_mensaje_chat(
     from models.notificacion import Notificacion
     from services.notificacion_service import notificar
 
-    if _es_interna(conversacion):
+    if _es_soporte(conversacion):
+        # Escribe el usuario: contesta el equipo de la plataforma (todos, porque
+        # los tickets no se asignan a nadie en concreto).
+        if str(conversacion.solicitante_id) == str(remitente_id):
+            for admin in db.query(Usuario).filter(
+                Usuario.rol.in_(ROLES_PLATAFORMA), Usuario.activo.is_(True)
+            ).all():
+                notificar(
+                    db,
+                    usuario_id=str(admin.id),
+                    tipo="soporte",
+                    titulo=f"Soporte: {conversacion.asunto or 'nuevo mensaje'}",
+                    mensaje=(contenido or "")[:160],
+                    data={"conversacion_id": str(conversacion.id), "urgencia": conversacion.urgencia},
+                    enlace_relativo="/chats",
+                )
+            return
+        destinatario_id = conversacion.solicitante_id
+    elif _es_interna(conversacion):
         if str(conversacion.importador_usuario_id) == str(remitente_id):
             # Escribe el asesor: contesta la cuenta dueña de la empresa.
             dueño = db.query(Usuario).filter(

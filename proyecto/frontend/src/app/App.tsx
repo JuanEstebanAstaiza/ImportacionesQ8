@@ -70,6 +70,7 @@ import {
 } from "@/lib/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
 import { RUTA_RESTABLECER, destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
+import type { UrgenciaSoporte } from "@/services/business.service";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 const SHOW_PAYMENTS_MODULE = false;
@@ -462,15 +463,31 @@ function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
 
 // ─── Chat data ────────────────────────────────────────────────────────────────
 // "interno" es el canal de la empresa con su asesor (coordinación del equipo);
-// no cuelga de ninguna cotización ni orden y el cliente nunca lo ve.
-type ChatType="orden"|"cotizacion"|"interno";
+// "soporte" es un ticket con el equipo de la plataforma. Ninguno de los dos
+// cuelga de una cotización o una orden.
+type ChatType="orden"|"cotizacion"|"interno"|"soporte";
+
+const URGENCIA_SOPORTE:Record<string,{label:string;clase:string;peso:number}>={
+  critica:{label:"Crítica", clase:"bg-red-100 text-red-800 border-red-200",       peso:4},
+  alta:   {label:"Alta",    clase:"bg-orange-100 text-orange-800 border-orange-200", peso:3},
+  media:  {label:"Media",   clase:"bg-amber-100 text-amber-800 border-amber-200",  peso:2},
+  baja:   {label:"Baja",    clase:"bg-slate-100 text-slate-700 border-slate-200",  peso:1},
+};
+
 interface ChatConv {
   id:string;type:ChatType;refCode:string;refId:string;importerId:string;
   // `refId` pasa a apuntar a la orden en cuanto existe; la cotización se guarda
   // aparte porque es lo que identifica al responsable que se puede reasignar.
-  // Ambos van vacíos en los hilos internos.
+  // Ambos van vacíos en los hilos internos y en los de soporte.
   quoteId:string;
   counterpartName?:string;
+  // Solo en tickets de soporte.
+  subject?:string;
+  urgency?:string;
+  requesterRole?:string;
+  closed?:boolean;
+  resolution?:string;
+  closedBy?:string;
   importerName?:string;
   advisorName?:string;
   advisorRole?:string;
@@ -585,7 +602,10 @@ const NAV_ASESOR=[
 ];
 
 // ─── Portal data ──────────────────────────────────────────────────────────────
-type UserRole="solicitante"|"importadora"|"asesor"|"admin";
+// "soporte" es el equipo de atención al cliente de la plataforma: atiende los
+// tickets y resuelve incidentes, pero no administra (ni empresas, ni cuentas,
+// ni certificaciones, ni copias de seguridad).
+type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte";
 
 // Cada área del panel es una entrada del sidebar, igual que en los demás
 // perfiles: así se navega con el mismo mecanismo que el resto de la aplicación
@@ -600,7 +620,15 @@ const NAV_ADMIN=[
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
 
-type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin";
+// El equipo de atención solo ve lo suyo: la bandeja de tickets y la sección de
+// soporte del panel (incidentes y conversaciones). Nada de altas ni respaldos.
+const NAV_SOPORTE=[
+  {icon:LifeBuoy,      label:"Bandeja",     key:"admin-soporte"},
+  {icon:MessageSquare, label:"Tickets",     key:"chats"},
+  {icon:FolderOpen,    label:"Documentos",  key:"documentos"},
+];
+
+type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin" | "soporte";
 
 function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
   if (!role) {
@@ -626,14 +654,14 @@ function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
     return "admin";
   }
 
-  if (normalizedRole === "solicitante" || normalizedRole === "asesor") {
+  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte") {
     return normalizedRole;
   }
 
   return null;
 }
 
-function getHomeScreenForRole(role: UserRole | "admin"): "dashboard" | "imp-dashboard" | "adv-dashboard" | "admin-dashboard" {
+function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   if (role === "importadora") {
     return "imp-dashboard";
   }
@@ -642,6 +670,10 @@ function getHomeScreenForRole(role: UserRole | "admin"): "dashboard" | "imp-dash
   }
   if (role === "admin") {
     return "admin-dashboard";
+  }
+  if (role === "soporte") {
+    // Su trabajo empieza en la bandeja de incidentes y tickets.
+    return "admin-soporte";
   }
   return "dashboard";
 }
@@ -1104,7 +1136,7 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
-function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
+function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte}:SidebarCtrl) {
   const [hovered,setHovered]=useState(false);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
   const floating=!pinned&&hovered;
@@ -1153,6 +1185,24 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
         </nav>
 
         <div className="p-2 border-t border-border">
+          {/* Vía directa con el equipo de la plataforma. Va en el pie y no en el
+              menú porque no es una sección de la aplicación, sino una acción. */}
+          {showSoporte&&(
+            <button
+              onClick={onSoporte}
+              className={clsx(
+                "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full mb-1",
+                "text-muted-foreground hover:text-foreground hover:bg-muted",
+                isExpanded ? "gap-2.5" : "justify-center gap-0",
+              )}
+              title={!isExpanded ? "Soporte técnico" : undefined}
+            >
+              <LifeBuoy className="w-4 h-4 flex-shrink-0"/>
+              <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                <span className="whitespace-nowrap">Soporte técnico</span>
+              </div>
+            </button>
+          )}
           <button
             onClick={onLogout}
             className={clsx(
@@ -1187,6 +1237,90 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout}:SidebarCtrl) {
         </div>
       </button>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SOPORTE TÉCNICO — formulario de apertura de ticket
+// ─────────────────────────────────────────────────────────────────────────────
+function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onSubmit:(datos:{asunto:string;urgencia:UrgenciaSoporte;mensaje:string})=>Promise<void>}) {
+  const [asunto,setAsunto]=useState("");
+  const [urgencia,setUrgencia]=useState<UrgenciaSoporte>("media");
+  const [mensaje,setMensaje]=useState("");
+  const [enviando,setEnviando]=useState(false);
+  const [error,setError]=useState("");
+
+  useEffect(()=>{
+    if(open){
+      setAsunto("");setUrgencia("media");setMensaje("");setError("");
+    }
+  },[open]);
+
+  async function enviar(){
+    if(asunto.trim().length<5){
+      setError("Describe el asunto en al menos 5 caracteres.");
+      return;
+    }
+    setError("");
+    setEnviando(true);
+    try{
+      await onSubmit({asunto:asunto.trim(),urgencia,mensaje:mensaje.trim()});
+    }catch(err){
+      setError(err instanceof Error?err.message:"No se pudo abrir la solicitud.");
+    }finally{
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Pedir soporte técnico">
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Abre una conversación con el equipo de ImportacionesQ8. Se atiende por urgencia, así que
+          marca la que corresponda de verdad.
+        </p>
+        <Input
+          label="Asunto"
+          placeholder="Ej. No puedo subir el packing list de mi orden"
+          value={asunto}
+          onChange={e=>setAsunto(e.target.value)}
+        />
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Urgencia</label>
+          <div className="grid grid-cols-4 gap-2">
+            {(["baja","media","alta","critica"] as UrgenciaSoporte[]).map((nivel)=>(
+              <button
+                key={nivel}
+                type="button"
+                onClick={()=>setUrgencia(nivel)}
+                className={clsx(
+                  "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+                  urgencia===nivel?URGENCIA_SOPORTE[nivel].clase:"bg-white border-border text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {URGENCIA_SOPORTE[nivel].label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">Cuéntanos qué pasa (opcional)</label>
+          <textarea
+            value={mensaje}
+            onChange={e=>setMensaje(e.target.value)}
+            rows={4}
+            maxLength={2000}
+            placeholder="Qué intentabas hacer, qué viste y desde qué pantalla."
+            className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </div>
+        {error&&<p className="text-xs text-destructive">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" loading={enviando} onClick={()=>{void enviar();}}>Enviar solicitud</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -2529,9 +2663,11 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
-  const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"interno"|"no-leidas">("all");
+  // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
+  // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
+  const [filter,setFilter]=useState<string>("all");
   const [searchConv,setSearchConv]=useState("");
   const [msgs,setMsgs]=useState<Record<string,ChatMsg[]>>(messagesByConversation);
   const [input,setInput]=useState("");
@@ -2548,6 +2684,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // Sin esto, un 400/403 del backend se perdía y la pantalla se quedaba igual
   // sin decir nada: parecía que el botón no hacía nada.
   const [orderActionError,setOrderActionError]=useState("");
+  const [resolucionTicket,setResolucionTicket]=useState("");
+  const [cerrandoTicket,setCerrandoTicket]=useState(false);
+  const [errorTicket,setErrorTicket]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
@@ -2618,12 +2757,18 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
     if(filter==="interno"&&c.type!=="interno")return false;
+    if(filter==="soporte"&&c.type!=="soporte")return false;
+    if(filter.startsWith("urg-")&&c.urgency!==filter.slice(4))return false;
     if(filter==="no-leidas"&&c.unread===0)return false;
+    // Un ticket cerrado solo aparece si se pide expresamente: si no, la bandeja
+    // de pendientes se llenaría de casos ya atendidos.
+    if(filter==="cerrados"&&!c.closed)return false;
+    if(filter!=="cerrados"&&c.closed)return false;
     if(searchConv){
       const cImp=importers.find(i=>i.id===c.importerId);
       const q=c.type==="cotizacion"?quotes.find((quote)=>quote.id===c.refId):null;
       const ord=c.type==="orden"?orders.find((order)=>order.id===c.refId):null;
-      const terms=[c.refCode,c.counterpartName||"",c.importerName||cImp?.name||"",c.advisorName||cImp?.advisor.name||"",q?.product||"",ord?.product||""];
+      const terms=[c.refCode,c.subject||"",c.counterpartName||"",c.importerName||cImp?.name||"",c.advisorName||cImp?.advisor.name||"",q?.product||"",ord?.product||""];
       if(!terms.some(t=>t.toLowerCase().includes(searchConv.toLowerCase())))return false;
     }
     return true;
@@ -2767,6 +2912,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // empresa le indica por el canal interno cuándo hacerlo. El backend comprueba
   // que sea el asignado a esa orden.
   const canManageOrder = currentUserRole === "importadora" || currentUserRole === "asesor";
+  // Administración y atención al cliente comparten la bandeja de tickets.
+  const esEquipoPlataforma = currentUserRole === "admin" || currentUserRole === "soporte";
   // El backend solo admite avanzar un paso en la cadena, así que ofrecer la
   // lista completa era ofrecer seis destinos inválidos y uno bueno.
   const siguienteEstado = nextOrderState(refOrder?.status);
@@ -2789,6 +2936,33 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
       setTransferError(error instanceof Error && error.message.trim() ? error.message : "No se pudo transferir la conversación.");
     } finally {
       setIsTransferring(false);
+    }
+  }
+
+  async function cerrarTicket() {
+    if (!conv || resolucionTicket.trim().length < 5) return;
+    setErrorTicket("");
+    setCerrandoTicket(true);
+    try {
+      await onCloseTicket(conv.id, resolucionTicket.trim());
+      setResolucionTicket("");
+    } catch (error) {
+      setErrorTicket(error instanceof Error && error.message.trim() ? error.message : "No se pudo cerrar el ticket.");
+    } finally {
+      setCerrandoTicket(false);
+    }
+  }
+
+  async function reabrirTicket() {
+    if (!conv) return;
+    setErrorTicket("");
+    setCerrandoTicket(true);
+    try {
+      await onReopenTicket(conv.id);
+    } catch (error) {
+      setErrorTicket(error instanceof Error && error.message.trim() ? error.message : "No se pudo reabrir el ticket.");
+    } finally {
+      setCerrandoTicket(false);
     }
   }
 
@@ -3012,15 +3186,29 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     return null;
   }
 
-  // La pestaña de equipo solo aparece si hay algún hilo interno: al solicitante
-  // no le sirve de nada y nunca va a tener ninguno.
-  const FILTERS=[
-    {k:"all",label:"Todas"},
-    {k:"ordenes",label:"Órdenes"},
-    {k:"cotizaciones",label:"Cotizaciones"},
-    ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"} as const]:[]),
-    {k:"no-leidas",label:"No leídas"},
-  ] as const;
+  // Para el equipo de la plataforma esto es una bandeja de soporte: filtrar por
+  // órdenes o cotizaciones no significa nada ahí, y lo que importa es la
+  // urgencia con la que el usuario pidió ayuda.
+  const FILTERS = esEquipoPlataforma
+    ? [
+        {k:"all",label:"Abiertos"},
+        {k:"no-leidas",label:"No leídas"},
+        {k:"urg-critica",label:"Críticas"},
+        {k:"urg-alta",label:"Altas"},
+        {k:"urg-media",label:"Medias"},
+        {k:"urg-baja",label:"Bajas"},
+        {k:"cerrados",label:"Cerrados"},
+      ]
+    : [
+        {k:"all",label:"Todas"},
+        {k:"ordenes",label:"Órdenes"},
+        {k:"cotizaciones",label:"Cotizaciones"},
+        // La pestaña de equipo solo aparece si hay algún hilo interno: al
+        // solicitante no le sirve de nada y nunca va a tener ninguno.
+        ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"}]:[]),
+        ...(conversations.some(c=>c.type==="soporte")?[{k:"soporte",label:"Soporte"}]:[]),
+        {k:"no-leidas",label:"No leídas"},
+      ];
   const pickerVisibleFiles = resourceSearchResults?.files ?? resourceExplorer.archivos;
   const pickerVisibleFolders = resourceSearchResults
     ? resourceSearchResults.folders
@@ -3212,24 +3400,36 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               ):filteredConvs.map(c=>{
                 const cImp=importers.find(i=>i.id===c.importerId);
                 // En el hilo interno la contraparte es una persona del equipo,
-                // no una empresa cliente.
+                // no una empresa cliente; en soporte, quien pidió ayuda.
                 const companyName = c.type==="interno"
                   ? (c.counterpartName || "Equipo")
-                  : (c.counterpartName || c.importerName || cImp?.name || "Empresa importadora");
+                  : c.type==="soporte"
+                    ? [c.counterpartName, c.requesterRole].filter(Boolean).join(" · ")
+                    : (c.counterpartName || c.importerName || cImp?.name || "Empresa importadora");
+                const urgencia = c.type==="soporte" ? URGENCIA_SOPORTE[c.urgency||""] : undefined;
                 const isSelected=selectedId===c.id;
                 return (
                   <button key={c.id} onClick={()=>setSelectedId(c.id)}
                     className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
                       isSelected?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
                     <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5",
-                      c.type==="orden"?"bg-purple-50 text-purple-600":c.type==="interno"?"bg-amber-50 text-amber-600":"bg-blue-50 text-blue-600")}>
-                      {c.type==="orden"?<ShoppingCart className="w-4 h-4"/>:c.type==="interno"?<Users className="w-4 h-4"/>:<FileText className="w-4 h-4"/>}
+                      c.type==="orden"?"bg-purple-50 text-purple-600":c.type==="interno"?"bg-amber-50 text-amber-600":c.type==="soporte"?"bg-rose-50 text-rose-600":"bg-blue-50 text-blue-600")}>
+                      {c.type==="orden"?<ShoppingCart className="w-4 h-4"/>:c.type==="interno"?<Users className="w-4 h-4"/>:c.type==="soporte"?<LifeBuoy className="w-4 h-4"/>:<FileText className="w-4 h-4"/>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
-                          <p className={clsx("text-xs font-semibold truncate",isSelected?"text-primary":"text-foreground")}>{c.refCode}</p>
-                          <p className="text-xs text-muted-foreground truncate">{companyName}</p>
+                          <p className={clsx("text-xs font-semibold truncate",isSelected?"text-primary":"text-foreground")}>
+                            {c.type==="soporte"?(c.subject||"Solicitud de soporte"):c.refCode}
+                          </p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {urgencia&&(
+                              <span className={clsx("inline-flex flex-shrink-0 items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold",urgencia.clase)}>
+                                {urgencia.label}
+                              </span>
+                            )}
+                            <p className="text-xs text-muted-foreground truncate">{companyName}</p>
+                          </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">{c.lastDate}</span>
@@ -3263,17 +3463,36 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 <Avatar initials={imp?.initials || "NA"} size="md" color={imp?.color || "bg-slate-500"}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-foreground">{conv.type==="interno"?(conv.counterpartName||"Equipo"):chatAdvisorName}</p>
-                    {conv.type!=="interno"&&(
+                    <p className="font-semibold text-sm text-foreground">
+                      {conv.type==="interno"?(conv.counterpartName||"Equipo")
+                        :conv.type==="soporte"?(conv.subject||"Solicitud de soporte")
+                        :chatAdvisorName}
+                    </p>
+                    {conv.type==="soporte"&&(
+                      <>
+                        <span className="text-muted-foreground/40 text-xs">·</span>
+                        <p className="text-xs text-muted-foreground">
+                          {[conv.counterpartName, conv.requesterRole].filter(Boolean).join(" · ")}
+                        </p>
+                        {URGENCIA_SOPORTE[conv.urgency||""]&&(
+                          <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold",URGENCIA_SOPORTE[conv.urgency||""].clase)}>
+                            Urgencia {URGENCIA_SOPORTE[conv.urgency||""].label.toLowerCase()}
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {conv.type!=="interno"&&conv.type!=="soporte"&&(
                       <>
                         <span className="text-muted-foreground/40 text-xs">·</span>
                         <p className="text-xs text-muted-foreground">{chatCompanyName}</p>
                       </>
                     )}
-                    <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-                      conv.type==="orden"?"bg-purple-50 text-purple-700":conv.type==="interno"?"bg-amber-50 text-amber-700":"bg-blue-50 text-blue-700")}>
-                      {conv.type==="orden"?`Orden · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
-                    </span>
+                    {conv.type!=="soporte"&&(
+                      <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                        conv.type==="orden"?"bg-purple-50 text-purple-700":conv.type==="interno"?"bg-amber-50 text-amber-700":"bg-blue-50 text-blue-700")}>
+                        {conv.type==="orden"?`Orden · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
+                      </span>
+                    )}
                     {conv.status==="activa"&&<span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>Activa</span>}
                   </div>
                 </div>
@@ -3477,7 +3696,52 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contexto</p>
               </div>
               <div className="p-3 space-y-3 flex-1">
-                {conv.type==="interno"?(
+                {conv.type==="soporte"?(
+                  <div className={clsx("rounded-lg border px-2.5 py-2 space-y-1.5",conv.closed?"bg-emerald-50 border-emerald-200":"bg-rose-50 border-rose-200")}>
+                    <p className={clsx("text-[10px] font-semibold uppercase tracking-wide",conv.closed?"text-emerald-800":"text-rose-800")}>
+                      {conv.closed?"Ticket cerrado":"Soporte técnico"}
+                    </p>
+                    {[["Asunto",conv.subject||"—"],["Urgencia",URGENCIA_SOPORTE[conv.urgency||""]?.label||"—"],["Solicita",conv.counterpartName||"—"],["Perfil",conv.requesterRole||"—"],...(conv.closed?[["Cerró",conv.closedBy||"—"]]:[])].map(([k,v])=>(
+                      <div key={k} className="flex justify-between items-start gap-1">
+                        <span className={clsx("text-[10px]",conv.closed?"text-emerald-900/70":"text-rose-900/70")}>{k}</span>
+                        <span className={clsx("text-[10px] font-medium text-right",conv.closed?"text-emerald-900":"text-rose-900")}>{v}</span>
+                      </div>
+                    ))}
+
+                    {conv.closed&&conv.resolution&&(
+                      <p className="text-[10px] text-emerald-900 leading-snug pt-1.5 border-t border-emerald-200">
+                        <span className="font-semibold">Resolución: </span>{conv.resolution}
+                      </p>
+                    )}
+
+                    {/* Cerrar es de quien atiende; reabrir, también de quien lo pidió. */}
+                    {!conv.closed&&esEquipoPlataforma&&(
+                      <div className="pt-1.5 border-t border-rose-200 space-y-1.5">
+                        <textarea
+                          value={resolucionTicket}
+                          onChange={(e)=>setResolucionTicket(e.target.value)}
+                          rows={3}
+                          placeholder="Qué se hizo para resolverlo…"
+                          className="w-full resize-none rounded-md border border-rose-200 px-2 py-1.5 text-[11px] bg-white"
+                        />
+                        <Button variant="primary" size="sm" fullWidth loading={cerrandoTicket}
+                          disabled={resolucionTicket.trim().length<5}
+                          onClick={()=>{void cerrarTicket();}}>
+                          Cerrar ticket
+                        </Button>
+                      </div>
+                    )}
+                    {conv.closed&&(
+                      <div className="pt-1.5 border-t border-emerald-200">
+                        <Button variant="secondary" size="sm" fullWidth loading={cerrandoTicket}
+                          onClick={()=>{void reabrirTicket();}}>
+                          Reabrir ticket
+                        </Button>
+                      </div>
+                    )}
+                    {errorTicket&&<p className="text-[10px] text-destructive">{errorTicket}</p>}
+                  </div>
+                ):conv.type==="interno"?(
                   <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2">
                     <p className="text-[10px] font-semibold text-amber-800 uppercase tracking-wide mb-1">Canal interno</p>
                     <p className="text-[11px] text-amber-900 leading-snug">
@@ -3527,8 +3791,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 </div>
                 <div className="border-t border-border"/>
                 {/* Transferir solo tiene sentido en el hilo con el cliente: el
-                    canal interno es de un asesor concreto por definición. */}
-                {conv.type!=="interno"&&(<>
+                    canal interno es de un asesor concreto por definición, y un
+                    ticket de soporte no se pasa a una empresa. */}
+                {conv.type!=="interno"&&conv.type!=="soporte"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">
@@ -7538,6 +7803,7 @@ export default function App() {
     ()=>idInicialDe("conversation") || undefined,
   );
   const [sidebarPinned,setSidebarPinned]=useState(true);
+  const [soporteAbierto,setSoporteAbierto]=useState(false);
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
   const [hiddenOpenQuotesByCompany,setHiddenOpenQuotesByCompany]=useState<Record<string, string[]>>(() => loadHiddenOpenQuotesByCompany());
   const [quoteStatusOverrides,setQuoteStatusOverrides]=useState<Record<string, Quote["status"]>>(() => loadQuoteStatusOverrides());
@@ -7762,23 +8028,34 @@ export default function App() {
     const importerByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.importador_id]));
     const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
     const mappedConversations: ChatConv[] = rows.map((row) => {
-      // El hilo interno no tiene cotización: su "empresa" es la propia.
+      // Ni el hilo interno ni el ticket de soporte cuelgan de una cotización.
       const esInterno = row.tipo === "interna";
+      const esSoporte = row.tipo === "soporte";
       const importerId = esInterno
         ? (row.importador_id || "")
-        : (importerByQuoteId.get(row.cotizacion_id || "") || row.importador_usuario_id);
+        : esSoporte
+          ? ""
+          : (importerByQuoteId.get(row.cotizacion_id || "") || row.importador_usuario_id || "");
       const importer = importerById.get(importerId);
       return {
         id: row.id,
-        type: esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
-        refCode: esInterno
-          ? "Equipo"
-          : row.orden_id
-            ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}`
-            : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
+        type: esSoporte ? "soporte" : esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
+        refCode: esSoporte
+          ? "Soporte"
+          : esInterno
+            ? "Equipo"
+            : row.orden_id
+              ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}`
+              : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
         refId: row.orden_id ?? row.cotizacion_id ?? "",
         quoteId: row.cotizacion_id ?? "",
         counterpartName: row.contraparte_nombre ?? undefined,
+        subject: row.asunto ?? undefined,
+        urgency: row.urgencia ?? undefined,
+        requesterRole: row.solicitante_rol ?? undefined,
+        closed: row.cerrada ?? false,
+        resolution: row.resolucion ?? undefined,
+        closedBy: row.cerrada_por_nombre ?? undefined,
         importerId,
         importerName: importer?.name,
         advisorName: importer?.advisor.name,
@@ -7788,7 +8065,9 @@ export default function App() {
         advisorInitials: importer?.advisor.initials,
         advisorColor: importer?.advisor.color,
         status: "activa",
-        unread: 0,
+        // Lo calcula el backend contra la marca de lectura del usuario; antes
+        // estaba escrito a cero y el filtro de no leídas no filtraba nada.
+        unread: row.no_leidos ?? 0,
         lastMsg: row.ultimo_mensaje?.contenido || "Sin mensajes",
         lastDate: row.ultimo_mensaje?.fecha_envio ? formatShortDate(row.ultimo_mensaje.fecha_envio) : formatShortDate(row.fecha_creacion),
       };
@@ -8270,6 +8549,7 @@ export default function App() {
 
   function getNavItems():NavItem[]{
     const base = userRole==="admin" ? NAV_ADMIN
+      : userRole==="soporte" ? NAV_SOPORTE
       : userRole==="importadora" ? NAV_IMPORTADORA
       : userRole==="asesor" ? NAV_ASESOR
       : NAV_ITEMS;
@@ -8309,6 +8589,9 @@ export default function App() {
     chatCount:chatUnreadCount,
     onHelp:handleHelpClick,
     showHelp:userRole!=="admin",
+    // El equipo de la plataforma no se pide soporte a sí mismo.
+    onSoporte:()=>setSoporteAbierto(true),
+    showSoporte:userRole!=="admin",
     profileSubtitle:headerSubtitle,
     onLogout:()=>{void handleLogout();},
     onProfile:handleProfileClick,
@@ -8318,6 +8601,46 @@ export default function App() {
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
   }
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
+
+  async function handleCloseTicket(conversationId: string, resolucion: string) {
+    await businessService.closeSupportTicket(conversationId, resolucion);
+    await reloadChatData();
+  }
+
+  async function handleReopenTicket(conversationId: string) {
+    await businessService.reopenSupportTicket(conversationId);
+    await reloadChatData();
+  }
+
+  /** Abre el ticket y lleva directo a su chat, que es donde sigue la conversación. */
+  async function handleOpenSupportTicket(datos:{asunto:string;urgencia:UrgenciaSoporte;mensaje:string}){
+    const ticket = await businessService.openSupportTicket({
+      asunto: datos.asunto,
+      urgencia: datos.urgencia,
+      mensaje: datos.mensaje || undefined,
+    });
+    setSoporteAbierto(false);
+    await reloadChatData();
+    openChat(ticket.id);
+  }
+
+  /**
+   * Conversación abierta en pantalla. Abrirla es leerla: se marca en el backend
+   * y se pone el contador a cero aquí mismo para que el badge no siga en rojo
+   * hasta la siguiente recarga.
+   */
+  function handleActiveConversationChange(convId: string | null) {
+    setActiveChatId(convId);
+    if (!convId) {
+      return;
+    }
+    setChatConversations((prev) =>
+      prev.some((c) => c.id === convId && c.unread > 0)
+        ? prev.map((c) => (c.id === convId ? { ...c, unread: 0 } : c))
+        : prev,
+    );
+    void businessService.markConversationRead(convId).catch(() => undefined);
+  }
 
   /**
    * Abre el canal interno con un asesor y lleva al chat ya posicionado en él.
@@ -8641,7 +8964,8 @@ export default function App() {
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
-    "admin-soporte": ["admin"],
+    // Única área del panel que comparte el equipo de atención al cliente.
+    "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
   };
 
@@ -8759,7 +9083,7 @@ export default function App() {
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={setActiveChatId} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
@@ -8779,6 +9103,13 @@ export default function App() {
       unauthorizedFallback={unauthorizedFallback}
     >
       {renderPrivateScreen()}
+      {/* Fuera del conmutador de pantallas: se puede pedir soporte desde
+          cualquiera de ellas sin perder dónde estabas. */}
+      <SoporteModal
+        open={soporteAbierto}
+        onClose={()=>setSoporteAbierto(false)}
+        onSubmit={handleOpenSupportTicket}
+      />
     </ProtectedRoute>
   );
 }

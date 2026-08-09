@@ -10,7 +10,15 @@ from database import Base
 #   vincula). Antes llamado "asesor" (Semana 3); renombrado en la Semana 4 para reflejar su rol real:
 #   reclama cotizaciones del pool de su empresa, redacta y negocia propuestas por chat.
 # - "admin": equipo de la plataforma (creado solo por otro admin o por script de seed)
-ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin")
+# - "soporte": agente de atención al cliente de la plataforma, creado por un admin. Atiende los
+#   tickets de soporte y resuelve incidentes de órdenes, pero NO administra la plataforma: no da
+#   de alta empresas ni usuarios, no toca certificaciones ni copias de seguridad.
+ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin", "soporte")
+
+# Cuentas del equipo de la plataforma: comparten la bandeja de soporte y las
+# acciones de resolución. Se agrupan aquí para no repetir la pareja por todo el
+# código y que añadir un rol interno mañana sea un solo cambio.
+ROLES_PLATAFORMA = ("admin", "soporte")
 
 TIPOS_PERSONA_VALIDOS = ("natural", "juridica")
 

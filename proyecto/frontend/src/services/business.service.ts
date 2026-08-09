@@ -361,17 +361,30 @@ export interface BackendChatConversation {
    * coordinación de la empresa con uno de sus asesores, que el cliente no ve.
    * En las internas no hay cotización ni solicitante.
    */
-  tipo: "negociacion" | "interna";
+  tipo: "negociacion" | "interna" | "soporte";
   cotizacion_id: string | null;
   orden_id: string | null;
   solicitante_id: string | null;
-  importador_usuario_id: string;
+  importador_usuario_id: string | null;
   importador_id: string | null;
   /** Nombre de la otra parte, ya resuelto por el backend. */
   contraparte_nombre: string | null;
+  /** Solo en tickets de soporte. */
+  asunto: string | null;
+  urgencia: UrgenciaSoporte | null;
+  solicitante_rol: string | null;
+  /** Mensajes ajenos posteriores a la última lectura de quien consulta. */
+  no_leidos: number;
+  /** Cierre del ticket: qué se hizo, quién lo cerró y cuándo. */
+  cerrada: boolean;
+  resolucion: string | null;
+  cerrada_por_nombre: string | null;
+  fecha_cierre: string | null;
   fecha_creacion: string;
   ultimo_mensaje: BackendChatMessage | null;
 }
+
+export type UrgenciaSoporte = "critica" | "alta" | "media" | "baja";
 
 export interface BackendEtiquetaItem {
   id: string;
@@ -598,6 +611,39 @@ export const businessService = {
       method: "POST",
       body: { asesor_id: asesorId ?? null, mensaje_inicial: mensajeInicial ?? null },
     });
+  },
+
+  /** Pide ayuda al equipo de la plataforma. Cada llamada abre un ticket propio. */
+  openSupportTicket(payload: { asunto: string; urgencia: UrgenciaSoporte; mensaje?: string }): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/soporte", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  /** Cierra un ticket dejando escrito qué se hizo. Solo equipo de la plataforma. */
+  closeSupportTicket(conversationId: string, resolucion: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/cerrar`, {
+      method: "POST",
+      body: { resolucion },
+    });
+  },
+
+  /** Reabre un ticket cerrado. Lo puede hacer el equipo o quien lo abrió. */
+  reopenSupportTicket(conversationId: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/reabrir`, {
+      method: "POST",
+    });
+  },
+
+  /** Alta de una cuenta del equipo de atención al cliente. Solo administración. */
+  createSupportAgent(payload: { email: string; password: string; nombre: string; telefono?: string }): Promise<unknown> {
+    return apiRequest<unknown>("/admin/equipo-soporte", { method: "POST", body: payload });
+  },
+
+  /** Marca el hilo como leído hasta ahora para el usuario en sesión. */
+  markConversationRead(conversationId: string): Promise<void> {
+    return apiRequest<void>(`/chat/conversaciones/${conversationId}/leida`, { method: "POST" });
   },
 
   listChatMessages(conversationId: string): Promise<BackendChatMessage[]> {

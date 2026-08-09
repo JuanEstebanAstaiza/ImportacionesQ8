@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Literal
 from datetime import datetime
 
 
@@ -41,21 +41,46 @@ class MensajeChatResponse(BaseModel):
 
 class ConversacionChatResponse(BaseModel):
     id: str
-    # "negociacion" (solicitante ↔ empresa) o "interna" (empresa ↔ su asesor).
-    # En las internas no hay cotización ni solicitante, de ahí los opcionales.
+    # "negociacion" (solicitante ↔ empresa), "interna" (empresa ↔ su asesor) o
+    # "soporte" (usuario ↔ equipo de la plataforma). Cada forma deja en nulo lo
+    # que no le aplica, de ahí los opcionales.
     tipo: str = "negociacion"
     cotizacion_id: Optional[str] = None
     orden_id: Optional[str] = None
     solicitante_id: Optional[str] = None
-    importador_usuario_id: str
+    importador_usuario_id: Optional[str] = None
     importador_id: Optional[str] = None
     # Con quién se habla, ya resuelto por el backend: el frontend no tiene forma
     # de traducir un id de usuario a un nombre sin pedir el directorio entero.
     contraparte_nombre: Optional[str] = None
+    # Solo en los tickets de soporte.
+    asunto: Optional[str] = None
+    urgencia: Optional[str] = None
+    # Rol de quien abrió el ticket, para que soporte sepa a quién atiende.
+    solicitante_rol: Optional[str] = None
+    # Mensajes posteriores a la última lectura de quien consulta.
+    no_leidos: int = 0
+    # Cierre del ticket: qué se hizo, quién lo cerró y cuándo.
+    cerrada: bool = False
+    resolucion: Optional[str] = None
+    cerrada_por_nombre: Optional[str] = None
+    fecha_cierre: Optional[datetime] = None
     fecha_creacion: datetime
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CerrarTicketRequest(BaseModel):
+    """Cierre de un ticket con constancia de qué se hizo."""
+    resolucion: str = Field(..., min_length=5, max_length=2000)
+
+
+class AbrirSoporteRequest(BaseModel):
+    """Petición de ayuda al equipo de la plataforma."""
+    asunto: str = Field(..., min_length=5, max_length=160)
+    urgencia: Literal["critica", "alta", "media", "baja"] = "media"
+    mensaje: Optional[str] = Field(None, max_length=2000)
 
 
 class IniciarChatInternoRequest(BaseModel):

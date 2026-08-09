@@ -18,7 +18,7 @@ import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
 type AdminTab = "metricas" | "empresas" | "usuarios" | "soporte" | "certificaciones";
-type InviteRole = "solicitante" | "importador" | "asesor" | "admin";
+type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
 
 type CompanyUiDetails = {
   nit: string;
@@ -73,7 +73,7 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   certificaciones: { label: "Certificaciones", hint: "Sellos y respaldo" },
 };
 
-const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "admin"] as const;
+const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "admin"] as const;
 
 type RoleFilter = (typeof ROLE_OPTIONS)[number];
 type ActiveFilter = "todos" | "activos" | "inactivos";
@@ -183,6 +183,11 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   const { user, appRole } = useAuth();
   const normalizedRole = normalizeRole(user?.rol);
   const isAdmin = Boolean(user?.rol && ["ADMIN", "SUPERADMIN", "ADMINISTRADOR", "ADMIN_ROLE"].includes(String(user.rol).toUpperCase())) || normalizedRole.includes("admin") || appRole === "admin";
+  // El equipo de atención al cliente entra solo a la sección de soporte. Pedir
+  // empresas, cuentas o métricas desde su sesión devolvería 403 y tumbaría la
+  // carga entera, así que ni se piden.
+  const esSoporte = normalizedRole === "soporte" || appRole === "soporte";
+  const esEquipo = isAdmin || esSoporte;
 
   const [companies, setCompanies] = useState<BackendImporter[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -273,27 +278,40 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   }, [users]);
 
   const reloadAdminData = useCallback(async () => {
-    if (!isAdmin) {
-      setError("Tu sesión no tiene permisos administrativos para cargar este panel.");
+    if (!esEquipo) {
+      setError("Tu sesión no tiene permisos para cargar este panel.");
       return;
     }
 
     setIsLoading(true);
     setError("");
     try {
-      const [companyRows, userRows, metricsRow, openQuoteRows, conversationRows, certificationRows, disputeRows, backupRow] =
+      // Lo que ve el equipo de atención: conversaciones e incidentes.
+      const [conversationRows, disputeRows] = await Promise.all([
+        adminService.listConversations({
+          buscar: conversationSearch,
+          limit: CONVERSACIONES_POR_PAGINA,
+          offset: conversationPage * CONVERSACIONES_POR_PAGINA,
+        }),
+        adminService.listDisputes().catch(() => [] as AdminDisputa[]),
+      ]);
+
+      setConversations(conversationRows.items);
+      setConversationsTotal(conversationRows.total);
+      setDisputes(disputeRows);
+
+      if (!isAdmin) {
+        return;
+      }
+
+      // Y lo que solo corresponde a administración.
+      const [companyRows, userRows, metricsRow, openQuoteRows, certificationRows, backupRow] =
         await Promise.all([
           adminService.listCompanies(),
           adminService.listUsers(userFilters),
           adminService.getMetricas(),
           adminService.listOpenQuotes(),
-          adminService.listConversations({
-            buscar: conversationSearch,
-            limit: CONVERSACIONES_POR_PAGINA,
-            offset: conversationPage * CONVERSACIONES_POR_PAGINA,
-          }),
           adminService.listCertifications(),
-          adminService.listDisputes().catch(() => [] as AdminDisputa[]),
           // El resumen del backup es informativo: que falle no debe tumbar el panel.
           adminService.getBackupSummary().catch(() => null),
         ]);
@@ -302,10 +320,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
       setUsers(userRows);
       setMetrics(metricsRow);
       setOpenQuotes(openQuoteRows);
-      setConversations(conversationRows.items);
-      setConversationsTotal(conversationRows.total);
       setCertifications(certificationRows);
-      setDisputes(disputeRows);
       setBackupSummary(backupRow);
     } catch (requestError) {
       const errorMessage = requestError instanceof Error ? requestError.message : "No se pudo cargar el panel de administracion.";
@@ -313,7 +328,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, userFilters, conversationSearch, conversationPage]);
+  }, [esEquipo, isAdmin, userFilters, conversationSearch, conversationPage]);
 
   // Buscar reinicia la paginación: si no, con la página 3 abierta una búsqueda
   // con pocos resultados se vería vacía.
@@ -522,12 +537,12 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   }
 
   useEffect(() => {
-    if (!isAdmin) {
-      setError("Tu sesión no tiene permisos administrativos para cargar este panel.");
+    if (!esEquipo) {
+      setError("Tu sesión no tiene permisos para cargar este panel.");
       return;
     }
     void reloadAdminData();
-  }, [isAdmin, reloadAdminData]);
+  }, [esEquipo, reloadAdminData]);
 
   async function refreshAll() {
     await reloadAdminData();
@@ -622,10 +637,25 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
 
     try {
       if (userForm.rol === "asesor" || userForm.rol === "admin") {
-        throw new Error("Con los endpoints actuales solo puedes crear solicitantes o importadores desde este panel.");
+        throw new Error(
+          userForm.rol === "asesor"
+            ? "Los asesores los crea la cuenta dueña de cada empresa desde su panel."
+            : "Las cuentas de administración no se crean desde aquí. Para atención al cliente usa el rol 'soporte'.",
+        );
       }
 
-      if (userForm.rol === "importador") {
+      if (userForm.rol === "soporte") {
+        if (!userForm.nombre || !userForm.email || !userForm.password) {
+          throw new Error("Para una cuenta de soporte debes completar nombre, email y contraseña.");
+        }
+        await businessService.createSupportAgent({
+          email: userForm.email,
+          password: userForm.password,
+          nombre: userForm.nombre,
+          telefono: userForm.telefono || undefined,
+        });
+        setStatusMessage(`Cuenta de atención al cliente creada para ${userForm.email}.`);
+      } else if (userForm.rol === "importador") {
         if (!userForm.nombre || !userForm.email || !userForm.password) {
           throw new Error("Para rol importador debes completar nombre, email y password.");
         }
@@ -1824,7 +1854,8 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                 className="h-9 rounded-lg border border-border px-3 text-sm"
               >
                 <option value="solicitante">Solicitante</option>
-                <option value="importador">Importador</option>
+                <option value="importador">Importador (crea también su empresa)</option>
+                <option value="soporte">Atención al cliente</option>
                 <option value="asesor">Asesor</option>
                 <option value="admin">Admin</option>
               </select>

@@ -1,4 +1,4 @@
-export type HeaderSubtitleRole = "solicitante" | "importadora" | "asesor" | "admin";
+export type HeaderSubtitleRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
 
 export interface ResolveHeaderSubtitleInput {
   role: HeaderSubtitleRole;

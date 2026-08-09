@@ -10,7 +10,10 @@ import { LoginForm, type LoginFormValues } from "@/features/auth/components/Logi
 import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
 
 type AuthView = "login" | "forgot" | "otp";
-export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin";
+// Rol con el que se entra tras autenticarse. Incluye "soporte" (equipo de
+// atención al cliente): no es un botón del formulario —nadie elige entrar como
+// soporte—, pero sí es un destino posible al que lleva la sesión.
+export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
 
 interface AuthScreenProps {
   onLogin: (role: PortalRole) => void;

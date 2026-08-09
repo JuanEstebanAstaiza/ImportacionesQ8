@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -70,6 +70,14 @@ class MensajeAdminItem(BaseModel):
     contenido: str
     tipo: str
     fecha_envio: datetime
+
+
+class CrearAgenteSoporteRequest(BaseModel):
+    """Alta de una cuenta del equipo de atención al cliente."""
+    email: EmailStr
+    password: str = Field(..., min_length=9, max_length=128)
+    nombre: str = Field(..., min_length=2, max_length=255)
+    telefono: Optional[str] = Field(None, max_length=30)
 
 
 class MensajeSoporteRequest(BaseModel):
