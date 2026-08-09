@@ -116,12 +116,27 @@ async def get_optional_current_user(
         return None
 
 
+def _detalle_rol_insuficiente(rol_actual: str, roles_requeridos: tuple) -> str:
+    """Mensaje de 403 que dice qué rol hace falta y cuál se está usando.
+
+    El texto anterior era solo "No autorizado - Rol insuficiente": al aparecer en
+    pantalla no había forma de saber qué llamada lo provocó ni con qué cuenta,
+    y se confundía con un fallo de la acción que el usuario acababa de hacer.
+    Revelar el propio rol no filtra nada: es de quien pregunta.
+    """
+    esperado = " o ".join(roles_requeridos)
+    return (
+        f"No autorizado - esta operación requiere el rol '{esperado}' "
+        f"y tu sesión es de tipo '{rol_actual}'."
+    )
+
+
 def require_rol(rol: str):
     async def verificar_rol(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user["rol"] != rol:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No autorizado - Rol insuficiente",
+                detail=_detalle_rol_insuficiente(current_user["rol"], (rol,)),
             )
         return current_user
 
@@ -133,7 +148,7 @@ def require_rol_in(*roles: str):
         if current_user["rol"] not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No autorizado - Rol insuficiente",
+                detail=_detalle_rol_insuficiente(current_user["rol"], roles),
             )
         return current_user
 

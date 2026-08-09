@@ -7339,9 +7339,14 @@ export default function App() {
   }, [marketplaceImporters, quoteStatusOverrides]);
 
   const reloadCompanyAdvisors = useCallback(async () => {
+    // `/importadores/asesores` es exclusivo de la cuenta dueña de una empresa.
+    if (!currentUserProfile?.importador_id) {
+      setCompanyAdvisors([]);
+      return;
+    }
     const rows = await businessService.listCompanyAdvisors();
     setCompanyAdvisors(rows.map(mapBackendAdvisorToUi));
-  }, []);
+  }, [currentUserProfile?.importador_id]);
 
   const reloadCurrentUserProfile = useCallback(async () => {
     const profile = await businessService.getMyUserProfile();
@@ -7534,6 +7539,13 @@ export default function App() {
   }, [ensureSystemRootFolders]);
 
   const reloadAdvisorAssignedQuotes = useCallback(async () => {
+    // `/asesores/me/cotizaciones` exige rol importador o asesor. Sin empresa
+    // asociada no hay nada que pedir y la llamada solo produce un 403 que
+    // acababa mostrandose como "Rol insuficiente" al crear una cotizacion.
+    if (!currentUserProfile?.importador_id) {
+      setAdvisorAssignedQuotes([]);
+      return;
+    }
     const rows = await businessService.listMyAssignedQuotes();
     const detailedRows = await Promise.all(
       rows.map(async (row) => {
@@ -7576,13 +7588,18 @@ export default function App() {
   }, [marketplaceImporters, quoteStatusOverrides]);
 
   const reloadAdvisorAvailableQuotes = useCallback(async () => {
+    // `/cotizaciones/pool-empresa` tambien es exclusivo de las cuentas de empresa.
+    if (!currentUserProfile?.importador_id) {
+      setAvailableQuotes([]);
+      return;
+    }
     const rows = await businessService.listAdvisorAvailableQuotes();
     setAvailableQuotes(
       rows
         .map((row) => mapBackendQuoteToUi(row, marketplaceImporters))
         .map((quote) => applyQuoteStatusOverride(quote, quoteStatusOverrides)),
     );
-  }, [marketplaceImporters, quoteStatusOverrides]);
+  }, [marketplaceImporters, quoteStatusOverrides, currentUserProfile?.importador_id]);
 
   /**
    * Índice "cotización → propuesta de mi empresa" (incluye borradores).
@@ -8021,12 +8038,21 @@ export default function App() {
   }
 
   async function handleCreateQuote(payload: CreateCotizacionPayload){
+    // La cotizacion se crea primero y sola: si esto falla, el error es real y el
+    // formulario tiene que mostrarlo.
     await businessService.createQuote(payload);
-    await reloadRequesterQuotes();
-    await reloadRequesterResponses();
-    await reloadRequesterOrders();
-    await reloadImporterQuotes();
-    await reloadAdvisorAssignedQuotes();
+
+    // El refresco posterior es cortesia, no parte de la operacion. Encadenado con
+    // `await`, el 403 de una lista ajena al rol (las del asesor, p. ej.) subia
+    // hasta el formulario y se leia como "No autorizado - Rol insuficiente",
+    // haciendo creer que la cotizacion habia fallado cuando ya estaba creada.
+    await Promise.allSettled([
+      reloadRequesterQuotes(),
+      reloadRequesterResponses(),
+      reloadRequesterOrders(),
+      reloadImporterQuotes(),
+      reloadAdvisorAssignedQuotes(),
+    ]);
   }
 
   async function handleCreateAdvisor(payload: CreateAsesorPayload): Promise<CompanyAdvisor>{
@@ -8215,7 +8241,10 @@ export default function App() {
   }
 
   async function refreshQuoteLists(){
-    await Promise.all([
+    // `allSettled`: recargar listas que no corresponden al rol actual no puede
+    // hacer fracasar la accion que pidio el refresco (enviar una propuesta,
+    // aceptar, etc.).
+    await Promise.allSettled([
       reloadRequesterQuotes(),
       reloadRequesterResponses(),
       reloadRequesterOrders(),
