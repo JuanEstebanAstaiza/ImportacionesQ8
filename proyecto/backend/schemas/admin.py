@@ -78,6 +78,56 @@ class CrearAgenteSoporteRequest(BaseModel):
     password: str = Field(..., min_length=9, max_length=128)
     nombre: str = Field(..., min_length=2, max_length=255)
     telefono: Optional[str] = Field(None, max_length=30)
+    # Nivel de la mesa. 1 atiende lo corriente; 3, lo que requiere experiencia.
+    nivel: int = Field(1, ge=1, le=3)
+
+
+class RequisitoVerificacion(BaseModel):
+    """Un punto comprobable del expediente de una empresa."""
+    clave: str
+    titulo: str
+    detalle: str
+    cumple: bool
+    valor: str
+
+
+class ExpedienteVerificacion(BaseModel):
+    """Qué cumple y qué le falta a una empresa para llevar el sello."""
+    importador_id: str
+    nombre_empresa: str
+    verificado: bool
+    estado: str
+    obligatorios: List[RequisitoVerificacion]
+    recomendables: List[RequisitoVerificacion]
+    obligatorios_cumplidos: int
+    obligatorios_totales: int
+    recomendables_cumplidos: int
+    recomendables_totales: int
+    listo_para_verificar: bool
+    pendientes: List[str]
+
+
+class RetirarVerificacionRequest(BaseModel):
+    """Motivo por el que se retira el sello. Queda escrito."""
+    motivo: str = Field(..., min_length=5, max_length=500)
+
+
+class NivelAgenteRequest(BaseModel):
+    """Cambio de nivel de un agente ya existente."""
+    nivel: int = Field(..., ge=1, le=3)
+
+
+class AgenteSoporteItem(BaseModel):
+    """Ficha de un agente con su desempeño, para el panel."""
+    id: str
+    email: str
+    nombre: Optional[str] = None
+    activo: bool
+    nivel: Optional[int] = None
+    tickets_asignados: int = 0
+    tickets_cerrados: int = 0
+    calificaciones_recibidas: int = 0
+    calificacion_promedio: Optional[float] = None
 
 
 class MensajeSoporteRequest(BaseModel):

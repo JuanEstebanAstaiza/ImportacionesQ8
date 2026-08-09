@@ -122,12 +122,25 @@ class TestCrearImportadorConDueño:
 
 
 class TestVerificarYEstadoImportador:
-    def test_verificar_importador(self, client, auth_headers_admin, empresa):
+    def test_verificar_importador(self, client, db_session, auth_headers_admin, empresa):
         importador, dueño = empresa
+        # Verificar exige el expediente completo (ver test_verificacion_empresa):
+        # el sello lo ve el cliente al elegir con quién contratar.
         importador.estado = "inactivo"
+        importador.especialidad_producto = ["Textiles"]
+        importador.paises_origen = ["China"]
+        importador.shipping_mark_prefijo = "adm"
+        dueño.email_verificado = True
+        db_session.commit()
+
         response = client.post(f"/admin/importadores/{importador.id}/verificar", headers=auth_headers_admin)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["estado"] == "activo"
+
+    def test_no_verifica_una_empresa_incompleta(self, client, auth_headers_admin, empresa):
+        importador, _dueño = empresa
+        response = client.post(f"/admin/importadores/{importador.id}/verificar", headers=auth_headers_admin)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_desactivar_importador(self, client, auth_headers_admin, empresa):
         importador, dueño = empresa

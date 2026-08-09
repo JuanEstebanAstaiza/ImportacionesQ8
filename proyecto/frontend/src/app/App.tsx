@@ -488,6 +488,12 @@ interface ChatConv {
   closed?:boolean;
   resolution?:string;
   closedBy?:string;
+  level?:number;
+  agentId?:string;
+  agentName?:string;
+  agentLevel?:number;
+  rating?:number;
+  ratingComment?:string;
   importerName?:string;
   advisorName?:string;
   advisorRole?:string;
@@ -2663,7 +2669,7 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
@@ -2687,6 +2693,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const [resolucionTicket,setResolucionTicket]=useState("");
   const [cerrandoTicket,setCerrandoTicket]=useState(false);
   const [errorTicket,setErrorTicket]=useState("");
+  const [notaSoporte,setNotaSoporte]=useState(0);
+  const [comentarioNota,setComentarioNota]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
@@ -2948,6 +2956,34 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
       setResolucionTicket("");
     } catch (error) {
       setErrorTicket(error instanceof Error && error.message.trim() ? error.message : "No se pudo cerrar el ticket.");
+    } finally {
+      setCerrandoTicket(false);
+    }
+  }
+
+  async function escalarTicket() {
+    if (!conv) return;
+    setErrorTicket("");
+    setCerrandoTicket(true);
+    try {
+      await onEscalateTicket(conv.id, (conv.level || 1) + 1);
+    } catch (error) {
+      setErrorTicket(error instanceof Error && error.message.trim() ? error.message : "No se pudo escalar el ticket.");
+    } finally {
+      setCerrandoTicket(false);
+    }
+  }
+
+  async function calificarTicket() {
+    if (!conv || notaSoporte < 1) return;
+    setErrorTicket("");
+    setCerrandoTicket(true);
+    try {
+      await onRateTicket(conv.id, notaSoporte, comentarioNota.trim() || undefined);
+      setNotaSoporte(0);
+      setComentarioNota("");
+    } catch (error) {
+      setErrorTicket(error instanceof Error && error.message.trim() ? error.message : "No se pudo enviar la calificación.");
     } finally {
       setCerrandoTicket(false);
     }
@@ -3701,7 +3737,16 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     <p className={clsx("text-[10px] font-semibold uppercase tracking-wide",conv.closed?"text-emerald-800":"text-rose-800")}>
                       {conv.closed?"Ticket cerrado":"Soporte técnico"}
                     </p>
-                    {[["Asunto",conv.subject||"—"],["Urgencia",URGENCIA_SOPORTE[conv.urgency||""]?.label||"—"],["Solicita",conv.counterpartName||"—"],["Perfil",conv.requesterRole||"—"],...(conv.closed?[["Cerró",conv.closedBy||"—"]]:[])].map(([k,v])=>(
+                    {[
+                      ["Asunto",conv.subject||"—"],
+                      ["Urgencia",URGENCIA_SOPORTE[conv.urgency||""]?.label||"—"],
+                      ["Nivel de mesa",conv.level?`Nivel ${conv.level}`:"—"],
+                      ["Atiende",conv.agentName||"Sin asignar"],
+                      ["Solicita",conv.counterpartName||"—"],
+                      ["Perfil",conv.requesterRole||"—"],
+                      ...(conv.closed?[["Cerró",conv.closedBy||"—"]]:[]),
+                      ...(conv.rating?[["Calificación",`${conv.rating} de 5`]]:[]),
+                    ].map(([k,v])=>(
                       <div key={k} className="flex justify-between items-start gap-1">
                         <span className={clsx("text-[10px]",conv.closed?"text-emerald-900/70":"text-rose-900/70")}>{k}</span>
                         <span className={clsx("text-[10px] font-medium text-right",conv.closed?"text-emerald-900":"text-rose-900")}>{v}</span>
@@ -3717,6 +3762,14 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     {/* Cerrar es de quien atiende; reabrir, también de quien lo pidió. */}
                     {!conv.closed&&esEquipoPlataforma&&(
                       <div className="pt-1.5 border-t border-rose-200 space-y-1.5">
+                        {/* Escalar: el nivel inicial se dedujo de la urgencia, que
+                            dice cuánta prisa corre y no lo difícil que es. */}
+                        {(conv.level||1)<3&&(
+                          <Button variant="secondary" size="sm" fullWidth loading={cerrandoTicket}
+                            onClick={()=>{void escalarTicket();}}>
+                            Escalar a nivel {(conv.level||1)+1}
+                          </Button>
+                        )}
                         <textarea
                           value={resolucionTicket}
                           onChange={(e)=>setResolucionTicket(e.target.value)}
@@ -3730,6 +3783,50 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                           Cerrar ticket
                         </Button>
                       </div>
+                    )}
+
+                    {/* Calificar: solo quien pidió la ayuda, y solo una vez cerrado. */}
+                    {conv.closed&&!esEquipoPlataforma&&!conv.rating&&(
+                      <div className="pt-1.5 border-t border-emerald-200 space-y-1.5">
+                        <p className="text-[10px] font-semibold text-emerald-900">
+                          ¿Cómo te atendió {conv.agentName||"el equipo"}?
+                        </p>
+                        <div className="flex gap-1">
+                          {[1,2,3,4,5].map((n)=>(
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={()=>setNotaSoporte(n)}
+                              className={clsx(
+                                "flex-1 rounded-md border py-1 text-[11px] font-semibold transition-colors",
+                                notaSoporte>=n?"bg-amber-400 border-amber-500 text-white":"bg-white border-emerald-200 text-muted-foreground hover:bg-muted",
+                              )}
+                              aria-label={`${n} de 5`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={comentarioNota}
+                          onChange={(e)=>setComentarioNota(e.target.value)}
+                          rows={2}
+                          placeholder="Comentario (opcional)"
+                          className="w-full resize-none rounded-md border border-emerald-200 px-2 py-1.5 text-[11px] bg-white"
+                        />
+                        <Button variant="primary" size="sm" fullWidth loading={cerrandoTicket}
+                          disabled={notaSoporte<1}
+                          onClick={()=>{void calificarTicket();}}>
+                          Enviar calificación
+                        </Button>
+                      </div>
+                    )}
+
+                    {conv.rating&&(
+                      <p className="text-[10px] text-emerald-900 pt-1.5 border-t border-emerald-200">
+                        <span className="font-semibold">Calificó con {conv.rating}/5.</span>
+                        {conv.ratingComment?` «${conv.ratingComment}»`:""}
+                      </p>
                     )}
                     {conv.closed&&(
                       <div className="pt-1.5 border-t border-emerald-200">
@@ -8056,6 +8153,12 @@ export default function App() {
         closed: row.cerrada ?? false,
         resolution: row.resolucion ?? undefined,
         closedBy: row.cerrada_por_nombre ?? undefined,
+        level: row.nivel ?? undefined,
+        agentId: row.agente_asignado_id ?? undefined,
+        agentName: row.agente_nombre ?? undefined,
+        agentLevel: row.agente_nivel ?? undefined,
+        rating: row.calificacion ?? undefined,
+        ratingComment: row.comentario_calificacion ?? undefined,
         importerId,
         importerName: importer?.name,
         advisorName: importer?.advisor.name,
@@ -8612,6 +8715,16 @@ export default function App() {
     await reloadChatData();
   }
 
+  async function handleEscalateTicket(conversationId: string, nivel: number) {
+    await businessService.escalateSupportTicket(conversationId, nivel);
+    await reloadChatData();
+  }
+
+  async function handleRateTicket(conversationId: string, calificacion: number, comentario?: string) {
+    await businessService.rateSupportTicket(conversationId, calificacion, comentario);
+    await reloadChatData();
+  }
+
   /** Abre el ticket y lleva directo a su chat, que es donde sigue la conversación. */
   async function handleOpenSupportTicket(datos:{asunto:string;urgencia:UrgenciaSoporte;mensaje:string}){
     const ticket = await businessService.openSupportTicket({
@@ -9083,7 +9196,7 @@ export default function App() {
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;

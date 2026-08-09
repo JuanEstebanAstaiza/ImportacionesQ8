@@ -65,6 +65,14 @@ class ConversacionChatResponse(BaseModel):
     resolucion: Optional[str] = None
     cerrada_por_nombre: Optional[str] = None
     fecha_cierre: Optional[datetime] = None
+    # Mesa de soporte: nivel del caso y agente que lo atiende.
+    nivel: Optional[int] = None
+    agente_asignado_id: Optional[str] = None
+    agente_nombre: Optional[str] = None
+    agente_nivel: Optional[int] = None
+    # Calificación del servicio, si quien pidió ayuda ya puntuó.
+    calificacion: Optional[int] = None
+    comentario_calificacion: Optional[str] = None
     fecha_creacion: datetime
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
@@ -74,6 +82,18 @@ class ConversacionChatResponse(BaseModel):
 class CerrarTicketRequest(BaseModel):
     """Cierre de un ticket con constancia de qué se hizo."""
     resolucion: str = Field(..., min_length=5, max_length=2000)
+
+
+class EscalarTicketRequest(BaseModel):
+    """Sube el ticket de nivel y lo reasigna a alguien que pueda con él."""
+    nivel: int = Field(..., ge=1, le=3)
+    motivo: Optional[str] = Field(None, max_length=500)
+
+
+class CalificarSoporteRequest(BaseModel):
+    """Puntuación del servicio recibido, de 1 a 5."""
+    calificacion: int = Field(..., ge=1, le=5)
+    comentario: Optional[str] = Field(None, max_length=1000)
 
 
 class AbrirSoporteRequest(BaseModel):

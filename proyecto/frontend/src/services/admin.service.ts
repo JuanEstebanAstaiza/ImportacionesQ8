@@ -52,6 +52,44 @@ export interface AdminDisputa {
   fecha_actualizacion: string;
 }
 
+/** Un punto comprobable del expediente de verificación de una empresa. */
+export interface RequisitoVerificacion {
+  clave: string;
+  titulo: string;
+  detalle: string;
+  cumple: boolean;
+  valor: string;
+}
+
+/** Qué cumple y qué le falta a una empresa para llevar el sello. */
+export interface ExpedienteVerificacion {
+  importador_id: string;
+  nombre_empresa: string;
+  verificado: boolean;
+  estado: string;
+  obligatorios: RequisitoVerificacion[];
+  recomendables: RequisitoVerificacion[];
+  obligatorios_cumplidos: number;
+  obligatorios_totales: number;
+  recomendables_cumplidos: number;
+  recomendables_totales: number;
+  listo_para_verificar: boolean;
+  pendientes: string[];
+}
+
+/** Ficha de un agente de la mesa de soporte, con su desempeño. */
+export interface AdminAgenteSoporte {
+  id: string;
+  email: string;
+  nombre: string | null;
+  activo: boolean;
+  nivel: number | null;
+  tickets_asignados: number;
+  tickets_cerrados: number;
+  calificaciones_recibidas: number;
+  calificacion_promedio: number | null;
+}
+
 /** Fila del supervisor de chats: una conversación con sus dos participantes. */
 export interface AdminConversacion {
   id: string;
@@ -192,6 +230,21 @@ export const adminService = {
     });
   },
 
+  /** Qué cumple y qué le falta a una empresa antes de decidir si se verifica. */
+  getVerificationFile(importadorId: string): Promise<ExpedienteVerificacion> {
+    return apiRequest<ExpedienteVerificacion>(`/admin/importadores/${importadorId}/expediente`, {
+      method: "GET",
+    });
+  },
+
+  /** Retira el sello dejando escrito el motivo. No desactiva la empresa. */
+  revokeImporterVerification(importadorId: string, motivo: string): Promise<BackendImporter> {
+    return apiRequest<BackendImporter>(`/admin/importadores/${importadorId}/retirar-verificacion`, {
+      method: "POST",
+      body: { motivo },
+    });
+  },
+
   listUsers(filters?: { rol?: string; activo?: boolean }): Promise<AdminUser[]> {
     const query = new URLSearchParams();
     if (filters?.rol) {
@@ -244,6 +297,19 @@ export const adminService = {
     return apiRequest<AdminMensaje>(`/admin/conversaciones/${conversacionId}/mensajes`, {
       method: "POST",
       body: { contenido },
+    });
+  },
+
+  /** La mesa de soporte con su nivel y su desempeño. */
+  listSupportTeam(): Promise<AdminAgenteSoporte[]> {
+    return apiRequest<AdminAgenteSoporte[]>("/admin/equipo-soporte", { method: "GET" });
+  },
+
+  /** Sube o baja a un agente de nivel. Solo administración. */
+  setAgentLevel(usuarioId: string, nivel: number): Promise<AdminAgenteSoporte> {
+    return apiRequest<AdminAgenteSoporte>(`/admin/equipo-soporte/${usuarioId}/nivel`, {
+      method: "PUT",
+      body: { nivel },
     });
   },
 

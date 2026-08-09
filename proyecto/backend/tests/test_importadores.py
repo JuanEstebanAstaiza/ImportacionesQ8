@@ -591,7 +591,21 @@ class TestCatalogoEnriquecido:
         assert nombres.index("Alta Orden") < nombres.index("Baja Orden")
 
     def test_admin_verificar_marca_verificado_true(self, client, db_session, admin_user):
+        from models.usuario import Usuario
+
         importador = self._crear(db_session, nombre_empresa="Empresa A Verificar", email_dueño="averificar@example.com")
+
+        # Verificar exige el expediente completo: sin especialidad, países ni
+        # prefijo de embarque la empresa no puede ni operar bien.
+        importador.especialidad_producto = ["Textiles"]
+        importador.paises_origen = ["China"]
+        importador.shipping_mark_prefijo = "ave"
+        dueño = db_session.query(Usuario).filter(
+            Usuario.importador_id == importador.id, Usuario.rol == "importador"
+        ).first()
+        if dueño:
+            dueño.email_verificado = True
+        db_session.commit()
 
         response = client.post(
             f"/admin/importadores/{importador.id}/verificar",

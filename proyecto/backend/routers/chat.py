@@ -20,7 +20,9 @@ from models.documental import Archivo, MensajeAdjunto
 from schemas.chat import (
     MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
     IniciarChatInternoRequest, AbrirSoporteRequest, CerrarTicketRequest,
+    EscalarTicketRequest, CalificarSoporteRequest,
 )
+from services.mesa_soporte import acotar_nivel, elegir_agente, nivel_inicial
 from schemas.features import TraducirRequest, TraducirResponse
 from utils.dependencies import get_db, get_current_user, require_rol_in
 from utils.security import decode_access_token, JWTError
@@ -223,6 +225,18 @@ def _respuesta_conversacion(
         resolucion=conversacion.resolucion,
         cerrada_por_nombre=_nombre_de_usuario(db, conversacion.cerrada_por_usuario_id),
         fecha_cierre=conversacion.fecha_cierre,
+        nivel=conversacion.nivel,
+        agente_asignado_id=conversacion.agente_asignado_id,
+        agente_nombre=_nombre_de_usuario(db, conversacion.agente_asignado_id),
+        agente_nivel=(
+            db.query(Usuario.nivel_soporte)
+            .filter(Usuario.id == conversacion.agente_asignado_id)
+            .scalar()
+            if conversacion.agente_asignado_id
+            else None
+        ),
+        calificacion=conversacion.calificacion,
+        comentario_calificacion=conversacion.comentario_calificacion,
         cotizacion_id=conversacion.cotizacion_id,
         orden_id=conversacion.orden_id,
         solicitante_id=conversacion.solicitante_id,
@@ -555,12 +569,19 @@ async def abrir_ticket_soporte(
     """
     user_id = current_user["user_id"]
 
+    # El nivel de partida sale de la urgencia; el agente que lo reciba puede
+    # escalarlo al leerlo (ver POST /chat/soporte/{id}/escalar).
+    nivel = nivel_inicial(datos.urgencia)
+    agente = elegir_agente(db, nivel)
+
     conversacion = ConversacionChat(
         id=str(uuid4()),
         tipo=TipoConversacion.soporte.value,
         solicitante_id=user_id,
         asunto=datos.asunto.strip()[:160],
         urgencia=datos.urgencia,
+        nivel=nivel,
+        agente_asignado_id=str(agente.id) if agente else None,
     )
     db.add(conversacion)
     db.flush()
@@ -577,22 +598,34 @@ async def abrir_ticket_soporte(
     quien = db.query(Usuario).filter(Usuario.id == user_id).first()
     nombre = (quien.nombre or quien.email) if quien else "Un usuario"
 
-    # Aviso a todo el equipo de la plataforma: no hay asignación de tickets, así
-    # que dirigirlo a un administrador concreto dejaría el resto a ciegas.
     from services.notificacion_service import crear_notificacion_best_effort
 
-    administradores = db.query(Usuario).filter(
-        Usuario.rol.in_(ROLES_PLATAFORMA),
-        Usuario.activo.is_(True),
-    ).all()
-    for admin in administradores:
+    if agente:
+        # Con dueño asignado, el aviso va a quien tiene que actuar. Avisar a
+        # todos convertiría la responsabilidad en tierra de nadie.
+        destinatarios = [agente]
+        titulo = f"Ticket nivel {nivel} ({datos.urgencia}): {datos.asunto.strip()[:70]}"
+    else:
+        # Sin nadie de ese nivel en la mesa, lo ve toda la administración para
+        # que alguien lo tome o suba a alguien de nivel.
+        destinatarios = db.query(Usuario).filter(
+            Usuario.rol == "admin",
+            Usuario.activo.is_(True),
+        ).all()
+        titulo = f"Ticket nivel {nivel} SIN AGENTE: {datos.asunto.strip()[:60]}"
+
+    for destinatario in destinatarios:
         crear_notificacion_best_effort(
             db,
-            usuario_id=str(admin.id),
+            usuario_id=str(destinatario.id),
             tipo="soporte",
-            titulo=f"Soporte {datos.urgencia}: {datos.asunto.strip()[:80]}",
+            titulo=titulo,
             mensaje=f"{nombre} pidió ayuda.",
-            data={"conversacion_id": str(conversacion.id), "urgencia": datos.urgencia},
+            data={
+                "conversacion_id": str(conversacion.id),
+                "urgencia": datos.urgencia,
+                "nivel": nivel,
+            },
         )
 
     db.commit()
@@ -657,6 +690,127 @@ async def cerrar_ticket_soporte(
             data={"conversacion_id": str(conversacion.id)},
             enlace_relativo="/chats",
         )
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+@router.post("/soporte/{conversacion_id}/escalar", response_model=ConversacionChatResponse)
+async def escalar_ticket_soporte(
+    conversacion_id: str,
+    datos: EscalarTicketRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("admin", "soporte")),
+):
+    """Sube el ticket de nivel y lo reasigna a alguien que pueda con él.
+
+    El nivel inicial se deduce de la urgencia que marcó el usuario, que sabe
+    cuánta prisa le corre pero no lo difícil que es. Esta es la corrección: el
+    agente que lo lee y ve que le queda grande lo escala, y el ticket pasa a
+    otra persona en lugar de quedarse encallado.
+    """
+    conversacion = _ticket_o_404(db, conversacion_id)
+
+    nivel_nuevo = acotar_nivel(datos.nivel)
+    if nivel_nuevo <= (conversacion.nivel or 1):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Escalar es subir de nivel; para bajarlo, ciérralo y resuélvelo tú.",
+        )
+
+    anterior = conversacion.nivel or 1
+    conversacion.nivel = nivel_nuevo
+
+    agente = elegir_agente(db, nivel_nuevo)
+    conversacion.agente_asignado_id = str(agente.id) if agente else None
+
+    quien = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    nombre = (quien.nombre or quien.email) if quien else "Un agente"
+    destino = (agente.nombre or agente.email) if agente else "nadie todavía"
+
+    detalle = f" Motivo: {datos.motivo.strip()}" if datos.motivo and datos.motivo.strip() else ""
+    db.add(MensajeChat(
+        id=str(uuid4()),
+        conversacion_id=conversacion.id,
+        remitente_id=current_user["user_id"],
+        contenido=(
+            f"{nombre} escaló el ticket de nivel {anterior} a nivel {nivel_nuevo}. "
+            f"Pasa a {destino}.{detalle}"
+        ),
+        tipo=TipoMensajeChat.sistema.value,
+    ))
+
+    from services.notificacion_service import crear_notificacion_best_effort
+
+    if agente:
+        crear_notificacion_best_effort(
+            db,
+            usuario_id=str(agente.id),
+            tipo="soporte",
+            titulo=f"Ticket escalado a nivel {nivel_nuevo}: {conversacion.asunto or 'sin asunto'}",
+            mensaje=f"{nombre} te lo pasó.",
+            data={"conversacion_id": str(conversacion.id), "nivel": nivel_nuevo},
+        )
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+@router.post("/soporte/{conversacion_id}/calificar", response_model=ConversacionChatResponse)
+async def calificar_soporte(
+    conversacion_id: str,
+    datos: CalificarSoporteRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Puntúa el servicio recibido, de 1 a 5.
+
+    Solo quien pidió la ayuda, y solo con el ticket cerrado: antes del cierre se
+    estaría puntuando una promesa. Se puntúa una vez; permitir cambiarla haría
+    que la nota dependiera del último enfado y no del servicio.
+    """
+    conversacion = _ticket_o_404(db, conversacion_id)
+
+    if conversacion.solicitante_id != current_user["user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo quien pidió el soporte puede calificarlo",
+        )
+    if not conversacion.cerrada:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Podrás calificar cuando el ticket esté cerrado",
+        )
+    if conversacion.calificacion is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este ticket ya fue calificado",
+        )
+
+    conversacion.calificacion = datos.calificacion
+    conversacion.comentario_calificacion = (datos.comentario or "").strip()[:1000] or None
+    conversacion.fecha_calificacion = datetime.utcnow()
+
+    db.add(MensajeChat(
+        id=str(uuid4()),
+        conversacion_id=conversacion.id,
+        remitente_id=current_user["user_id"],
+        contenido=(
+            f"El usuario calificó la atención con {datos.calificacion} de 5."
+            + (f" Comentario: {conversacion.comentario_calificacion}" if conversacion.comentario_calificacion else "")
+        ),
+        tipo=TipoMensajeChat.sistema.value,
+    ))
 
     db.commit()
     db.refresh(conversacion)
@@ -784,7 +938,17 @@ async def listar_mis_conversaciones(
         rol = current_user["rol"]
 
         query = db.query(ConversacionChat)
-        if _es_equipo_plataforma(rol):
+        if rol == "soporte":
+            # Un agente ve lo suyo y lo que nadie ha tomado. Enseñarle los
+            # tickets de sus compañeros convertiría la asignación en decorado.
+            query = query.filter(
+                ConversacionChat.tipo == TipoConversacion.soporte.value,
+                or_(
+                    ConversacionChat.agente_asignado_id == user_id_str,
+                    ConversacionChat.agente_asignado_id.is_(None),
+                ),
+            )
+        elif rol == "admin":
             # La bandeja del equipo de la plataforma son los tickets de soporte,
             # no las conversaciones ajenas: para supervisar existe el panel de
             # administración, que además pagina y filtra.

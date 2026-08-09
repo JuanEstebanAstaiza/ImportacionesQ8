@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, String, Text, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship
 from uuid import uuid4
@@ -95,6 +95,16 @@ class ConversacionChat(Base):
     # Solo en los tickets de soporte.
     asunto = Column(String(160), nullable=True)
     urgencia = Column(String(20), nullable=True)
+    # Nivel de mesa que requiere el caso y agente que lo atiende. La asignación
+    # es automática al abrirlo (ver `asignar_agente`), y un agente puede escalar
+    # el ticket si al leerlo ve que le queda grande.
+    nivel = Column(Integer, nullable=True)
+    agente_asignado_id = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
+    # Calificación del servicio, que solo puede dar quien pidió la ayuda y solo
+    # una vez cerrado: puntuar antes sería puntuar una promesa.
+    calificacion = Column(Integer, nullable=True)
+    comentario_calificacion = Column(Text, nullable=True)
+    fecha_calificacion = Column(DateTime, nullable=True)
     # Un ticket cerrado sale de la bandeja de pendientes pero no se borra: la
     # resolución queda escrita para poder consultarla si el problema vuelve.
     cerrada = Column(Boolean, nullable=False, default=False)

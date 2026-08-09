@@ -28,6 +28,10 @@ from schemas.admin import (
     MensajeAdminItem,
     MensajeSoporteRequest,
     CrearAgenteSoporteRequest,
+    NivelAgenteRequest,
+    AgenteSoporteItem,
+    ExpedienteVerificacion,
+    RetirarVerificacionRequest,
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
@@ -144,6 +148,7 @@ async def crear_agente_soporte(
         rol="soporte",
         nombre=datos.nombre,
         telefono=datos.telefono,
+        nivel_soporte=datos.nivel,
         activo=True,
         email_verificado=True,
         perfil_completo=True,
@@ -164,6 +169,107 @@ async def crear_agente_soporte(
     )
 
 
+@router.get("/equipo-soporte", response_model=List[AgenteSoporteItem])
+async def listar_equipo_soporte(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_equipo),
+):
+    """La mesa de soporte con su nivel y su desempeño.
+
+    El promedio sale de las calificaciones que dejan los usuarios al cerrarse
+    sus tickets, que es la única medida de calidad que no se puede autoasignar.
+    """
+    from models.chat import ConversacionChat, TipoConversacion
+
+    agentes = (
+        db.query(Usuario)
+        .filter(Usuario.rol == "soporte")
+        .order_by(Usuario.nivel_soporte.desc(), Usuario.nombre)
+        .all()
+    )
+
+    filas = []
+    for agente in agentes:
+        base = db.query(ConversacionChat).filter(
+            ConversacionChat.tipo == TipoConversacion.soporte.value,
+            ConversacionChat.agente_asignado_id == agente.id,
+        )
+        asignados = base.count()
+        cerrados = base.filter(ConversacionChat.cerrada.is_(True)).count()
+
+        notas = [
+            fila[0]
+            for fila in base.filter(ConversacionChat.calificacion.isnot(None))
+            .with_entities(ConversacionChat.calificacion)
+            .all()
+        ]
+
+        filas.append(AgenteSoporteItem(
+            id=str(agente.id),
+            email=agente.email,
+            nombre=agente.nombre,
+            activo=bool(agente.activo),
+            nivel=agente.nivel_soporte,
+            tickets_asignados=asignados,
+            tickets_cerrados=cerrados,
+            calificaciones_recibidas=len(notas),
+            calificacion_promedio=round(sum(notas) / len(notas), 2) if notas else None,
+        ))
+
+    return filas
+
+
+@router.put("/equipo-soporte/{usuario_id}/nivel", response_model=AgenteSoporteItem)
+async def cambiar_nivel_agente(
+    usuario_id: str,
+    datos: NivelAgenteRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Sube o baja a un agente de nivel según vaya cogiendo experiencia."""
+    agente = db.query(Usuario).filter(
+        Usuario.id == usuario_id, Usuario.rol == "soporte"
+    ).first()
+    if not agente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agente no encontrado")
+
+    agente.nivel_soporte = datos.nivel
+    db.commit()
+    db.refresh(agente)
+
+    return AgenteSoporteItem(
+        id=str(agente.id),
+        email=agente.email,
+        nombre=agente.nombre,
+        activo=bool(agente.activo),
+        nivel=agente.nivel_soporte,
+    )
+
+
+@router.get("/importadores/{importador_id}/expediente", response_model=ExpedienteVerificacion)
+async def expediente_verificacion(
+    importador_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Qué cumple y qué le falta a una empresa para llevar el sello.
+
+    El botón de verificar existía, pero quien lo pulsaba no tenía delante nada
+    sobre lo que decidir. Esto reúne lo comprobable desde la propia plataforma
+    —cuenta dueña, especialidad, prefijo de embarque, incidentes abiertos,
+    material aprobado, actividad real— para que la decisión sea informada.
+
+    No sustituye a la comprobación externa (registro mercantil, referencias):
+    esas siguen siendo del criterio de quien administra.
+    """
+    from services.verificacion_empresa import expediente_de
+
+    expediente = expediente_de(db, importador_id)
+    if expediente is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
+    return ExpedienteVerificacion(**expediente)
+
+
 @router.post("/importadores/{importador_id}/verificar", response_model=ImportadorResponse)
 async def verificar_importador(
     importador_id: str,
@@ -171,7 +277,15 @@ async def verificar_importador(
     current_user: dict = Depends(require_rol("admin"))
 ):
     """Marca una empresa importadora como verificada (badge de "socio verificado",
-    visible en el catálogo del dashboard del solicitante) y la activa."""
+    visible en el catálogo del dashboard del solicitante) y la activa.
+
+    Se rechaza si le faltan requisitos obligatorios: el sello lo ve el cliente al
+    elegir con quién contratar, y ponerlo sobre una ficha a medias es
+    precisamente lo que lo vacía de significado. Consulta antes
+    `GET /admin/importadores/{id}/expediente` para ver qué falta.
+    """
+    from services.verificacion_empresa import construir_expediente
+
     try:
         importador_id_str = str(PyUUID(importador_id))
     except ValueError:
@@ -181,8 +295,78 @@ async def verificar_importador(
     if not importador:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
 
+    expediente = construir_expediente(db, importador)
+    if not expediente["listo_para_verificar"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Faltan requisitos obligatorios para verificar esta empresa: "
+                + "; ".join(expediente["pendientes"])
+            ),
+        )
+
     importador.estado = "activo"
     importador.verificado = True
+    db.commit()
+    db.refresh(importador)
+
+    return adjuntar_certificaciones(db, [importador])[0]
+
+
+@router.post("/importadores/{importador_id}/retirar-verificacion", response_model=ImportadorResponse)
+async def retirar_verificacion_importador(
+    importador_id: str,
+    datos: RetirarVerificacionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Retira el sello de socio verificado.
+
+    Verificar era irreversible desde el panel, lo que dejaba sin salida el caso
+    de una empresa que deja de cumplir. Retirar el sello **no la desactiva**:
+    sigue operando, simplemente deja de estar avalada por la plataforma.
+    """
+    try:
+        importador_id_str = str(PyUUID(importador_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de importador inválido")
+
+    importador = db.query(Importador).filter(Importador.id == importador_id_str).first()
+    if not importador:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
+
+    if not importador.verificado:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta empresa no está verificada",
+        )
+
+    importador.verificado = False
+    logger.info(
+        "Verificación retirada a %s por %s. Motivo: %s",
+        importador.nombre_empresa,
+        current_user["user_id"],
+        datos.motivo.strip(),
+    )
+
+    # Al dueño se le dice, y se le dice por qué: enterarse por el catálogo sería
+    # peor que no enterarse.
+    from services.notificacion_service import notificar
+
+    dueño = db.query(Usuario).filter(
+        Usuario.importador_id == importador.id, Usuario.rol == "importador"
+    ).first()
+    if dueño:
+        notificar(
+            db,
+            usuario_id=str(dueño.id),
+            tipo="empresa",
+            titulo="Se retiró el sello de socio verificado",
+            mensaje=datos.motivo.strip()[:160],
+            data={"importador_id": str(importador.id)},
+            enlace_relativo="/empresa/perfil",
+        )
+
     db.commit()
     db.refresh(importador)
 

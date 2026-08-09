@@ -380,6 +380,13 @@ export interface BackendChatConversation {
   resolucion: string | null;
   cerrada_por_nombre: string | null;
   fecha_cierre: string | null;
+  /** Mesa de soporte: nivel del caso y agente que lo atiende. */
+  nivel: number | null;
+  agente_asignado_id: string | null;
+  agente_nombre: string | null;
+  agente_nivel: number | null;
+  calificacion: number | null;
+  comentario_calificacion: string | null;
   fecha_creacion: string;
   ultimo_mensaje: BackendChatMessage | null;
 }
@@ -636,8 +643,24 @@ export const businessService = {
     });
   },
 
+  /** Sube el ticket de nivel y lo pasa a alguien que pueda con él. */
+  escalateSupportTicket(conversationId: string, nivel: number, motivo?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/escalar`, {
+      method: "POST",
+      body: { nivel, motivo: motivo || null },
+    });
+  },
+
+  /** Puntúa la atención recibida. Solo quien pidió ayuda y con el ticket cerrado. */
+  rateSupportTicket(conversationId: string, calificacion: number, comentario?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/calificar`, {
+      method: "POST",
+      body: { calificacion, comentario: comentario || null },
+    });
+  },
+
   /** Alta de una cuenta del equipo de atención al cliente. Solo administración. */
-  createSupportAgent(payload: { email: string; password: string; nombre: string; telefono?: string }): Promise<unknown> {
+  createSupportAgent(payload: { email: string; password: string; nombre: string; telefono?: string; nivel: number }): Promise<unknown> {
     return apiRequest<unknown>("/admin/equipo-soporte", { method: "POST", body: payload });
   },
 

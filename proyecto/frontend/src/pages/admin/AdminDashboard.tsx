@@ -7,7 +7,9 @@ import {
   type AdminCertificacion,
   type AdminConversacion,
   type AdminCotizacionAbierta,
+  type AdminAgenteSoporte,
   type AdminDisputa,
+  type ExpedienteVerificacion,
   type AdminMensaje,
   type AdminMetricas,
   type AdminUser,
@@ -52,6 +54,8 @@ type UserFormState = {
   indicativo_pais_telefono: string;
   companyId: string;
   companyName: string;
+  /** Solo para el rol de atención al cliente: nivel de la mesa (1-3). */
+  nivelSoporte: number;
 };
 
 interface AdminDashboardProps {
@@ -107,6 +111,7 @@ const EMPTY_USER_FORM: UserFormState = {
   indicativo_pais_telefono: "+57",
   companyId: "",
   companyName: "",
+  nivelSoporte: 1,
 };
 
 type CertificationFormState = {
@@ -222,6 +227,12 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   const [supportReply, setSupportReply] = useState("");
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [disputes, setDisputes] = useState<AdminDisputa[]>([]);
+  // Expediente de la empresa que se está revisando para verificar.
+  const [expediente, setExpediente] = useState<ExpedienteVerificacion | null>(null);
+  const [cargandoExpediente, setCargandoExpediente] = useState(false);
+  const [motivoRetiro, setMotivoRetiro] = useState("");
+  const [procesandoSello, setProcesandoSello] = useState(false);
+  const [supportTeam, setSupportTeam] = useState<AdminAgenteSoporte[]>([]);
   const [resolvingDispute, setResolvingDispute] = useState<AdminDisputa | null>(null);
   const [disputeResolution, setDisputeResolution] = useState("");
   const [isResolvingDispute, setIsResolvingDispute] = useState(false);
@@ -287,18 +298,20 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     setError("");
     try {
       // Lo que ve el equipo de atención: conversaciones e incidentes.
-      const [conversationRows, disputeRows] = await Promise.all([
+      const [conversationRows, disputeRows, teamRows] = await Promise.all([
         adminService.listConversations({
           buscar: conversationSearch,
           limit: CONVERSACIONES_POR_PAGINA,
           offset: conversationPage * CONVERSACIONES_POR_PAGINA,
         }),
         adminService.listDisputes().catch(() => [] as AdminDisputa[]),
+        adminService.listSupportTeam().catch(() => [] as AdminAgenteSoporte[]),
       ]);
 
       setConversations(conversationRows.items);
       setConversationsTotal(conversationRows.total);
       setDisputes(disputeRows);
+      setSupportTeam(teamRows);
 
       if (!isAdmin) {
         return;
@@ -514,6 +527,18 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     }
   }
 
+  /** Sube o baja a un agente de nivel según vaya cogiendo experiencia. */
+  async function handleChangeAgentLevel(usuarioId: string, nivel: number) {
+    setError("");
+    try {
+      await adminService.setAgentLevel(usuarioId, nivel);
+      setSupportTeam((prev) => prev.map((a) => (a.id === usuarioId ? { ...a, nivel } : a)));
+      setStatusMessage(`Agente movido a nivel ${nivel}.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo cambiar el nivel.");
+    }
+  }
+
   /** Cierra el incidente dejando por escrito qué se hizo. */
   async function handleResolveDispute() {
     const texto = disputeResolution.trim();
@@ -620,13 +645,52 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     }
   }
 
+  /** Abre el expediente: qué cumple y qué le falta, antes de decidir. */
+  async function handleOpenVerificationFile(companyId: string) {
+    setError("");
+    setMotivoRetiro("");
+    setCargandoExpediente(true);
+    try {
+      setExpediente(await adminService.getVerificationFile(companyId));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo abrir el expediente.");
+    } finally {
+      setCargandoExpediente(false);
+    }
+  }
+
   async function handleVerifyCompany(companyId: string) {
     setError("");
+    setProcesandoSello(true);
     try {
       await adminService.verifyImporter(companyId);
+      setStatusMessage("Empresa verificada. El sello ya es visible en su ficha pública.");
+      setExpediente(null);
       await reloadAdminData();
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "No se pudo verificar la empresa.");
+    } finally {
+      setProcesandoSello(false);
+    }
+  }
+
+  async function handleRevokeVerification(companyId: string) {
+    if (motivoRetiro.trim().length < 5) {
+      setError("Explica por qué se retira el sello (mínimo 5 caracteres).");
+      return;
+    }
+    setError("");
+    setProcesandoSello(true);
+    try {
+      await adminService.revokeImporterVerification(companyId, motivoRetiro.trim());
+      setStatusMessage("Sello retirado. Se avisó al representante con el motivo.");
+      setExpediente(null);
+      setMotivoRetiro("");
+      await reloadAdminData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo retirar el sello.");
+    } finally {
+      setProcesandoSello(false);
     }
   }
 
@@ -653,8 +717,11 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           password: userForm.password,
           nombre: userForm.nombre,
           telefono: userForm.telefono || undefined,
+          nivel: userForm.nivelSoporte,
         });
-        setStatusMessage(`Cuenta de atención al cliente creada para ${userForm.email}.`);
+        setStatusMessage(
+          `Cuenta de atención al cliente creada para ${userForm.email} en nivel ${userForm.nivelSoporte}.`,
+        );
       } else if (userForm.rol === "importador") {
         if (!userForm.nombre || !userForm.email || !userForm.password) {
           throw new Error("Para rol importador debes completar nombre, email y password.");
@@ -858,17 +925,21 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                         >
                           {company.estado === "inactivo" ? "Activar" : "Desactivar"}
                         </button>
-                        {!company.verificado ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleVerifyCompany(company.id);
-                            }}
-                            className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-                          >
-                            Verificar
-                          </button>
-                        ) : null}
+                        {/* Verificar no es un interruptor: se abre el expediente
+                            y se decide con los requisitos delante. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleOpenVerificationFile(company.id);
+                          }}
+                          className={`rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                            company.verificado
+                              ? "border-border hover:bg-muted"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          }`}
+                        >
+                          {company.verificado ? "Ver expediente" : "Verificar"}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -1015,6 +1086,81 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             </p>
           </div>
           <span className="text-xs text-muted-foreground">{conversationsTotal} conversaciones</span>
+        </div>
+
+        {/* La mesa: quién puede atender qué y cómo lo está haciendo. */}
+        <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Users className="h-4 w-4 text-primary" />
+              Mesa de soporte
+            </p>
+            <span className="text-xs text-muted-foreground">{supportTeam.length} agentes</span>
+          </div>
+
+          {supportTeam.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+              Todavía no hay agentes. Créalos desde Usuarios con el rol «Atención al cliente».
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px] text-left text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr className="border-b border-border">
+                    <th className="py-2 pr-3">Agente</th>
+                    <th className="py-2 pr-3">Nivel</th>
+                    <th className="py-2 pr-3 text-right">Asignados</th>
+                    <th className="py-2 pr-3 text-right">Cerrados</th>
+                    <th className="py-2 pr-3 text-right">Calificación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supportTeam.map((agente) => (
+                    <tr key={agente.id} className="border-b border-border/60">
+                      <td className="py-2.5 pr-3">
+                        <p className="font-medium text-foreground">{agente.nombre || agente.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {agente.email}
+                          {agente.activo ? "" : " · inactivo"}
+                        </p>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        {isAdmin ? (
+                          <select
+                            value={agente.nivel ?? 1}
+                            onChange={(event) => {
+                              void handleChangeAgentLevel(agente.id, Number(event.target.value));
+                            }}
+                            className="h-8 rounded-lg border border-border px-2 text-xs"
+                          >
+                            <option value={1}>Nivel 1</option>
+                            <option value={2}>Nivel 2</option>
+                            <option value={3}>Nivel 3</option>
+                          </select>
+                        ) : (
+                          <span className="text-xs">Nivel {agente.nivel ?? 1}</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3 text-right">{agente.tickets_asignados}</td>
+                      <td className="py-2.5 pr-3 text-right">{agente.tickets_cerrados}</td>
+                      <td className="py-2.5 pr-3 text-right">
+                        {agente.calificacion_promedio !== null ? (
+                          <span className="font-medium">
+                            ★ {agente.calificacion_promedio.toFixed(1)}
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              ({agente.calificaciones_recibidas})
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Sin calificar</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Los incidentes son lo urgente: van primero y con acción, no como una
@@ -1624,6 +1770,149 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         </div>
       ) : null}
 
+      {expediente || cargandoExpediente ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+              <div>
+                <h2 className="text-base font-semibold">
+                  {cargandoExpediente ? "Cargando expediente…" : `Verificación de ${expediente?.nombre_empresa}`}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Qué se puede comprobar desde la plataforma antes de avalar a esta empresa.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setExpediente(null);
+                  setMotivoRetiro("");
+                }}
+                className="rounded-md border border-border p-1.5 hover:bg-muted"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {expediente ? (
+              <>
+                <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                  {expediente.verificado ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                      Esta empresa lleva el sello de socio verificado.
+                    </div>
+                  ) : expediente.listo_para_verificar ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                      Cumple los {expediente.obligatorios_totales} requisitos obligatorios. La decisión final es tuya.
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      <p className="font-medium">Todavía no se puede verificar.</p>
+                      <p className="mt-1">Falta: {expediente.pendientes.join(" · ")}</p>
+                    </div>
+                  )}
+
+                  {[
+                    {
+                      titulo: "Obligatorios",
+                      nota: "Sin esto la empresa no puede operar bien en la plataforma.",
+                      lista: expediente.obligatorios,
+                      cumplidos: expediente.obligatorios_cumplidos,
+                      total: expediente.obligatorios_totales,
+                    },
+                    {
+                      titulo: "Recomendables",
+                      nota: "Hablan de una empresa con recorrido. No impiden verificar.",
+                      lista: expediente.recomendables,
+                      cumplidos: expediente.recomendables_cumplidos,
+                      total: expediente.recomendables_totales,
+                    },
+                  ].map((grupo) => (
+                    <div key={grupo.titulo}>
+                      <div className="mb-2 flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold">{grupo.titulo}</p>
+                        <span className="text-xs text-muted-foreground">
+                          {grupo.cumplidos} de {grupo.total}
+                        </span>
+                      </div>
+                      <p className="mb-2 text-xs text-muted-foreground">{grupo.nota}</p>
+                      <div className="space-y-1.5">
+                        {grupo.lista.map((requisito) => (
+                          <div
+                            key={requisito.clave}
+                            className={`flex items-start gap-2.5 rounded-lg border p-2.5 ${
+                              requisito.cumple ? "border-emerald-200 bg-emerald-50/50" : "border-border bg-muted/30"
+                            }`}
+                          >
+                            <span className={`mt-0.5 text-sm ${requisito.cumple ? "text-emerald-600" : "text-muted-foreground/50"}`}>
+                              {requisito.cumple ? "✓" : "○"}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground">{requisito.titulo}</p>
+                              <p className="text-xs text-muted-foreground">{requisito.detalle}</p>
+                            </div>
+                            <span className="max-w-[40%] text-right text-xs text-muted-foreground">
+                              {requisito.valor}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                    Esta lista solo cubre lo que consta en la plataforma. La comprobación del registro
+                    mercantil, las referencias comerciales y cualquier documentación legal siguen siendo
+                    tuyas: el sello dice que respondes por esta empresa.
+                  </p>
+                </div>
+
+                <div className="space-y-2 border-t border-border p-3">
+                  {expediente.verificado ? (
+                    <>
+                      <textarea
+                        value={motivoRetiro}
+                        onChange={(event) => setMotivoRetiro(event.target.value)}
+                        rows={2}
+                        placeholder="Motivo para retirar el sello (se le comunica a la empresa)…"
+                        className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        disabled={procesandoSello || motivoRetiro.trim().length < 5}
+                        onClick={() => {
+                          void handleRevokeVerification(expediente.importador_id);
+                        }}
+                        className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-40"
+                      >
+                        {procesandoSello ? "Retirando…" : "Retirar verificación"}
+                      </button>
+                      <p className="text-[11px] text-muted-foreground">
+                        Retirar el sello no desactiva la empresa: sigue operando, pero deja de estar avalada.
+                      </p>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={procesandoSello || !expediente.listo_para_verificar}
+                      onClick={() => {
+                        void handleVerifyCompany(expediente.importador_id);
+                      }}
+                      className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                    >
+                      {procesandoSello ? "Verificando…" : "Verificar empresa"}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="p-8 text-center text-sm text-muted-foreground">Cargando…</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       {resolvingDispute ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="w-full max-w-lg rounded-xl border border-border bg-white p-5 shadow-2xl">
@@ -1859,6 +2148,19 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                 <option value="asesor">Asesor</option>
                 <option value="admin">Admin</option>
               </select>
+
+              {/* El nivel decide qué tickets se le pueden asignar. */}
+              {userForm.rol === "soporte" ? (
+                <select
+                  value={userForm.nivelSoporte}
+                  onChange={(event) => setUserForm((prev) => ({ ...prev, nivelSoporte: Number(event.target.value) }))}
+                  className="h-9 rounded-lg border border-border px-3 text-sm"
+                >
+                  <option value={1}>Nivel 1 — consultas corrientes</option>
+                  <option value={2}>Nivel 2 — casos intermedios</option>
+                  <option value={3}>Nivel 3 — casos complejos</option>
+                </select>
+              ) : null}
 
               <input
                 value={userForm.indicativo_pais_telefono}
