@@ -153,6 +153,53 @@ async def listar_pool_empresa(
 
     return resultado
 
+def _asegurar_chat_negociacion(
+    db: Session,
+    *,
+    cotizacion: Cotizacion,
+    importador_usuario_id: str,
+    mensaje_sistema: Optional[str] = None,
+):
+    """Devuelve el hilo solicitante ↔ empresa de esta cotización, creándolo si no existe.
+
+    Hay tres momentos que necesitan el hilo abierto (el asesor reclama, el
+    cliente pide negociar, la propuesta se cierra) y antes cada uno lo creaba por
+    su cuenta con criterios ligeramente distintos. Con un único sitio, el hilo
+    siempre nace igual y nunca se duplica: `cotizacion_id` es único en la tabla.
+    """
+    from uuid import uuid4 as gen_uuid
+
+    from models.chat import ConversacionChat, MensajeChat, TipoConversacion, TipoMensajeChat
+
+    conversacion = db.query(ConversacionChat).filter(
+        ConversacionChat.cotizacion_id == cotizacion.id
+    ).first()
+
+    if conversacion:
+        return conversacion
+
+    conversacion = ConversacionChat(
+        id=str(gen_uuid()),
+        tipo=TipoConversacion.negociacion.value,
+        cotizacion_id=cotizacion.id,
+        solicitante_id=cotizacion.solicitante_id,
+        importador_usuario_id=importador_usuario_id,
+    )
+    db.add(conversacion)
+    db.flush()
+
+    if mensaje_sistema:
+        db.add(MensajeChat(
+            id=str(gen_uuid()),
+            conversacion_id=conversacion.id,
+            remitente_id=importador_usuario_id,
+            contenido=mensaje_sistema,
+            tipo=TipoMensajeChat.sistema.value,
+        ))
+
+    return conversacion
+
+
 @router.post("/{cotizacion_id}/reclamar", response_model=CotizacionResponse)
 async def reclamar_cotizacion(
     cotizacion_id: str,
@@ -201,6 +248,41 @@ async def reclamar_cotizacion(
             status_code=status.HTTP_409_CONFLICT,
             detail="Esta cotización ya fue reclamada por otro miembro de la empresa"
         )
+
+    # El chat nace aquí, no cuando el cliente se decide a escribir: quien reclama
+    # es quien va a negociar, y sin canal abierto el solicitante no tenía forma
+    # de discutir condiciones antes de aceptar.
+    from models.usuario import Usuario
+
+    quien = db.query(Usuario).filter(Usuario.id == user_id_str).first()
+    empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
+    nombre_quien = (quien.nombre or quien.email) if quien else "Un asesor"
+    nombre_empresa = empresa.nombre_empresa if empresa else "la empresa importadora"
+
+    _asegurar_chat_negociacion(
+        db,
+        cotizacion=cotizacion,
+        importador_usuario_id=user_id_str,
+        mensaje_sistema=(
+            f"{nombre_quien}, de {nombre_empresa}, tomó esta cotización y abrió el "
+            f"canal para negociar las condiciones."
+        ),
+    )
+
+    from services.notificacion_service import notificar as _notificar_usuario
+
+    _notificar_usuario(
+        db,
+        usuario_id=cotizacion.solicitante_id,
+        tipo="negociacion",
+        titulo="Un asesor tomó tu cotización",
+        mensaje=(
+            f"{nombre_quien} ({nombre_empresa}) atenderá «{cotizacion.nombre_producto}». "
+            f"Ya puedes escribirle por el chat."
+        ),
+        data={"cotizacion_id": cotizacion_id_str, "importador_id": importador_id_str},
+        enlace_relativo="/chats",
+    )
 
     db.commit()
     db.refresh(cotizacion)
@@ -1183,32 +1265,26 @@ async def aceptar_propuesta(
         except Exception:
             logger.warning("No se pudo notificar al asesor asignado de la cotización %s", cotizacion_id_str)
 
-    # Crear la conversación de chat de negociación: el asesor asignado negocia
-    # con el solicitante si reclamó la cotización; si no, la cuenta dueña.
-    from models.chat import ConversacionChat
+    # El hilo normalmente ya existe (se abre al reclamar la cotización). Esto
+    # cubre el caso de la propuesta enviada directamente por la cuenta dueña,
+    # donde nadie pasó por el reclamo.
     from models.usuario import Usuario as UsuarioModel
-    conversacion_existente = db.query(ConversacionChat).filter(
-        ConversacionChat.cotizacion_id == cotizacion_id_str
-    ).first()
-    if not conversacion_existente:
-        importador_usuario_id = cotizacion.asesor_asignado_id
-        if not importador_usuario_id:
-            dueño = db.query(UsuarioModel).filter(
-                UsuarioModel.importador_id == importador_id_str,
-                UsuarioModel.rol == "importador"
-            ).first()
-            importador_usuario_id = str(dueño.id) if dueño else None
 
-        if importador_usuario_id:
-            from uuid import uuid4 as gen_uuid
-            nueva_conversacion = ConversacionChat(
-                id=str(gen_uuid()),
-                cotizacion_id=cotizacion_id_str,
-                solicitante_id=user_id_str,
-                importador_usuario_id=importador_usuario_id
-            )
-            db.add(nueva_conversacion)
-            db.commit()
+    importador_usuario_id = cotizacion.asesor_asignado_id
+    if not importador_usuario_id:
+        dueño = db.query(UsuarioModel).filter(
+            UsuarioModel.importador_id == importador_id_str,
+            UsuarioModel.rol == "importador"
+        ).first()
+        importador_usuario_id = str(dueño.id) if dueño else None
+
+    if importador_usuario_id:
+        _asegurar_chat_negociacion(
+            db,
+            cotizacion=cotizacion,
+            importador_usuario_id=importador_usuario_id,
+        )
+        db.commit()
 
     db.refresh(cotizacion)
     return cotizacion
@@ -1226,8 +1302,9 @@ async def pre_aceptar_propuesta(
     (doble aceptación mutua, Semana 4).
 
     - El **solicitante** dueño de la cotización marca/revierte el lado "solicitante".
-    - El **asesor asignado** a la cotización o el **dueño** (cuenta `importador`)
-      de la empresa marcan/revierten el lado "empresa".
+    - Solo la cuenta **dueña** (rol `importador`) marca/revierte el lado
+      "empresa": el asesor negocia, pero quien compromete a la empresa es su
+      representante, que revisa el chat de la negociación antes de confirmar.
 
     Cuando ambos lados quedan en `True` (sin importar el orden), la propuesta
     se finaliza automáticamente en la misma transacción:
@@ -1236,8 +1313,9 @@ async def pre_aceptar_propuesta(
       empresa ganadora (también en modalidad abierta, donde antes quedaba NULL).
     - Se crea la **Orden automáticamente** (sin pago de por medio: la plataforma
       solo conecta, no se responsabiliza del cumplimiento entre las partes).
-    - El chat de negociación se **traspasa al dueño** de la empresa (supervisor /
-      representante legal), quien queda a cargo de ahí en adelante.
+    - El chat **sigue con el asesor** que negoció, pero cambia de asunto: pasa a
+      ser el seguimiento del embarque. La empresa lo coordina con él por el
+      canal interno (`POST /chat/interno`).
 
     Mientras el otro lado no haya aceptado, cualquiera de las dos partes puede
     revertir su propia marca (`aceptar: false`). Una vez finalizada (ambos lados
@@ -1274,9 +1352,20 @@ async def pre_aceptar_propuesta(
 
     if rol == "solicitante" and cotizacion.solicitante_id == user_id_str:
         lado = "solicitante"
-    elif rol in ("importador", "asesor") and current_user.get("importador_id") == propuesta.importador_id:
-        if rol == "importador" or cotizacion.asesor_asignado_id == user_id_str:
-            lado = "empresa"
+    elif rol == "importador" and current_user.get("importador_id") == propuesta.importador_id:
+        # La confirmación de la empresa la da la cuenta dueña, no el asesor: es
+        # el paso en el que la empresa revisa la negociación de su asesor (el
+        # chat queda como evidencia) antes de comprometerse con la orden.
+        lado = "empresa"
+    elif rol == "asesor" and current_user.get("importador_id") == propuesta.importador_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "La aceptación final la confirma la cuenta dueña de la empresa. "
+                "Tu negociación queda registrada en el chat y es lo que revisará "
+                "antes de cerrar la orden."
+            )
+        )
 
     if lado is None:
         raise HTTPException(
@@ -1288,18 +1377,24 @@ async def pre_aceptar_propuesta(
         propuesta.preaceptada_por_solicitante = solicitud.aceptar
         # La empresa se entera de que el cliente movió ficha, aunque todavía
         # falte su propia confirmación.
+        # Aquí la pelota pasa a la cuenta dueña, que es la única que puede
+        # confirmar: el aviso va a toda la empresa (dueño incluido) en vez de
+        # solo al asesor, que ya no tiene nada que firmar.
         _notificar_empresa(
             db,
             importador_id=propuesta.importador_id,
             tipo="propuesta",
-            titulo="El solicitante aceptó tu propuesta" if solicitud.aceptar else "El solicitante retiró su aceptación",
+            titulo="El solicitante aceptó la propuesta" if solicitud.aceptar else "El solicitante retiró su aceptación",
             mensaje=(
                 f"Cotización de {cotizacion.nombre_producto}. "
-                + ("Confirma desde tu panel para cerrar la orden." if solicitud.aceptar else "La negociación sigue abierta.")
+                + (
+                    "Revisa el chat de la negociación y confírmala desde la cuenta de la empresa para cerrar la orden."
+                    if solicitud.aceptar
+                    else "La negociación sigue abierta."
+                )
             ),
             data={"cotizacion_id": str(cotizacion.id), "propuesta_id": str(propuesta.id)},
             enlace_relativo="/cotizaciones",
-            solo_usuario_id=cotizacion.asesor_asignado_id,
         )
     else:
         propuesta.preaceptada_por_empresa = solicitud.aceptar
@@ -1377,40 +1472,43 @@ async def pre_aceptar_propuesta(
         except Exception:
             logger.warning("No se pudieron generar documentos PDF automáticos para la orden %s", nueva_orden.id)
 
-        # Traspaso de chat al dueño (supervisor): a partir de aquí, el asesor deja
-        # de negociar y responde la cuenta dueña de la empresa importadora.
+        # El mismo hilo cambia de asunto: deja de ser la negociación de la
+        # cotización y pasa a ser el seguimiento del embarque. Lo sigue
+        # atendiendo el asesor que negoció —es quien conoce el trato— y no el
+        # dueño, que solo entra a confirmar y a supervisar.
         dueño = db.query(UsuarioModel).filter(
             UsuarioModel.importador_id == propuesta.importador_id,
             UsuarioModel.rol == "importador"
         ).first()
         dueño_id = str(dueño.id) if dueño else None
+        responsable_id = cotizacion.asesor_asignado_id or dueño_id
 
         conversacion = db.query(ConversacionChat).filter(
             ConversacionChat.cotizacion_id == cotizacion.id
         ).first()
 
-        if not conversacion and dueño_id:
+        if not conversacion and responsable_id:
             conversacion = ConversacionChat(
                 id=str(gen_uuid()),
                 cotizacion_id=cotizacion.id,
                 solicitante_id=cotizacion.solicitante_id,
-                importador_usuario_id=dueño_id
+                importador_usuario_id=responsable_id
             )
             db.add(conversacion)
             db.flush()
-        elif conversacion and dueño_id:
-            conversacion.importador_usuario_id = dueño_id
+        elif conversacion and responsable_id:
+            conversacion.importador_usuario_id = responsable_id
 
         if conversacion:
             conversacion.orden_id = nueva_orden.id
             db.add(MensajeChat(
                 id=str(gen_uuid()),
                 conversacion_id=conversacion.id,
-                remitente_id=dueño_id or user_id_str,
+                remitente_id=responsable_id or user_id_str,
                 contenido=(
-                    "Propuesta aceptada por ambas partes. Se creó la orden y esta "
-                    "conversación ahora queda a cargo del representante de la "
-                    "empresa importadora."
+                    "La empresa confirmó la propuesta y se creó la orden. "
+                    "Esta conversación pasa a ser el seguimiento del embarque: "
+                    "aquí se irán informando los cambios de estado."
                 ),
                 tipo=TipoMensajeChat.sistema
             ))

@@ -118,10 +118,13 @@ class Cotizacion(Base):
 
     @property
     def contacto_asignado(self):
-        """Contacto de la empresa a cargo de la negociación de esta cotización:
-        el asesor asignado mientras la propuesta sigue `pendiente`, o el dueño de
-        la empresa una vez la propuesta queda `aceptada` (traspaso de chat,
-        Fase 5). Devuelve `None` si todavía no hay ninguna propuesta enviada."""
+        """Persona de la empresa con la que habla el cliente.
+
+        Es el asesor asignado, antes y después de que la propuesta se acepte:
+        quien negoció es quien hace luego el seguimiento del embarque, y
+        cambiarle el interlocutor justo al cerrar el trato obligaba al cliente a
+        recontar el caso desde cero. Solo se cae a la cuenta dueña cuando nadie
+        reclamó la cotización. `None` si todavía no hay propuesta enviada."""
         session = object_session(self)
         if session is None:
             return None
@@ -135,7 +138,7 @@ class Cotizacion(Base):
         from models.usuario import Usuario
 
         usuario = None
-        if propuesta.estado == "pendiente" and self.asesor_asignado_id:
+        if self.asesor_asignado_id:
             usuario = session.query(Usuario).filter(Usuario.id == self.asesor_asignado_id).first()
         if usuario is None:
             usuario = session.query(Usuario).filter(

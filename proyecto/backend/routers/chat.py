@@ -8,10 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from sqlalchemy.orm import Session
 
 import config
-from models.chat import ConversacionChat, MensajeChat, TipoMensajeChat
+from models.chat import ConversacionChat, MensajeChat, TipoConversacion, TipoMensajeChat
 from models.documental import Archivo, MensajeAdjunto
 from schemas.chat import (
     MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
+    IniciarChatInternoRequest,
 )
 from schemas.features import TraducirRequest, TraducirResponse
 from utils.dependencies import get_db, get_current_user, require_rol_in
@@ -61,6 +62,10 @@ async def emitir_ticket_ws(
     return WsTicketResponse(ticket=ticket)
 
 
+def _es_interna(conversacion: ConversacionChat) -> bool:
+    return str(conversacion.tipo or TipoConversacion.negociacion.value) == TipoConversacion.interna.value
+
+
 def _verificar_acceso_conversacion(
     conversacion: ConversacionChat,
     current_user: dict,
@@ -71,6 +76,19 @@ def _verificar_acceso_conversacion(
     conversaciones de otros clientes/empresas)."""
     user_id = current_user["user_id"]
     rol = current_user["rol"]
+
+    if _es_interna(conversacion):
+        # Canal de coordinación de la empresa: el cliente nunca entra, ni
+        # siquiera al hilo interno de la orden que él mismo encargó.
+        if rol == "asesor":
+            return conversacion.importador_usuario_id == user_id
+        if rol == "importador":
+            return bool(
+                conversacion.importador_id
+                and current_user.get("importador_id") == conversacion.importador_id
+            )
+        return rol == "admin"
+
     if rol == "solicitante":
         return conversacion.solicitante_id == user_id
     if rol == "asesor":
@@ -88,6 +106,61 @@ def _verificar_acceso_conversacion(
         ).first()
         return bool(contraparte and contraparte.importador_id == importador_id)
     return rol == "admin"
+
+
+def _nombre_de_usuario(db: Session, usuario_id: Optional[str]) -> Optional[str]:
+    if not usuario_id:
+        return None
+    usuario = db.query(Usuario).filter(Usuario.id == str(usuario_id)).first()
+    if not usuario:
+        return None
+    return usuario.nombre or usuario.email
+
+
+def _nombre_contraparte(db: Session, conversacion: ConversacionChat, current_user: dict) -> Optional[str]:
+    """Con quién habla quien consulta.
+
+    Se resuelve en el backend porque el frontend solo tiene ids de usuario, y
+    pedir el directorio de la empresa entera para poner un nombre en la lista de
+    chats sería exponer más de lo necesario.
+    """
+    user_id = current_user.get("user_id")
+
+    if _es_interna(conversacion):
+        if conversacion.importador_usuario_id == user_id:
+            from models.importador import Importador
+
+            empresa = (
+                db.query(Importador).filter(Importador.id == conversacion.importador_id).first()
+                if conversacion.importador_id
+                else None
+            )
+            return empresa.nombre_empresa if empresa else "Mi empresa"
+        return _nombre_de_usuario(db, conversacion.importador_usuario_id)
+
+    if conversacion.solicitante_id == user_id:
+        return _nombre_de_usuario(db, conversacion.importador_usuario_id)
+    return _nombre_de_usuario(db, conversacion.solicitante_id)
+
+
+def _respuesta_conversacion(
+    db: Session,
+    conversacion: ConversacionChat,
+    current_user: dict,
+    ultimo: Optional[MensajeChat] = None,
+) -> ConversacionChatResponse:
+    return ConversacionChatResponse(
+        id=str(conversacion.id),
+        tipo=str(conversacion.tipo or TipoConversacion.negociacion.value),
+        cotizacion_id=conversacion.cotizacion_id,
+        orden_id=conversacion.orden_id,
+        solicitante_id=conversacion.solicitante_id,
+        importador_usuario_id=conversacion.importador_usuario_id,
+        importador_id=conversacion.importador_id,
+        contraparte_nombre=_nombre_contraparte(db, conversacion, current_user),
+        fecha_creacion=conversacion.fecha_creacion,
+        ultimo_mensaje=ultimo,
+    )
 
 
 def _persistir_adjuntos_chat(
@@ -305,15 +378,89 @@ async def iniciar_chat(
         MensajeChat.conversacion_id == conversacion.id
     ).order_by(MensajeChat.fecha_envio.desc()).first()
 
-    return ConversacionChatResponse(
-        id=str(conversacion.id),
-        cotizacion_id=conversacion.cotizacion_id,
-        orden_id=conversacion.orden_id,
-        solicitante_id=conversacion.solicitante_id,
-        importador_usuario_id=conversacion.importador_usuario_id,
-        fecha_creacion=conversacion.fecha_creacion,
-        ultimo_mensaje=ultimo,
-    )
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+@router.post("/interno", response_model=ConversacionChatResponse, status_code=status.HTTP_201_CREATED)
+async def iniciar_chat_interno(
+    datos: IniciarChatInternoRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """Abre (o reutiliza) el canal de coordinación entre la empresa y un asesor.
+
+    Es donde la empresa le dice al asesor cuándo mover el estado de una orden
+    ("ya salió de fábrica", "está en aduana"). Va aparte del hilo de negociación
+    porque el solicitante no debe leer la coordinación interna del equipo.
+
+    Hay un único canal por asesor, no uno por orden: así el asesor no acaba con
+    una lista de hilos idénticos y el historial de instrucciones queda junto.
+    """
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no está asociada a ninguna empresa importadora",
+        )
+
+    user_id = current_user["user_id"]
+    rol = current_user["rol"]
+
+    if rol == "asesor":
+        # El asesor solo puede abrir el suyo; indicar otro `asesor_id` sería
+        # colarse en la coordinación de un compañero.
+        asesor_id = user_id
+    else:
+        if not datos.asesor_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Indica el asesor con el que quieres abrir el canal interno",
+            )
+        asesor = db.query(Usuario).filter(
+            Usuario.id == str(datos.asesor_id),
+            Usuario.importador_id == importador_id,
+            Usuario.rol == "asesor",
+        ).first()
+        if not asesor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ese asesor no pertenece a tu empresa",
+            )
+        asesor_id = str(asesor.id)
+
+    conversacion = db.query(ConversacionChat).filter(
+        ConversacionChat.tipo == TipoConversacion.interna.value,
+        ConversacionChat.importador_id == importador_id,
+        ConversacionChat.importador_usuario_id == asesor_id,
+    ).first()
+
+    if not conversacion:
+        conversacion = ConversacionChat(
+            id=str(uuid4()),
+            tipo=TipoConversacion.interna.value,
+            importador_id=importador_id,
+            importador_usuario_id=asesor_id,
+        )
+        db.add(conversacion)
+        db.flush()
+
+    if datos.mensaje_inicial and datos.mensaje_inicial.strip():
+        db.add(MensajeChat(
+            id=str(uuid4()),
+            conversacion_id=conversacion.id,
+            remitente_id=user_id,
+            contenido=datos.mensaje_inicial.strip()[:2000],
+            tipo=TipoMensajeChat.texto.value,
+        ))
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
 
 
 @router.get("/conversaciones", response_model=List[ConversacionChatResponse])
@@ -332,6 +479,8 @@ async def listar_mis_conversaciones(
 
         query = db.query(ConversacionChat)
         if rol == "solicitante":
+            # `solicitante_id` es NULL en las internas, así que este filtro ya
+            # las deja fuera por sí solo.
             query = query.filter(ConversacionChat.solicitante_id == user_id_str)
         elif rol == "asesor":
             query = query.filter(ConversacionChat.importador_usuario_id == user_id_str)
@@ -359,15 +508,7 @@ async def listar_mis_conversaciones(
             ultimo = db.query(MensajeChat).filter(
                 MensajeChat.conversacion_id == c.id
             ).order_by(MensajeChat.fecha_envio.desc()).first()
-            resultado.append(ConversacionChatResponse(
-                id=str(c.id),
-                cotizacion_id=c.cotizacion_id,
-                orden_id=c.orden_id,
-                solicitante_id=c.solicitante_id,
-                importador_usuario_id=c.importador_usuario_id,
-                fecha_creacion=c.fecha_creacion,
-                ultimo_mensaje=ultimo
-            ))
+            resultado.append(_respuesta_conversacion(db, c, current_user, ultimo))
         return resultado
     except HTTPException:
         raise
@@ -416,11 +557,22 @@ def _notificar_mensaje_chat(
     from models.notificacion import Notificacion
     from services.notificacion_service import notificar
 
-    destinatario_id = (
-        conversacion.importador_usuario_id
-        if str(conversacion.solicitante_id) == str(remitente_id)
-        else conversacion.solicitante_id
-    )
+    if _es_interna(conversacion):
+        if str(conversacion.importador_usuario_id) == str(remitente_id):
+            # Escribe el asesor: contesta la cuenta dueña de la empresa.
+            dueño = db.query(Usuario).filter(
+                Usuario.importador_id == conversacion.importador_id,
+                Usuario.rol == "importador",
+            ).first()
+            destinatario_id = str(dueño.id) if dueño else None
+        else:
+            destinatario_id = conversacion.importador_usuario_id
+    else:
+        destinatario_id = (
+            conversacion.importador_usuario_id
+            if str(conversacion.solicitante_id) == str(remitente_id)
+            else conversacion.solicitante_id
+        )
     if not destinatario_id or str(destinatario_id) == str(remitente_id):
         return
 
@@ -447,7 +599,10 @@ def _notificar_mensaje_chat(
         tipo="chat",
         titulo=f"Nuevo mensaje de {quien}",
         mensaje=resumen,
-        data={"conversacion_id": str(conversacion.id), "cotizacion_id": str(conversacion.cotizacion_id)},
+        data={
+            "conversacion_id": str(conversacion.id),
+            "cotizacion_id": str(conversacion.cotizacion_id) if conversacion.cotizacion_id else None,
+        },
         enlace_relativo="/chats",
         whatsapp=not reciente,
         email=not reciente,

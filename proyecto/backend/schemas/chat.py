@@ -41,14 +41,31 @@ class MensajeChatResponse(BaseModel):
 
 class ConversacionChatResponse(BaseModel):
     id: str
-    cotizacion_id: str
+    # "negociacion" (solicitante ↔ empresa) o "interna" (empresa ↔ su asesor).
+    # En las internas no hay cotización ni solicitante, de ahí los opcionales.
+    tipo: str = "negociacion"
+    cotizacion_id: Optional[str] = None
     orden_id: Optional[str] = None
-    solicitante_id: str
+    solicitante_id: Optional[str] = None
     importador_usuario_id: str
+    importador_id: Optional[str] = None
+    # Con quién se habla, ya resuelto por el backend: el frontend no tiene forma
+    # de traducir un id de usuario a un nombre sin pedir el directorio entero.
+    contraparte_nombre: Optional[str] = None
     fecha_creacion: datetime
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class IniciarChatInternoRequest(BaseModel):
+    """Abre (o reutiliza) el canal de coordinación entre la empresa y un asesor.
+
+    Lo puede pedir la cuenta dueña indicando `asesor_id`, o el propio asesor sin
+    indicar nada (abre el suyo con su empresa).
+    """
+    asesor_id: Optional[str] = None
+    mensaje_inicial: Optional[str] = Field(None, max_length=2000)
 
 
 class IniciarChatRequest(BaseModel):

@@ -103,17 +103,23 @@ class TestContactoAsignadoEnCotizacion:
         assert data["contacto_asignado"]["nombre"] == "Asesor Nav"
         assert data["contacto_asignado"]["whatsapp"] == "+573001112233"
 
-    def test_tras_doble_aceptacion_contacto_pasa_al_dueño(self, client, db_session, solicitante, empresa, asesor):
+    def test_tras_doble_aceptacion_el_contacto_sigue_siendo_el_asesor(self, client, db_session, solicitante, empresa, asesor):
+        """Cerrar la orden no le cambia el interlocutor al cliente.
+
+        El dueño confirma, pero quien negoció —y quien va a hacer el
+        seguimiento del embarque— es el asesor: mandarlo a hablar con otra
+        persona justo al cerrar el trato le hacía repetir todo el contexto.
+        """
         importador, dueño = empresa
         cotizacion, propuesta = _crear_cotizacion_con_propuesta(db_session, solicitante, importador.id, asesor_asignado_id=asesor.id)
 
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(solicitante))
-        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(asesor))
+        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         response = client.get(f"/cotizaciones/{cotizacion.id}", headers=auth_headers_for(solicitante))
         assert response.status_code == 200
         data = response.json()
-        assert data["contacto_asignado"]["usuario_id"] == str(dueño.id)
+        assert data["contacto_asignado"]["usuario_id"] == str(asesor.id)
         assert data["conversacion_id"] is not None
 
 
@@ -131,11 +137,11 @@ class TestContactoAsesorEnPropuesta:
 
 class TestConversacionIdEnOrden:
     def test_orden_expone_conversacion_id_tras_doble_aceptacion(self, client, db_session, solicitante, empresa, asesor):
-        importador, _dueño = empresa
+        importador, dueño = empresa
         cotizacion, propuesta = _crear_cotizacion_con_propuesta(db_session, solicitante, importador.id, asesor_asignado_id=asesor.id)
 
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(solicitante))
-        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(asesor))
+        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
         assert orden is not None

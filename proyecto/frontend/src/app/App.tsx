@@ -422,12 +422,16 @@ function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
 }
 
 // ─── Chat data ────────────────────────────────────────────────────────────────
-type ChatType="orden"|"cotizacion";
+// "interno" es el canal de la empresa con su asesor (coordinación del equipo);
+// no cuelga de ninguna cotización ni orden y el cliente nunca lo ve.
+type ChatType="orden"|"cotizacion"|"interno";
 interface ChatConv {
   id:string;type:ChatType;refCode:string;refId:string;importerId:string;
   // `refId` pasa a apuntar a la orden en cuanto existe; la cotización se guarda
   // aparte porque es lo que identifica al responsable que se puede reasignar.
+  // Ambos van vacíos en los hilos internos.
   quoteId:string;
+  counterpartName?:string;
   importerName?:string;
   advisorName?:string;
   advisorRole?:string;
@@ -2423,7 +2427,7 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
 
 function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
-  const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"no-leidas">("all");
+  const [filter,setFilter]=useState<"all"|"ordenes"|"cotizaciones"|"interno"|"no-leidas">("all");
   const [searchConv,setSearchConv]=useState("");
   const [msgs,setMsgs]=useState<Record<string,ChatMsg[]>>(messagesByConversation);
   const [input,setInput]=useState("");
@@ -2507,12 +2511,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const filteredConvs=conversations.filter(c=>{
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
+    if(filter==="interno"&&c.type!=="interno")return false;
     if(filter==="no-leidas"&&c.unread===0)return false;
     if(searchConv){
       const cImp=importers.find(i=>i.id===c.importerId);
       const q=c.type==="cotizacion"?quotes.find((quote)=>quote.id===c.refId):null;
       const ord=c.type==="orden"?orders.find((order)=>order.id===c.refId):null;
-      const terms=[c.refCode,c.importerName||cImp?.name||"",c.advisorName||cImp?.advisor.name||"",q?.product||"",ord?.product||""];
+      const terms=[c.refCode,c.counterpartName||"",c.importerName||cImp?.name||"",c.advisorName||cImp?.advisor.name||"",q?.product||"",ord?.product||""];
       if(!terms.some(t=>t.toLowerCase().includes(searchConv.toLowerCase())))return false;
     }
     return true;
@@ -2652,7 +2657,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const refQuote=conv?.type==="cotizacion"?quotes.find((quote)=>quote.id===conv.refId)||null:null;
   const refOrderId=conv?.type==="orden"?conv.refId:null;
   const refOrder=conv?.type==="orden"?orders.find((order)=>order.id===conv.refId)||null:null;
-  const canManageOrder = currentUserRole === "importadora";
+  // El asesor asignado también mueve el estado del embarque: es a quien la
+  // empresa le indica por el canal interno cuándo hacerlo. El backend comprueba
+  // que sea el asignado a esa orden.
+  const canManageOrder = currentUserRole === "importadora" || currentUserRole === "asesor";
   const orderStatusOptions = ORDER_LIFECYCLE_STEPS.map((step) => ({
     value: step.key,
     label: step.label,
@@ -2901,7 +2909,15 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     return null;
   }
 
-  const FILTERS=[{k:"all",label:"Todas"},{k:"ordenes",label:"Órdenes"},{k:"cotizaciones",label:"Cotizaciones"},{k:"no-leidas",label:"No leídas"}] as const;
+  // La pestaña de equipo solo aparece si hay algún hilo interno: al solicitante
+  // no le sirve de nada y nunca va a tener ninguno.
+  const FILTERS=[
+    {k:"all",label:"Todas"},
+    {k:"ordenes",label:"Órdenes"},
+    {k:"cotizaciones",label:"Cotizaciones"},
+    ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"} as const]:[]),
+    {k:"no-leidas",label:"No leídas"},
+  ] as const;
   const pickerVisibleFiles = resourceSearchResults?.files ?? resourceExplorer.archivos;
   const pickerVisibleFolders = resourceSearchResults
     ? resourceSearchResults.folders
@@ -3092,15 +3108,19 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 </div>
               ):filteredConvs.map(c=>{
                 const cImp=importers.find(i=>i.id===c.importerId);
-                const companyName = c.importerName || cImp?.name || "Empresa importadora";
+                // En el hilo interno la contraparte es una persona del equipo,
+                // no una empresa cliente.
+                const companyName = c.type==="interno"
+                  ? (c.counterpartName || "Equipo")
+                  : (c.counterpartName || c.importerName || cImp?.name || "Empresa importadora");
                 const isSelected=selectedId===c.id;
                 return (
                   <button key={c.id} onClick={()=>setSelectedId(c.id)}
                     className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
                       isSelected?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
                     <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5",
-                      c.type==="orden"?"bg-purple-50 text-purple-600":"bg-blue-50 text-blue-600")}>
-                      {c.type==="orden"?<ShoppingCart className="w-4 h-4"/>:<FileText className="w-4 h-4"/>}
+                      c.type==="orden"?"bg-purple-50 text-purple-600":c.type==="interno"?"bg-amber-50 text-amber-600":"bg-blue-50 text-blue-600")}>
+                      {c.type==="orden"?<ShoppingCart className="w-4 h-4"/>:c.type==="interno"?<Users className="w-4 h-4"/>:<FileText className="w-4 h-4"/>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
@@ -3140,12 +3160,16 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 <Avatar initials={imp?.initials || "NA"} size="md" color={imp?.color || "bg-slate-500"}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-foreground">{chatAdvisorName}</p>
-                    <span className="text-muted-foreground/40 text-xs">·</span>
-                    <p className="text-xs text-muted-foreground">{chatCompanyName}</p>
+                    <p className="font-semibold text-sm text-foreground">{conv.type==="interno"?(conv.counterpartName||"Equipo"):chatAdvisorName}</p>
+                    {conv.type!=="interno"&&(
+                      <>
+                        <span className="text-muted-foreground/40 text-xs">·</span>
+                        <p className="text-xs text-muted-foreground">{chatCompanyName}</p>
+                      </>
+                    )}
                     <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-                      conv.type==="orden"?"bg-purple-50 text-purple-700":"bg-blue-50 text-blue-700")}>
-                      {conv.type==="orden"?"Orden":"Cotización"} · {conv.refCode}
+                      conv.type==="orden"?"bg-purple-50 text-purple-700":conv.type==="interno"?"bg-amber-50 text-amber-700":"bg-blue-50 text-blue-700")}>
+                      {conv.type==="orden"?`Orden · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
                     </span>
                     {conv.status==="activa"&&<span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>Activa</span>}
                   </div>
@@ -3350,18 +3374,30 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contexto</p>
               </div>
               <div className="p-3 space-y-3 flex-1">
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
-                  <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{chatCompanyName}</p></div></div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
-                  <div className="flex items-center gap-2"><Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/><div><p className="text-xs font-semibold">{chatAdvisorName}</p><p className="text-[10px] text-muted-foreground">{chatAdvisorRole}</p></div></div>
-                  <div className="flex gap-1 mt-2">
-                    <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
-                    <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
+                {conv.type==="interno"?(
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2">
+                    <p className="text-[10px] font-semibold text-amber-800 uppercase tracking-wide mb-1">Canal interno</p>
+                    <p className="text-[11px] text-amber-900 leading-snug">
+                      Coordinación entre la empresa y {conv.counterpartName||"el asesor"}. Úsalo para indicar
+                      cuándo actualizar el estado de una orden. El solicitante no ve estos mensajes.
+                    </p>
                   </div>
-                </div>
+                ):(
+                  <>
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
+                      <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{chatCompanyName}</p></div></div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
+                      <div className="flex items-center gap-2"><Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/><div><p className="text-xs font-semibold">{chatAdvisorName}</p><p className="text-[10px] text-muted-foreground">{chatAdvisorRole}</p></div></div>
+                      <div className="flex gap-1 mt-2">
+                        <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
+                        <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
+                      </div>
+                    </div>
+                  </>
+                )}
                 <div className="border-t border-border"/>
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -3387,6 +3423,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   </div>
                 </div>
                 <div className="border-t border-border"/>
+                {/* Transferir solo tiene sentido en el hilo con el cliente: el
+                    canal interno es de un asesor concreto por definición. */}
+                {conv.type!=="interno"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">
@@ -3411,6 +3450,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   </div>
                 </div>
                 <div className="border-t border-border"/>
+                </>)}
                 {conv.type==="cotizacion"&&refQuote&&(<>
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cotización</p>
@@ -5691,7 +5731,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — ADVISORS
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<string>}) {
+function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive,onOpenInternalChat}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<string>;onOpenInternalChat:(advisorId:string)=>Promise<void>}) {
   const [advisors,setAdvisors]=useState(initialAdvisors);
   const [search,setSearch]=useState("");
   const [showModal,setShowModal]=useState(false);
@@ -5731,6 +5771,14 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
     setAdvisors(prev=>[created,...prev]);
     setShowModal(false);
   }
+  async function abrirCanal(asesor:CompanyAdvisor){
+    try{
+      await onOpenInternalChat(asesor.id);
+    }catch(err){
+      setStatusMessage(err instanceof Error ? err.message : "No se pudo abrir el canal con el asesor.");
+    }
+  }
+
   async function reiniciarClave(asesor:CompanyAdvisor){
     try{
       await authService.forgotPassword({email:asesor.email});
@@ -5829,6 +5877,7 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
                     <td className="px-3 py-3 text-xs hidden xl:table-cell">{a.avgResponse}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} title="Abrir canal interno para coordinar sus órdenes" onClick={()=>{void abrirCanal(a);}}/>
                         <Button variant="ghost" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>openEdit(a)}/>
                         <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Enviar enlace para restablecer la contraseña" onClick={()=>{void reiniciarClave(a);}}/>
                         <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>{void toggle(a.id);}}/>
@@ -5871,15 +5920,41 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>}) {
+function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
   const [search,setSearch]=useState("");
   const [detalle,setDetalle]=useState<Quote|null>(null);
   const [asignando,setAsignando]=useState<Quote|null>(null);
   const [mensaje,setMensaje]=useState("");
+  const [confirmando,setConfirmando]=useState("");
   // La conversacion de una cotizacion solo existe cuando ya se abrio la
   // negociacion; hasta entonces no hay chat al que llevar al usuario.
-  const chatDe=(quoteId:string)=>chats.find((c)=>c.type==="cotizacion"&&c.refId===quoteId);
+  // Tras crearse la orden el mismo hilo pasa a tipo "orden", asi que se buscan
+  // los dos: es la misma conversacion con el cliente.
+  const chatDe=(quoteId:string)=>chats.find((c)=>(c.type==="cotizacion"||c.type==="orden")&&(c.refId===quoteId||c.quoteId===quoteId));
+
+  // El cliente ya aceptó y falta la firma de la empresa: hasta que la cuenta
+  // dueña confirme, no hay orden. Es el paso donde revisa la negociación que
+  // dejó su asesor en el chat.
+  const esperandoConfirmacion=quotes.filter((q)=>{
+    const p=proposalsByQuoteId[q.id];
+    return p&&p.estado==="pendiente"&&p.preaceptada_por_solicitante&&!p.preaceptada_por_empresa;
+  });
+
+  async function confirmar(quote:Quote){
+    const propuesta=proposalsByQuoteId[quote.id];
+    if(!propuesta)return;
+    setConfirmando(propuesta.id);
+    setMensaje("");
+    try{
+      await onConfirmProposal(propuesta.id);
+      setMensaje(`Confirmaste la propuesta de ${quote.product}. La orden ya está creada y el seguimiento queda en el chat.`);
+    }catch(err){
+      setMensaje(err instanceof Error?err.message:"No se pudo confirmar la propuesta.");
+    }finally{
+      setConfirmando("");
+    }
+  }
 
   async function asignar(quote:Quote,advisorId:string|null){
     try{
@@ -5912,6 +5987,44 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Cotizaciones"}]}/>
             <h1 className="text-xl font-semibold mt-3">Cotizaciones recibidas</h1>
           </div>
+
+          {esperandoConfirmacion.length>0&&(
+            <Card padding="none" className="border-amber-300">
+              <div className="px-5 py-3 border-b border-amber-200 bg-amber-50">
+                <p className="font-semibold text-sm text-amber-900">Esperan tu confirmación</p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  El cliente aceptó lo que negoció tu asesor. Revisa el chat y confirma para crear la orden.
+                </p>
+              </div>
+              <div className="divide-y divide-border">
+                {esperandoConfirmacion.map((q)=>{
+                  const propuesta=proposalsByQuoteId[q.id];
+                  const chat=chatDe(q.id);
+                  return (
+                    <div key={q.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{q.product}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {q.code} · US${propuesta.precio_ofrecido_usd} · {propuesta.tiempo_estimado_entrega} · {propuesta.incoterm}
+                        </p>
+                      </div>
+                      <Button variant="secondary" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>}
+                        disabled={!chat}
+                        title={chat?"Revisar la negociación del asesor":"Todavía no hay chat de esta cotización"}
+                        onClick={()=>{if(chat) onOpenChat(chat.id);}}>
+                        Ver negociación
+                      </Button>
+                      <Button variant="primary" size="sm" icon={<CheckCircle2 className="w-3.5 h-3.5"/>}
+                        loading={confirmando===propuesta.id}
+                        onClick={()=>{void confirmar(q);}}>
+                        Confirmar y crear orden
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex gap-1 flex-wrap">
               {tabs.map(t=><button key={t} onClick={()=>setFilter(t)} className={clsx("px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors",filter===t?"bg-primary text-white":"bg-white border border-border text-muted-foreground hover:text-foreground")}>{t}</button>)}
@@ -6064,7 +6177,8 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSentCount,activeChatsCount}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string};responsesSentCount:number;activeChatsCount:number}) {
+function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSentCount,activeChatsCount,onOpenInternalChat}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string};responsesSentCount:number;activeChatsCount:number;onOpenInternalChat:()=>Promise<void>}) {
+  const [errorCanal,setErrorCanal]=useState("");
   const myQuotesCount = quotes.length;
   const activeOrdersCount = quotes.filter(q=>q.status==="active-order").length;
   const recentQuotes = quotes.slice(0,3);
@@ -6084,8 +6198,19 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Mi dashboard"}]}/>
-            <h1 className="text-xl font-semibold mt-3">Panel del asesor</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{headerUser.company}</p>
+            <div className="flex items-start justify-between gap-4 flex-wrap mt-3">
+              <div>
+                <h1 className="text-xl font-semibold">Panel del asesor</h1>
+                <p className="text-sm text-muted-foreground mt-0.5">{headerUser.company}</p>
+              </div>
+              {/* Canal privado con la empresa: por aquí llegan las instrucciones
+                  de cuándo mover el estado de cada orden. */}
+              <Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>}
+                onClick={()=>{void onOpenInternalChat().catch((err)=>setErrorCanal(err instanceof Error?err.message:"No se pudo abrir el canal."));}}>
+                Canal con mi empresa
+              </Button>
+            </div>
+            {errorCanal&&<p className="text-xs text-destructive mt-2">{errorCanal}</p>}
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {metrics.map((m,i)=>(
@@ -6223,7 +6348,10 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
 // ─────────────────────────────────────────────────────────────────────────────
 function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void}) {
   const myQuotes=quotes.slice(0,20);
-  const chatDe=(quoteId:string)=>chats.find((c)=>c.type==="cotizacion"&&c.refId===quoteId);
+  // Al crearse la orden el hilo pasa a tipo "orden" y `refId` apunta a ella,
+  // pero sigue siendo la misma conversacion con el cliente: sin buscar tambien
+  // por `quoteId`, el asesor perdia el acceso al chat justo al cerrar el trato.
+  const chatDe=(quoteId:string)=>chats.find((c)=>(c.type==="cotizacion"||c.type==="orden")&&(c.refId===quoteId||c.quoteId===quoteId));
   const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -7294,6 +7422,9 @@ export default function App() {
   const [companyAdvisors,setCompanyAdvisors]=useState<CompanyAdvisor[]>([]);
   const [advisorAssignedQuotes,setAdvisorAssignedQuotes]=useState<Quote[]>([]);
   const [advisorProposalsByQuoteId,setAdvisorProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
+  // Propuestas de la empresa vistas desde la cuenta dueña: de aquí sale la
+  // bandeja de "esperan tu confirmación".
+  const [companyProposalsByQuoteId,setCompanyProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
   const [currentUserProfile,setCurrentUserProfile]=useState<BackendUserProfile|null>(null);
   const [companyProfile,setCompanyProfile]=useState<BackendImporter|null>(null);
   const [requesterResponses,setRequesterResponses]=useState<QuoteResponse[]>([]);
@@ -7336,7 +7467,31 @@ export default function App() {
         .map((row: BackendCotizacion) => mapBackendQuoteToUi(row, marketplaceImporters))
         .map((quote) => applyQuoteStatusOverride(quote, quoteStatusOverrides)),
     );
-  }, [marketplaceImporters, quoteStatusOverrides]);
+
+    // Propuestas de esta empresa, para saber cuáles esperan la confirmación de
+    // la cuenta dueña (el cliente ya aceptó y falta cerrar la orden).
+    const companyId = currentUserProfile?.importador_id;
+    if (!companyId) {
+      setCompanyProposalsByQuoteId({});
+      return;
+    }
+    const proposalRows = await Promise.all(
+      rows.map(async (row) => {
+        try {
+          return await businessService.listQuoteProposals(row.id);
+        } catch {
+          return [] as BackendPropuesta[];
+        }
+      }),
+    );
+    const byQuote: Record<string, BackendPropuesta> = {};
+    proposalRows.flat().forEach((proposal) => {
+      if (proposal.importador_id === companyId) {
+        byQuote[proposal.cotizacion_id] = proposal;
+      }
+    });
+    setCompanyProposalsByQuoteId(byQuote);
+  }, [marketplaceImporters, quoteStatusOverrides, currentUserProfile?.importador_id]);
 
   const reloadCompanyAdvisors = useCallback(async () => {
     // `/importadores/asesores` es exclusivo de la cuenta dueña de una empresa.
@@ -7419,14 +7574,23 @@ export default function App() {
     const importerByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.importador_id]));
     const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
     const mappedConversations: ChatConv[] = rows.map((row) => {
-      const importerId = importerByQuoteId.get(row.cotizacion_id) || row.importador_usuario_id;
+      // El hilo interno no tiene cotización: su "empresa" es la propia.
+      const esInterno = row.tipo === "interna";
+      const importerId = esInterno
+        ? (row.importador_id || "")
+        : (importerByQuoteId.get(row.cotizacion_id || "") || row.importador_usuario_id);
       const importer = importerById.get(importerId);
       return {
         id: row.id,
-        type: row.orden_id ? "orden" : "cotizacion",
-        refCode: row.orden_id ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}` : `COT-${row.cotizacion_id.slice(0, 8).toUpperCase()}`,
-        refId: row.orden_id ?? row.cotizacion_id,
-        quoteId: row.cotizacion_id,
+        type: esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
+        refCode: esInterno
+          ? "Equipo"
+          : row.orden_id
+            ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}`
+            : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
+        refId: row.orden_id ?? row.cotizacion_id ?? "",
+        quoteId: row.cotizacion_id ?? "",
+        counterpartName: row.contraparte_nombre ?? undefined,
         importerId,
         importerName: importer?.name,
         advisorName: importer?.advisor.name,
@@ -7968,6 +8132,17 @@ export default function App() {
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
   }
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
+
+  /**
+   * Abre el canal interno con un asesor y lleva al chat ya posicionado en él.
+   * El backend reutiliza el hilo si ya existía, así que llamarlo varias veces
+   * no crea conversaciones nuevas.
+   */
+  async function openInternalChat(advisorId?:string){
+    const conversation = await businessService.startInternalChat(advisorId);
+    await reloadChatData();
+    openChat(conversation.id);
+  }
   function openNewQuote(importerId?:string){setQuotePrefill(undefined);setPreselectedImporterId(importerId);goTo("new-quote");}
 
   /**
@@ -8199,6 +8374,15 @@ export default function App() {
     await Promise.all([reloadImporterQuotes(), reloadChatData()]);
   }
 
+  /**
+   * Confirmación del lado empresa (solo la cuenta dueña). Cuando el cliente ya
+   * había aceptado, esta es la llamada que crea la orden.
+   */
+  async function handleConfirmProposalAsCompany(propuestaId: string) {
+    await businessService.preAcceptProposal(propuestaId, true);
+    await refreshQuoteLists();
+  }
+
   async function handleUpdateOrderStatus(orderId: string, statusValue: string) {
     await businessService.updateOrderStatus(orderId, { estado: statusValue });
     await Promise.all([reloadRequesterOrders(), reloadImporterOrders(), reloadChatData()]);
@@ -8353,11 +8537,11 @@ export default function App() {
     // ── Importer portal ───────────────────────────────────────────────────────
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} orders={importerOrders} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""} averageResponseHours={importerAverageResponseHours}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
-    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote}/>;
+    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
-    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount}/>;
+    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
     if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
     if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat}/>;
 

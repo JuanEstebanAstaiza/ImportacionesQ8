@@ -31,11 +31,14 @@ class DisputaOrdenResponse(BaseModel):
 class ConversacionAdminItem(BaseModel):
     """Fila del supervisor de chats del panel de administración."""
     id: str
-    cotizacion_id: str
+    # "negociacion" (solicitante ↔ empresa) o "interna" (empresa ↔ su asesor).
+    # Las internas no cuelgan de una cotización ni tienen solicitante.
+    tipo: str = "negociacion"
+    cotizacion_id: Optional[str] = None
     orden_id: Optional[str] = None
     fecha_creacion: datetime
 
-    solicitante_id: str
+    solicitante_id: Optional[str] = None
     solicitante_nombre: Optional[str] = None
     solicitante_email: Optional[str] = None
 

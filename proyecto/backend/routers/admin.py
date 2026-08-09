@@ -849,10 +849,11 @@ async def listar_conversaciones_admin(
         )
         items.append(ConversacionAdminItem(
             id=str(conversacion.id),
-            cotizacion_id=str(conversacion.cotizacion_id),
+            tipo=str(conversacion.tipo or "negociacion"),
+            cotizacion_id=str(conversacion.cotizacion_id) if conversacion.cotizacion_id else None,
             orden_id=str(conversacion.orden_id) if conversacion.orden_id else None,
             fecha_creacion=conversacion.fecha_creacion,
-            solicitante_id=str(conversacion.solicitante_id),
+            solicitante_id=str(conversacion.solicitante_id) if conversacion.solicitante_id else None,
             solicitante_nombre=usuario_solicitante.nombre if usuario_solicitante else None,
             solicitante_email=usuario_solicitante.email if usuario_solicitante else None,
             importador_usuario_id=str(conversacion.importador_usuario_id),

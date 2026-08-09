@@ -347,10 +347,19 @@ export interface BackendChatMessage {
 
 export interface BackendChatConversation {
   id: string;
-  cotizacion_id: string;
+  /**
+   * "negociacion" es el hilo solicitante ↔ empresa; "interna" es el canal de
+   * coordinación de la empresa con uno de sus asesores, que el cliente no ve.
+   * En las internas no hay cotización ni solicitante.
+   */
+  tipo: "negociacion" | "interna";
+  cotizacion_id: string | null;
   orden_id: string | null;
-  solicitante_id: string;
+  solicitante_id: string | null;
   importador_usuario_id: string;
+  importador_id: string | null;
+  /** Nombre de la otra parte, ya resuelto por el backend. */
+  contraparte_nombre: string | null;
   fecha_creacion: string;
   ultimo_mensaje: BackendChatMessage | null;
 }
@@ -568,6 +577,17 @@ export const businessService = {
   listChatConversations(): Promise<BackendChatConversation[]> {
     return apiRequest<BackendChatConversation[]>("/chat/conversaciones", {
       method: "GET",
+    });
+  },
+
+  /**
+   * Abre (o reutiliza) el canal interno empresa ↔ asesor. La cuenta dueña indica
+   * el asesor; el asesor lo llama sin argumentos y abre el suyo.
+   */
+  startInternalChat(asesorId?: string, mensajeInicial?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/interno", {
+      method: "POST",
+      body: { asesor_id: asesorId ?? null, mensaje_inicial: mensajeInicial ?? null },
     });
   },
 
