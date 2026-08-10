@@ -7773,7 +7773,7 @@ function AdminDashboardScreen({sb,onRefreshGlobal,screen}:{sb:SidebarCtrl;onRefr
   );
 }
 
-function HelpSupportScreen({sb,role}:{sb:SidebarCtrl;role:UserRole}) {
+function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRole;onPedirSoporte:()=>void}) {
   const helpRole = normalizeHelpRole(role);
   const roleContent = HELP_SUPPORT_CONTENT[helpRole];
   const [faqSearch, setFaqSearch] = useState("");
@@ -7790,6 +7790,27 @@ function HelpSupportScreen({sb,role}:{sb:SidebarCtrl;role:UserRole}) {
             <h1 className="text-xl font-semibold tracking-tight mt-3">Ayuda y soporte</h1>
             <p className="text-sm text-muted-foreground mt-1">Guia de uso y preguntas frecuentes para rol {roleContent.roleLabel}.</p>
           </div>
+
+          {/* Quien entra aquí ya tiene un problema: la salida a una persona va
+              arriba y visible, no escondida en el pie del menú. */}
+          <Card padding="md" className="border-primary/30 bg-primary/[0.03]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                  <LifeBuoy className="w-4 h-4"/>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">¿No encuentras la respuesta aquí?</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Abre un ticket y te atiende una persona del equipo de ImportacionesQ8. Se prioriza por urgencia.
+                  </p>
+                </div>
+              </div>
+              <Button variant="primary" icon={<LifeBuoy className="w-4 h-4"/>} onClick={onPedirSoporte}>
+                Pedir soporte técnico
+              </Button>
+            </div>
+          </Card>
 
           <Card padding="md">
             <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
@@ -9253,7 +9274,7 @@ export default function App() {
     // ── Shared ────────────────────────────────────────────────────────────────
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
-    if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole}/>;
+    if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole} onPedirSoporte={()=>setSoporteAbierto(true)}/>;
     if(screen==="courses")return (
       <CoursesPortalScreen
         sb={sb}
