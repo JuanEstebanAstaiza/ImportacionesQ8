@@ -6880,13 +6880,68 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
 // CREATE RESPONSE SCREEN — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
 function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,chatConversationId,onOpenChat}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};chatConversationId?:string;onOpenChat?:(conversationId:string)=>void}) {
+  type ProposalAttachmentRef = {id:string;nombre:string};
+  type ProposalDraftDetails = {
+    moq: string;
+    port: string;
+    productionTime: string;
+    shippingTime: string;
+    description: string;
+    advantages: string;
+    recommendations: string;
+    attachedFiles: ProposalAttachmentRef[];
+  };
+
+  function parseDraftDetails(raw:string|null|undefined):ProposalDraftDetails|null{
+    if(!raw){
+      return null;
+    }
+    try{
+      const parsed=JSON.parse(raw) as unknown;
+      if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)){
+        return null;
+      }
+      const draft=parsed as Record<string, unknown>;
+      const pickString=(value:unknown)=>typeof value==="string"?value:"";
+      const attachedFiles=Array.isArray(draft.attachedFiles)
+        ?draft.attachedFiles.map((row)=>{
+          if(!row||typeof row!=="object"||Array.isArray(row)){
+            return null;
+          }
+          const item=row as Record<string, unknown>;
+          const id=typeof item.id==="string"?item.id.trim():"";
+          if(!id){
+            return null;
+          }
+          return {
+            id,
+            nombre:typeof item.nombre==="string"&&item.nombre.trim()?item.nombre.trim():"Archivo adjunto",
+          };
+        }).filter((row):row is ProposalAttachmentRef=>Boolean(row))
+        :[];
+
+      return {
+        moq: pickString(draft.moq),
+        port: pickString(draft.port),
+        productionTime: pickString(draft.productionTime),
+        shippingTime: pickString(draft.shippingTime),
+        description: pickString(draft.description),
+        advantages: pickString(draft.advantages),
+        recommendations: pickString(draft.recommendations),
+        attachedFiles,
+      };
+    }catch{
+      return null;
+    }
+  }
+
   const quote=quotes.find(q=>q.id===quoteId)??null;
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
   const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
-  const [attachedFiles,setAttachedFiles]=useState<BackendArchivoItem[]>([]);
+  const [attachedFiles,setAttachedFiles]=useState<ProposalAttachmentRef[]>([]);
   const [form,setForm]=useState({
     unitPrice:"",moq:"",totalPrice:"",
     incoterm:"FOB",port:"",productionTime:"",shippingTime:"",totalTime:"",
@@ -6903,14 +6958,25 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
       return;
     }
 
+    const draftDetails=parseDraftDetails(existingProposal.condiciones_adicionales);
+    const plainTextConditions=draftDetails?"":(existingProposal.condiciones_adicionales || "");
+
     setForm((prev)=>({
       ...prev,
       totalPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
       unitPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
       incoterm: existingProposal.incoterm || "FOB",
       totalTime: existingProposal.tiempo_estimado_entrega || "",
-      description: existingProposal.condiciones_adicionales || "",
+      moq: draftDetails?.moq || "",
+      port: draftDetails?.port || "",
+      productionTime: draftDetails?.productionTime || "",
+      shippingTime: draftDetails?.shippingTime || "",
+      description: draftDetails?.description || plainTextConditions,
+      advantages: draftDetails?.advantages || "",
+      recommendations: draftDetails?.recommendations || "",
     }));
+
+    setAttachedFiles(draftDetails?.attachedFiles || []);
   },[existingProposal]);
 
   async function submit(){
@@ -6927,7 +6993,17 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     }
 
     const tiempoEstimado = form.totalTime.trim() || [form.productionTime.trim(), form.shippingTime.trim()].filter(Boolean).join(" + ") || "Por definir";
-    const observaciones = [form.description.trim(), form.advantages.trim(), form.recommendations.trim()].filter(Boolean).join("\n\n");
+    const observaciones = JSON.stringify({
+      schema:"create-response-v1",
+      moq:form.moq.trim(),
+      port:form.port.trim(),
+      productionTime:form.productionTime.trim(),
+      shippingTime:form.shippingTime.trim(),
+      description:form.description.trim(),
+      advantages:form.advantages.trim(),
+      recommendations:form.recommendations.trim(),
+      attachedFiles:attachedFiles.map((file)=>({id:file.id,nombre:file.nombre})),
+    });
 
     try{
       setSaving(true);
@@ -7097,7 +7173,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                           if(prev.some((row)=>row.id===fileItem.id)){
                             return prev;
                           }
-                          return [...prev,fileItem];
+                          return [...prev,{id:fileItem.id,nombre:fileItem.nombre}];
                         })}
                         onError={(message)=>setError(message)}
                       />
