@@ -104,61 +104,29 @@ class TestObtenerImportador:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 class TestCrearImportador:
-    """Tests para el endpoint POST /importadores"""
-    
-    def test_crear_importador_sin_autenticacion(self, client):
-        """Intentar crear importador sin autenticación"""
-        response = client.post("/importadores", json={
-            "nombre_empresa": "Importadora Test",
-            "especialidad_producto": ["Textiles"],
-            "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
-        })
-        
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    
-    def test_crear_importador_sin_role_admin(self, client, monkeypatch):
-        """Intentar crear importador sin rol de admin"""
-        from conftest import registrar_verificado
-        data = registrar_verificado(client, monkeypatch, "solicitante@example.com")
-        token = data["access_token"]
-        
-        # Intentar crear importador - debería fallar por rol insuficiente
-        response = client.post("/importadores", json={
-            "nombre_empresa": "Importadora Test",
-            "especialidad_producto": ["Textiles"],
-            "paises_origen": ["China"],
-            "tiempo_respuesta_promedio": "24h"
-        }, headers={"Authorization": f"Bearer {token}"})
-        
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-    
-    def test_crear_importador_con_role_admin_deshabilitado(self, client, db_session):
-        """POST /importadores sin dueño está deshabilitado; el alta oficial es /admin/importadores."""
-        _, _ah = crear_usuario_con_token(db_session, rol="admin"); token = _ah["Authorization"].split(" ", 1)[1]
+    """El alta de empresas vive solo en POST /admin/importadores.
+
+    `/importadores` no expone POST: crear la ficha sin representante legal dejaba
+    importadoras huérfanas. La cobertura del alta real (201, 403, 401, 422, email
+    duplicado) está en test_admin.py::TestCrearImportadorConDueño.
+    """
+
+    def test_post_no_esta_expuesto(self, client, db_session):
+        """Con GET registrado en la ruta, un POST debe dar 405, no 404."""
+        _, headers = crear_usuario_con_token(db_session, rol="admin")
 
         response = client.post("/importadores", json={
             "nombre_empresa": "Importadora Test Admin",
-            "especialidad_producto": ["Textiles", "Electrónica"],
-            "paises_origen": ["China", "Vietnam", "Tailandia"],
-            "tiempo_respuesta_promedio": "12h",
-            "calificacion_promedio": 4.5,
-            "capacidad_volumen": 50000
-        }, headers={"Authorization": f"Bearer {token}"})
+            "especialidad_producto": ["Textiles"],
+            "paises_origen": ["China"],
+            "tiempo_respuesta_promedio": "12h"
+        }, headers=headers)
 
-        assert response.status_code == status.HTTP_410_GONE
-        assert "/admin/importadores" in response.json()["detail"]
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
-    def test_crear_importador_campos_requeridos(self, client, db_session):
-        """Crear importador con campos requeridos faltantes (validación Pydantic antes del 410)"""
-        _, _ah = crear_usuario_con_token(db_session, rol="admin"); token = _ah["Authorization"].split(" ", 1)[1]
-
-        # Intentar crear sin campos requeridos - debería fallar
-        response = client.post("/importadores", json={
-            "nombre_empresa": ""  # Campo vacío
-        }, headers={"Authorization": f"Bearer {token}"})
-
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    def test_get_de_la_coleccion_sigue_vivo(self, client):
+        """Quitar el POST no debe afectar la lectura del catálogo."""
+        assert client.get("/importadores").status_code == status.HTTP_200_OK
 
 class TestImportadorModel:
     """Tests para el modelo ORM Importador"""
@@ -526,16 +494,40 @@ class TestCatalogoEnriquecido:
         importador, _dueño = crear_empresa_importadora(db_session, **kwargs)
         return importador
 
-    def test_destacados_ordena_por_calificacion_desc(self, client, db_session):
-        self._crear(db_session, nombre_empresa="Baja Calificación", email_dueño="baja@example.com", calificacion_promedio=2.0)
-        self._crear(db_session, nombre_empresa="Alta Calificación", email_dueño="alta@example.com", calificacion_promedio=4.9)
+    def test_destacados_ordena_por_peso_de_certificaciones(self, client, db_session):
+        """Las destacadas salen por el respaldo que les dio la plataforma.
+
+        Antes se ordenaba por `calificacion_promedio`, un campo que nunca se
+        alimentó de reseñas reales: ahora manda el peso publicitario de los
+        sellos que el admin otorga.
+        """
+        sin_sello = self._crear(db_session, nombre_empresa="Sin Respaldo", email_dueño="sin@example.com")
+        con_sello = self._crear(db_session, nombre_empresa="Con Respaldo", email_dueño="con@example.com")
+
+        _admin, headers_admin = crear_usuario_con_token(db_session, rol="admin")
+        certificacion = client.post(
+            "/admin/certificaciones",
+            json={"nombre": "Socio Destacado", "descripcion": "", "peso_publicidad": 50},
+            headers=headers_admin,
+        )
+        assert certificacion.status_code == status.HTTP_201_CREATED, certificacion.text
+
+        otorgada = client.post(
+            f"/admin/importadores/{con_sello.id}/certificaciones",
+            json={"certificacion_id": certificacion.json()["id"]},
+            headers=headers_admin,
+        )
+        assert otorgada.status_code == status.HTTP_201_CREATED, otorgada.text
 
         response = client.get("/importadores/destacados")
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 2
         nombres = [i["nombre_empresa"] for i in data]
-        assert nombres.index("Alta Calificación") < nombres.index("Baja Calificación")
+        assert nombres.index("Con Respaldo") < nombres.index("Sin Respaldo")
+        assert data[nombres.index("Con Respaldo")]["puntaje_publicidad"] == 50
+        assert data[nombres.index("Sin Respaldo")]["puntaje_publicidad"] == 0
+        assert sin_sello.id  # la empresa sin sello sigue apareciendo en el catálogo
 
     def test_destacados_respeta_limite(self, client, db_session):
         for i in range(5):
@@ -599,7 +591,21 @@ class TestCatalogoEnriquecido:
         assert nombres.index("Alta Orden") < nombres.index("Baja Orden")
 
     def test_admin_verificar_marca_verificado_true(self, client, db_session, admin_user):
+        from models.usuario import Usuario
+
         importador = self._crear(db_session, nombre_empresa="Empresa A Verificar", email_dueño="averificar@example.com")
+
+        # Verificar exige el expediente completo: sin especialidad, países ni
+        # prefijo de embarque la empresa no puede ni operar bien.
+        importador.especialidad_producto = ["Textiles"]
+        importador.paises_origen = ["China"]
+        importador.shipping_mark_prefijo = "ave"
+        dueño = db_session.query(Usuario).filter(
+            Usuario.importador_id == importador.id, Usuario.rol == "importador"
+        ).first()
+        if dueño:
+            dueño.email_verificado = True
+        db_session.commit()
 
         response = client.post(
             f"/admin/importadores/{importador.id}/verificar",

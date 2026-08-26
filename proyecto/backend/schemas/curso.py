@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
-from urllib.parse import urlparse
+
+from utils.urls import canonicalize_resource_url
 
 
 NivelCursoLiteral = Literal["Principiante", "Avanzado"]
@@ -14,17 +15,26 @@ MAX_RECURSOS_POR_LECCION = 20
 
 
 def _validar_url_http(value: Optional[str], *, campo: str = "url") -> Optional[str]:
-    """Solo permite http/https (mitiga javascript:/data: y esquemas raros)."""
-    if value is None or value == "":
-        return value
-    raw = value.strip()
-    parsed = urlparse(raw)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError(f"{campo} debe ser una URL http(s) absoluta válida")
-    return raw
+    """Acepta rutas del backend o URLs http(s) externas y las deja canónicas.
+
+    Guarda `/documentos/archivos/<id>/descargar` en vez de una URL absoluta atada
+    al host donde se publicó el curso, para que siga resolviendo desde localhost,
+    Dev Tunnel o producción. Sigue bloqueando `javascript:`/`data:` y YouTube.
+    """
+    return canonicalize_resource_url(value, campo=campo)
+
+
+def _validar_url_documental(value: Optional[str], *, campo: str = "url") -> Optional[str]:
+        url = _validar_url_http(value, campo=campo)
+        if url is None:
+            return None
+        if not url.startswith("/documentos/archivos/"):
+                raise ValueError(f"{campo} debe apuntar a un archivo subido a la plataforma")
+        return url
 
 
 class RecursoLeccionCreate(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=36)
     nombre: str = Field(..., min_length=1, max_length=255)
     url: str = Field(..., min_length=5, max_length=500)
     tipo: TipoRecursoLiteral = "archivo"
@@ -32,10 +42,14 @@ class RecursoLeccionCreate(BaseModel):
     @field_validator("url")
     @classmethod
     def url_segura(cls, v: str) -> str:
-        return _validar_url_http(v, campo="url de recurso")  # type: ignore[return-value]
+        return _validar_url_documental(v, campo="url de recurso")  # type: ignore[return-value]
 
 
 class LeccionCreate(BaseModel):
+    # Al editar un curso hay que devolver el id que entregó `LeccionResponse`:
+    # es lo que permite conservar la lección y, con ella, el progreso que los
+    # alumnos ya tenían registrado sobre ella.
+    id: Optional[str] = Field(default=None, max_length=36)
     titulo: str = Field(..., min_length=1, max_length=255)
     duracion: str = Field(default="10 min", max_length=30)
     video_url: str = Field(..., min_length=5, max_length=500)
@@ -45,10 +59,11 @@ class LeccionCreate(BaseModel):
     @field_validator("video_url")
     @classmethod
     def video_url_segura(cls, v: str) -> str:
-        return _validar_url_http(v, campo="video_url")  # type: ignore[return-value]
+        return _validar_url_documental(v, campo="video_url")  # type: ignore[return-value]
 
 
 class ModuloCreate(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=36)
     titulo: str = Field(..., min_length=1, max_length=255)
     lecciones: List[LeccionCreate] = Field(default_factory=list, max_length=MAX_LECCIONES_POR_MODULO)
 
@@ -78,6 +93,29 @@ class CursoCreate(BaseModel):
     @classmethod
     def al_menos_un_modulo(cls, v: List[ModuloCreate]) -> List[ModuloCreate]:
         if not v:
+            raise ValueError("El curso debe tener al menos un módulo")
+        return v
+
+
+class CursoUpdate(BaseModel):
+    titulo: Optional[str] = Field(default=None, min_length=3, max_length=255)
+    descripcion: Optional[str] = Field(default=None, max_length=5000)
+    portada_url: Optional[str] = Field(default=None, max_length=500)
+    precio: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    nivel: Optional[NivelCursoLiteral] = None
+    categoria: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    estado: Optional[Literal["borrador", "publicado", "archivado"]] = None
+    modulos: Optional[List[ModuloCreate]] = Field(default=None, max_length=MAX_MODULOS)
+
+    @field_validator("portada_url")
+    @classmethod
+    def portada_segura_update(cls, v: Optional[str]) -> Optional[str]:
+        return _validar_url_http(v, campo="portada_url")
+
+    @field_validator("modulos")
+    @classmethod
+    def modulos_validos(cls, v: Optional[List[ModuloCreate]]) -> Optional[List[ModuloCreate]]:
+        if v is not None and not v:
             raise ValueError("El curso debe tener al menos un módulo")
         return v
 
@@ -149,6 +187,14 @@ class CompraCursoResponse(BaseModel):
     precio_pagado: float
     fecha_compra: datetime
     curso: Optional[CursoListItem] = None
+
+
+class CertificadoCursoResponse(BaseModel):
+    curso_id: str
+    curso_titulo: str
+    archivo_id: str
+    url_descarga: str
+    fecha_emision: Optional[datetime] = None
 
 
 class ProgresoLeccionRequest(BaseModel):

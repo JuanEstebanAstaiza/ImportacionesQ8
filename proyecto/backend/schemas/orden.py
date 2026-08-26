@@ -36,6 +36,9 @@ class OrdenResponse(BaseModel):
     precio_acordado_usd: float
     tiempo_estimado_entrega: Optional[str]
     condiciones_adicionales: Optional[str]
+    # Marca de embarque congelada al crear la orden ("ctl-prendascontrol"): es lo
+    # que va rotulado en las cajas de este embarque.
+    shipping_mark: Optional[str] = None
     en_disputa: bool = False
     motivo_disputa: Optional[str] = None
     # Navegación cruzada (Fase 7): enlace directo al chat de esta orden, si existe

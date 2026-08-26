@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Integer
 from uuid import uuid4
 from datetime import datetime
 from database import Base
@@ -10,7 +10,22 @@ from database import Base
 #   vincula). Antes llamado "asesor" (Semana 3); renombrado en la Semana 4 para reflejar su rol real:
 #   reclama cotizaciones del pool de su empresa, redacta y negocia propuestas por chat.
 # - "admin": equipo de la plataforma (creado solo por otro admin o por script de seed)
-ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin")
+# - "soporte": agente de atención al cliente de la plataforma, creado por un admin. Atiende los
+#   tickets de soporte y resuelve incidentes de órdenes, pero NO administra la plataforma: no da
+#   de alta empresas ni usuarios, no toca certificaciones ni copias de seguridad.
+ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin", "soporte")
+
+# Cuentas del equipo de la plataforma: comparten la bandeja de soporte y las
+# acciones de resolución. Se agrupan aquí para no repetir la pareja por todo el
+# código y que añadir un rol interno mañana sea un solo cambio.
+ROLES_PLATAFORMA = ("admin", "soporte")
+
+# Mesa de soporte por niveles: 1 atiende lo corriente, 3 lo que requiere más
+# experiencia. Un agente puede atender su nivel y todos los inferiores; nunca
+# uno superior, que es justamente lo que evita mandarle un caso difícil a
+# alguien que acaba de entrar.
+NIVEL_SOPORTE_MINIMO = 1
+NIVEL_SOPORTE_MAXIMO = 3
 
 TIPOS_PERSONA_VALIDOS = ("natural", "juridica")
 
@@ -55,6 +70,10 @@ class Usuario(Base):
     # Saldo de créditos personal (solicitante natural). Si pertenece a una
     # organización, el saldo efectivo es OrganizacionSolicitante.creditos_balance.
     creditos_balance = Column(Float, default=0.0, nullable=False)
+
+    # Nivel de la mesa de soporte al que pertenece esta cuenta (solo rol
+    # "soporte"). Determina qué tickets se le pueden asignar. NULL en el resto.
+    nivel_soporte = Column(Integer, nullable=True)
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva

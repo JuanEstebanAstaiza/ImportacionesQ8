@@ -47,6 +47,7 @@ class Curso(Base):
     estado = Column(String(20), nullable=False, default=EstadoCurso.publicado.value, index=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
 
     modulos = relationship(
         "ModuloCurso",
@@ -112,6 +113,7 @@ class RecursoLeccion(Base):
     nombre = Column(String(255), nullable=False)
     url = Column(String(500), nullable=False)
     tipo = Column(String(30), nullable=False, default=TipoRecursoLeccion.archivo.value)
+    deleted_at = Column(DateTime, nullable=True)
 
     leccion = relationship("LeccionCurso", back_populates="recursos")
 
@@ -137,6 +139,24 @@ class CompraCurso(Base):
 
     def __repr__(self):
         return f"<CompraCurso(curso_id={self.curso_id}, usuario_id={self.usuario_id})>"
+
+
+class CertificadoCurso(Base):
+    """Certificado de finalización emitido a un alumno que completó el curso."""
+    __tablename__ = "certificados_curso"
+    __table_args__ = (
+        UniqueConstraint("curso_id", "usuario_id", name="unique_certificado_curso_usuario"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    curso_id = Column(String(36), ForeignKey("cursos.id"), nullable=False, index=True)
+    usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False, index=True)
+    # Archivo PDF en gestión documental (propiedad del alumno).
+    archivo_id = Column(String(36), ForeignKey("archivos.id"), nullable=False)
+    fecha_emision = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<CertificadoCurso(curso_id={self.curso_id}, usuario_id={self.usuario_id})>"
 
 
 class ProgresoLeccion(Base):

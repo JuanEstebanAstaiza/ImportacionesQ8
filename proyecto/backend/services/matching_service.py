@@ -7,6 +7,7 @@ from config import (
     indice_importador_abiertas,
 )
 from models.importador import Importador
+from utils.categorias import categoria_en, claves_categorias, texto_en
 
 def _get_redis_client():
     from config import redis_client
@@ -76,13 +77,29 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
     """
     Encuentra importadores activos que aplican a una cotización abierta
     (país + especialidad) y los registra en Redis + índice por importador.
+
+    El cruce se hace en Python y no con un `LIKE '%"Textiles"%'` sobre la
+    columna JSON: ese LIKE exigía que la cadena guardada por la empresa fuera
+    idéntica a la que eligió el cliente, y bastaba un "Químicos" frente a un
+    "Química" para que la cotización no llegara a nadie. El universo a filtrar
+    son las empresas importadoras activas, así que el coste es irrelevante
+    frente al de perder la difusión.
+
+    A diferencia de la validación al responder, aquí una empresa **sin**
+    especialidad declarada no entra en el reparto: hay que decidir a quién se
+    avisa, y sin especialidad no hay criterio.
     """
-    importadores = db.query(Importador).filter(
+    candidatos = db.query(Importador).filter(
         Importador.estado == "activo",
         Importador.solo_cotizaciones_directas == False,
-        json_contains_column(Importador.paises_origen, pais_importacion),
-        json_contains_column(Importador.especialidad_producto, linea_producto)
     ).all()
+
+    importadores = [
+        importador for importador in candidatos
+        if texto_en(pais_importacion, importador.paises_origen)
+        and claves_categorias(importador.especialidad_producto)
+        and categoria_en(linea_producto, importador.especialidad_producto)
+    ]
 
     if _redis_available() and importadores:
         client = _get_redis_client()

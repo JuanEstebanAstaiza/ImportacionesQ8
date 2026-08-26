@@ -34,14 +34,31 @@ ImportacionesQ8V/02-Integracion-API/ImportacionesQ8.postman_collection.json
 
 ## Regenerar (si cambia el backend)
 
-Con el backend en marcha:
+Levanta el backend **reconstruyendo la imagen**, o exportarás el código viejo que
+quedó cacheado:
+
+```powershell
+cd proyecto\backend
+docker compose build backend
+docker compose up -d backend
+```
+
+Exporta el snapshot y regenera. El paso de Python no es cosmético: normaliza a
+UTF-8 sin BOM con sangría estable, de modo que el diff entre exportaciones
+muestre solo cambios reales de la API.
 
 ```powershell
 curl.exe -s http://127.0.0.1:8000/openapi.json -o proyecto\backend\openapi_snapshot.json
+python -c "import json,io; d=json.load(io.open(r'proyecto\backend\openapi_snapshot.json',encoding='utf-8')); io.open(r'proyecto\backend\openapi_snapshot.json','w',encoding='utf-8',newline='\n').write(json.dumps(d,ensure_ascii=False,indent=2)+'\n')"
 python proyecto\backend\scripts\generate_postman_collection.py
 python proyecto\backend\scripts\generate_frontend_api_docs.py
 # Salida: ImportacionesQ8V/02-Integracion-API/
 ```
+
+> **No redirijas la salida de curl con `>` ni uses `Invoke-RestMethod`.** PowerShell
+> reescribe el archivo en su codificación y deja el texto acentuado corrupto
+> (`CrÃ©ditos` en vez de `Créditos`). Los tags dejan de coincidir con `TAG_FILES`
+> y el generador de docs aborta. Usa siempre `curl.exe -o`.
 
 ## Ver también
 

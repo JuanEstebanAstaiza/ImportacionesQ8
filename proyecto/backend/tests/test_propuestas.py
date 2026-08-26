@@ -228,14 +228,23 @@ class TestListarPropuestas:
         data = response.json()
         assert len(data) >= 1
     
-    def test_listar_propuestas_sin_autorizacion(self, client, db_session, test_cotizacion_abierta, auth_headers_importador):
-        """GET /cotizaciones/{id}/propuestas - Importador no puede ver propuestas"""
+    def test_importador_solo_ve_sus_propias_propuestas(self, client, db_session, test_cotizacion_abierta, auth_headers_importador):
+        """GET /cotizaciones/{id}/propuestas - la empresa ve lo suyo, nunca lo de la competencia.
+
+        Antes respondía 403 a cualquier cuenta de empresa, así que no había forma
+        de consultar por API la propuesta que ella misma había enviado.
+        """
         response = client.get(
             f"/cotizaciones/{test_cotizacion_abierta.id}/propuestas",
             headers=auth_headers_importador
         )
-        
-        assert response.status_code == 403
+
+        assert response.status_code == 200
+        propuestas = response.json()
+        assert isinstance(propuestas, list)
+        # Sin propuestas propias en esta cotización, la lista llega vacía: en
+        # ningún caso se filtran las de otras empresas.
+        assert propuestas == []
 
 
 class TestAceptarPropuesta:

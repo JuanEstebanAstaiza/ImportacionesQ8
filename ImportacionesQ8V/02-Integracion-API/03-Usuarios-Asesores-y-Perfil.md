@@ -1,6 +1,15 @@
 # APIs — Usuarios, asesores y perfil
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/03-Usuarios-Asesores-y-Perfil.md`; el resto se sobrescribe.
+
+### `GET /asesores/dashboard/stats`
+
+- **Resumen:** Dashboard Stats Asesor
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+---
 
 ### `GET /asesores/me/cotizaciones`
 
@@ -93,27 +102,3 @@ Array de `CotizacionAsignadaItem`:
 | `fecha_creacion` | `string` | sí |  |
 
 ---
-
-### `GET /asesores/me/cotizaciones`
-
-- **Auth:** JWT rol `asesor`
-- Lista cotizaciones asignadas al asesor autenticado.
-
-### `GET /asesores/dashboard/stats`
-
-- **Resumen:** Metricas de rendimiento del asesor (cotizaciones asignadas/respondidas, propuestas, tasa de aceptacion, volumen, ordenes).
-- **Auth:** Bearer JWT rol `asesor`
-- **Codigos:** 200
-
-**Respuesta (`MetricasAsesorResponse`)**
-
-| Campo | Tipo |
-|-------|------|
-| `asesor_id` | string |
-| `cotizaciones_asignadas` | int |
-| `cotizaciones_respondidas` | int |
-| `propuestas_enviadas` | int |
-| `propuestas_aceptadas` | int |
-| `tasa_aceptacion_pct` | number |
-| `volumen_cotizado_usd` | number |
-| `ordenes_asociadas` | int |

@@ -21,9 +21,21 @@ from .referido import CodigoReferido, ReferidoUso
 from .traduccion import TraduccionCache
 from .curso import (
     Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
-    NivelCurso, TipoRecursoLeccion, EstadoCurso,
+    CertificadoCurso, NivelCurso, TipoRecursoLeccion, EstadoCurso,
 )
+from .certificacion import Certificacion, CertificacionImportador
+from .resena import ResenaImportador
 from .notificacion import Notificacion, TipoNotificacion
+from .documental import (
+    Carpeta,
+    Archivo,
+    Etiqueta,
+    ArchivoEtiqueta,
+    Favorito,
+    CursoRecurso,
+    MensajeAdjunto,
+    OrdenDocumento,
+)
 
 __all__ = [
     "Usuario",
@@ -73,9 +85,21 @@ __all__ = [
     "RecursoLeccion",
     "CompraCurso",
     "ProgresoLeccion",
+    "CertificadoCurso",
+    "Certificacion",
+    "CertificacionImportador",
+    "ResenaImportador",
     "NivelCurso",
     "TipoRecursoLeccion",
     "EstadoCurso",
     "Notificacion",
     "TipoNotificacion",
+    "Carpeta",
+    "Archivo",
+    "Etiqueta",
+    "ArchivoEtiqueta",
+    "Favorito",
+    "CursoRecurso",
+    "MensajeAdjunto",
+    "OrdenDocumento",
 ]

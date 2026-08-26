@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
+
+from utils.urls import canonicalize_resource_url
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -39,10 +41,25 @@ class ActualizarMiembroRequest(BaseModel):
 
 
 class EvidenciaImportadorCreate(BaseModel):
-    tipo: Literal["certificado", "foto_fabrica", "catalogo", "moq_doc", "otro"]
+    tipo: Literal[
+        "certificado", "foto_fabrica", "catalogo", "moq_doc",
+        "video_presentacion", "foto_producto", "otro",
+    ]
     titulo: str = Field(..., min_length=1, max_length=255)
-    descripcion: Optional[str] = None
+    descripcion: Optional[str] = Field(
+        None,
+        max_length=600,
+        description="Descripcion breve que acompana al video o a la foto en la ficha publica",
+    )
     url: str = Field(..., min_length=5, max_length=500)
+
+    @field_validator("url")
+    @classmethod
+    def url_normalizada(cls, v: str) -> str:
+        """Se guarda la ruta canonica del backend, no la URL absoluta del host
+        donde se subio: si no, la evidencia dejaba de resolver desde otro
+        entorno (Dev Tunnel, produccion). Misma regla que el logo o el banner."""
+        return canonicalize_resource_url(v, campo="url")
 
 
 class EvidenciaImportadorResponse(BaseModel):

@@ -59,6 +59,329 @@
       "name": "Administración",
       "item": [
         {
+          "name": "Descargar Backup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/backup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "backup"
+              ],
+              "query": [
+                {
+                  "key": "incluir_archivos",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Incluir uploads/ y generated_docs/ en el ZIP"
+                }
+              ]
+            },
+            "description": "Descarga un ZIP con toda la plataforma: base de datos + archivos subidos.\n\nPensado para tomar una foto antes de actualizar y poder volver atrás sin\ndepender de integración continua. Se restaura con\n`python scripts/restaurar_backup.py <archivo.zip>`.\n\nOjo: el ZIP contiene datos personales y hashes de contraseña de toda la\nplataforma. Trátalo como un secreto."
+          },
+          "response": []
+        },
+        {
+          "name": "Resumen Backup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/backup/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "backup",
+                "resumen"
+              ]
+            },
+            "description": "Qué contendría el backup, sin generarlo: filas por tabla y peso de los archivos."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Certificaciones Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/certificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "certificaciones"
+              ],
+              "query": [
+                {
+                  "key": "incluir_inactivas",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Incluir sellos retirados del catálogo"
+                }
+              ]
+            },
+            "description": "Catálogo completo de sellos, con cuántas empresas tiene cada uno."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Certificacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/certificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "certificaciones"
+              ]
+            },
+            "description": "Crea un sello desde cero: nombre, descripción, logo y peso publicitario.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Retirar Certificacion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/certificaciones/:certificacion_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "certificaciones",
+                ":certificacion_id"
+              ],
+              "variable": [
+                {
+                  "key": "certificacion_id",
+                  "value": "{{certificacion_id}}"
+                }
+              ]
+            },
+            "description": "Retira el sello del catálogo sin borrarlo.\n\nNo se elimina de verdad: eso perdería el registro de a qué empresas se les\nhabía otorgado y por qué aparecían destacadas en su momento."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Certificacion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/certificaciones/:certificacion_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "certificaciones",
+                ":certificacion_id"
+              ],
+              "variable": [
+                {
+                  "key": "certificacion_id",
+                  "value": "{{certificacion_id}}"
+                }
+              ]
+            },
+            "description": "Edita el sello. Cambiar `peso_publicidad` reordena el catálogo al instante.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Conversaciones Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/conversaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "conversaciones"
+              ],
+              "query": [
+                {
+                  "key": "buscar",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtra por nombre o email de solicitante/empresa"
+                },
+                {
+                  "key": "importador_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Solo conversaciones de esta empresa"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Todas las conversaciones de la plataforma, para supervisión del equipo.\n\nReemplaza el uso de `GET /chat/conversaciones`, que para un admin devolvía\nlas 50 más recientes sin filtros ni paginación ni datos de los participantes."
+          },
+          "response": []
+        },
+        {
+          "name": "Leer Conversacion Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/conversaciones/:conversacion_id/mensajes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "conversaciones",
+                ":conversacion_id",
+                "mensajes"
+              ],
+              "variable": [
+                {
+                  "key": "conversacion_id",
+                  "value": "{{conversacion_id}}"
+                }
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Historial completo de una conversación. Solo lectura: el admin supervisa,\nno interviene en la negociación."
+          },
+          "response": []
+        },
+        {
           "name": "Listar Cotizaciones Abiertas",
           "request": {
             "method": "GET",
@@ -289,6 +612,131 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Certificaciones De Empresa",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/importadores/:importador_id/certificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "importadores",
+                ":importador_id",
+                "certificaciones"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Listar Certificaciones De Empresa"
+          },
+          "response": []
+        },
+        {
+          "name": "Otorgar Certificacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/importadores/:importador_id/certificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "importadores",
+                ":importador_id",
+                "certificaciones"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Respalda a una empresa con un sello de la plataforma.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revocar Certificacion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/importadores/:importador_id/certificaciones/:certificacion_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "importadores",
+                ":importador_id",
+                "certificaciones",
+                ":certificacion_id"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                },
+                {
+                  "key": "certificacion_id",
+                  "value": "{{certificacion_id}}"
+                }
+              ]
+            },
+            "description": "Retira el respaldo a una empresa. La empresa baja en el catálogo al instante."
           },
           "response": []
         },
@@ -581,6 +1029,36 @@
       "name": "Asesores",
       "item": [
         {
+          "name": "Dashboard Stats Asesor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asesores/dashboard/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asesores",
+                "dashboard",
+                "stats"
+              ]
+            },
+            "description": "Métricas de rendimiento de la cuenta de empresa autenticada: cotizaciones\nrespondidas, tasa de aceptación, volumen cotizado y órdenes asociadas.\n\nEl dueño también reclama y responde cotizaciones, así que ve sus propias\nmétricas con el mismo cálculo que un asesor."
+          },
+          "response": []
+        },
+        {
           "name": "Listar Mis Cotizaciones Asignadas",
           "request": {
             "method": "GET",
@@ -606,7 +1084,7 @@
                 "cotizaciones"
               ]
             },
-            "description": "Cotizaciones que el asesor autenticado ha reclamado (pantalla \"cuántas\ntengo asignadas\" del panel de empresa)."
+            "description": "Cotizaciones que la cuenta autenticada ha reclamado (pantalla \"cuántas\ntengo asignadas\" del panel de empresa).\n\nAcepta al dueño además del asesor: `POST /cotizaciones/{id}/reclamar` permite\nreclamar a ambos, así que limitar esta consulta a \"asesor\" dejaba al dueño con\nun 403 en la pantalla que lista justamente lo que él acababa de reclamar."
           },
           "response": []
         }
@@ -1054,6 +1532,44 @@
           "response": []
         },
         {
+          "name": "Iniciar Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/iniciar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                "iniciar"
+              ]
+            },
+            "description": "Inicia (o reutiliza) la conversación de negociación desde el lado de la empresa.\n\nPensado para que el asesor abra el chat al enviar su propuesta, sin esperar\na que el solicitante invoque `PUT /cotizaciones/{id}/propuestas/aceptar`.\n\nAlias conceptual del gap frontend: `POST /chats/iniciar` → implementado como\n`POST /chat/iniciar` (prefijo REST existente del módulo).",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Traducir Mensaje",
           "request": {
             "method": "POST",
@@ -1377,7 +1893,7 @@
                 }
               ]
             },
-            "description": "Listar todas las propuestas recibidas para una cotización. Solo el solicitante de la cotización puede verlas.\n\n- **cotizacion_id**: ID de la cotización (UUID)"
+            "description": "Listar las propuestas de una cotización.\n\n- **solicitante** dueño de la cotización: ve todas las propuestas enviadas\n  por las empresas (los borradores en redacción siguen ocultos).\n- **empresa** (dueño o asesor): ve **solo las propuestas de su propia\n  empresa**, incluidos sus borradores. Antes recibía un 403 aquí y no tenía\n  forma de consultar por API lo que ella misma había enviado.\n\n- **cotizacion_id**: ID de la cotización (UUID)"
           },
           "response": []
         },
@@ -1538,7 +2054,7 @@
                 "comprar"
               ]
             },
-            "description": "Genera un enlace de pago con Wompi para recargar créditos.\n\nLos créditos se acreditan cuando Wompi confirma el pago vía webhook\n(`POST /pagos/webhook/wompi`), no en este endpoint.",
+            "description": "Genera un enlace de pago con Wompi para recargar créditos.\n\nDeshabilitado por defecto: el modelo de negocio no cobra al solicitante\n(quien cotiza). Solo se factura a empresas importadoras por contrato.\nReactivar con COBRO_A_SOLICITANTES=true.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"paquete_creditos\": 100\n}",
@@ -1606,6 +2122,385 @@
               ]
             },
             "description": "Saldo efectivo: wallet de organización si pertenece a una, si no el personal."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cursos",
+      "item": [
+        {
+          "name": "Listar Cursos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos"
+              ],
+              "query": [
+                {
+                  "key": "categoria",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filtrar por categoría"
+                },
+                {
+                  "key": "nivel",
+                  "value": "",
+                  "disabled": true,
+                  "description": "'Principiante' o 'Avanzado'"
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Búsqueda por título/descripción"
+                },
+                {
+                  "key": "recomendados",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Ordenar por rating y popularidad"
+                },
+                {
+                  "key": "importador_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Cursos de una empresa"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Catálogo público de cursos publicados con filtros y recomendaciones."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Curso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos"
+              ]
+            },
+            "description": "Publica un curso con módulos, lecciones, URLs de video y archivos adjuntos.\nSolo la cuenta dueña de la empresa importadora.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Curso",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Curso"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Curso",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Curso",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Certificado Curso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id/certificado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id",
+                "certificado"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Certificado de finalización del alumno que completó el 100% del curso.\n\nEs idempotente: el PDF se emite una sola vez y queda en la carpeta\n`Certificados` de su gestión documental; las llamadas siguientes devuelven\nel mismo archivo."
+          },
+          "response": []
+        },
+        {
+          "name": "Comprar Curso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id/comprar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id",
+                "comprar"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                }
+              ]
+            },
+            "description": "Registra la compra/inscripción del usuario en el curso.\nIdempotente: si ya compró, devuelve la inscripción existente.\n\nCualquier cuenta de negocio puede inscribirse (no solo el solicitante):\nrestringirlo al rol \"solicitante\" devolvía 403 a los asesores y dueños de\nempresa que quisieran tomar un curso de otra importadora.\n\nNota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en\nauditoría 2026-07-28 (A04 diseño de pagos)."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Progreso Leccion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:curso_id/lecciones/:leccion_id/progreso",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":curso_id",
+                "lecciones",
+                ":leccion_id",
+                "progreso"
+              ],
+              "variable": [
+                {
+                  "key": "curso_id",
+                  "value": "{{curso_id}}"
+                },
+                {
+                  "key": "leccion_id",
+                  "value": "{{leccion_id}}"
+                }
+              ]
+            },
+            "description": "Marca una lección como completada (o no) y devuelve el avance del curso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener Curso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cursos/:id_o_slug",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cursos",
+                ":id_o_slug"
+              ],
+              "variable": [
+                {
+                  "key": "id_o_slug",
+                  "value": "{{id_o_slug}}"
+                }
+              ]
+            },
+            "description": "Detalle del curso con temario, vista previa y módulos."
+          },
+          "response": []
+        },
+        {
+          "name": "Mis Cursos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/mis-cursos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mis-cursos"
+              ]
+            },
+            "description": "Cursos comprados/inscritos por el usuario logueado, con progreso."
           },
           "response": []
         }
@@ -1778,6 +2673,626 @@
       ]
     },
     {
+      "name": "Gestión Documental",
+      "item": [
+        {
+          "name": "Crear Archivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos"
+              ]
+            },
+            "description": "Crear Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Subir Archivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                "upload"
+              ]
+            },
+            "description": "Subir Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Archivo",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Archivo"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Archivo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Descargar Archivo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id/descargar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id",
+                "descargar"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Descargar Archivo"
+          },
+          "response": []
+        },
+        {
+          "name": "Asignar Etiquetas Archivo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/archivos/:archivo_id/etiquetas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "archivos",
+                ":archivo_id",
+                "etiquetas"
+              ],
+              "variable": [
+                {
+                  "key": "archivo_id",
+                  "value": "{{archivo_id}}"
+                }
+              ]
+            },
+            "description": "Asignar Etiquetas Archivo",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar Archivos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/buscar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "buscar"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "tipo_recurso",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "etiqueta_ids",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "favorito",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "fecha_hasta",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Buscar Archivos"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Carpeta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/carpetas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "carpetas"
+              ]
+            },
+            "description": "Crear Carpeta",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar Carpeta",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/carpetas/:carpeta_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "carpetas",
+                ":carpeta_id"
+              ],
+              "variable": [
+                {
+                  "key": "carpeta_id",
+                  "value": "{{carpeta_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar Carpeta"
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Carpeta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/carpetas/:carpeta_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "carpetas",
+                ":carpeta_id"
+              ],
+              "variable": [
+                {
+                  "key": "carpeta_id",
+                  "value": "{{carpeta_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar Carpeta",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Adjuntos Chat",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/chats/:conversacion_id/adjuntos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "chats",
+                ":conversacion_id",
+                "adjuntos"
+              ],
+              "variable": [
+                {
+                  "key": "conversacion_id",
+                  "value": "{{conversacion_id}}"
+                }
+              ]
+            },
+            "description": "Listar Adjuntos Chat"
+          },
+          "response": []
+        },
+        {
+          "name": "Compartir Recursos Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/compartir-chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "compartir-chat"
+              ]
+            },
+            "description": "Compartir Recursos Chat",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear Etiqueta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/etiquetas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "etiquetas"
+              ]
+            },
+            "description": "Crear Etiqueta",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Explorador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/explorador",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "explorador"
+              ],
+              "query": [
+                {
+                  "key": "parent_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Listar Explorador"
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Favorito",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documentos/favoritos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "favoritos"
+              ]
+            },
+            "description": "Toggle Favorito",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Importadores",
       "item": [
         {
@@ -1788,6 +3303,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "url": {
@@ -1822,47 +3342,22 @@
                   "value": "",
                   "disabled": true,
                   "description": "Filtrar por empresas verificadas (true/false)"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Máximo de filas (paginación anti-DoS)"
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
                 }
               ]
             },
-            "description": "Lista todos los importadores activos con filtros opcionales.\n\n- **especialidad**: Filtrar por especialidad de producto (ej: \"Textiles\")\n- **pais**: Filtrar por país de origen (ej: \"China\")\n- **orden**: 'calificacion' (mejor calificados primero) o 'reciente' (más nuevos primero)\n- **certificado**: `true` para solo empresas verificadas, `false` para no verificadas"
-          },
-          "response": []
-        },
-        {
-          "name": "Crear Importador",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/importadores",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "importadores"
-              ]
-            },
-            "description": "**Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba\nimportadoras sin representante legal (dueño). El alta oficial es siempre:\n\n`POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)\nen un solo paso. El dueño es el jefe de los asesores/operadores.",
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Lista importadores activos con filtros y paginación (default 50, max 200).\n\n- **especialidad**: Filtrar por especialidad de producto (ej: \"Textiles\")\n- **pais**: Filtrar por país de origen (ej: \"China\")\n- **orden**: 'calificacion' (mejor calificados primero) o 'reciente' (más nuevos primero)\n- **certificado**: `true` para solo empresas verificadas, `false` para no verificadas"
           },
           "response": []
         },
@@ -1934,6 +3429,42 @@
           "response": []
         },
         {
+          "name": "Eliminar Asesor",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/asesores/:asesor_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "asesores",
+                ":asesor_id"
+              ],
+              "variable": [
+                {
+                  "key": "asesor_id",
+                  "value": "{{asesor_id}}"
+                }
+              ]
+            },
+            "description": "Eliminación física (hard delete) de un asesor de la empresa.\n\nPreferible usar `PUT /importadores/asesores/{id}/estado` (soft delete) si el\nasesor tiene historial de cotizaciones/chat. El hard delete solo se permite\ncuando el asesor no tiene cotizaciones asignadas ni es participante de chats."
+          },
+          "response": []
+        },
+        {
           "name": "Actualizar Estado Asesor",
           "request": {
             "method": "PUT",
@@ -1966,7 +3497,7 @@
                 }
               ]
             },
-            "description": "Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa).",
+            "description": "Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa).\n\nAl desactivarlo, toda su carga de trabajo (cotizaciones, órdenes y chats)\npasa a la cuenta dueña para que ninguna negociación quede huérfana.",
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -2152,6 +3683,52 @@
           "response": []
         },
         {
+          "name": "Asignar Asesor A Cotizacion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/cotizaciones/:cotizacion_id/asignar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "cotizaciones",
+                ":cotizacion_id",
+                "asignar"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "La cuenta dueña asigna (o reasigna) el responsable de una cotización.\n\nHasta ahora el único mecanismo era el reclamo por orden de llegada, sin\nmanera de corregirlo: si el asesor equivocado reclamaba una cotización,\nnadie podía moverla. Con `asesor_id = null` la cotización vuelve al pool.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Listar Importadores Destacados",
           "request": {
             "method": "GET",
@@ -2179,7 +3756,7 @@
                 }
               ]
             },
-            "description": "Top empresas importadoras activas por calificación promedio, para la sección\n\"Mejor calificados\" del dashboard del solicitante."
+            "description": "Empresas destacadas del dashboard del solicitante.\n\nEl criterio es el peso de las certificaciones que la plataforma les otorgó,\nno una calificación promedio: ese campo nunca se alimentó de reseñas reales."
           },
           "response": []
         },
@@ -2283,6 +3860,35 @@
               ]
             },
             "description": "Eliminar Evidencia"
+          },
+          "response": []
+        },
+        {
+          "name": "Metricas Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/metricas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "metricas"
+              ]
+            },
+            "description": "Resumen comercial de la empresa: cotizaciones respondidas, tasa de aceptación,\nvolumen cotizado y rendimiento (panel importadora).\n\nConsultas agregadas (COUNT/SUM) — evita cargar todas las filas en memoria\n(crítico con 100+ ops concurrentes)."
           },
           "response": []
         },
@@ -2610,6 +4216,124 @@
       ]
     },
     {
+      "name": "Notificaciones",
+      "item": [
+        {
+          "name": "Listar Notificaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notificaciones"
+              ],
+              "query": [
+                {
+                  "key": "solo_no_leidas",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Si true, solo no leídas"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Lista las notificaciones reales del usuario logueado (persistidas en BD)."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Todas Leidas",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notificaciones/leer-todas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notificaciones",
+                "leer-todas"
+              ]
+            },
+            "description": "Marca todas las notificaciones del usuario como leídas."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Leida",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notificaciones/:notificacion_id/leer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notificaciones",
+                ":notificacion_id",
+                "leer"
+              ],
+              "variable": [
+                {
+                  "key": "notificacion_id",
+                  "value": "{{notificacion_id}}"
+                }
+              ]
+            },
+            "description": "Marca una notificación propia como leída."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Organizaciones solicitantes",
       "item": [
         {
@@ -2897,7 +4621,7 @@
                 "borrador"
               ]
             },
-            "description": "Un asesor redacta un borrador de propuesta para una cotización que reclamó\n(`POST /cotizaciones/{id}/reclamar`). El borrador no es visible para el\nsolicitante hasta que la cuenta dueña lo envíe (`POST /propuestas/{id}/enviar`).",
+            "description": "Redacta un borrador de propuesta para una cotización de la empresa.\n\nUn **asesor** solo puede redactar sobre lo que reclamó\n(`POST /cotizaciones/{id}/reclamar`). El **dueño** puede redactar sobre\ncualquier cotización de su empresa: también reclama cotizaciones, y limitar\neste endpoint al rol \"asesor\" lo dejaba con un 403 sobre su propio trabajo.\n\nEl borrador no es visible para el solicitante hasta que la cuenta dueña lo\nenvíe (`POST /propuestas/{id}/enviar`).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"precio_ofrecido_usd\": 0.11,\n  \"tiempo_estimado_entrega\": \"35-45 días\",\n  \"incoterm\": \"FOB\"\n}",
@@ -3101,6 +4825,327 @@
       ]
     },
     {
+      "name": "Reseñas",
+      "item": [
+        {
+          "name": "Crear Resena",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas"
+              ]
+            },
+            "description": "Publica una reseña sobre la empresa de una orden propia ya entregada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Resenas De Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/importador/:importador_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "importador",
+                ":importador_id"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Reseñas públicas de una empresa. No exige sesión: el catálogo es público\ny quien está eligiendo proveedor todavía puede no haberse registrado."
+          },
+          "response": []
+        },
+        {
+          "name": "Resumen De Importador",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/importador/:importador_id/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "importador",
+                ":importador_id",
+                "resumen"
+              ],
+              "variable": [
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Promedio, total y reparto por estrellas para la cabecera de la ficha."
+          },
+          "response": []
+        },
+        {
+          "name": "Mis Resenas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/mias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "mias"
+              ]
+            },
+            "description": "Reseñas escritas por el solicitante, o recibidas por su empresa.\n\nUn mismo endpoint sirve a los dos lados porque la pregunta es la misma\n(\"¿qué reseñas me tocan?\") y la respuesta depende del rol de quien pregunta."
+          },
+          "response": []
+        },
+        {
+          "name": "Ordenes Pendientes De Resena",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/pendientes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                "pendientes"
+              ]
+            },
+            "description": "Órdenes entregadas del solicitante que todavía no tienen reseña.\n\nEs lo que alimenta el aviso de \"cuéntanos qué tal fue\": sin esta lista, el\nusuario tendría que acordarse por su cuenta de volver a puntuar."
+          },
+          "response": []
+        },
+        {
+          "name": "Editar Resena",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/:resena_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                ":resena_id"
+              ],
+              "variable": [
+                {
+                  "key": "resena_id",
+                  "value": "{{resena_id}}"
+                }
+              ]
+            },
+            "description": "Corrige la propia reseña. La opinión puede cambiar; el derecho a opinar no.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Moderar Resena",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/:resena_id/moderar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                ":resena_id",
+                "moderar"
+              ],
+              "variable": [
+                {
+                  "key": "resena_id",
+                  "value": "{{resena_id}}"
+                }
+              ]
+            },
+            "description": "Oculta o restaura una reseña. No se borra: se conserva la trazabilidad.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder Resena",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/resenas/:resena_id/responder",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "resenas",
+                ":resena_id",
+                "responder"
+              ],
+              "variable": [
+                {
+                  "key": "resena_id",
+                  "value": "{{resena_id}}"
+                }
+              ]
+            },
+            "description": "Derecho de réplica de la empresa reseñada.\n\nUna reseña pública sin posibilidad de responder deja a la empresa sin\ndefensa ante una crítica injusta, y al lector sin la otra versión.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Salud",
       "item": [
         {
@@ -3121,6 +5166,34 @@
               "path": []
             },
             "description": "Endpoint de salud - verifica que el servidor está funcionando"
+          },
+          "response": []
+        },
+        {
+          "name": "Configuracion Publica",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/configuracion-publica",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "configuracion-publica"
+              ]
+            },
+            "description": "Flags que el frontend necesita conocer antes de dibujar la navegación.\n\nFuente única de verdad: el frontend no duplica estas banderas en su propio\n`.env`, así que encender o apagar un módulo se hace en un solo sitio."
           },
           "response": []
         },

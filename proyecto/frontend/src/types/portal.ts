@@ -57,6 +57,14 @@ export interface SidebarCtrl {
   navItems: NavItem[];
   onNotif?: () => void;
   notifCount?: number;
+  onChat?: () => void;
+  chatCount?: number;
+  onHelp?: () => void;
+  showHelp?: boolean;
+  /** Abre el formulario para pedir soporte técnico al equipo de la plataforma. */
+  onSoporte?: () => void;
+  showSoporte?: boolean;
+  profileSubtitle?: string;
   onLogout?: () => void;
   onProfile?: () => void;
 }

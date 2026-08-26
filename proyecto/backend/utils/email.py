@@ -65,6 +65,33 @@ def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str)
     return enviar_correo(destinatario, asunto, cuerpo_texto)
 
 
+def enviar_correo_notificacion(
+    destinatario: str,
+    titulo: str,
+    mensaje: str = "",
+    enlace_relativo: str = "",
+) -> bool:
+    """Réplica por correo de una notificación in-app.
+
+    `enlace_relativo` se resuelve contra `FRONTEND_URL` para que el usuario entre
+    directo a la pantalla correspondiente.
+    """
+    enlace = f"{config.FRONTEND_URL}{enlace_relativo}" if enlace_relativo else config.FRONTEND_URL
+    cuerpo_texto = (
+        f"{titulo}\n\n"
+        f"{mensaje}\n\n"
+        f"Entra a la plataforma: {enlace}\n\n"
+        f"— ImportacionesQ8"
+    )
+    cuerpo_html = (
+        f"<p><strong>{titulo}</strong></p>"
+        f"<p>{mensaje}</p>"
+        f'<p><a href="{enlace}">Entrar a la plataforma</a></p>'
+        f"<p>— ImportacionesQ8</p>"
+    )
+    return enviar_correo(destinatario, f"{titulo} — ImportacionesQ8", cuerpo_texto, cuerpo_html)
+
+
 def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
     """Envía OTP de verificación de email o de login tras inactividad prolongada."""
     if proposito == "verificacion_email":

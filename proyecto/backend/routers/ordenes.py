@@ -14,7 +14,7 @@ from schemas.orden import (
     ReportarProblemaRequest, ResolverDisputaRequest
 )
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
-from utils.dependencies import get_db, get_current_user, require_rol
+from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
 
 logger = logging.getLogger("importacionesq8")
 
@@ -29,6 +29,55 @@ ESTADOS_VALIDOS = {
     "bodega_local": ["entregado"]
 }
 
+# Cómo se lee cada estado fuera del código: los mensajes que ve el cliente no
+# pueden decir "aduana_nacionalizacion".
+ETIQUETAS_ESTADO = {
+    "cotizacion_aceptada": "cotización aceptada",
+    "en_produccion": "en producción",
+    "transito_internacional": "en tránsito internacional",
+    "aduana_nacionalizacion": "en aduana / nacionalización",
+    "bodega_local": "en bodega local",
+    "entregado": "entregado",
+}
+
+
+def _anotar_cambio_estado_en_chat(
+    db: Session,
+    *,
+    orden: Orden,
+    remitente_id: str,
+    estado_anterior: str,
+    estado_nuevo: str,
+) -> None:
+    """Deja constancia del cambio de estado en el chat de seguimiento.
+
+    Best-effort: si el hilo no existe (órdenes anteriores a que el chat se
+    abriera al reclamar), el cambio de estado no debe fallar por eso.
+    """
+    try:
+        from models.chat import ConversacionChat, MensajeChat, TipoMensajeChat
+
+        conversacion = db.query(ConversacionChat).filter(
+            ConversacionChat.cotizacion_id == orden.cotizacion_id
+        ).first()
+        if not conversacion:
+            return
+
+        db.add(MensajeChat(
+            id=str(uuid4()),
+            conversacion_id=conversacion.id,
+            remitente_id=str(remitente_id),
+            contenido=(
+                f"Estado del embarque actualizado: "
+                f"{ETIQUETAS_ESTADO.get(estado_anterior, estado_anterior)} → "
+                f"{ETIQUETAS_ESTADO.get(estado_nuevo, estado_nuevo)}."
+            ),
+            tipo=TipoMensajeChat.sistema.value,
+        ))
+    except Exception:
+        logger.warning("No se pudo anotar el cambio de estado en el chat de la orden %s", orden.id)
+
+
 def get_db_now(db: Session) -> datetime:
     """Obtener la fecha/hora actual de forma compatible con SQLite y MySQL"""
     try:
@@ -39,7 +88,7 @@ def get_db_now(db: Session) -> datetime:
         # Fallback a datetime.utcnow() (SQLite)
         return datetime.utcnow()
 
-@router.get("/", response_model=List[OrdenResponse])
+@router.get("", response_model=List[OrdenResponse])
 async def listar_ordenes(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -80,6 +129,7 @@ async def listar_ordenes(
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
             condiciones_adicionales=o.condiciones_adicionales,
+            shipping_mark=o.shipping_mark,
             en_disputa=o.en_disputa,
             motivo_disputa=o.motivo_disputa,
             conversacion_id=o.conversacion_id,
@@ -151,6 +201,7 @@ async def listar_ordenes_activas_importador(
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
             condiciones_adicionales=o.condiciones_adicionales,
+            shipping_mark=o.shipping_mark,
             en_disputa=o.en_disputa,
             motivo_disputa=o.motivo_disputa,
             conversacion_id=o.conversacion_id,
@@ -233,6 +284,7 @@ async def obtener_orden(
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
+        shipping_mark=orden.shipping_mark,
         en_disputa=orden.en_disputa,
         motivo_disputa=orden.motivo_disputa,
         conversacion_id=orden.conversacion_id,
@@ -262,18 +314,23 @@ async def obtener_orden(
 async def actualizar_estado_orden(
     orden_id: str,
     nuevo_estado: EstadoOrdenUpdate,
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
     db: Session = Depends(get_db)
 ):
     """
-    Actualizar el estado de una orden. Solo los importadores asignados pueden actualizar el estado.
-    
+    Actualizar el estado de una orden.
+
+    Lo mueve la empresa dueña o el **asesor asignado** a esa orden: es quien
+    hace el seguimiento del embarque y quien recibe por el canal interno la
+    indicación de cuándo marcarlo (despachado, en aduana...).
+
     - **orden_id**: ID de la orden (UUID)
     - **nuevo_estado**: Nuevo estado de la orden
-    
+
     Validaciones:
-    1. La orden debe existir y el importador debe ser el asignado
-    2. El nuevo estado debe ser una transición válida según el ciclo de vida del pedido
+    1. La orden debe existir y ser de la empresa del usuario autenticado
+    2. Si quien la mueve es un asesor, debe ser el asignado a esa orden
+    3. El nuevo estado debe ser una transición válida según el ciclo de vida del pedido
     """
     try:
         orden_id_str = str(PyUUID(orden_id))  # Validar UUID
@@ -282,19 +339,25 @@ async def actualizar_estado_orden(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ID de orden inválido"
         )
-    
+
     # Verificar que la orden existe y pertenece a la empresa del usuario autenticado
     orden = db.query(Orden).filter(
         Orden.id == orden_id_str,
         Orden.importador_id == current_user.get("importador_id")
     ).first()
-    
+
     if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Orden no encontrada o no asignada a este importador"
         )
-    
+
+    if current_user["rol"] == "asesor" and str(orden.asesor_asignado_id or "") != str(current_user["user_id"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el asesor asignado a esta orden puede actualizar su estado"
+        )
+
     # Verificar que el nuevo estado es válido (transición permitida)
     estado_actual = orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado
     nuevo_estado_valor = nuevo_estado.estado
@@ -319,10 +382,21 @@ async def actualizar_estado_orden(
         fecha_cambio=get_db_now(db)
     )
     db.add(nuevo_historial)
-    
-    # Notificación persistente in-app + Redis Pub/Sub (best-effort).
-    from services.notificacion_service import crear_notificacion_best_effort
-    crear_notificacion_best_effort(
+
+    # El hilo de la cotización pasó a ser el del seguimiento al crearse la orden:
+    # dejar ahí el cambio de estado evita que el cliente tenga que ir a otra
+    # pantalla a enterarse, y da pie a preguntar por el mismo canal.
+    _anotar_cambio_estado_en_chat(
+        db,
+        orden=orden,
+        remitente_id=current_user["user_id"],
+        estado_anterior=estado_actual,
+        estado_nuevo=nuevo_estado_valor,
+    )
+
+    # Notificación in-app + WhatsApp + correo, y Redis Pub/Sub (best-effort).
+    from services.notificacion_service import notificar
+    notificar(
         db,
         usuario_id=orden.solicitante_id,
         tipo="orden",
@@ -333,6 +407,7 @@ async def actualizar_estado_orden(
             "estado_anterior": estado_actual,
             "estado_nuevo": nuevo_estado_valor,
         },
+        enlace_relativo="/ordenes",
     )
 
     if config.redis_client:
@@ -469,6 +544,7 @@ async def obtener_orden_por_cotizacion(
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
         condiciones_adicionales=orden.condiciones_adicionales,
+        shipping_mark=orden.shipping_mark,
         en_disputa=orden.en_disputa,
         motivo_disputa=orden.motivo_disputa,
         conversacion_id=orden.conversacion_id,

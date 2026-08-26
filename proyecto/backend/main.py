@@ -22,10 +22,17 @@ from routers.legal import router as legal_router
 from routers.organizaciones import router as organizaciones_router
 from routers.disputas import router as disputas_router
 from routers.referidos import router as referidos_router
+from routers.resenas import router as resenas_router
 from routers.cursos import router as cursos_router
 from routers.notificaciones import router as notificaciones_router
+from routers.documentos import router as documentos_router
+from routers.ayuda import router as ayuda_router
 from utils.limiter import limiter
-from utils.security_middleware import SecurityHeadersMiddleware, RequestSizeLimitMiddleware
+from utils.security_middleware import (
+    SecurityHeadersMiddleware,
+    RequestSizeLimitMiddleware,
+    TrailingSlashNormalizationMiddleware,
+)
 
 logger = logging.getLogger("importacionesq8")
 
@@ -52,19 +59,42 @@ app = FastAPI(
     description="API REST para la plataforma de importaciones Q8",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,
     docs_url=_docs,
     redoc_url=_redoc,
     openapi_url=_openapi,
 )
 
-# Configurar CORS (métodos/headers acotados — no wildcard)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip() and o.strip() != "*"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
-)
+# Refuerza el comportamiento también en el router raíz para evitar 307 automáticos.
+app.router.redirect_slashes = False
+
+# Configurar CORS (métodos/headers acotados — sin wildcard inseguro con credenciales)
+default_dev_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+]
+configured_origins = [o.strip() for o in CORS_ORIGINS if o.strip() and o.strip() != "*"]
+allow_origins = sorted(set(default_dev_origins + configured_origins))
+
+# Permite DevTunnels y LAN de desarrollo sin abrir todos los orígenes.
+allow_origin_regex = r"^https?://((localhost|127\.0\.0\.1)(:\d+)?|192\.168\.\d{1,3}\.\d{1,3}(:\d+)?|[a-z0-9-]+\.devtunnels\.ms)$"
+
+# ORDEN DE LOS MIDDLEWARES
+# `add_middleware` va apilando hacia fuera: el ÚLTIMO registrado es el más
+# externo y por tanto el primero que ve la petición y el último que toca la
+# respuesta. De abajo hacia arriba, la cadena resultante es:
+#
+#   CORS → normalización de slash → headers de seguridad → tope de body → gzip → router
+#
+# CORS queda de lo más externo a propósito. Antes estaba por dentro del tope de
+# body, así que su 413 salía SIN `Access-Control-Allow-Origin`: el navegador no
+# mostraba "archivo demasiado grande" sino un error de CORS, y la causa real
+# quedaba oculta. Cualquier respuesta corta que genere un middleware interno
+# tiene que seguir siendo legible desde el browser.
 
 # Comprime respuestas JSON grandes (catálogos, temarios, listas) → menos ancho de banda
 # bajo 100–1000 clientes concurrentes. Umbral 500 bytes.
@@ -73,6 +103,29 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 # Blindaje HTTP (orden: size limit antes de handlers pesados; headers al final de la cadena de salida)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Normaliza la ruta antes de que el rate limiting o el router la vean. Todas las
+# rutas se registran sin slash final; esto hace que `/importadores/` resuelva
+# igual que `/importadores`.
+app.add_middleware(TrailingSlashNormalizationMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "Cache-Control",
+        "Pragma",
+        "X-Requested-With",
+    ],
+    expose_headers=["WWW-Authenticate", "Content-Disposition"],
+)
 
 # Configurar rate limiting (fuerza bruta en /auth/login, abuso en /auth/register)
 app.state.limiter = limiter
@@ -129,8 +182,11 @@ app.include_router(legal_router)
 app.include_router(organizaciones_router)
 app.include_router(disputas_router)
 app.include_router(referidos_router)
+app.include_router(resenas_router)
 app.include_router(cursos_router)
 app.include_router(notificaciones_router)
+app.include_router(documentos_router)
+app.include_router(ayuda_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
@@ -140,6 +196,26 @@ async def root():
         "message": "API ImportacionesQ8 funcionando correctamente",
         "version": "1.0.0"
     }
+
+@app.get("/configuracion-publica", tags=["Salud"])
+async def configuracion_publica():
+    """Flags que el frontend necesita conocer antes de dibujar la navegación.
+
+    Fuente única de verdad: el frontend no duplica estas banderas en su propio
+    `.env`, así que encender o apagar un módulo se hace en un solo sitio.
+    """
+    import config as app_config
+    from utils.security_middleware import MAX_UPLOAD_BYTES
+
+    return {
+        "modulo_educativo_habilitado": app_config.MODULO_EDUCATIVO_HABILITADO,
+        "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
+        "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
+        # Para que el frontend avise ANTES de subir en vez de dejar que el usuario
+        # espere a que se transfiera un vídeo entero y reciba un 413 al final.
+        "max_subida_bytes": MAX_UPLOAD_BYTES,
+    }
+
 
 @app.get("/health", tags=["Salud"])
 async def health_check():

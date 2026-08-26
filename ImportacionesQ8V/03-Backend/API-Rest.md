@@ -98,6 +98,26 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | POST | `/chat/mensajes/{mensaje_id}/traducir` | Traduce un mensaje y cachea en `metadata.traducciones` |
 | WS | `/ws/chat/{conversacion_id}?token=...` | Conexión WebSocket para chat en tiempo real |
 
+### Gestión documental y multimedia (2026-08-05)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/documentos/explorador` | Lista carpetas y archivos por carpeta padre |
+| POST | `/documentos/carpetas` | Crea carpeta |
+| PATCH | `/documentos/carpetas/{id}` | Renombra/reubica carpeta |
+| DELETE | `/documentos/carpetas/{id}` | Soft delete de carpeta |
+| POST | `/documentos/archivos` | Registra archivo permitido (documento/imagen/mp4) |
+| PATCH | `/documentos/archivos/{id}` | Renombra o mueve archivo |
+| DELETE | `/documentos/archivos/{id}` | Soft delete de archivo (con validación LMS activa) |
+| GET | `/documentos/buscar` | Búsqueda por nombre, tipo, etiqueta, favorito y fechas |
+| POST | `/documentos/favoritos/toggle` | Marca/desmarca favoritos |
+| GET | `/documentos/etiquetas` | Lista etiquetas del usuario |
+| POST | `/documentos/etiquetas` | Crea etiqueta |
+| POST | `/documentos/archivos/{id}/etiquetas` | Asigna etiquetas a archivo |
+| POST | `/documentos/compartir-chat` | Inserta archivos de drive como adjuntos en chats |
+| GET | `/documentos/chats/{conversacion_id}/adjuntos` | Panel lateral de adjuntos por conversación |
+| GET | `/documentos/archivos/{id}/descargar` | Descarga del archivo |
+
 ### Features de valor (2026-07-13)
 
 > Importadoras **no** tienen wallet: su cobro es contractual fuera de plataforma. Los créditos son solo de **solicitantes** (natural o jurídica / organización). Detalle: [[Features-Valor-Jul-2026]].
@@ -152,6 +172,12 @@ Registro: body opcional `codigo_referido` en `POST /auth/register`. Persona jur�
 | PUT | `/notificaciones/{id}/leer` | Autenticado | Marcar una leída |
 | PUT | `/notificaciones/leer-todas` | Autenticado | Marcar todas leídas |
 | POST | `/chat/iniciar` | Dueño o asesor | Abrir negociación al enviar propuesta (sin esperar al solicitante) |
+
+Actualización 2026-08-05 (LMS):
+
+- `PUT /cursos/{curso_id}` para edición de metadatos del curso.
+- `DELETE /cursos/{curso_id}` con soft delete (`deleted_at`) y archivado.
+- Validación de URLs en recursos/lecciones: no se aceptan hosts YouTube.
 
 ### Propuestas: redacción, envío y doble aceptación (Semana 4)
 

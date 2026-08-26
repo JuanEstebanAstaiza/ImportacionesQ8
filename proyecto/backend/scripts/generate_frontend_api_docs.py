@@ -12,6 +12,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]  # ImportacionesQ8
 OPENAPI = Path(__file__).resolve().parents[1] / "openapi_snapshot.json"
 OUT = ROOT / "ImportacionesQ8V" / "02-Integracion-API"
+PREAMBULOS = OUT / "_preambulos"
+
+# Módulos con guía de integración escrita a mano: no se generan por tag. Sus
+# endpoints siguen apareciendo en Catalogo-Completo.md, así que no se pierde
+# cobertura; lo que se evita es sobrescribir la guía con un volcado de endpoints.
+TAGS_CON_GUIA_MANUAL = {
+    "Cursos",                # 15-Cursos-LMS.md
+    "Notificaciones",        # 16-Notificaciones.md
+    "Gestión Documental",    # 17-Documentos-y-Multimedia.md
+}
 
 TAG_FILES = {
     "Salud": "13-Legal-y-Salud.md",
@@ -29,6 +39,9 @@ TAG_FILES = {
     "Organizaciones solicitantes": "09-Organizaciones.md",
     "Disputas": "10-Disputas.md",
     "Referidos": "11-Referidos.md",
+    # Reputación de las empresas importadoras: se documenta junto a ellas
+    # porque es lo que ordena y explica el catálogo.
+    "Reseñas": "04-Importadores.md",
     "Administración": "12-Admin.md",
 }
 
@@ -278,19 +291,33 @@ def render_endpoint(method: str, path: str, op: dict, schemas: dict) -> str:
 
 
 def write_tag_file(path: Path, title: str, body: str) -> None:
+    # Lo que OpenAPI no puede describir (protocolo WebSocket, notas de uso) vive en
+    # `_preambulos/<archivo>.md` y se antepone en cada regeneración. Sin esto, el
+    # contenido escrito a mano se perdía cada vez que alguien corría el script.
+    preambulo = ""
+    fuente = PREAMBULOS / path.name
+    if fuente.exists():
+        preambulo = fuente.read_text(encoding="utf-8").strip() + "\n\n"
+
     path.write_text(
         f"# {title}\n\n"
-        f"> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.\n\n"
+        f"> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.\n"
+        f"> Lo escrito a mano va en `_preambulos/{path.name}`; el resto se sobrescribe.\n\n"
+        f"{preambulo}"
         f"{body}",
         encoding="utf-8",
     )
 
 
 def main() -> None:
-    d = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    # utf-8-sig: el snapshot se exporta desde PowerShell, que antepone BOM.
+    # También lee correctamente un archivo sin BOM (curl, bash).
+    d = json.loads(OPENAPI.read_text(encoding="utf-8-sig"))
     schemas = d.get("components", {}).get("schemas", {})
     by_file: dict[str, list[tuple[str, str, dict]]] = defaultdict(list)
     catalog_rows = []
+
+    tags_sin_mapeo: set[str] = set()
 
     for path, methods in sorted(d["paths"].items()):
         for method, op in sorted(methods.items()):
@@ -299,11 +326,30 @@ def main() -> None:
             m = method.upper()
             tags = op.get("tags") or ["Otros"]
             tag = tags[0]
-            fname = TAG_FILES.get(tag, "99-Otros.md")
-            by_file[fname].append((m, path, op))
             auth = "Público" if is_public(m, path) else "JWT"
             summary = (op.get("summary") or "").replace("|", "\\|").replace("\n", " ")[:100]
             catalog_rows.append((m, path, tag, auth, summary))
+
+            if tag in TAGS_CON_GUIA_MANUAL:
+                continue
+            if tag not in TAG_FILES:
+                tags_sin_mapeo.add(tag)
+            fname = TAG_FILES.get(tag, "99-Otros.md")
+            by_file[fname].append((m, path, op))
+
+    # Un tag sin mapeo manda sus endpoints a 99-Otros.md y, al reescribirse los
+    # archivos por tag, su documentación anterior desaparece. Antes esto pasaba en
+    # silencio, así que se corta aquí: es más barato arreglar la causa que perder
+    # páginas. Causa típica: el snapshot exportado con mojibake ("CrÃ©ditos" en vez
+    # de "Créditos") porque PowerShell lo escribió en otra codificación.
+    if tags_sin_mapeo:
+        raise SystemExit(
+            "Abortado: hay tags de OpenAPI sin entrada en TAG_FILES.\n"
+            + "".join("  - %r\n" % t for t in sorted(tags_sin_mapeo))
+            + "Si los nombres se ven corruptos, reexporta el snapshot en UTF-8:\n"
+            "  curl.exe -s http://127.0.0.1:8000/openapi.json -o proyecto\\backend\\openapi_snapshot.json\n"
+            "Si son tags nuevos y legítimos, agrégalos a TAG_FILES y a file_titles."
+        )
 
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -342,11 +388,27 @@ def main() -> None:
     for m, path, tag, auth, summary in catalog_rows:
         cat.append(f"| `{m}` | `{path}` | {tag} | {auth} | {summary} |")
     cat.append("")
+    cat.append("## Colección HTTP")
+    cat.append("")
+    cat.append("- Postman/Insomnia: [[14-Postman-Insomnia]]")
+    cat.append("- Archivo: `ImportacionesQ8.postman_collection.json` (en `02-Integracion-API/`)")
+    cat.append("- Índice de la carpeta: [[Indice-Integracion-API]]")
+    cat.append("")
     cat.append("## Índice por módulo")
     cat.append("")
     for fname, title in file_titles.items():
         if (OUT / fname).exists():
             note = fname.replace(".md", "")
+            cat.append(f"- [[{note}|{title}]]")
+
+    # Módulos con guía manual: no tienen archivo generado, pero sus endpoints sí
+    # están en la tabla de arriba, así que se enlazan igual.
+    for note, title in (
+        ("15-Cursos-LMS", "APIs — Cursos / LMS"),
+        ("16-Notificaciones", "APIs — Notificaciones in-app"),
+        ("17-Documentos-y-Multimedia", "APIs — Gestión documental y multimedia"),
+    ):
+        if (OUT / f"{note}.md").exists():
             cat.append(f"- [[{note}|{title}]]")
     (OUT / "Catalogo-Completo.md").write_text("\n".join(cat) + "\n", encoding="utf-8")
 

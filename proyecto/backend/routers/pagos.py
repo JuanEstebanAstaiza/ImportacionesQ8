@@ -191,6 +191,21 @@ async def obtener_pago(
     return pago
 
 
+def _notificar_pago(db: Session, *, pago: Pago, titulo: str, mensaje: str) -> None:
+    """Aviso in-app + WhatsApp + correo del resultado de un pago."""
+    from services.notificacion_service import notificar
+
+    notificar(
+        db,
+        usuario_id=str(pago.usuario_id),
+        tipo="pago",
+        titulo=titulo,
+        mensaje=mensaje,
+        data={"pago_id": str(pago.id), "wompi_payment_id": pago.wompi_payment_id},
+        enlace_relativo="/creditos",
+    )
+
+
 @router.post("/webhook/wompi")
 async def webhook_wompi(
     evento: WompiWebhookEvent,
@@ -249,6 +264,12 @@ async def webhook_wompi(
                 pago_id=pago.id,
                 descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})",
             )
+        _notificar_pago(
+            db,
+            pago=pago,
+            titulo="Pago confirmado",
+            mensaje=f"Se acreditaron {pago.creditos_comprados} créditos a tu cuenta.",
+        )
         try:
             db.commit()
         except IntegrityError:
@@ -260,6 +281,12 @@ async def webhook_wompi(
             Pago.id == pago.id,
             Pago.estado == EstadoPago.pendiente.value,
         ).update({Pago.estado: EstadoPago.fallido.value}, synchronize_session=False)
+        _notificar_pago(
+            db,
+            pago=pago,
+            titulo="Tu pago no se pudo procesar",
+            mensaje="El pago fue rechazado por la pasarela. Puedes intentarlo de nuevo desde la plataforma.",
+        )
         db.commit()
 
     elif evento_tipo == "payment.refunded" or estado_wompi == "refunded":

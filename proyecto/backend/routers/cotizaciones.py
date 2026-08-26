@@ -17,6 +17,7 @@ from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.importador import Importador
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
+from utils.categorias import categoria_en
 
 logger = logging.getLogger("importacionesq8")
 
@@ -32,7 +33,22 @@ router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
 # Router independiente para /propuestas (no anidado bajo /cotizaciones) - ver Tarea 2.1
 propuestas_router = APIRouter(prefix="/propuestas", tags=["Propuestas"])
 
-@router.get("/", response_model=List[CotizacionResponse])
+
+def _empresa_puede_responder_abierta(empresa: Optional[Importador], cotizacion: Cotizacion) -> bool:
+    """¿Tiene sentido ofrecerle a esta empresa una cotización abierta ajena?
+
+    Es el mismo criterio que aplica `POST /propuestas` al validar la propuesta,
+    para que la bandeja de la empresa no muestre nada que después vaya a ser
+    rechazado. Una empresa de "solo cotizaciones directas" queda fuera del
+    circuito abierto por definición.
+    """
+    if empresa is None:
+        return False
+    if empresa.solo_cotizaciones_directas:
+        return False
+    return categoria_en(cotizacion.linea_producto, empresa.especialidad_producto)
+
+@router.get("", response_model=List[CotizacionResponse])
 async def listar_cotizaciones(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -55,7 +71,7 @@ async def listar_cotizaciones(
         # El importador_id de la empresa viene del claim del JWT (no del user_id de
         # la cuenta), para soportar varias cuentas (dueño + asesores) por empresa.
         importador_id_str = current_user.get("importador_id")
-        
+
         # Importador ve cotizaciones dirigidas a él + abiertas disponibles para propuestas
         cotizaciones = db.query(Cotizacion).filter(
             or_(
@@ -69,6 +85,17 @@ async def listar_cotizaciones(
                 )
             )
         ).order_by(Cotizacion.fecha_creacion.desc()).all()
+
+        # Las abiertas se recortan a lo que la empresa puede responder de verdad.
+        # Antes se devolvían todas: la bandeja se llenaba de cotizaciones de otras
+        # categorías y el botón "Responder" terminaba en un 400 de congruencia que
+        # el usuario leía como un fallo de permisos.
+        empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
+        cotizaciones = [
+            c for c in cotizaciones
+            if c.importador_id == importador_id_str
+            or _empresa_puede_responder_abierta(empresa, c)
+        ]
     else:
         # Admin ve todas las cotizaciones
         cotizaciones = db.query(Cotizacion).order_by(
@@ -126,6 +153,53 @@ async def listar_pool_empresa(
 
     return resultado
 
+def _asegurar_chat_negociacion(
+    db: Session,
+    *,
+    cotizacion: Cotizacion,
+    importador_usuario_id: str,
+    mensaje_sistema: Optional[str] = None,
+):
+    """Devuelve el hilo solicitante ↔ empresa de esta cotización, creándolo si no existe.
+
+    Hay tres momentos que necesitan el hilo abierto (el asesor reclama, el
+    cliente pide negociar, la propuesta se cierra) y antes cada uno lo creaba por
+    su cuenta con criterios ligeramente distintos. Con un único sitio, el hilo
+    siempre nace igual y nunca se duplica: `cotizacion_id` es único en la tabla.
+    """
+    from uuid import uuid4 as gen_uuid
+
+    from models.chat import ConversacionChat, MensajeChat, TipoConversacion, TipoMensajeChat
+
+    conversacion = db.query(ConversacionChat).filter(
+        ConversacionChat.cotizacion_id == cotizacion.id
+    ).first()
+
+    if conversacion:
+        return conversacion
+
+    conversacion = ConversacionChat(
+        id=str(gen_uuid()),
+        tipo=TipoConversacion.negociacion.value,
+        cotizacion_id=cotizacion.id,
+        solicitante_id=cotizacion.solicitante_id,
+        importador_usuario_id=importador_usuario_id,
+    )
+    db.add(conversacion)
+    db.flush()
+
+    if mensaje_sistema:
+        db.add(MensajeChat(
+            id=str(gen_uuid()),
+            conversacion_id=conversacion.id,
+            remitente_id=importador_usuario_id,
+            contenido=mensaje_sistema,
+            tipo=TipoMensajeChat.sistema.value,
+        ))
+
+    return conversacion
+
+
 @router.post("/{cotizacion_id}/reclamar", response_model=CotizacionResponse)
 async def reclamar_cotizacion(
     cotizacion_id: str,
@@ -174,6 +248,41 @@ async def reclamar_cotizacion(
             status_code=status.HTTP_409_CONFLICT,
             detail="Esta cotización ya fue reclamada por otro miembro de la empresa"
         )
+
+    # El chat nace aquí, no cuando el cliente se decide a escribir: quien reclama
+    # es quien va a negociar, y sin canal abierto el solicitante no tenía forma
+    # de discutir condiciones antes de aceptar.
+    from models.usuario import Usuario
+
+    quien = db.query(Usuario).filter(Usuario.id == user_id_str).first()
+    empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
+    nombre_quien = (quien.nombre or quien.email) if quien else "Un asesor"
+    nombre_empresa = empresa.nombre_empresa if empresa else "la empresa importadora"
+
+    _asegurar_chat_negociacion(
+        db,
+        cotizacion=cotizacion,
+        importador_usuario_id=user_id_str,
+        mensaje_sistema=(
+            f"{nombre_quien}, de {nombre_empresa}, tomó esta cotización y abrió el "
+            f"canal para negociar las condiciones."
+        ),
+    )
+
+    from services.notificacion_service import notificar as _notificar_usuario
+
+    _notificar_usuario(
+        db,
+        usuario_id=cotizacion.solicitante_id,
+        tipo="negociacion",
+        titulo="Un asesor tomó tu cotización",
+        mensaje=(
+            f"{nombre_quien} ({nombre_empresa}) atenderá «{cotizacion.nombre_producto}». "
+            f"Ya puedes escribirle por el chat."
+        ),
+        data={"cotizacion_id": cotizacion_id_str, "importador_id": importador_id_str},
+        enlace_relativo="/chats",
+    )
 
     db.commit()
     db.refresh(cotizacion)
@@ -229,7 +338,7 @@ async def obtener_cotizacion(
     
     return cotizacion
 
-@router.post("/", response_model=CotizacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CotizacionResponse, status_code=status.HTTP_201_CREATED)
 async def crear_cotizacion(
     cotizacion_data: CotizacionCreate,
     current_user: dict = Depends(require_rol("solicitante")),
@@ -309,6 +418,21 @@ async def crear_cotizacion(
                 detail="Importador no encontrado o inactivo"
             )
 
+        # La empresa destino tiene que trabajar la línea de producto pedida. Sin
+        # esta comprobación la cotización se creaba igual y era la empresa quien
+        # se topaba después con el 400 de congruencia al intentar responder: un
+        # callejón sin salida para las dos partes. Mejor decírselo al cliente
+        # ahora, que todavía puede elegir otra empresa o la modalidad abierta.
+        if not categoria_en(cotizacion_data.linea_producto, importador.especialidad_producto):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"{importador.nombre_empresa} no trabaja la línea de producto "
+                    f"'{cotizacion_data.linea_producto}'. Elige otra empresa o publica la "
+                    f"cotización en modalidad abierta."
+                )
+            )
+
         # Si la empresa es de "solo cotizaciones directas", validar que se hayan
         # incluido los valores de sus campos personalizados obligatorios.
         if importador.solo_cotizaciones_directas:
@@ -345,6 +469,7 @@ async def crear_cotizacion(
         precio_objetivo_usd=cotizacion_data.precio_objetivo_usd,
         incoterm=cotizacion_data.incoterm,
         notas_adicionales=cotizacion_data.notas_adicionales,
+        shipping_mark_sufijo=cotizacion_data.shipping_mark_sufijo,
         costo_creditos=costo_creditos,
         estado="dirigida" if cotizacion_data.modalidad == "dirigida" else "abierta"
     )
@@ -367,15 +492,24 @@ async def crear_cotizacion(
     db.refresh(solicitante)
     
     # Si es cotización abierta, ejecutar el motor de matching (después del commit para tener ID)
+    importadores_notificables = []
     if cotizacion_data.modalidad == "abierta":
         from services.matching_service import matching_cotizacion_abierta as mc
-        mc(
+        importadores_notificables = mc(
             str(nuevo_cotizacion.id),
             nuevo_cotizacion.pais_importacion,
             nuevo_cotizacion.linea_producto,
             db
-        )
-    
+        ) or []
+
+    # Aviso a las empresas que pueden responderla (in-app + WhatsApp + correo).
+    try:
+        _notificar_cotizacion_en_pool(db, cotizacion=nuevo_cotizacion, importadores=importadores_notificables)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("No se pudo notificar la nueva cotización %s a las empresas", nuevo_cotizacion.id)
+
     return nuevo_cotizacion
 
 # ==================== Endpoints de Propuestas (Tarea 2.1) ====================
@@ -386,10 +520,15 @@ def _validar_congruencia_categoria(cotizacion: Cotizacion, importador_id_str: st
     especialidad (ej. una empresa de tecnología no puede responder una
     cotización de alimentos y viceversa). Se aplica tanto a propuestas
     dirigidas como a propuestas sobre cotizaciones abiertas.
+
+    La comparación es tolerante a mayúsculas, tildes, plurales y variantes
+    léxicas (`utils.categorias`): el formulario de cotización y el perfil de
+    empresa llegaron a ofrecer listas distintas ("Químicos" / "Química"), y con
+    igualdad exacta la empresa veía la cotización pero no podía responderla.
     """
     importador_empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
     especialidades = (importador_empresa.especialidad_producto or []) if importador_empresa else []
-    if cotizacion.linea_producto not in especialidades:
+    if not categoria_en(cotizacion.linea_producto, especialidades):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -399,7 +538,104 @@ def _validar_congruencia_categoria(cotizacion: Cotizacion, importador_id_str: st
         )
 
 
-@propuestas_router.post("/", response_model=PropuestaResponse, status_code=status.HTTP_201_CREATED)
+# ==================== Notificaciones de negocio (in-app + WhatsApp + correo) ====================
+
+def _cuentas_de_empresa(db: Session, importador_id: Optional[str]) -> List:
+    """Dueño y asesores activos de una empresa: los destinatarios de sus avisos."""
+    from models.usuario import Usuario as UsuarioModel
+
+    if not importador_id:
+        return []
+    return db.query(UsuarioModel).filter(
+        UsuarioModel.importador_id == importador_id,
+        UsuarioModel.rol.in_(("importador", "asesor")),
+        UsuarioModel.activo.is_(True),
+    ).all()
+
+
+def _nombre_empresa(db: Session, importador_id: Optional[str]) -> str:
+    if not importador_id:
+        return "Una empresa importadora"
+    empresa = db.query(Importador).filter(Importador.id == importador_id).first()
+    return empresa.nombre_empresa if empresa else "Una empresa importadora"
+
+
+def _notificar_propuesta_enviada(db: Session, *, cotizacion: Cotizacion, importador_id: Optional[str]) -> None:
+    """Avisa al solicitante de que recibió una propuesta nueva."""
+    from services.notificacion_service import notificar
+
+    notificar(
+        db,
+        usuario_id=cotizacion.solicitante_id,
+        tipo="propuesta",
+        titulo="Nueva propuesta recibida",
+        mensaje=(
+            f"{_nombre_empresa(db, importador_id)} respondió tu cotización "
+            f"de {cotizacion.nombre_producto}."
+        ),
+        data={"cotizacion_id": str(cotizacion.id), "importador_id": importador_id},
+        enlace_relativo="/cotizaciones",
+    )
+
+
+def _notificar_empresa(
+    db: Session,
+    *,
+    importador_id: Optional[str],
+    tipo: str,
+    titulo: str,
+    mensaje: str,
+    data: Optional[dict] = None,
+    enlace_relativo: str = "",
+    solo_usuario_id: Optional[str] = None,
+) -> None:
+    """Avisa a la empresa. Si hay un responsable asignado, solo a él."""
+    from services.notificacion_service import notificar
+
+    if solo_usuario_id:
+        notificar(
+            db,
+            usuario_id=solo_usuario_id,
+            tipo=tipo,
+            titulo=titulo,
+            mensaje=mensaje,
+            data=data,
+            enlace_relativo=enlace_relativo,
+        )
+        return
+
+    for cuenta in _cuentas_de_empresa(db, importador_id):
+        notificar(
+            db,
+            usuario_id=str(cuenta.id),
+            tipo=tipo,
+            titulo=titulo,
+            mensaje=mensaje,
+            data=data,
+            enlace_relativo=enlace_relativo,
+        )
+
+
+def _notificar_cotizacion_en_pool(db: Session, *, cotizacion: Cotizacion, importadores: List) -> None:
+    """Avisa a las empresas que pueden responder una cotización recién creada."""
+    destino = [str(imp.id) for imp in importadores] if importadores else []
+    if cotizacion.modalidad == "dirigida" and cotizacion.importador_id:
+        destino = [str(cotizacion.importador_id)]
+
+    etiqueta = "dirigida a tu empresa" if cotizacion.modalidad == "dirigida" else "abierta que encaja con tu especialidad"
+    for importador_id in destino:
+        _notificar_empresa(
+            db,
+            importador_id=importador_id,
+            tipo="cotizacion",
+            titulo="Nueva cotización disponible",
+            mensaje=f"Cotización {etiqueta}: {cotizacion.nombre_producto}.",
+            data={"cotizacion_id": str(cotizacion.id), "modalidad": cotizacion.modalidad},
+            enlace_relativo="/cotizaciones",
+        )
+
+
+@propuestas_router.post("", response_model=PropuestaResponse, status_code=status.HTTP_201_CREATED)
 async def enviar_propuesta(
     propuesta: PropuestaCreate,
     current_user: dict = Depends(require_rol("importador")),
@@ -465,23 +701,32 @@ async def enviar_propuesta(
             )
     # 2. Verificar matching Redis en cotizaciones abiertas (fail-closed).
     elif cotizacion.modalidad == "abierta":
-        if not config.redis_client:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
-            )
-        try:
-            importadores_matching = config.redis_client.hgetall(f"cotizacion_abierta:{cotizacion_id_str}")
-        except Exception:
-            logger.warning("Redis no disponible al verificar matching de cotización %s", cotizacion_id_str)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
-            )
-        if importador_id_str not in importadores_matching:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No autorizado para responder esta cotización (no está en la lista de matching)"
+        strict_matching = config.APP_ENV == "production"
+        if strict_matching:
+            if not config.redis_client:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
+                )
+            try:
+                importadores_matching = config.redis_client.hgetall(f"cotizacion_abierta:{cotizacion_id_str}")
+            except Exception:
+                logger.warning("Redis no disponible al verificar matching de cotización %s", cotizacion_id_str)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
+                )
+            if importador_id_str not in importadores_matching:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No autorizado para responder esta cotización (no está en la lista de matching)"
+                )
+        else:
+            logger.info(
+                "Matching relajado en APP_ENV=%s para cotizacion abierta %s e importador %s",
+                config.APP_ENV,
+                cotizacion_id_str,
+                importador_id_str,
             )
 
     # 2.5. Congruencia de categoría: la especialidad de la empresa debe incluir la línea de producto solicitada
@@ -494,11 +739,30 @@ async def enviar_propuesta(
     ).first()
     
     if propuesta_existente:
+        # Distinguir el borrador de un asesor de una propuesta ya enviada: decir
+        # "ya has enviado una propuesta" cuando lo que hay es un borrador ajeno
+        # dejaba al dueño sin entender qué hacer (el camino es revisarlo y
+        # enviarlo con POST /propuestas/{id}/enviar).
+        if propuesta_existente.estado == EstadoPropuesta.borrador.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Tu empresa ya tiene un borrador de propuesta para esta cotización. "
+                    "Revísalo y envíalo desde el panel en lugar de crear otro."
+                )
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ya has enviado una propuesta a esta cotización"
         )
-    
+
+    # 3.5. El dueño queda como responsable de la cotización que acaba de responder.
+    # Sin esto la cotización seguía con `asesor_asignado_id` NULL y por tanto
+    # visible en `GET /cotizaciones/pool-empresa`: cualquier asesor podía
+    # reclamarla después y quedarse con el chat de una propuesta que no escribió.
+    if not cotizacion.asesor_asignado_id:
+        cotizacion.asesor_asignado_id = user_id_str
+
     # 4. Crear nueva propuesta en la base de datos
     nueva_propuesta = Propuesta(
         id=str(uuid4()),  # Convertir a string para SQLite
@@ -512,7 +776,7 @@ async def enviar_propuesta(
         creado_por_usuario_id=user_id_str
     )
     db.add(nueva_propuesta)
-    
+
     # 5. Actualizar estado de la cotización a "propuestas_recibidas" al recibir la primera propuesta
     # (aplica a abierta Y dirigida; sin esto, negociar/aceptar falla en dirigidas).
     if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
@@ -530,6 +794,15 @@ async def enviar_propuesta(
             detail="Ya has enviado una propuesta a esta cotización"
         )
     db.refresh(nueva_propuesta)
+
+    # El aviso va después del commit: en la carrera por la restricción única se
+    # hace rollback, y no debe salir un correo por una propuesta que no existe.
+    try:
+        _notificar_propuesta_enviada(db, cotizacion=cotizacion, importador_id=importador_id_str)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("No se pudo notificar la propuesta enviada de %s", importador_id_str)
     
     # 7. Actualizar estado en Redis (best-effort, después de confirmar en la base de datos).
     # Si Redis falla aquí ya no se debe revertir la propuesta, que ya quedó persistida en MySQL/SQLite.
@@ -558,13 +831,19 @@ async def enviar_propuesta(
 @propuestas_router.post("/borrador", response_model=PropuestaResponse, status_code=status.HTTP_201_CREATED)
 async def crear_borrador_propuesta(
     propuesta: PropuestaCreate,
-    current_user: dict = Depends(require_rol("asesor")),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
     db: Session = Depends(get_db)
 ):
     """
-    Un asesor redacta un borrador de propuesta para una cotización que reclamó
-    (`POST /cotizaciones/{id}/reclamar`). El borrador no es visible para el
-    solicitante hasta que la cuenta dueña lo envíe (`POST /propuestas/{id}/enviar`).
+    Redacta un borrador de propuesta para una cotización de la empresa.
+
+    Un **asesor** solo puede redactar sobre lo que reclamó
+    (`POST /cotizaciones/{id}/reclamar`). El **dueño** puede redactar sobre
+    cualquier cotización de su empresa: también reclama cotizaciones, y limitar
+    este endpoint al rol "asesor" lo dejaba con un 403 sobre su propio trabajo.
+
+    El borrador no es visible para el solicitante hasta que la cuenta dueña lo
+    envíe (`POST /propuestas/{id}/enviar`).
     """
     from uuid import UUID as PyUUID, uuid4
 
@@ -582,12 +861,25 @@ async def crear_borrador_propuesta(
     if not cotizacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
 
-    # Solo el asesor que reclamó la cotización puede redactar su borrador
-    if cotizacion.asesor_asignado_id != user_id_str:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo puedes redactar propuestas de cotizaciones que hayas reclamado"
-        )
+    if current_user["rol"] == "asesor":
+        # El asesor solo redacta sobre lo que reclamó.
+        if cotizacion.asesor_asignado_id != user_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo puedes redactar propuestas de cotizaciones que hayas reclamado"
+            )
+    else:
+        # El dueño redacta sobre cualquier cotización de su empresa; en dirigidas
+        # se comprueba que efectivamente vaya destinada a ella.
+        if cotizacion.modalidad == "dirigida" and cotizacion.importador_id != importador_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Esta cotización no está dirigida a tu empresa"
+            )
+        # Si nadie la había reclamado, el dueño queda como responsable: así sale
+        # del pool y ningún asesor puede reclamarla por encima de su borrador.
+        if not cotizacion.asesor_asignado_id:
+            cotizacion.asesor_asignado_id = user_id_str
 
     propuesta_existente = db.query(Propuesta).filter(
         Propuesta.cotizacion_id == cotizacion_id_str,
@@ -700,6 +992,8 @@ async def enviar_borrador_propuesta(
     if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
 
+    _notificar_propuesta_enviada(db, cotizacion=cotizacion, importador_id=propuesta_db.importador_id)
+
     db.commit()
     db.refresh(propuesta_db)
 
@@ -719,21 +1013,27 @@ async def listar_propuestas(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Listar todas las propuestas recibidas para una cotización. Solo el solicitante de la cotización puede verlas.
-    
+    Listar las propuestas de una cotización.
+
+    - **solicitante** dueño de la cotización: ve todas las propuestas enviadas
+      por las empresas (los borradores en redacción siguen ocultos).
+    - **empresa** (dueño o asesor): ve **solo las propuestas de su propia
+      empresa**, incluidos sus borradores. Antes recibía un 403 aquí y no tenía
+      forma de consultar por API lo que ella misma había enviado.
+
     - **cotizacion_id**: ID de la cotización (UUID)
     """
     from uuid import UUID as PyUUID
-    
-    # Verificar que el usuario es el solicitante de esta cotización
+
     user_id_str = str(PyUUID(current_user["user_id"]))  # Convertir a string para SQLite
-    
-    if current_user["rol"] != "solicitante":
+    rol = current_user["rol"]
+
+    if rol not in ("solicitante", "importador", "asesor"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No autorizado - Solo el solicitante puede ver las propuestas"
+            detail="No autorizado para ver las propuestas de esta cotización"
         )
-    
+
     try:
         cotizacion_id_str = str(PyUUID(cotizacion_id))  # Validar UUID
     except ValueError:
@@ -741,26 +1041,41 @@ async def listar_propuestas(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="ID de cotización inválido"
         )
-    
-    # Verificar que el solicitante es el dueño de la cotización
-    cotizacion = db.query(Cotizacion).filter(
-        Cotizacion.id == cotizacion_id_str,
-        Cotizacion.solicitante_id == user_id_str
-    ).first()
-    
-    if not cotizacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cotización no encontrada"
-        )
-    
-    # Listar las propuestas visibles para el solicitante (los borradores en
-    # redacción del asesor todavía no se muestran hasta que la empresa las envía)
-    propuestas = db.query(Propuesta).filter(
-        Propuesta.cotizacion_id == cotizacion_id_str,
-        Propuesta.estado != EstadoPropuesta.borrador.value
-    ).order_by(Propuesta.fecha_envio.desc()).all()
-    
+
+    consulta = db.query(Propuesta).filter(Propuesta.cotizacion_id == cotizacion_id_str)
+
+    if rol == "solicitante":
+        # Verificar que el solicitante es el dueño de la cotización
+        cotizacion = db.query(Cotizacion).filter(
+            Cotizacion.id == cotizacion_id_str,
+            Cotizacion.solicitante_id == user_id_str
+        ).first()
+        if not cotizacion:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cotización no encontrada"
+            )
+        # Los borradores en redacción del asesor no se muestran hasta que la
+        # empresa los envía.
+        consulta = consulta.filter(Propuesta.estado != EstadoPropuesta.borrador.value)
+    else:
+        importador_id_str = current_user.get("importador_id")
+        if not importador_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La cuenta no está asociada a ninguna empresa importadora"
+            )
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).first()
+        if not cotizacion:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cotización no encontrada"
+            )
+        # Nunca se exponen las propuestas de la competencia en una cotización abierta.
+        consulta = consulta.filter(Propuesta.importador_id == importador_id_str)
+
+    propuestas = consulta.order_by(Propuesta.fecha_envio.desc()).all()
+
     return [
         PropuestaResponse(
             id=str(p.id),
@@ -924,6 +1239,7 @@ async def aceptar_propuesta(
     # Notificación persistente + Redis (best-effort) al asesor asignado.
     if cotizacion.asesor_asignado_id:
         from services.notificacion_service import crear_notificacion_best_effort
+        from services.pdf_document_service import generate_order_documents
         crear_notificacion_best_effort(
             db,
             usuario_id=cotizacion.asesor_asignado_id,
@@ -949,32 +1265,26 @@ async def aceptar_propuesta(
         except Exception:
             logger.warning("No se pudo notificar al asesor asignado de la cotización %s", cotizacion_id_str)
 
-    # Crear la conversación de chat de negociación: el asesor asignado negocia
-    # con el solicitante si reclamó la cotización; si no, la cuenta dueña.
-    from models.chat import ConversacionChat
+    # El hilo normalmente ya existe (se abre al reclamar la cotización). Esto
+    # cubre el caso de la propuesta enviada directamente por la cuenta dueña,
+    # donde nadie pasó por el reclamo.
     from models.usuario import Usuario as UsuarioModel
-    conversacion_existente = db.query(ConversacionChat).filter(
-        ConversacionChat.cotizacion_id == cotizacion_id_str
-    ).first()
-    if not conversacion_existente:
-        importador_usuario_id = cotizacion.asesor_asignado_id
-        if not importador_usuario_id:
-            dueño = db.query(UsuarioModel).filter(
-                UsuarioModel.importador_id == importador_id_str,
-                UsuarioModel.rol == "importador"
-            ).first()
-            importador_usuario_id = str(dueño.id) if dueño else None
 
-        if importador_usuario_id:
-            from uuid import uuid4 as gen_uuid
-            nueva_conversacion = ConversacionChat(
-                id=str(gen_uuid()),
-                cotizacion_id=cotizacion_id_str,
-                solicitante_id=user_id_str,
-                importador_usuario_id=importador_usuario_id
-            )
-            db.add(nueva_conversacion)
-            db.commit()
+    importador_usuario_id = cotizacion.asesor_asignado_id
+    if not importador_usuario_id:
+        dueño = db.query(UsuarioModel).filter(
+            UsuarioModel.importador_id == importador_id_str,
+            UsuarioModel.rol == "importador"
+        ).first()
+        importador_usuario_id = str(dueño.id) if dueño else None
+
+    if importador_usuario_id:
+        _asegurar_chat_negociacion(
+            db,
+            cotizacion=cotizacion,
+            importador_usuario_id=importador_usuario_id,
+        )
+        db.commit()
 
     db.refresh(cotizacion)
     return cotizacion
@@ -992,8 +1302,9 @@ async def pre_aceptar_propuesta(
     (doble aceptación mutua, Semana 4).
 
     - El **solicitante** dueño de la cotización marca/revierte el lado "solicitante".
-    - El **asesor asignado** a la cotización o el **dueño** (cuenta `importador`)
-      de la empresa marcan/revierten el lado "empresa".
+    - Solo la cuenta **dueña** (rol `importador`) marca/revierte el lado
+      "empresa": el asesor negocia, pero quien compromete a la empresa es su
+      representante, que revisa el chat de la negociación antes de confirmar.
 
     Cuando ambos lados quedan en `True` (sin importar el orden), la propuesta
     se finaliza automáticamente en la misma transacción:
@@ -1002,8 +1313,9 @@ async def pre_aceptar_propuesta(
       empresa ganadora (también en modalidad abierta, donde antes quedaba NULL).
     - Se crea la **Orden automáticamente** (sin pago de por medio: la plataforma
       solo conecta, no se responsabiliza del cumplimiento entre las partes).
-    - El chat de negociación se **traspasa al dueño** de la empresa (supervisor /
-      representante legal), quien queda a cargo de ahí en adelante.
+    - El chat **sigue con el asesor** que negoció, pero cambia de asunto: pasa a
+      ser el seguimiento del embarque. La empresa lo coordina con él por el
+      canal interno (`POST /chat/interno`).
 
     Mientras el otro lado no haya aceptado, cualquiera de las dos partes puede
     revertir su propia marca (`aceptar: false`). Una vez finalizada (ambos lados
@@ -1040,9 +1352,20 @@ async def pre_aceptar_propuesta(
 
     if rol == "solicitante" and cotizacion.solicitante_id == user_id_str:
         lado = "solicitante"
-    elif rol in ("importador", "asesor") and current_user.get("importador_id") == propuesta.importador_id:
-        if rol == "importador" or cotizacion.asesor_asignado_id == user_id_str:
-            lado = "empresa"
+    elif rol == "importador" and current_user.get("importador_id") == propuesta.importador_id:
+        # La confirmación de la empresa la da la cuenta dueña, no el asesor: es
+        # el paso en el que la empresa revisa la negociación de su asesor (el
+        # chat queda como evidencia) antes de comprometerse con la orden.
+        lado = "empresa"
+    elif rol == "asesor" and current_user.get("importador_id") == propuesta.importador_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "La aceptación final la confirma la cuenta dueña de la empresa. "
+                "Tu negociación queda registrada en el chat y es lo que revisará "
+                "antes de cerrar la orden."
+            )
+        )
 
     if lado is None:
         raise HTTPException(
@@ -1052,8 +1375,40 @@ async def pre_aceptar_propuesta(
 
     if lado == "solicitante":
         propuesta.preaceptada_por_solicitante = solicitud.aceptar
+        # La empresa se entera de que el cliente movió ficha, aunque todavía
+        # falte su propia confirmación.
+        # Aquí la pelota pasa a la cuenta dueña, que es la única que puede
+        # confirmar: el aviso va a toda la empresa (dueño incluido) en vez de
+        # solo al asesor, que ya no tiene nada que firmar.
+        _notificar_empresa(
+            db,
+            importador_id=propuesta.importador_id,
+            tipo="propuesta",
+            titulo="El solicitante aceptó la propuesta" if solicitud.aceptar else "El solicitante retiró su aceptación",
+            mensaje=(
+                f"Cotización de {cotizacion.nombre_producto}. "
+                + (
+                    "Revisa el chat de la negociación y confírmala desde la cuenta de la empresa para cerrar la orden."
+                    if solicitud.aceptar
+                    else "La negociación sigue abierta."
+                )
+            ),
+            data={"cotizacion_id": str(cotizacion.id), "propuesta_id": str(propuesta.id)},
+            enlace_relativo="/cotizaciones",
+        )
     else:
         propuesta.preaceptada_por_empresa = solicitud.aceptar
+        from services.notificacion_service import notificar as _notificar_usuario
+
+        _notificar_usuario(
+            db,
+            usuario_id=cotizacion.solicitante_id,
+            tipo="propuesta",
+            titulo="La empresa confirmó la propuesta" if solicitud.aceptar else "La empresa retiró su confirmación",
+            mensaje=f"Cotización de {cotizacion.nombre_producto}.",
+            data={"cotizacion_id": str(cotizacion.id), "propuesta_id": str(propuesta.id)},
+            enlace_relativo="/cotizaciones",
+        )
 
     if propuesta.preaceptada_por_solicitante and propuesta.preaceptada_por_empresa:
         # --- Finalización: doble aceptación mutua confirmada ---
@@ -1074,6 +1429,19 @@ async def pre_aceptar_propuesta(
 
         nueva_orden = db.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
         if not nueva_orden:
+            # La marca de embarque se congela aquí: hasta este momento, en una
+            # cotización abierta ni siquiera se sabía qué empresa pondría el
+            # prefijo. A partir de ahora es un dato del embarque, no del perfil.
+            from utils.shipping_mark import componer_shipping_mark
+
+            empresa_ganadora = db.query(Importador).filter(
+                Importador.id == propuesta.importador_id
+            ).first()
+            marca = componer_shipping_mark(
+                empresa_ganadora.shipping_mark_prefijo if empresa_ganadora else None,
+                cotizacion.shipping_mark_sufijo,
+            )
+
             nueva_orden = Orden(
                 id=str(gen_uuid()),
                 cotizacion_id=cotizacion.id,
@@ -1083,7 +1451,8 @@ async def pre_aceptar_propuesta(
                 estado=EstadoOrden.cotizacion_aceptada,
                 precio_acordado_usd=propuesta.precio_ofrecido_usd,
                 tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
-                condiciones_adicionales=propuesta.condiciones_adicionales
+                condiciones_adicionales=propuesta.condiciones_adicionales,
+                shipping_mark=marca
             )
             db.add(nueva_orden)
             db.flush()
@@ -1093,40 +1462,53 @@ async def pre_aceptar_propuesta(
                 estado_nuevo=EstadoOrden.cotizacion_aceptada.value
             ))
 
-        # Traspaso de chat al dueño (supervisor): a partir de aquí, el asesor deja
-        # de negociar y responde la cuenta dueña de la empresa importadora.
+        try:
+            generate_order_documents(
+                db,
+                orden=nueva_orden,
+                cotizacion=cotizacion,
+                propuesta=propuesta,
+            )
+        except Exception:
+            logger.warning("No se pudieron generar documentos PDF automáticos para la orden %s", nueva_orden.id)
+
+        # El mismo hilo cambia de asunto: deja de ser la negociación de la
+        # cotización y pasa a ser el seguimiento del embarque. Lo sigue
+        # atendiendo el asesor que negoció —es quien conoce el trato— y no el
+        # dueño, que solo entra a confirmar y a supervisar.
         dueño = db.query(UsuarioModel).filter(
             UsuarioModel.importador_id == propuesta.importador_id,
             UsuarioModel.rol == "importador"
         ).first()
         dueño_id = str(dueño.id) if dueño else None
+        responsable_id = cotizacion.asesor_asignado_id or dueño_id
 
         conversacion = db.query(ConversacionChat).filter(
             ConversacionChat.cotizacion_id == cotizacion.id
         ).first()
 
-        if not conversacion and dueño_id:
+        if not conversacion and responsable_id:
             conversacion = ConversacionChat(
                 id=str(gen_uuid()),
                 cotizacion_id=cotizacion.id,
                 solicitante_id=cotizacion.solicitante_id,
-                importador_usuario_id=dueño_id
+                importador_usuario_id=responsable_id
             )
             db.add(conversacion)
             db.flush()
-        elif conversacion and dueño_id:
-            conversacion.importador_usuario_id = dueño_id
+        elif conversacion and responsable_id:
+            conversacion.importador_usuario_id = responsable_id
 
         if conversacion:
             conversacion.orden_id = nueva_orden.id
             db.add(MensajeChat(
                 id=str(gen_uuid()),
                 conversacion_id=conversacion.id,
-                remitente_id=dueño_id or user_id_str,
+                remitente_id=responsable_id or user_id_str,
                 contenido=(
-                    "Propuesta aceptada por ambas partes. Se creó la orden y esta "
-                    "conversación ahora queda a cargo del representante de la "
-                    "empresa importadora."
+                    "La empresa confirmó la propuesta y se creó la orden. "
+                    "Esta conversación pasa a ser el seguimiento del embarque: "
+                    "aquí se irán informando los cambios de estado."
                 ),
                 tipo=TipoMensajeChat.sistema
             ))

@@ -1,8 +1,9 @@
 # APIs — Órdenes
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/06-Ordenes.md`; el resto se sobrescribe.
 
-### `GET /ordenes/`
+### `GET /ordenes`
 
 - **Resumen:** Listar Ordenes
 - **Auth:** Bearer JWT
@@ -23,6 +24,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -51,6 +53,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -81,6 +84,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
@@ -109,6 +113,7 @@ Array de `OrdenResponse`:
 | `precio_acordado_usd` | `number` | sí |  |
 | `tiempo_estimado_entrega` | `Optional[string]` | sí |  |
 | `condiciones_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark` | `Optional[string]` | no |  |
 | `en_disputa` | `boolean` | no |  |
 | `motivo_disputa` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |

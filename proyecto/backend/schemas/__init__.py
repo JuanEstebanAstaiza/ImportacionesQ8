@@ -5,7 +5,7 @@ from .auth import (
     ReenviarOtpResponse, LoginOtpRequest,
 )
 from .importador import (
-    ImportadorCreate, ImportadorResponse, ImportadorUpdate,
+    ImportadorResponse, ImportadorUpdate,
     AdminCrearImportadorRequest, AdminCrearImportadorResponse
 )
 from .cotizacion import (
@@ -27,7 +27,7 @@ from .campo_personalizado import (
 from .chat import MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest
 from .curso import (
     CursoCreate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
-    ProgresoLeccionRequest, ProgresoLeccionResponse,
+    CursoUpdate, ProgresoLeccionRequest, ProgresoLeccionResponse,
 )
 from .notificacion import NotificacionResponse, NotificacionesListaResponse, MarcarLeidasResponse
 from .metricas_empresa import MetricasImportadorResponse, MetricasAsesorResponse
@@ -37,6 +37,21 @@ from .pago import (
     SaldoCreditosResponse, MovimientoCreditoResponse, WompiWebhookEvent
 )
 from .credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse, ResolverRecreacionRequest
+from .documental import (
+    CarpetaCreate,
+    CarpetaUpdate,
+    ArchivoCreate,
+    ArchivoUpdate,
+    EtiquetaCreate,
+    FavoritoToggle,
+    ResourceTagAssign,
+    CompartirRecursosChatRequest,
+    CarpetaItem,
+    ArchivoItem,
+    EtiquetaItem,
+    ExplorerResponse,
+    ChatAttachmentItem,
+)
 
 __all__ = [
     "RegistroRequest",
@@ -51,7 +66,6 @@ __all__ = [
     "ReenviarOtpRequest",
     "ReenviarOtpResponse",
     "LoginOtpRequest",
-    "ImportadorCreate",
     "ImportadorResponse",
     "ImportadorUpdate",
     "AdminCrearImportadorRequest",
@@ -96,5 +110,19 @@ __all__ = [
     "WompiWebhookEvent",
     "SolicitarRecreacionRequest",
     "SolicitudRecreacionResponse",
-    "ResolverRecreacionRequest"
+    "ResolverRecreacionRequest",
+    "CarpetaCreate",
+    "CarpetaUpdate",
+    "ArchivoCreate",
+    "ArchivoUpdate",
+    "EtiquetaCreate",
+    "FavoritoToggle",
+    "ResourceTagAssign",
+    "CompartirRecursosChatRequest",
+    "CarpetaItem",
+    "ArchivoItem",
+    "EtiquetaItem",
+    "ExplorerResponse",
+    "ChatAttachmentItem",
+    "CursoUpdate",
 ]

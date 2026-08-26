@@ -1,16 +1,27 @@
 # Catálogo completo de endpoints
 
-Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notificaciones, chat iniciar, métricas, hard-delete asesor). Fuente runtime: `/openapi.json` en development.
+Total: **145** operaciones REST exportadas desde OpenAPI.
 
 | Método | Ruta | Tag | Auth | Resumen |
 |--------|------|-----|------|---------|
 | `GET` | `/` | Salud | Público | Root |
+| `GET` | `/admin/backup` | Administración | JWT | Descargar Backup |
+| `GET` | `/admin/backup/resumen` | Administración | JWT | Resumen Backup |
+| `GET` | `/admin/certificaciones` | Administración | JWT | Listar Certificaciones Admin |
+| `POST` | `/admin/certificaciones` | Administración | JWT | Crear Certificacion |
+| `DELETE` | `/admin/certificaciones/{certificacion_id}` | Administración | JWT | Retirar Certificacion |
+| `PUT` | `/admin/certificaciones/{certificacion_id}` | Administración | JWT | Actualizar Certificacion |
+| `GET` | `/admin/conversaciones` | Administración | JWT | Listar Conversaciones Admin |
+| `GET` | `/admin/conversaciones/{conversacion_id}/mensajes` | Administración | JWT | Leer Conversacion Admin |
 | `GET` | `/admin/cotizaciones-abiertas` | Administración | JWT | Listar Cotizaciones Abiertas |
 | `GET` | `/admin/disputas` | Administración | JWT | Listar Disputas |
 | `PUT` | `/admin/disputas-room/{disputa_id}/resolver` | Administración | JWT | Resolver Disputa Por Id |
 | `PUT` | `/admin/disputas/{orden_id}/resolver` | Administración | JWT | Resolver Disputa |
 | `PUT` | `/admin/evidencias/{evidencia_id}/revisar` | Administración | JWT | Revisar Evidencia Importador |
 | `POST` | `/admin/importadores` | Administración | JWT | Crear Importador Con Dueño |
+| `GET` | `/admin/importadores/{importador_id}/certificaciones` | Administración | JWT | Listar Certificaciones De Empresa |
+| `POST` | `/admin/importadores/{importador_id}/certificaciones` | Administración | JWT | Otorgar Certificacion |
+| `DELETE` | `/admin/importadores/{importador_id}/certificaciones/{certificacion_id}` | Administración | JWT | Revocar Certificacion |
 | `PUT` | `/admin/importadores/{importador_id}/estado` | Administración | JWT | Actualizar Estado Importador |
 | `POST` | `/admin/importadores/{importador_id}/verificar` | Administración | JWT | Verificar Importador |
 | `GET` | `/admin/metricas` | Administración | JWT | Obtener Metricas |
@@ -18,6 +29,7 @@ Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notifi
 | `PUT` | `/admin/recreaciones/{solicitud_id}/resolver` | Administración | JWT | Resolver Recreacion |
 | `GET` | `/admin/usuarios` | Administración | JWT | Listar Usuarios |
 | `PUT` | `/admin/usuarios/{usuario_id}/estado` | Administración | JWT | Actualizar Estado Usuario |
+| `GET` | `/asesores/dashboard/stats` | Asesores | JWT | Dashboard Stats Asesor |
 | `GET` | `/asesores/me/cotizaciones` | Asesores | JWT | Listar Mis Cotizaciones Asignadas |
 | `POST` | `/auth/forgot-password` | Autenticación | Público | Olvido Password |
 | `POST` | `/auth/login` | Autenticación | Público | Iniciar Sesion |
@@ -28,24 +40,16 @@ Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notifi
 | `POST` | `/auth/register` | Autenticación | Público | Registrar Usuario |
 | `POST` | `/auth/reset-password` | Autenticación | Público | Restablecer Password |
 | `POST` | `/auth/verificar-email` | Autenticación | Público | Verificar Correo |
-| `POST` | `/chat/iniciar` | Chat | JWT | Iniciar negociación (asesor/dueño) |
 | `GET` | `/chat/conversaciones` | Chat | JWT | Listar Mis Conversaciones |
 | `GET` | `/chat/conversaciones/{conversacion_id}/mensajes` | Chat | JWT | Listar Mensajes |
 | `POST` | `/chat/conversaciones/{conversacion_id}/mensajes` | Chat | JWT | Enviar Mensaje |
+| `POST` | `/chat/iniciar` | Chat | JWT | Iniciar Chat |
 | `POST` | `/chat/mensajes/{mensaje_id}/traducir` | Chat | JWT | Traducir Mensaje |
 | `POST` | `/chat/traducir` | Chat | JWT | Traducir Preview |
 | `POST` | `/chat/ws-ticket` | Chat | JWT | Emitir Ticket Ws |
-| `GET` | `/cursos` | Cursos | Público | Catálogo de cursos |
-| `POST` | `/cursos` | Cursos | JWT | Publicar curso (importador) |
-| `GET` | `/cursos/{id_o_slug}` | Cursos | Público | Detalle / temario |
-| `POST` | `/cursos/{curso_id}/comprar` | Cursos | JWT | Comprar / inscribirse |
-| `POST` | `/cursos/{curso_id}/lecciones/{leccion_id}/progreso` | Cursos | JWT | Progreso de lección |
-| `GET` | `/mis-cursos` | Cursos | JWT | Cursos del usuario |
-| `GET` | `/notificaciones` | Notificaciones | JWT | Listar notificaciones |
-| `PUT` | `/notificaciones/leer-todas` | Notificaciones | JWT | Marcar todas leídas |
-| `PUT` | `/notificaciones/{id}/leer` | Notificaciones | JWT | Marcar una leída |
-| `GET` | `/cotizaciones/` | Cotizaciones | JWT | Listar Cotizaciones |
-| `POST` | `/cotizaciones/` | Cotizaciones | JWT | Crear Cotizacion |
+| `GET` | `/configuracion-publica` | Salud | JWT | Configuracion Publica |
+| `GET` | `/cotizaciones` | Cotizaciones | JWT | Listar Cotizaciones |
+| `POST` | `/cotizaciones` | Cotizaciones | JWT | Crear Cotizacion |
 | `GET` | `/cotizaciones/pool-empresa` | Cotizaciones | JWT | Listar Pool Empresa |
 | `GET` | `/cotizaciones/{cotizacion_id}` | Cotizaciones | JWT | Obtener Cotizacion |
 | `GET` | `/cotizaciones/{cotizacion_id}/matching-status` | Cotizaciones | JWT | Obtener Estado Matching |
@@ -56,29 +60,51 @@ Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notifi
 | `POST` | `/creditos/comprar` | Créditos | JWT | Comprar Creditos |
 | `GET` | `/creditos/movimientos` | Créditos | JWT | Listar Movimientos |
 | `GET` | `/creditos/saldo` | Créditos | JWT | Obtener Saldo |
+| `GET` | `/cursos` | Cursos | JWT | Listar Cursos |
+| `POST` | `/cursos` | Cursos | JWT | Crear Curso |
+| `DELETE` | `/cursos/{curso_id}` | Cursos | JWT | Eliminar Curso |
+| `PUT` | `/cursos/{curso_id}` | Cursos | JWT | Actualizar Curso |
+| `GET` | `/cursos/{curso_id}/certificado` | Cursos | JWT | Obtener Certificado Curso |
+| `POST` | `/cursos/{curso_id}/comprar` | Cursos | JWT | Comprar Curso |
+| `POST` | `/cursos/{curso_id}/lecciones/{leccion_id}/progreso` | Cursos | JWT | Marcar Progreso Leccion |
+| `GET` | `/cursos/{id_o_slug}` | Cursos | JWT | Obtener Curso |
 | `GET` | `/disputas/orden/{orden_id}` | Disputas | JWT | Disputa Por Orden |
 | `GET` | `/disputas/{disputa_id}` | Disputas | JWT | Obtener Disputa |
 | `POST` | `/disputas/{disputa_id}/evidencias` | Disputas | JWT | Subir Evidencia Disputa |
 | `POST` | `/disputas/{disputa_id}/mensajes` | Disputas | JWT | Mensaje Disputa |
+| `POST` | `/documentos/archivos` | Gestión Documental | JWT | Crear Archivo |
+| `POST` | `/documentos/archivos/upload` | Gestión Documental | JWT | Subir Archivo |
+| `DELETE` | `/documentos/archivos/{archivo_id}` | Gestión Documental | JWT | Eliminar Archivo |
+| `PATCH` | `/documentos/archivos/{archivo_id}` | Gestión Documental | JWT | Actualizar Archivo |
+| `GET` | `/documentos/archivos/{archivo_id}/descargar` | Gestión Documental | JWT | Descargar Archivo |
+| `PUT` | `/documentos/archivos/{archivo_id}/etiquetas` | Gestión Documental | JWT | Asignar Etiquetas Archivo |
+| `GET` | `/documentos/buscar` | Gestión Documental | JWT | Buscar Archivos |
+| `POST` | `/documentos/carpetas` | Gestión Documental | JWT | Crear Carpeta |
+| `DELETE` | `/documentos/carpetas/{carpeta_id}` | Gestión Documental | JWT | Eliminar Carpeta |
+| `PATCH` | `/documentos/carpetas/{carpeta_id}` | Gestión Documental | JWT | Actualizar Carpeta |
+| `GET` | `/documentos/chats/{conversacion_id}/adjuntos` | Gestión Documental | JWT | Listar Adjuntos Chat |
+| `POST` | `/documentos/compartir-chat` | Gestión Documental | JWT | Compartir Recursos Chat |
+| `POST` | `/documentos/etiquetas` | Gestión Documental | JWT | Crear Etiqueta |
+| `GET` | `/documentos/explorador` | Gestión Documental | JWT | Listar Explorador |
+| `PUT` | `/documentos/favoritos` | Gestión Documental | JWT | Toggle Favorito |
 | `GET` | `/health` | Salud | Público | Health Check |
 | `GET` | `/health/ready` | Salud | Público | Readiness Check |
-| `GET` | `/importadores/` | Importadores | Público | Listar Importadores |
-| `POST` | `/importadores/` | Importadores | JWT | Crear Importador |
+| `GET` | `/importadores` | Importadores | Público | Listar Importadores |
 | `GET` | `/importadores/asesores` | Importadores | JWT | Listar Asesores |
 | `POST` | `/importadores/asesores` | Importadores | JWT | Crear Asesor |
+| `DELETE` | `/importadores/asesores/{asesor_id}` | Importadores | JWT | Eliminar Asesor |
 | `PUT` | `/importadores/asesores/{asesor_id}/estado` | Importadores | JWT | Actualizar Estado Asesor |
-| `DELETE` | `/importadores/asesores/{asesor_id}` | Importadores | JWT | Hard delete asesor |
-| `GET` | `/importadores/metricas` | Importadores | JWT | Métricas comerciales empresa |
-| `GET` | `/asesores/dashboard/stats` | Asesores | JWT | Stats dashboard asesor |
 | `GET` | `/importadores/campos-personalizados` | Importadores | JWT | Listar Mis Campos Personalizados |
 | `POST` | `/importadores/campos-personalizados` | Importadores | JWT | Crear Campo Personalizado |
 | `DELETE` | `/importadores/campos-personalizados/{campo_id}` | Importadores | JWT | Eliminar Campo Personalizado |
 | `PUT` | `/importadores/campos-personalizados/{campo_id}` | Importadores | JWT | Actualizar Campo Personalizado |
 | `GET` | `/importadores/certificados` | Importadores | Público | Listar Importadores Certificados |
+| `PUT` | `/importadores/cotizaciones/{cotizacion_id}/asignar` | Importadores | JWT | Asignar Asesor A Cotizacion |
 | `GET` | `/importadores/destacados` | Importadores | Público | Listar Importadores Destacados |
 | `GET` | `/importadores/evidencias` | Importadores | JWT | Listar Mis Evidencias |
 | `POST` | `/importadores/evidencias` | Importadores | JWT | Crear Evidencia |
 | `DELETE` | `/importadores/evidencias/{evidencia_id}` | Importadores | JWT | Eliminar Evidencia |
+| `GET` | `/importadores/metricas` | Importadores | JWT | Metricas Importador |
 | `GET` | `/importadores/por-categoria` | Importadores | Público | Listar Importadores Por Categoria |
 | `GET` | `/importadores/{importador_id}` | Importadores | Público | Obtener Importador |
 | `PUT` | `/importadores/{importador_id}` | Importadores | JWT | Actualizar Perfil Importador |
@@ -89,7 +115,11 @@ Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notifi
 | `GET` | `/importadores/{importador_id}/solicitudes-dirigidas` | Importadores | JWT | Listar Solicitudes Dirigidas |
 | `GET` | `/legal/politica-tratamiento-datos` | Legal | Público | Politica Tratamiento Datos |
 | `GET` | `/legal/terminos-condiciones` | Legal | Público | Terminos Condiciones |
-| `GET` | `/ordenes/` | Órdenes | JWT | Listar Ordenes |
+| `GET` | `/mis-cursos` | Cursos | JWT | Mis Cursos |
+| `GET` | `/notificaciones` | Notificaciones | JWT | Listar Notificaciones |
+| `PUT` | `/notificaciones/leer-todas` | Notificaciones | JWT | Marcar Todas Leidas |
+| `PUT` | `/notificaciones/{notificacion_id}/leer` | Notificaciones | JWT | Marcar Leida |
+| `GET` | `/ordenes` | Órdenes | JWT | Listar Ordenes |
 | `GET` | `/ordenes/cotizacion/{cotizacion_id}` | Órdenes | JWT | Obtener Orden Por Cotizacion |
 | `GET` | `/ordenes/importador/{importador_id}/activas` | Órdenes | JWT | Listar Ordenes Activas Importador |
 | `GET` | `/ordenes/{orden_id}` | Órdenes | JWT | Obtener Orden |
@@ -102,13 +132,21 @@ Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notifi
 | `PUT` | `/organizaciones/me/miembros/{miembro_id}` | Organizaciones solicitantes | JWT | Actualizar Miembro |
 | `POST` | `/pagos/webhook/wompi` | Pagos | Público | Webhook Wompi |
 | `GET` | `/pagos/{pago_id}` | Pagos | JWT | Obtener Pago |
-| `POST` | `/propuestas/` | Propuestas | JWT | Enviar Propuesta |
+| `POST` | `/propuestas` | Propuestas | JWT | Enviar Propuesta |
 | `POST` | `/propuestas/borrador` | Propuestas | JWT | Crear Borrador Propuesta |
 | `PUT` | `/propuestas/{propuesta_id}` | Propuestas | JWT | Editar Propuesta |
 | `POST` | `/propuestas/{propuesta_id}/enviar` | Propuestas | JWT | Enviar Borrador Propuesta |
 | `POST` | `/propuestas/{propuesta_id}/pre-aceptar` | Propuestas | JWT | Pre Aceptar Propuesta |
 | `GET` | `/referidos/estadisticas` | Referidos | JWT | Estadisticas |
 | `GET` | `/referidos/mi-codigo` | Referidos | JWT | Mi Codigo |
+| `POST` | `/resenas` | Reseñas | JWT | Crear Resena |
+| `GET` | `/resenas/importador/{importador_id}` | Reseñas | JWT | Listar Resenas De Importador |
+| `GET` | `/resenas/importador/{importador_id}/resumen` | Reseñas | JWT | Resumen De Importador |
+| `GET` | `/resenas/mias` | Reseñas | JWT | Mis Resenas |
+| `GET` | `/resenas/pendientes` | Reseñas | JWT | Ordenes Pendientes De Resena |
+| `PUT` | `/resenas/{resena_id}` | Reseñas | JWT | Editar Resena |
+| `PUT` | `/resenas/{resena_id}/moderar` | Reseñas | JWT | Moderar Resena |
+| `POST` | `/resenas/{resena_id}/responder` | Reseñas | JWT | Responder Resena |
 | `GET` | `/usuarios/me` | Usuarios | JWT | Obtener Mi Perfil |
 | `PUT` | `/usuarios/me` | Usuarios | JWT | Actualizar Mi Perfil |
 
@@ -132,3 +170,6 @@ Total: **94** operaciones REST base + **extensiones 2026-07-28** (cursos, notifi
 - [[11-Referidos|APIs — Referidos]]
 - [[12-Admin|APIs — Administración]]
 - [[13-Legal-y-Salud|APIs — Legal y salud]]
+- [[15-Cursos-LMS|APIs — Cursos / LMS]]
+- [[16-Notificaciones|APIs — Notificaciones in-app]]
+- [[17-Documentos-y-Multimedia|APIs — Gestión documental y multimedia]]

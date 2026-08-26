@@ -23,6 +23,12 @@ export interface ChatConv {
   type: ChatType;
   refCode: string;
   refId: string;
+  /**
+   * Cotización de la que nace la conversación. `refId` apunta a la orden en
+   * cuanto existe, así que se guarda aparte para poder reasignar el responsable
+   * de la cotización desde el chat.
+   */
+  quoteId?: string;
   importerId: string;
   status: "activa" | "archivada";
   unread: number;

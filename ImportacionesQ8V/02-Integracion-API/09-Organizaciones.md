@@ -1,6 +1,7 @@
 # APIs — Organizaciones solicitantes
 
-> Generado desde OpenAPI en vivo (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Endpoints REST generados desde OpenAPI (`/openapi.json`). Base URL local: `http://localhost:8000`.
+> Lo escrito a mano va en `_preambulos/09-Organizaciones.md`; el resto se sobrescribe.
 
 ### `GET /organizaciones/me`
 

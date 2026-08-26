@@ -1,16 +1,34 @@
 import { apiRequest } from "@/services/api-client";
 
+/** Sello otorgado por la plataforma, tal como llega en el catálogo. */
+export interface BackendCertificacionOtorgada {
+  id: string;
+  certificacion_id: string;
+  nombre: string;
+  descripcion: string;
+  logo_url: string | null;
+  peso_publicidad: number;
+  fecha_otorgada: string | null;
+}
+
 export interface BackendImporter {
   id: string;
   nombre_empresa: string;
   logo_url?: string | null;
+  certificaciones?: BackendCertificacionOtorgada[];
+  /** Suma de los pesos de sus sellos: define el orden del catálogo. */
+  puntaje_publicidad?: number;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;
   tiempo_respuesta_promedio: string;
   capacidad_volumen?: number | null;
+  perfil_publico?: Record<string, unknown> | null;
   solo_cotizaciones_directas?: boolean;
+  estado?: string;
   verificado: boolean;
+  /** Prefijo de la empresa en el shipping mark (ej. "ctl"). */
+  shipping_mark_prefijo?: string | null;
   fecha_registro: string;
 }
 
@@ -32,6 +50,10 @@ export interface BackendCotizacion {
   precio_objetivo_usd: number | null;
   incoterm: string;
   notas_adicionales?: string | null;
+  /** Parte del shipping mark que escribe el cliente (ej. "prendas control"). */
+  shipping_mark_sufijo?: string | null;
+  /** Marca ya compuesta ("ctl-prendascontrol"); null mientras no se sepa la empresa. */
+  shipping_mark?: string | null;
   campos_personalizados_valores?: Record<string, unknown> | null;
   asesor_asignado_id?: string | null;
   conversacion_id?: string | null;
@@ -43,6 +65,7 @@ export interface BackendCotizacion {
 export interface CreateCotizacionPayload {
   modalidad: "dirigida" | "abierta";
   importador_id?: string;
+  foto_producto?: string;
   pais_importacion: string;
   nombre_producto: string;
   descripcion_cliente: string;
@@ -55,6 +78,8 @@ export interface CreateCotizacionPayload {
   precio_objetivo_usd?: number;
   incoterm: string;
   notas_adicionales?: string;
+  shipping_mark_sufijo?: string;
+  campos_personalizados_valores?: Record<string, unknown>;
 }
 
 export interface BackendAsesor {
@@ -65,6 +90,15 @@ export interface BackendAsesor {
   activo: boolean;
   fecha_creacion: string;
 }
+
+/** Qué se movió al reasignar trabajo entre cuentas de la empresa. */
+export interface BackendReasignacion {
+  cotizaciones_reasignadas: number;
+  ordenes_reasignadas: number;
+  conversaciones_reasignadas: number;
+}
+
+export interface BackendAsesorEstadoResponse extends BackendAsesor, BackendReasignacion {}
 
 export interface UpdateAsesorEstadoPayload {
   activo: boolean;
@@ -157,20 +191,128 @@ export interface UpdateImporterPayload {
   paises_origen?: string[];
   tiempo_respuesta_promedio?: string;
   capacidad_volumen?: number;
+  perfil_publico?: Record<string, unknown>;
   solo_cotizaciones_directas?: boolean;
+  shipping_mark_prefijo?: string;
 }
 
+/**
+ * Una entrada del historial tal y como la devuelve `EstadoOrdenItem` del
+ * backend. Antes se declaraba `{estado, fecha, nota}`, campos que el backend
+ * nunca ha enviado: el historial llegaba entero como `undefined` y el
+ * seguimiento salía vacío en pantalla.
+ */
 export interface BackendEstadoOrdenItem {
-  estado: string;
-  fecha: string;
-  nota: string | null;
+  id: string;
+  orden_id: string;
+  estado_anterior: string | null;
+  estado_nuevo: string;
+  fecha_cambio: string;
 }
 
 export interface BackendDocumentoOrdenItem {
+  id: string;
+  orden_id: string;
   nombre: string;
   url: string;
   tipo: string;
-  fecha_subida: string;
+}
+
+/* ------------------------------------------------------------------
+ * Resenas de empresas importadoras
+ * ---------------------------------------------------------------- */
+
+export interface BackendResena {
+  id: string;
+  importador_id: string;
+  orden_id: string;
+  calificacion: number;
+  comentario?: string | null;
+  puntualidad?: number | null;
+  calidad_producto?: number | null;
+  comunicacion?: number | null;
+  respuesta_empresa?: string | null;
+  fecha_respuesta?: string | null;
+  visible: boolean;
+  /** Nombre de pila de quien la escribio; el backend no expone su correo ni su id. */
+  autor_nombre?: string | null;
+  fecha_creacion: string;
+}
+
+export interface BackendResumenResenas {
+  promedio: number;
+  total: number;
+  /** Reparto por estrellas: {"5": 12, "4": 3, ...} */
+  reparto: Record<string, number>;
+  puntualidad?: number | null;
+  calidad_producto?: number | null;
+  comunicacion?: number | null;
+}
+
+/** Orden ya entregada que todavia no tiene resena. */
+export interface BackendOrdenResenable {
+  orden_id: string;
+  importador_id: string;
+  nombre_empresa: string;
+  producto: string;
+  fecha_creacion: string;
+}
+
+export interface CrearResenaPayload {
+  orden_id: string;
+  calificacion: number;
+  comentario?: string;
+  puntualidad?: number;
+  calidad_producto?: number;
+  comunicacion?: number;
+}
+
+/* ------------------------------------------------------------------
+ * Presentacion de la empresa (video breve y fotos)
+ * ---------------------------------------------------------------- */
+
+export type TipoEvidenciaImportador =
+  | "certificado"
+  | "foto_fabrica"
+  | "catalogo"
+  | "moq_doc"
+  | "video_presentacion"
+  | "foto_producto"
+  | "otro";
+
+export interface BackendEvidenciaImportador {
+  id: string;
+  importador_id: string;
+  tipo: TipoEvidenciaImportador;
+  titulo: string;
+  descripcion?: string | null;
+  url: string;
+  /** "pendiente" | "aprobada" | "rechazada": solo las aprobadas salen en la ficha publica. */
+  estado: string;
+  nota_revision?: string | null;
+  fecha_creacion?: string | null;
+  fecha_revision?: string | null;
+}
+
+export interface CrearEvidenciaPayload {
+  tipo: TipoEvidenciaImportador;
+  titulo: string;
+  descripcion?: string;
+  url: string;
+}
+
+/* ------------------------------------------------------------------
+ * Referidos
+ * ---------------------------------------------------------------- */
+
+export interface BackendCodigoReferido {
+  codigo: string;
+  activo?: boolean;
+}
+
+export interface BackendEstadisticasReferido {
+  total_referidos: number;
+  creditos_ganados: number;
 }
 
 export interface BackendOrder {
@@ -183,11 +325,23 @@ export interface BackendOrder {
   precio_acordado_usd: number;
   tiempo_estimado_entrega: string | null;
   condiciones_adicionales: string | null;
+  /** Marca de embarque congelada al crear la orden ("ctl-prendascontrol"). */
+  shipping_mark: string | null;
   en_disputa: boolean;
   motivo_disputa: string | null;
   conversacion_id: string | null;
   historial_estados: BackendEstadoOrdenItem[];
   documentos_adjuntos: BackendDocumentoOrdenItem[];
+}
+
+export interface UpdateOrderStatusPayload {
+  estado: string;
+}
+
+export interface AddOrderDocumentPayload {
+  nombre: string;
+  url: string;
+  tipo: string;
 }
 
 export interface BackendChatMessage {
@@ -202,12 +356,150 @@ export interface BackendChatMessage {
 
 export interface BackendChatConversation {
   id: string;
-  cotizacion_id: string;
+  /**
+   * "negociacion" es el hilo solicitante ↔ empresa; "interna" es el canal de
+   * coordinación de la empresa con uno de sus asesores, que el cliente no ve.
+   * En las internas no hay cotización ni solicitante.
+   */
+  tipo: "negociacion" | "interna" | "soporte";
+  cotizacion_id: string | null;
   orden_id: string | null;
-  solicitante_id: string;
-  importador_usuario_id: string;
+  solicitante_id: string | null;
+  importador_usuario_id: string | null;
+  importador_id: string | null;
+  /** Nombre de la otra parte, ya resuelto por el backend. */
+  contraparte_nombre: string | null;
+  /** Solo en tickets de soporte. */
+  asunto: string | null;
+  urgencia: UrgenciaSoporte | null;
+  solicitante_rol: string | null;
+  /** Mensajes ajenos posteriores a la última lectura de quien consulta. */
+  no_leidos: number;
+  /** Cierre del ticket: qué se hizo, quién lo cerró y cuándo. */
+  cerrada: boolean;
+  resolucion: string | null;
+  cerrada_por_nombre: string | null;
+  fecha_cierre: string | null;
+  /** Mesa de soporte: nivel del caso y agente que lo atiende. */
+  nivel: number | null;
+  agente_asignado_id: string | null;
+  agente_nombre: string | null;
+  agente_nivel: number | null;
+  calificacion: number | null;
+  comentario_calificacion: string | null;
   fecha_creacion: string;
   ultimo_mensaje: BackendChatMessage | null;
+}
+
+export type UrgenciaSoporte = "critica" | "alta" | "media" | "baja";
+
+export interface BackendEtiquetaItem {
+  id: string;
+  owner_user_id: string;
+  nombre: string;
+  color: string | null;
+  created_at: string;
+}
+
+export interface BackendCarpetaItem {
+  id: string;
+  owner_user_id: string;
+  parent_id: string | null;
+  nombre: string;
+  is_system?: boolean;
+  is_protected?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendArchivoItem {
+  id: string;
+  owner_user_id: string;
+  carpeta_id: string | null;
+  nombre: string;
+  extension: string;
+  mime_type: string;
+  tipo_recurso: string;
+  size_bytes: number | null;
+  storage_url: string | null;
+  origen: string;
+  created_at: string;
+  updated_at: string;
+  favorito: boolean;
+  etiquetas: BackendEtiquetaItem[];
+}
+
+export interface BackendExplorerResponse {
+  carpetas: BackendCarpetaItem[];
+  archivos: BackendArchivoItem[];
+}
+
+export interface CreateDocumentFolderPayload {
+  nombre: string;
+  parent_id?: string | null;
+}
+
+export interface UpdateDocumentFolderPayload {
+  nombre?: string;
+  parent_id?: string | null;
+}
+
+export interface CreateDocumentFilePayload {
+  nombre: string;
+  carpeta_id?: string | null;
+  mime_type?: string;
+  extension?: string;
+  size_bytes?: number;
+  storage_url?: string;
+  origen?: string;
+}
+
+export interface UpdateDocumentFilePayload {
+  nombre?: string;
+  carpeta_id?: string | null;
+  favorito?: boolean;
+}
+
+export interface ShareDocumentsToChatPayload {
+  conversacion_ids: string[];
+  archivo_ids: string[];
+  mensaje?: string;
+}
+
+export interface BackendChatAttachmentItem {
+  archivo_id: string;
+  mensaje_id: string;
+  conversacion_id: string;
+  nombre: string;
+  mime_type: string;
+  extension: string;
+  tipo_recurso: string;
+  size_bytes: number | null;
+  storage_url: string | null;
+  created_at: string;
+}
+
+export interface BackendNotification {
+  id: string;
+  usuario_id: string;
+  tipo: string;
+  titulo: string;
+  mensaje: string;
+  data: Record<string, unknown> | null;
+  leida: boolean;
+  fecha_creacion: string;
+  fecha_lectura: string | null;
+}
+
+export interface BackendNotificationsListResponse {
+  items: BackendNotification[];
+  total: number;
+  no_leidas: number;
+}
+
+export interface BackendMarkAllNotificationsReadResponse {
+  actualizadas: number;
+  mensaje: string;
 }
 
 export const businessService = {
@@ -243,10 +535,23 @@ export const businessService = {
     });
   },
 
-  updateCompanyAdvisorStatus(asesorId: string, activo: boolean): Promise<BackendAsesor> {
-    return apiRequest<BackendAsesor>(`/importadores/asesores/${asesorId}/estado`, {
+  /**
+   * Activa o desactiva un asesor. Al desactivarlo el backend traspasa su carga
+   * (cotizaciones, órdenes y chats) a la cuenta dueña y devuelve cuánto movió,
+   * para poder avisárselo al usuario.
+   */
+  updateCompanyAdvisorStatus(asesorId: string, activo: boolean): Promise<BackendAsesorEstadoResponse> {
+    return apiRequest<BackendAsesorEstadoResponse>(`/importadores/asesores/${asesorId}/estado`, {
       method: "PUT",
       body: { activo } satisfies UpdateAsesorEstadoPayload,
+    });
+  },
+
+  /** Reasigna el responsable de una cotización (o la devuelve al pool con null). */
+  assignAdvisorToQuote(cotizacionId: string, asesorId: string | null): Promise<BackendReasignacion> {
+    return apiRequest<BackendReasignacion>(`/importadores/cotizaciones/${cotizacionId}/asignar`, {
+      method: "PUT",
+      body: { asesor_id: asesorId },
     });
   },
 
@@ -284,10 +589,84 @@ export const businessService = {
     });
   },
 
+  updateOrderStatus(orderId: string, payload: UpdateOrderStatusPayload): Promise<Record<string, unknown>> {
+    return apiRequest<Record<string, unknown>>(`/ordenes/${orderId}/estado`, {
+      method: "PUT",
+      body: payload,
+    });
+  },
+
+  addOrderDocument(orderId: string, payload: AddOrderDocumentPayload): Promise<BackendDocumentoOrdenItem> {
+    return apiRequest<BackendDocumentoOrdenItem>(`/ordenes/${orderId}/documentos`, {
+      method: "POST",
+      body: payload,
+    });
+  },
+
   listChatConversations(): Promise<BackendChatConversation[]> {
     return apiRequest<BackendChatConversation[]>("/chat/conversaciones", {
       method: "GET",
     });
+  },
+
+  /**
+   * Abre (o reutiliza) el canal interno empresa ↔ asesor. La cuenta dueña indica
+   * el asesor; el asesor lo llama sin argumentos y abre el suyo.
+   */
+  startInternalChat(asesorId?: string, mensajeInicial?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/interno", {
+      method: "POST",
+      body: { asesor_id: asesorId ?? null, mensaje_inicial: mensajeInicial ?? null },
+    });
+  },
+
+  /** Pide ayuda al equipo de la plataforma. Cada llamada abre un ticket propio. */
+  openSupportTicket(payload: { asunto: string; urgencia: UrgenciaSoporte; mensaje?: string }): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/soporte", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  /** Cierra un ticket dejando escrito qué se hizo. Solo equipo de la plataforma. */
+  closeSupportTicket(conversationId: string, resolucion: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/cerrar`, {
+      method: "POST",
+      body: { resolucion },
+    });
+  },
+
+  /** Reabre un ticket cerrado. Lo puede hacer el equipo o quien lo abrió. */
+  reopenSupportTicket(conversationId: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/reabrir`, {
+      method: "POST",
+    });
+  },
+
+  /** Sube el ticket de nivel y lo pasa a alguien que pueda con él. */
+  escalateSupportTicket(conversationId: string, nivel: number, motivo?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/escalar`, {
+      method: "POST",
+      body: { nivel, motivo: motivo || null },
+    });
+  },
+
+  /** Puntúa la atención recibida. Solo quien pidió ayuda y con el ticket cerrado. */
+  rateSupportTicket(conversationId: string, calificacion: number, comentario?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>(`/chat/soporte/${conversationId}/calificar`, {
+      method: "POST",
+      body: { calificacion, comentario: comentario || null },
+    });
+  },
+
+  /** Alta de una cuenta del equipo de atención al cliente. Solo administración. */
+  createSupportAgent(payload: { email: string; password: string; nombre: string; telefono?: string; nivel: number }): Promise<unknown> {
+    return apiRequest<unknown>("/admin/equipo-soporte", { method: "POST", body: payload });
+  },
+
+  /** Marca el hilo como leído hasta ahora para el usuario en sesión. */
+  markConversationRead(conversationId: string): Promise<void> {
+    return apiRequest<void>(`/chat/conversaciones/${conversationId}/leida`, { method: "POST" });
   },
 
   listChatMessages(conversationId: string): Promise<BackendChatMessage[]> {
@@ -296,10 +675,89 @@ export const businessService = {
     });
   },
 
-  sendChatMessage(conversationId: string, payload: { contenido: string; tipo?: string }): Promise<BackendChatMessage> {
+  sendChatMessage(conversationId: string, payload: { contenido: string; tipo?: string; metadata?: Record<string, unknown> | null }): Promise<BackendChatMessage> {
     return apiRequest<BackendChatMessage>(`/chat/conversaciones/${conversationId}/mensajes`, {
       method: "POST",
       body: payload,
+    });
+  },
+
+  listDocumentExplorer(parentId?: string | null): Promise<BackendExplorerResponse> {
+    const query = parentId ? `?parent_id=${encodeURIComponent(parentId)}` : "";
+    return apiRequest<BackendExplorerResponse>(`/documentos/explorador${query}`, {
+      method: "GET",
+    });
+  },
+
+  createDocumentFolder(payload: CreateDocumentFolderPayload): Promise<BackendCarpetaItem> {
+    return apiRequest<BackendCarpetaItem>("/documentos/carpetas", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  updateDocumentFolder(folderId: string, payload: UpdateDocumentFolderPayload): Promise<BackendCarpetaItem> {
+    return apiRequest<BackendCarpetaItem>(`/documentos/carpetas/${folderId}`, {
+      method: "PATCH",
+      body: payload,
+    });
+  },
+
+  deleteDocumentFolder(folderId: string): Promise<{ success?: boolean }> {
+    return apiRequest<{ success?: boolean }>(`/documentos/carpetas/${folderId}`, {
+      method: "DELETE",
+    });
+  },
+
+  createDocumentFile(payload: CreateDocumentFilePayload): Promise<BackendArchivoItem> {
+    return apiRequest<BackendArchivoItem>("/documentos/archivos", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  uploadDocumentFile(file: File, carpetaId?: string | null, origen = "manual"): Promise<BackendArchivoItem> {
+    const formData = new FormData();
+    formData.append("archivo", file);
+    formData.append("origen", origen);
+    if (carpetaId) {
+      formData.append("carpeta_id", carpetaId);
+    }
+    return apiRequest<BackendArchivoItem>("/documentos/archivos/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  updateDocumentFile(fileId: string, payload: UpdateDocumentFilePayload): Promise<BackendArchivoItem> {
+    return apiRequest<BackendArchivoItem>(`/documentos/archivos/${fileId}`, {
+      method: "PATCH",
+      body: payload,
+    });
+  },
+
+  deleteDocumentFile(fileId: string): Promise<{ success?: boolean }> {
+    return apiRequest<{ success?: boolean }>(`/documentos/archivos/${fileId}`, {
+      method: "DELETE",
+    });
+  },
+
+  searchDocumentFiles(query: string): Promise<BackendArchivoItem[]> {
+    return apiRequest<BackendArchivoItem[]>(`/documentos/buscar?q=${encodeURIComponent(query)}`, {
+      method: "GET",
+    });
+  },
+
+  shareDocumentsToChat(payload: ShareDocumentsToChatPayload): Promise<{ success: boolean; mensajes_creados: number }> {
+    return apiRequest<{ success: boolean; mensajes_creados: number }>("/documentos/compartir-chat", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  listChatAttachments(conversationId: string): Promise<BackendChatAttachmentItem[]> {
+    return apiRequest<BackendChatAttachmentItem[]>(`/documentos/chats/${conversationId}/adjuntos`, {
+      method: "GET",
     });
   },
 
@@ -328,7 +786,7 @@ export const businessService = {
   },
 
   createProposal(payload: CreatePropuestaPayload): Promise<BackendPropuesta> {
-    return apiRequest<BackendPropuesta>("/propuestas/", {
+    return apiRequest<BackendPropuesta>("/propuestas", {
       method: "POST",
       body: payload,
     });
@@ -365,6 +823,90 @@ export const businessService = {
     return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}/propuestas/aceptar`, {
       method: "PUT",
       body: { importador_id: importadorId } satisfies StartNegotiationPayload,
+    });
+  },
+
+  /* ---------------- Resenas de empresas importadoras ---------------- */
+
+  /** Resenas publicas de una empresa. No exige sesion: el catalogo es publico. */
+  listImporterReviews(importadorId: string): Promise<BackendResena[]> {
+    return apiRequest<BackendResena[]>(`/resenas/importador/${importadorId}`, { method: "GET" });
+  },
+
+  getImporterReviewsSummary(importadorId: string): Promise<BackendResumenResenas> {
+    return apiRequest<BackendResumenResenas>(`/resenas/importador/${importadorId}/resumen`, { method: "GET" });
+  },
+
+  /** Ordenes entregadas del solicitante que todavia no ha valorado. */
+  listPendingReviews(): Promise<BackendOrdenResenable[]> {
+    return apiRequest<BackendOrdenResenable[]>("/resenas/pendientes", { method: "GET" });
+  },
+
+  listMyReviews(): Promise<BackendResena[]> {
+    return apiRequest<BackendResena[]>("/resenas/mias", { method: "GET" });
+  },
+
+  createReview(payload: CrearResenaPayload): Promise<BackendResena> {
+    return apiRequest<BackendResena>("/resenas", { method: "POST", body: payload });
+  },
+
+  updateReview(resenaId: string, payload: Partial<CrearResenaPayload>): Promise<BackendResena> {
+    return apiRequest<BackendResena>(`/resenas/${resenaId}`, { method: "PUT", body: payload });
+  },
+
+  /** Derecho de replica de la empresa resenada. */
+  replyToReview(resenaId: string, respuesta: string): Promise<BackendResena> {
+    return apiRequest<BackendResena>(`/resenas/${resenaId}/responder`, {
+      method: "POST",
+      body: { respuesta },
+    });
+  },
+
+  /* ---------------- Presentacion de la empresa ---------------- */
+
+  listMyImporterEvidence(): Promise<BackendEvidenciaImportador[]> {
+    return apiRequest<BackendEvidenciaImportador[]>("/importadores/evidencias", { method: "GET" });
+  },
+
+  /** Presentacion aprobada y visible en la ficha publica de una empresa. */
+  listPublicImporterEvidence(importadorId: string): Promise<BackendEvidenciaImportador[]> {
+    return apiRequest<BackendEvidenciaImportador[]>(`/importadores/${importadorId}/evidencias`, { method: "GET" });
+  },
+
+  createImporterEvidence(payload: CrearEvidenciaPayload): Promise<BackendEvidenciaImportador> {
+    return apiRequest<BackendEvidenciaImportador>("/importadores/evidencias", { method: "POST", body: payload });
+  },
+
+  deleteImporterEvidence(evidenciaId: string): Promise<void> {
+    return apiRequest<void>(`/importadores/evidencias/${evidenciaId}`, { method: "DELETE" });
+  },
+
+  /* ---------------- Referidos ---------------- */
+
+  getMyReferralCode(): Promise<BackendCodigoReferido> {
+    return apiRequest<BackendCodigoReferido>("/referidos/mi-codigo", { method: "GET" });
+  },
+
+  getReferralStats(): Promise<BackendEstadisticasReferido> {
+    return apiRequest<BackendEstadisticasReferido>("/referidos/estadisticas", { method: "GET" });
+  },
+
+  listNotifications(soloNoLeidas = false): Promise<BackendNotificationsListResponse> {
+    const query = soloNoLeidas ? "?solo_no_leidas=true" : "";
+    return apiRequest<BackendNotificationsListResponse>(`/notificaciones${query}`, {
+      method: "GET",
+    });
+  },
+
+  markNotificationAsRead(notificationId: string): Promise<BackendNotification> {
+    return apiRequest<BackendNotification>(`/notificaciones/${notificationId}/leer`, {
+      method: "PUT",
+    });
+  },
+
+  markAllNotificationsAsRead(): Promise<BackendMarkAllNotificationsReadResponse> {
+    return apiRequest<BackendMarkAllNotificationsReadResponse>("/notificaciones/leer-todas", {
+      method: "PUT",
     });
   },
 };

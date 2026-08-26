@@ -3,12 +3,17 @@ import { Moon, Sun } from "lucide-react";
 import { useState } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { authService } from "@/services/auth.service";
 import { mapBackendRoleToAppRole } from "@/utils/auth-roles";
 import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/auth/components/ForgotPasswordForm";
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
+import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
 
-type AuthView = "login" | "forgot";
-export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin";
+type AuthView = "login" | "forgot" | "otp";
+// Rol con el que se entra tras autenticarse. Incluye "soporte" (equipo de
+// atención al cliente): no es un botón del formulario —nadie elige entrar como
+// soporte—, pero sí es un destino posible al que lleva la sesión.
+export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
 
 interface AuthScreenProps {
   onLogin: (role: PortalRole) => void;
@@ -20,25 +25,95 @@ interface AuthScreenProps {
 }
 
 export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, initialEmail }: AuthScreenProps) {
-  const { signIn, requestPasswordReset } = useAuth();
+  const { signIn, verifyLoginOtp, requestPasswordReset } = useAuth();
   const [view, setView] = useState<AuthView>("login");
   const [dark, setDark] = useState(false);
   const [success, setSuccess] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpChallengeToken, setOtpChallengeToken] = useState("");
+  const [otpReasonMessage, setOtpReasonMessage] = useState("");
+  const [otpInfoMessage, setOtpInfoMessage] = useState("");
   const [authError, setAuthError] = useState("");
 
   const loginMutation = useMutation({
     mutationFn: (values: LoginFormValues) => signIn(values),
-    onSuccess: (response) => {
+    onSuccess: (response, variables) => {
+      const otpGate = response as typeof response & {
+        require_otp?: boolean;
+        status?: string;
+      };
+      if (response.requiere_otp || otpGate.require_otp === true || otpGate.status === "otp_required") {
+        if (!response.challenge_token) {
+          setAuthError(response.mensaje || "No se pudo iniciar el reto OTP. Intenta de nuevo.");
+          return;
+        }
+        setOtpEmail(String(variables.email ?? "").trim());
+        setOtpChallengeToken(response.challenge_token);
+        setOtpReasonMessage(response.mensaje || "");
+        setOtpInfoMessage("");
+        setAuthError("");
+        setView("otp");
+        return;
+      }
+
       if (!response.rol) {
         setAuthError(response.mensaje || "Respuesta de login invalida: falta rol");
         return;
       }
       const appRole = mapBackendRoleToAppRole(response.rol);
+      if (!appRole) {
+        setAuthError("No se reconoce el rol del usuario autenticado.");
+        return;
+      }
       onLogin(appRole);
     },
     onError: (error) => {
       setAuthError(error instanceof Error ? error.message : "No se pudo iniciar sesion");
+    },
+  });
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: (otp: string) =>
+      verifyLoginOtp(
+        {
+          challenge_token: otpChallengeToken,
+          otp,
+        },
+        otpEmail,
+      ),
+    onSuccess: (response) => {
+      if (!response.rol) {
+        setAuthError(response.mensaje || "Respuesta invalida: falta rol");
+        return;
+      }
+      const appRole = mapBackendRoleToAppRole(response.rol);
+      if (!appRole) {
+        setAuthError("No se reconoce el rol del usuario autenticado.");
+        return;
+      }
+      onLogin(appRole);
+    },
+    onError: (error) => {
+      setAuthError(error instanceof Error ? error.message : "No se pudo verificar el codigo OTP");
+    },
+  });
+
+  const resendOtpMutation = useMutation({
+    mutationFn: () =>
+      authService.resendOtp({
+        email: otpEmail,
+        proposito: "login_tardio",
+      }),
+    onSuccess: (response) => {
+      if (response.challenge_token) {
+        setOtpChallengeToken(response.challenge_token);
+      }
+      setAuthError("");
+      setOtpInfoMessage(response.mensaje || "Te enviamos un nuevo codigo OTP.");
+    },
+    onError: (error) => {
+      setAuthError(error instanceof Error ? error.message : "No se pudo reenviar el codigo OTP");
     },
   });
 
@@ -64,12 +139,28 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
     forgotMutation.mutate(values);
   }
 
+  function handleOtpSubmit(otp: string) {
+    setAuthError("");
+    setOtpInfoMessage("");
+    verifyOtpMutation.mutate(String(otp ?? "").trim());
+  }
+
+  function handleResendOtp() {
+    setAuthError("");
+    setOtpInfoMessage("");
+    resendOtpMutation.mutate();
+  }
+
   function switchTo(next: AuthView) {
     setView(next);
     setAuthError("");
     setSuccess(false);
+    setOtpInfoMessage("");
     if (next === "login") {
       setSubmittedEmail("");
+      setOtpEmail("");
+      setOtpChallengeToken("");
+      setOtpReasonMessage("");
     }
   }
 
@@ -96,6 +187,18 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
               isPending={loginMutation.isPending}
               errorMessage={authError}
               initialEmail={initialEmail}
+            />
+          ) : view === "otp" ? (
+            <LoginOtpForm
+              email={otpEmail}
+              reasonMessage={otpReasonMessage}
+              isPending={verifyOtpMutation.isPending}
+              isResending={resendOtpMutation.isPending}
+              errorMessage={authError}
+              infoMessage={otpInfoMessage}
+              onSubmit={handleOtpSubmit}
+              onResend={handleResendOtp}
+              onBackToLogin={() => switchTo("login")}
             />
           ) : (
             <ForgotPasswordForm

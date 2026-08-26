@@ -8,8 +8,15 @@ from uuid import UUID
 import json
 
 import config
-from schemas.importador import ImportadorCreate, ImportadorResponse, ImportadorUpdate
-from schemas.usuario import AsesorCreate, AsesorResponse, AsesorEstadoUpdate
+from schemas.importador import ImportadorResponse, ImportadorUpdate
+from schemas.usuario import (
+    AsesorCreate,
+    AsesorResponse,
+    AsesorEstadoUpdate,
+    AsesorEstadoResponse,
+    AsignarAsesorRequest,
+    ReasignacionResponse,
+)
 from schemas.campo_personalizado import (
     CampoPersonalizadoCreate, CampoPersonalizadoUpdate, CampoPersonalizadoResponse,
     FormularioImportadorResponse
@@ -22,6 +29,10 @@ from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.campo_personalizado import CampoPersonalizado
 from models.orden import Orden
+from services.certificacion_service import (
+    adjuntar_certificaciones,
+    subconsulta_puntaje_publicidad,
+)
 from utils.dependencies import get_db, require_rol, require_rol_in, get_current_user
 from utils.security import hash_password
 from utils.limiter import limiter, RATE_LIMIT_PUBLIC_READ
@@ -39,7 +50,7 @@ def json_contains_column(column, value):
     # Usar LIKE para buscar el valor dentro del JSON (compatible con ambos)
     return column.like(f'%"{value}"%')
 
-@router.get("/", response_model=List[ImportadorResponse])
+@router.get("", response_model=List[ImportadorResponse])
 @limiter.limit(RATE_LIMIT_PUBLIC_READ)
 async def listar_importadores(
     request: Request,
@@ -74,14 +85,37 @@ async def listar_importadores(
     if certificado is not None:
         query = query.filter(Importador.verificado == certificado)
 
-    if orden == "calificacion":
-        query = query.order_by(Importador.calificacion_promedio.desc())
-    elif orden == "reciente":
-        query = query.order_by(Importador.fecha_registro.desc())
-    else:
-        query = query.order_by(Importador.calificacion_promedio.desc())
+    # El orden por defecto lo decide el peso de las certificaciones que la
+    # plataforma otorgó: es el "algoritmo de publicidad" del catálogo. Se hace
+    # con un outerjoin para que las empresas sin sello sigan apareciendo (con 0).
+    puntajes = subconsulta_puntaje_publicidad(db)
+    query = query.outerjoin(puntajes, puntajes.c.importador_id == Importador.id)
+    puntaje_col = func.coalesce(puntajes.c.puntaje, 0.0)
 
-    return query.offset(offset).limit(limit).all()
+    if orden == "reciente":
+        query = query.order_by(Importador.fecha_registro.desc())
+    elif orden == "calificacion":
+        query = query.order_by(Importador.calificacion_promedio.desc())
+    else:
+        # Desempate estable: a igual peso, primero la empresa verificada y luego
+        # la más antigua, para que el orden no baile entre peticiones.
+        query = query.order_by(
+            puntaje_col.desc(),
+            Importador.verificado.desc(),
+            Importador.fecha_registro.asc(),
+        )
+
+    filas = query.offset(offset).limit(limit).all()
+    return _con_certificaciones(db, filas)
+
+
+def _con_certificaciones(db: Session, importadores: List[Importador]) -> List[ImportadorResponse]:
+    """Adjunta a cada empresa sus sellos vigentes y su puntaje agregado."""
+    return adjuntar_certificaciones(db, importadores)
+
+
+def _una_con_certificaciones(db: Session, importador: Importador) -> ImportadorResponse:
+    return _con_certificaciones(db, [importador])[0]
 
 # ==================== Panel de empresa: asesores (Fase 1) ====================
 # NOTA: estas rutas de un solo segmento literal ("/asesores", "/campos-personalizados")
@@ -143,14 +177,89 @@ async def listar_asesores(
 
     return asesores
 
-@router.put("/asesores/{asesor_id}/estado", response_model=AsesorResponse)
+def _cuenta_duena(db: Session, importador_id: str) -> Optional[Usuario]:
+    """Cuenta dueña de la empresa: el destino por defecto de toda reasignación."""
+    return db.query(Usuario).filter(
+        Usuario.importador_id == importador_id,
+        Usuario.rol == "importador",
+    ).order_by(Usuario.fecha_creacion.asc()).first()
+
+
+def _traspasar_carga_de_trabajo(
+    db: Session,
+    *,
+    desde_usuario_id: str,
+    hacia_usuario: Usuario,
+    motivo: str,
+    solo_cotizacion_id: Optional[str] = None,
+) -> dict:
+    """Mueve cotizaciones, órdenes y conversaciones de una cuenta a otra.
+
+    Sin esto, desactivar a un asesor dejaba sus chats apuntando a una cuenta que
+    ya no puede iniciar sesión: la conversación desaparecía de la bandeja de la
+    empresa y ni siquiera el dueño podía leerla, porque el control de acceso
+    exige ser exactamente `importador_usuario_id`.
+    """
+    from models.chat import ConversacionChat, MensajeChat, TipoMensajeChat
+    from uuid import uuid4
+
+    hacia_id = str(hacia_usuario.id)
+
+    if solo_cotizacion_id:
+        # Reasignación puntual: solo esa cotización y su conversación.
+        cotizaciones = 0
+        ordenes = db.query(Orden).filter(
+            Orden.asesor_asignado_id == desde_usuario_id,
+            Orden.cotizacion_id == solo_cotizacion_id,
+        ).update({Orden.asesor_asignado_id: hacia_id}, synchronize_session=False)
+        conversaciones = db.query(ConversacionChat).filter(
+            ConversacionChat.importador_usuario_id == desde_usuario_id,
+            ConversacionChat.cotizacion_id == solo_cotizacion_id,
+        ).all()
+    else:
+        cotizaciones = db.query(Cotizacion).filter(
+            Cotizacion.asesor_asignado_id == desde_usuario_id
+        ).update({Cotizacion.asesor_asignado_id: hacia_id}, synchronize_session=False)
+
+        ordenes = db.query(Orden).filter(
+            Orden.asesor_asignado_id == desde_usuario_id
+        ).update({Orden.asesor_asignado_id: hacia_id}, synchronize_session=False)
+
+        conversaciones = db.query(ConversacionChat).filter(
+            ConversacionChat.importador_usuario_id == desde_usuario_id
+        ).all()
+
+    for conversacion in conversaciones:
+        conversacion.importador_usuario_id = hacia_id
+        # Traza visible para el solicitante: el interlocutor cambió a mitad de
+        # la negociación y debe saberlo.
+        db.add(MensajeChat(
+            id=str(uuid4()),
+            conversacion_id=conversacion.id,
+            remitente_id=hacia_id,
+            contenido=f"Esta conversación fue reasignada a {hacia_usuario.nombre or hacia_usuario.email} ({motivo}).",
+            tipo=TipoMensajeChat.sistema.value,
+        ))
+
+    return {
+        "cotizaciones_reasignadas": int(cotizaciones or 0),
+        "ordenes_reasignadas": int(ordenes or 0),
+        "conversaciones_reasignadas": len(conversaciones),
+    }
+
+
+@router.put("/asesores/{asesor_id}/estado", response_model=AsesorEstadoResponse)
 async def actualizar_estado_asesor(
     asesor_id: str,
     datos: AsesorEstadoUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("importador"))
 ):
-    """Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa)."""
+    """Activa o desactiva un asesor de la empresa (solo la cuenta dueña, y solo de su propia empresa).
+
+    Al desactivarlo, toda su carga de trabajo (cotizaciones, órdenes y chats)
+    pasa a la cuenta dueña para que ninguna negociación quede huérfana.
+    """
     try:
         asesor_id_str = str(UUID(asesor_id))
     except ValueError:
@@ -166,11 +275,123 @@ async def actualizar_estado_asesor(
     if not asesor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asesor no encontrado")
 
+    estaba_activo = bool(asesor.activo)
     asesor.activo = datos.activo
+
+    traspaso = {"cotizaciones_reasignadas": 0, "ordenes_reasignadas": 0, "conversaciones_reasignadas": 0}
+    if estaba_activo and not datos.activo:
+        dueno = _cuenta_duena(db, importador_id_str)
+        if not dueno:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La empresa no tiene cuenta dueña a la que reasignar el trabajo del asesor",
+            )
+        traspaso = _traspasar_carga_de_trabajo(
+            db,
+            desde_usuario_id=asesor_id_str,
+            hacia_usuario=dueno,
+            motivo="el asesor fue desactivado",
+        )
+
     db.commit()
     db.refresh(asesor)
 
-    return asesor
+    return AsesorEstadoResponse(
+        **AsesorResponse.model_validate(asesor).model_dump(),
+        **traspaso,
+    )
+
+
+@router.put("/cotizaciones/{cotizacion_id}/asignar", response_model=ReasignacionResponse)
+async def asignar_asesor_a_cotizacion(
+    cotizacion_id: str,
+    datos: AsignarAsesorRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("importador")),
+):
+    """La cuenta dueña asigna (o reasigna) el responsable de una cotización.
+
+    Hasta ahora el único mecanismo era el reclamo por orden de llegada, sin
+    manera de corregirlo: si el asesor equivocado reclamaba una cotización,
+    nadie podía moverla. Con `asesor_id = null` la cotización vuelve al pool.
+    """
+    from models.chat import ConversacionChat
+
+    try:
+        cotizacion_id_str = str(UUID(cotizacion_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de cotización inválido")
+
+    importador_id_str = current_user.get("importador_id")
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).first()
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+
+    # Solo se puede asignar sobre cotizaciones que la empresa está atendiendo.
+    propia = cotizacion.importador_id == importador_id_str
+    if not propia:
+        propia = db.query(Propuesta.id).filter(
+            Propuesta.cotizacion_id == cotizacion_id_str,
+            Propuesta.importador_id == importador_id_str,
+        ).first() is not None
+    if not propia:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta cotización no pertenece a tu empresa",
+        )
+
+    if datos.asesor_id is None:
+        cotizacion.asesor_asignado_id = None
+        conversacion = db.query(ConversacionChat).filter(
+            ConversacionChat.cotizacion_id == cotizacion_id_str
+        ).first()
+        if conversacion:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La cotización ya tiene una conversación abierta: asigna otro responsable en vez de devolverla al pool",
+            )
+        db.commit()
+        return ReasignacionResponse(cotizaciones_reasignadas=1)
+
+    try:
+        nuevo_id = str(UUID(datos.asesor_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de asesor inválido")
+
+    destino = db.query(Usuario).filter(
+        Usuario.id == nuevo_id,
+        Usuario.importador_id == importador_id_str,
+        Usuario.rol.in_(("asesor", "importador")),
+        Usuario.activo.is_(True),
+    ).first()
+    if not destino:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El asesor no existe, no pertenece a tu empresa o está desactivado",
+        )
+
+    cotizacion.asesor_asignado_id = nuevo_id
+
+    conversaciones = 0
+    conversacion = db.query(ConversacionChat).filter(
+        ConversacionChat.cotizacion_id == cotizacion_id_str
+    ).first()
+    if conversacion and conversacion.importador_usuario_id != nuevo_id:
+        anterior = conversacion.importador_usuario_id
+        traspaso = _traspasar_carga_de_trabajo(
+            db,
+            desde_usuario_id=anterior,
+            hacia_usuario=destino,
+            motivo="reasignación del responsable por la empresa",
+            solo_cotizacion_id=cotizacion_id_str,
+        )
+        conversaciones = traspaso["conversaciones_reasignadas"]
+
+    db.commit()
+    return ReasignacionResponse(
+        cotizaciones_reasignadas=1,
+        conversaciones_reasignadas=conversaciones,
+    )
 
 
 @router.delete("/asesores/{asesor_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -473,12 +694,25 @@ async def listar_importadores_destacados(
     db: Session = Depends(get_db)
 ):
     """
-    Top empresas importadoras activas por calificación promedio, para la sección
-    "Mejor calificados" del dashboard del solicitante.
+    Empresas destacadas del dashboard del solicitante.
+
+    El criterio es el peso de las certificaciones que la plataforma les otorgó,
+    no una calificación promedio: ese campo nunca se alimentó de reseñas reales.
     """
-    return db.query(Importador).filter(
-        Importador.estado == "activo"
-    ).order_by(Importador.calificacion_promedio.desc()).limit(limite).all()
+    puntajes = subconsulta_puntaje_publicidad(db)
+    filas = (
+        db.query(Importador)
+        .outerjoin(puntajes, puntajes.c.importador_id == Importador.id)
+        .filter(Importador.estado == "activo")
+        .order_by(
+            func.coalesce(puntajes.c.puntaje, 0.0).desc(),
+            Importador.verificado.desc(),
+            Importador.fecha_registro.asc(),
+        )
+        .limit(limite)
+        .all()
+    )
+    return _con_certificaciones(db, filas)
 
 @router.get("/por-categoria", response_model=dict)
 async def listar_importadores_por_categoria(
@@ -490,12 +724,13 @@ async def listar_importadores_por_categoria(
     Una empresa con varias especialidades aparece en cada una de sus categorías.
     """
     importadores = db.query(Importador).filter(Importador.estado == "activo").all()
+    respuestas = {r.id: r for r in _con_certificaciones(db, importadores)}
 
     agrupado: dict[str, list] = {}
     for imp in importadores:
         categorias = imp.especialidad_producto or []
         for categoria in categorias:
-            agrupado.setdefault(categoria, []).append(ImportadorResponse.model_validate(imp).model_dump(mode="json"))
+            agrupado.setdefault(categoria, []).append(respuestas[str(imp.id)].model_dump(mode="json"))
 
     return agrupado
 
@@ -508,10 +743,18 @@ async def listar_importadores_certificados(
     equipo de la plataforma), para la sección "Empresas certificadas" del
     dashboard del solicitante.
     """
-    return db.query(Importador).filter(
-        Importador.estado == "activo",
-        Importador.verificado == True  # noqa: E712 - comparación explícita requerida por SQLAlchemy
-    ).order_by(Importador.calificacion_promedio.desc()).all()
+    puntajes = subconsulta_puntaje_publicidad(db)
+    filas = (
+        db.query(Importador)
+        .outerjoin(puntajes, puntajes.c.importador_id == Importador.id)
+        .filter(
+            Importador.estado == "activo",
+            Importador.verificado == True,  # noqa: E712 - comparación explícita requerida por SQLAlchemy
+        )
+        .order_by(func.coalesce(puntajes.c.puntaje, 0.0).desc(), Importador.fecha_registro.asc())
+        .all()
+    )
+    return _con_certificaciones(db, filas)
 
 
 # ==================== Evidencias de perfil ====================
@@ -627,30 +870,12 @@ async def obtener_importador(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Importador no encontrado"
         )
-    
-    return importador
 
-@router.post("/", response_model=ImportadorResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
-async def crear_importador(
-    importador_data: ImportadorCreate,
-    current_user: dict = Depends(require_rol("admin")),
-    db: Session = Depends(get_db),
-):
-    """
-    **Deprecado / deshabilitado.** Crear solo la ficha de empresa dejaba
-    importadoras sin representante legal (dueño). El alta oficial es siempre:
+    return _una_con_certificaciones(db, importador)
 
-    `POST /admin/importadores` → empresa + cuenta dueño (`rol=importador`)
-    en un solo paso. El dueño es el jefe de los asesores/operadores.
-    """
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail=(
-            "Este endpoint está deshabilitado: no se permite crear una empresa "
-            "sin representante legal. Usa POST /admin/importadores para crear "
-            "la empresa junto con su cuenta dueño."
-        )
-    )
+# El alta de importadoras vive solo en `POST /admin/importadores`: crea la empresa
+# junto con su cuenta dueño (representante legal) en un paso. Aquí no se expone un
+# POST propio porque crear la ficha suelta dejaba empresas sin representante.
 
 # ==================== Endpoints de la bandeja de solicitudes del importador (Tarea 2.5) ====================
 
@@ -857,7 +1082,7 @@ async def actualizar_perfil_importador(
     db.commit()
     db.refresh(importador)
 
-    return importador
+    return _una_con_certificaciones(db, importador)
 
 @router.get("/{importador_id}/formulario", response_model=FormularioImportadorResponse)
 async def obtener_formulario_importador(

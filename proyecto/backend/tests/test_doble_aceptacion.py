@@ -1,10 +1,13 @@
 """Semana 4 - Fase 5: doble aceptación mutua de propuestas.
 
 Cubre: `POST /propuestas/{id}/pre-aceptar` no finaliza con un solo lado, ambos
-lados finalizan y crean la Orden automáticamente (sin pago), el chat se
-traspasa al dueño (supervisor) con un mensaje de sistema, las demás propuestas
-quedan rechazadas, y la reversión de la pre-aceptación mientras el otro lado
-no haya confirmado.
+lados finalizan y crean la Orden automáticamente (sin pago), el hilo de chat
+pasa a colgar de la orden con un mensaje de sistema y sigue atendido por el
+asesor que negoció, las demás propuestas quedan rechazadas, y la reversión de
+la pre-aceptación mientras el otro lado no haya confirmado.
+
+El lado "empresa" solo lo confirma la cuenta dueña: el asesor negocia y su chat
+es la evidencia que el dueño revisa antes de cerrar.
 """
 import pytest
 from uuid import uuid4
@@ -106,7 +109,8 @@ class TestUnSoloLadoNoFinaliza:
 
 
 class TestAmbosLadosFinalizan:
-    def test_dueño_finaliza_crea_orden_y_traspasa_chat(self, client, db_session, solicitante, empresa):
+    def test_dueño_finaliza_crea_orden_y_el_chat_cuelga_de_ella(self, client, db_session, solicitante, empresa):
+        """Sin asesor asignado el interlocutor sigue siendo el dueño."""
         importador, dueño = empresa
         cotizacion, propuesta = _crear_cotizacion_con_propuesta(db_session, solicitante, importador.id)
 
@@ -137,23 +141,45 @@ class TestAmbosLadosFinalizan:
         ).first()
         assert mensaje_sistema is not None
 
-    def test_asesor_asignado_puede_finalizar_por_la_empresa(self, client, db_session, solicitante, empresa, asesor):
-        importador, dueño = empresa
-        cotizacion, propuesta = _crear_cotizacion_con_propuesta(
+    def test_asesor_asignado_no_puede_finalizar_por_la_empresa(self, client, db_session, solicitante, empresa, asesor):
+        """El asesor negocia; comprometer a la empresa es de la cuenta dueña.
+
+        El chat que dejó el asesor es justo la evidencia que el dueño revisa
+        antes de confirmar, así que dejarle cerrar a él se saltaba el control.
+        """
+        importador, _dueño = empresa
+        _cotizacion, propuesta = _crear_cotizacion_con_propuesta(
             db_session, solicitante, importador.id, asesor_asignado_id=asesor.id
         )
 
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(solicitante))
         response = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(asesor))
 
+        assert response.status_code == 403
+        assert "cuenta dueña" in response.json()["detail"]
+
+        db_session.refresh(propuesta)
+        assert propuesta.estado == EstadoPropuesta.pendiente.value
+        assert propuesta.preaceptada_por_empresa is False
+
+    def test_el_chat_sigue_con_el_asesor_tras_cerrar_la_orden(self, client, db_session, solicitante, empresa, asesor):
+        """Al crearse la orden el hilo cambia de asunto, no de interlocutor."""
+        importador, dueño = empresa
+        cotizacion, propuesta = _crear_cotizacion_con_propuesta(
+            db_session, solicitante, importador.id, asesor_asignado_id=asesor.id
+        )
+
+        client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(solicitante))
+        response = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
+
         assert response.status_code == 200
         assert response.json()["estado"] == "aceptada"
 
-        # El chat se traspasa siempre al DUEÑO, aunque haya sido el asesor quien
-        # confirmó el lado empresa (a partir de aquí el supervisor toma el caso).
         conversacion = db_session.query(ConversacionChat).filter(ConversacionChat.cotizacion_id == cotizacion.id).first()
         assert conversacion is not None
-        assert conversacion.importador_usuario_id == str(dueño.id)
+        assert conversacion.importador_usuario_id == str(asesor.id)
+        # El mismo hilo pasa a colgar de la orden: es el de seguimiento.
+        assert conversacion.orden_id is not None
 
     def test_otras_propuestas_quedan_rechazadas(self, client, db_session, solicitante, empresa):
         importador, dueño = empresa

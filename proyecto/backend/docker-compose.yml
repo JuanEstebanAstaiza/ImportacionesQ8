@@ -6,10 +6,10 @@ services:
     env_file:
       - .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-importacionesq8}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER:-usuario_q8}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password_q8}
     command: ["--max-connections=500", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     # Solo localhost: no exponer MySQL a la red (OWASP A05)
     ports:
@@ -17,7 +17,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
       timeout: 20s
       retries: 10
 
@@ -68,11 +68,47 @@ services:
       RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-5/minute}
       RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-10/minute}
       RATE_LIMIT_FORGOT_PASSWORD: ${RATE_LIMIT_FORGOT_PASSWORD:-5/minute}
+    # Los archivos subidos y los PDF generados viven en el sistema de ficheros,
+    # no en MySQL. Sin estos volúmenes se quedaban en la capa de escritura del
+    # contenedor: cada `docker compose build backend` + recreación los borraba y
+    # dejaba las filas de `archivos` apuntando a binarios inexistentes, con un
+    # 404 "No hay contenido descargable" al abrirlos.
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_generated_docs:/app/generated_docs
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: importacionesq8_frontend
+    restart: unless-stopped
+    environment:
+      # Lo usa el BROWSER del usuario, que corre en el host: ahí `localhost:8000`
+      # sí es el backend, porque su puerto está publicado.
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
+      # Lo usa el proceso de Vite DENTRO del contenedor para reenviar /api. Aquí
+      # `localhost` sería el propio contenedor, así que va por el nombre del
+      # servicio. Sin esto el proxy respondía 500 (relevante al exponer el front
+      # por Dev Tunnel, donde el browser no alcanza localhost:8000).
+      VITE_PROXY_TARGET: http://backend:8000
+      # Recarga en caliente sobre el bind mount: sin sondeo, Vite no ve los
+      # cambios que haces en tu editor del host.
+      VITE_USE_POLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_started
 
   tests:
     build:
@@ -99,4 +135,10 @@ volumes:
   mysql_data:
     driver: local
   redis_data:
+    driver: local
+  # Sobreviven a `docker compose down` y a reconstruir la imagen; solo
+  # `docker compose down -v` los borra.
+  backend_uploads:
+    driver: local
+  backend_generated_docs:
     driver: local

@@ -1,21 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { mockCourses } from "./mockCourses";
-import type {
-  Course,
-  CourseProgress,
-  LearningState,
-  Lesson,
-  LessonResource,
-  Module,
-  PublishCourseInput,
-} from "./types";
-
-const CUSTOM_COURSES_STORAGE_KEY = "iq8_courses_custom";
-const PURCHASES_STORAGE_KEY = "iq8_courses_purchases";
-const PROGRESS_STORAGE_KEY = "iq8_courses_progress";
-const LEARNING_STATE_STORAGE_KEY = "iq8_courses_learning_state";
-const DEFAULT_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ?si=iq8coursebuilder";
+import type { Course, CourseProgress, LearningState, PublishCourseInput } from "./types";
+import { coursesService } from "@/services/courses.service";
 
 const DEFAULT_LEARNING_STATE: LearningState = {
   lastCourseId: null,
@@ -24,136 +10,6 @@ const DEFAULT_LEARNING_STATE: LearningState = {
   lastLessonIdByCourse: {},
   lastViewedAtByCourse: {},
 };
-
-function readLocalStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      return fallback;
-    }
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeLocalStorage<T>(key: string, value: T): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function createId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
-}
-
-function normalizeVideoUrl(value: string): string {
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return DEFAULT_VIDEO_URL;
-  }
-
-  if (trimmed.includes("youtube.com/watch?v=")) {
-    const url = new URL(trimmed);
-    const videoId = url.searchParams.get("v");
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : trimmed;
-  }
-
-  if (trimmed.includes("youtu.be/")) {
-    const parts = trimmed.split("youtu.be/");
-    const videoId = parts[1]?.split(/[?&]/)[0];
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : trimmed;
-  }
-
-  if (trimmed.includes("vimeo.com/") && !trimmed.includes("player.vimeo.com")) {
-    const parts = trimmed.split("vimeo.com/");
-    const videoId = parts[1]?.split(/[?&/]/)[0];
-    return videoId ? `https://player.vimeo.com/video/${videoId}` : trimmed;
-  }
-
-  return trimmed;
-}
-
-function normalizeResource(raw: Partial<LessonResource>): LessonResource {
-  return {
-    id: raw.id || createId("resource"),
-    nombre: raw.nombre?.trim() || "Recurso descargable",
-    url: raw.url?.trim() || "https://example.com/recurso",
-    tipo: raw.tipo || "archivo",
-  };
-}
-
-function normalizeLesson(raw: Partial<Lesson>): Lesson {
-  return {
-    id: raw.id || createId("lesson"),
-    titulo: raw.titulo?.trim() || "Leccion sin titulo",
-    duracion: raw.duracion?.trim() || "10 min",
-    video_url: normalizeVideoUrl(raw.video_url || DEFAULT_VIDEO_URL),
-    recursos: Array.isArray(raw.recursos) ? raw.recursos.map((resource) => normalizeResource(resource)) : [],
-  };
-}
-
-function normalizeModule(raw: Partial<Module>): Module {
-  return {
-    id: raw.id || createId("module"),
-    titulo: raw.titulo?.trim() || "Modulo",
-    lecciones: Array.isArray(raw.lecciones) ? raw.lecciones.map((lesson) => normalizeLesson(lesson)) : [],
-  };
-}
-
-function normalizeCourse(raw: Partial<Course>): Course {
-  return {
-    id: raw.id || createId("course"),
-    titulo: raw.titulo?.trim() || "Curso",
-    descripcion: raw.descripcion?.trim() || "",
-    portada_url: raw.portada_url?.trim() || "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80",
-    precio: typeof raw.precio === "number" ? raw.precio : 0,
-    nivel: raw.nivel || "Principiante",
-    categoria: raw.categoria?.trim() || "General",
-    importadora_nombre: raw.importadora_nombre?.trim() || "Importadora",
-    rating: typeof raw.rating === "number" ? raw.rating : 4.5,
-    estudiantes_count: typeof raw.estudiantes_count === "number" ? raw.estudiantes_count : 0,
-    modulos: Array.isArray(raw.modulos) ? raw.modulos.map((module) => normalizeModule(module)) : [],
-  };
-}
-
-function buildCourseFromInput(input: PublishCourseInput): Course {
-  return normalizeCourse({
-    id: createId("course"),
-    titulo: input.titulo,
-    descripcion: input.descripcion,
-    portada_url: input.portada_url,
-    precio: input.precio,
-    nivel: input.nivel,
-    categoria: input.categoria,
-    importadora_nombre: input.importadora_nombre,
-    rating: 4.6,
-    estudiantes_count: 0,
-    modulos: input.modulos.map((module) => ({
-      id: createId("module"),
-      titulo: module.titulo,
-      lecciones: module.lecciones.map((lesson) => ({
-        id: createId("lesson"),
-        titulo: lesson.titulo,
-        duracion: lesson.duracion,
-        video_url: lesson.video_url,
-        recursos: lesson.recursos.map((resource) => ({
-          id: createId("resource"),
-          nombre: resource.nombre,
-          url: resource.url,
-          tipo: resource.tipo,
-        })),
-      })),
-    })),
-  });
-}
 
 function normalizeLearningState(raw: Partial<LearningState>): LearningState {
   return {
@@ -165,60 +21,155 @@ function normalizeLearningState(raw: Partial<LearningState>): LearningState {
   };
 }
 
+function mergeCourseRows(catalogRows: Course[], myCourses: Course[]): Course[] {
+  const myById = new Map(myCourses.map((row) => [row.id, row]));
+  const merged = catalogRows.map((row) => {
+    const own = myById.get(row.id);
+    return own ? { ...row, ...own, modulos: own.modulos } : row;
+  });
+
+  myCourses.forEach((row) => {
+    if (!merged.some((item) => item.id === row.id)) {
+      merged.unshift(row);
+    }
+  });
+
+  return merged;
+}
+
 export function useCourses() {
-  const [customCourses, setCustomCourses] = useState<Course[]>(() => readLocalStorage<Partial<Course>[]>(CUSTOM_COURSES_STORAGE_KEY, []).map((course) => normalizeCourse(course)));
-  const [purchasedCourseIds, setPurchasedCourseIds] = useState<string[]>(() => readLocalStorage(PURCHASES_STORAGE_KEY, []));
-  const [completedLessonsByCourse, setCompletedLessonsByCourse] = useState<CourseProgress>(() => readLocalStorage(PROGRESS_STORAGE_KEY, {}));
-  const [learningState, setLearningState] = useState<LearningState>(() => normalizeLearningState(readLocalStorage(LEARNING_STATE_STORAGE_KEY, DEFAULT_LEARNING_STATE)));
+  const [catalogCourses, setCatalogCourses] = useState<Course[]>([]);
+  const [purchasedCourseIds, setPurchasedCourseIds] = useState<string[]>([]);
+  const [completedLessonsByCourse, setCompletedLessonsByCourse] = useState<CourseProgress>({});
+  const [learningState, setLearningState] = useState<LearningState>(() => normalizeLearningState(DEFAULT_LEARNING_STATE));
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
+  const [isSavingProgress, setIsSavingProgress] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    writeLocalStorage(CUSTOM_COURSES_STORAGE_KEY, customCourses);
-  }, [customCourses]);
+  const courses = useMemo(
+    () => catalogCourses.map((course) => ({
+      ...course,
+      comprado: purchasedCourseIds.includes(course.id),
+    })),
+    [catalogCourses, purchasedCourseIds],
+  );
 
-  useEffect(() => {
-    writeLocalStorage(PURCHASES_STORAGE_KEY, purchasedCourseIds);
-  }, [purchasedCourseIds]);
+  const refreshCourses = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const catalog = await coursesService.listCourses();
+      let myCourses: Course[] = [];
+      let completedByCourseId: Record<string, string[]> = {};
 
-  useEffect(() => {
-    writeLocalStorage(PROGRESS_STORAGE_KEY, completedLessonsByCourse);
-  }, [completedLessonsByCourse]);
-
-  useEffect(() => {
-    writeLocalStorage(LEARNING_STATE_STORAGE_KEY, learningState);
-  }, [learningState]);
-
-  const courses = [...customCourses, ...mockCourses.map((course) => normalizeCourse(course))].map((course) => ({
-    ...course,
-    estudiantes_count: course.estudiantes_count + (purchasedCourseIds.includes(course.id) ? 1 : 0),
-  }));
-
-  function purchaseCourse(courseId: string): void {
-    setPurchasedCourseIds((current) => {
-      if (current.includes(courseId)) {
-        return current;
+      try {
+        const my = await coursesService.listMyCourses();
+        myCourses = my.courses;
+        completedByCourseId = my.completedByCourseId;
+      } catch {
+        myCourses = [];
+        completedByCourseId = {};
       }
-      return [...current, courseId];
-    });
+
+      setCatalogCourses(mergeCourseRows(catalog, myCourses));
+      setPurchasedCourseIds(myCourses.map((row) => row.id));
+      setCompletedLessonsByCourse(completedByCourseId);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo cargar el catálogo de cursos.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCourses();
+  }, [refreshCourses]);
+
+  async function fetchCourseDetail(courseIdOrSlug: string): Promise<Course> {
+    const normalizedIdOrSlug = courseIdOrSlug?.trim();
+    if (!normalizedIdOrSlug) {
+      const parameterError = new Error("No se encontró el identificador del curso.");
+      setError(parameterError.message);
+      throw parameterError;
+    }
+
+    setIsFetchingDetail(true);
+    setError(null);
+    try {
+      const { course, completedLessonIds } = await coursesService.getCourseDetail(normalizedIdOrSlug);
+      setCatalogCourses((current) => {
+        const exists = current.some((row) => row.id === course.id);
+        if (!exists) {
+          return [course, ...current];
+        }
+        return current.map((row) => row.id === course.id ? { ...row, ...course } : row);
+      });
+
+      if (course.comprado) {
+        setPurchasedCourseIds((current) => current.includes(course.id) ? current : [...current, course.id]);
+        setCompletedLessonsByCourse((current) => ({
+          ...current,
+          [course.id]: completedLessonIds,
+        }));
+      }
+
+      return course;
+    } catch (requestError) {
+      const message = requestError instanceof Error
+        ? requestError.message
+        : "No se pudo cargar la información del curso.";
+      setError(message);
+      throw requestError;
+    } finally {
+      setIsFetchingDetail(false);
+    }
   }
 
-  function publishCourse(input: PublishCourseInput): Course {
-    const course = buildCourseFromInput(input);
-    setCustomCourses((current) => [course, ...current]);
-    return course;
+  async function purchaseCourse(courseId: string): Promise<void> {
+    await coursesService.purchaseCourse(courseId);
+    await fetchCourseDetail(courseId);
   }
 
-  function toggleLessonCompleted(courseId: string, lessonId: string, completed: boolean): void {
+  async function publishCourse(input: PublishCourseInput): Promise<Course> {
+    const created = await coursesService.publishCourse(input);
+    setCatalogCourses((current) => [created, ...current.filter((row) => row.id !== created.id)]);
+    return created;
+  }
+
+  async function updateCourse(courseId: string, input: PublishCourseInput): Promise<Course> {
+    const updated = await coursesService.updateCourse(courseId, input);
+    setCatalogCourses((current) => current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+    return updated;
+  }
+
+  async function deleteCourse(courseId: string): Promise<void> {
+    await coursesService.deleteCourse(courseId);
+    setCatalogCourses((current) => current.filter((row) => row.id !== courseId));
+    setPurchasedCourseIds((current) => current.filter((id) => id !== courseId));
     setCompletedLessonsByCourse((current) => {
-      const currentLessons = current[courseId] || [];
-      const nextLessons = completed
-        ? Array.from(new Set([...currentLessons, lessonId]))
-        : currentLessons.filter((id) => id !== lessonId);
-
-      return {
-        ...current,
-        [courseId]: nextLessons,
-      };
+      const next = { ...current };
+      delete next[courseId];
+      return next;
     });
+  }
+
+  async function toggleLessonCompleted(courseId: string, lessonId: string, completed: boolean): Promise<void> {
+    setIsSavingProgress(true);
+    try {
+      const result = await coursesService.markLessonProgress(courseId, lessonId, completed);
+      setCompletedLessonsByCourse((current) => ({
+        ...current,
+        [result.curso_id]: result.lecciones_completadas,
+      }));
+      setCatalogCourses((current) => current.map((row) => (
+        row.id === result.curso_id
+          ? { ...row, progreso_pct: result.progreso_pct }
+          : row
+      )));
+    } finally {
+      setIsSavingProgress(false);
+    }
   }
 
   function markLessonViewed(courseId: string, lessonId: string): void {
@@ -242,8 +193,16 @@ export function useCourses() {
     purchasedCourseIds,
     completedLessonsByCourse,
     learningState,
+    isLoading,
+    isFetchingDetail,
+    isSavingProgress,
+    error,
+    refreshCourses,
+    fetchCourseDetail,
     purchaseCourse,
     publishCourse,
+    updateCourse,
+    deleteCourse,
     toggleLessonCompleted,
     markLessonViewed,
   };
