@@ -68,7 +68,8 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden
 from models.pago import Pago, EstadoPago
 from models.campo_personalizado import CampoPersonalizado
-from models.chat import ConversacionChat, MensajeChat
+from models.ayuda import ArticuloAyuda
+from models.chat import ConversacionChat, LecturaConversacion, MensajeChat
 from models.password_reset import PasswordResetToken
 from models.credito import MovimientoCredito
 from models.solicitud_recreacion import SolicitudRecreacion
@@ -539,6 +540,8 @@ def cleanup_test_db(db_session):
     yield
     try:
         db_session.query(PasswordResetToken).delete()
+        db_session.query(ArticuloAyuda).delete()
+        db_session.query(LecturaConversacion).delete()
         db_session.query(MensajeAdjunto).delete()
         db_session.query(MensajeChat).delete()
         db_session.query(ConversacionChat).delete()

@@ -16,6 +16,7 @@ import {
   type BackupResumen,
 } from "@/services/admin.service";
 import { businessService } from "@/services/business.service";
+import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
@@ -1087,6 +1088,10 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           </div>
           <span className="text-xs text-muted-foreground">{conversationsTotal} conversaciones</span>
         </div>
+
+        {/* Cada duda que se repite en los tickets debería acabar aquí: es lo
+            que hace que el volumen de soporte baje en vez de crecer. */}
+        <EditorDocumentacion />
 
         {/* La mesa: quién puede atender qué y cómo lo está haciendo. */}
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">

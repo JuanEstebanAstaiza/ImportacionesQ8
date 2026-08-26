@@ -40,7 +40,10 @@ import { useChatSocket } from "@/hooks/useChatSocket";
 import { usePlatformConfig } from "@/hooks/usePlatformConfig";
 import { authService } from "@/services/auth.service";
 import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
-import { HELP_SUPPORT_CONTENT, filterFaq, normalizeHelpRole } from "@/features/help/help-support-content";
+// De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
+// ahora en la base de datos, mantenida por el equipo de soporte.
+import { HELP_SUPPORT_CONTENT, normalizeHelpRole } from "@/features/help/help-support-content";
+import { ayudaService, type ArticuloAyuda } from "@/services/ayuda.service";
 import {
   businessService,
   type BackendArchivoItem,
@@ -7777,7 +7780,45 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   const helpRole = normalizeHelpRole(role);
   const roleContent = HELP_SUPPORT_CONTENT[helpRole];
   const [faqSearch, setFaqSearch] = useState("");
-  const filteredFaqs = filterFaq(roleContent.faqs, faqSearch);
+  const [categoria, setCategoria] = useState("");
+  const [articulos, setArticulos] = useState<ArticuloAyuda[]>([]);
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [cargandoAyuda, setCargandoAyuda] = useState(true);
+  const [expandido, setExpandido] = useState<string|null>(null);
+  const [votados, setVotados] = useState<Record<string, boolean>>({});
+
+  // La documentación vive en el backend y la mantiene el equipo de soporte, así
+  // que se pide cada vez: lo que escriban hoy se ve hoy, sin desplegar nada.
+  useEffect(()=>{
+    let vigente = true;
+    setCargandoAyuda(true);
+    const t = setTimeout(()=>{
+      void ayudaService.listArticles({ buscar: faqSearch, categoria: categoria || undefined })
+        .then((datos)=>{
+          if(!vigente) return;
+          setArticulos(datos.articulos);
+          // Las categorías solo se refrescan sin filtro puesto: si no,
+          // filtrar por una dejaría el resto fuera de la lista de filtros.
+          if(!categoria) setCategorias(datos.categorias);
+        })
+        .catch(()=>{ if(vigente) setArticulos([]); })
+        .finally(()=>{ if(vigente) setCargandoAyuda(false); });
+    }, faqSearch ? 250 : 0);  // Teclear no dispara una petición por letra.
+    return ()=>{ vigente = false; clearTimeout(t); };
+  },[faqSearch, categoria]);
+
+  function abrirArticulo(articulo: ArticuloAyuda){
+    const abriendo = expandido !== articulo.id;
+    setExpandido(abriendo ? articulo.id : null);
+    if(abriendo){
+      void ayudaService.markRead(articulo.id).catch(()=>undefined);
+    }
+  }
+
+  async function votar(articuloId: string, util: boolean){
+    setVotados((prev)=>({ ...prev, [articuloId]: true }));
+    await ayudaService.vote(articuloId, util).catch(()=>undefined);
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -7813,22 +7854,33 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
           </Card>
 
           <Card padding="md">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="space-y-3">
               <Input
                 value={faqSearch}
                 onChange={(event)=>setFaqSearch(event.target.value)}
-                placeholder="Buscar FAQ por tema, flujo o palabra clave"
+                placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»…"
                 prefix={<Search className="w-4 h-4"/>}
               />
+              {/* Las categorías salen de lo que hay publicado para este perfil,
+                  no de una lista fija que pueda quedar vacía. */}
               <div className="flex flex-wrap gap-2">
-                {roleContent.quickTopics.map((topic) => (
+                <button
+                  type="button"
+                  onClick={()=>setCategoria("")}
+                  className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    categoria===""?"bg-primary text-white border-primary":"border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
+                >
+                  Todo
+                </button>
+                {categorias.map((c) => (
                   <button
-                    key={topic}
+                    key={c}
                     type="button"
-                    onClick={()=>setFaqSearch(topic)}
-                    className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={()=>setCategoria(c===categoria?"":c)}
+                    className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      categoria===c?"bg-primary text-white border-primary":"border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
                   >
-                    {topic}
+                    {c}
                   </button>
                 ))}
               </div>
@@ -7837,22 +7889,70 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card padding="md" className="md:col-span-2">
-              <div className="flex items-center gap-2 mb-4">
-                <HelpCircle className="w-4 h-4 text-primary"/>
-                <h2 className="text-sm font-semibold">FAQ por rol</h2>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-primary"/>
+                  <h2 className="text-sm font-semibold">Documentación</h2>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {cargandoAyuda?"Cargando…":`${articulos.length} artículos`}
+                </span>
               </div>
-              <div className="space-y-3">
-                {filteredFaqs.length===0&&(
+              <div className="space-y-2.5">
+                {!cargandoAyuda&&articulos.length===0&&(
                   <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    No encontramos coincidencias para tu busqueda. Prueba con otro termino.
+                    No encontramos nada para esa búsqueda. Prueba con otras palabras o abre un ticket de soporte:
+                    el equipo escribe un artículo nuevo cuando una duda se repite.
                   </div>
                 )}
-                {filteredFaqs.map((item)=> (
-                  <div key={item.q} className="rounded-lg border border-border bg-white p-3">
-                    <p className="text-sm font-semibold text-foreground">{item.q}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{item.a}</p>
-                  </div>
-                ))}
+                {articulos.map((articulo)=>{
+                  const abierto = expandido===articulo.id;
+                  return (
+                    <div key={articulo.id} className="rounded-lg border border-border bg-white overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={()=>abrirArticulo(articulo)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">{articulo.titulo}</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">{articulo.resumen}</p>
+                          </div>
+                          <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {articulo.categoria}
+                          </span>
+                        </div>
+                        {articulo.contenido&&(
+                          <span className="mt-1.5 inline-block text-xs font-medium text-primary">
+                            {abierto?"Ocultar detalle":"Ver paso a paso"}
+                          </span>
+                        )}
+                      </button>
+
+                      {abierto&&articulo.contenido&&(
+                        <div className="border-t border-border px-3 py-3 bg-muted/20">
+                          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                            {articulo.contenido}
+                          </p>
+                          {/* Señal de qué documentación falla: un artículo muy
+                              leído y marcado como inútil es donde nacen los tickets. */}
+                          <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 flex-wrap">
+                            {votados[articulo.id]?(
+                              <p className="text-xs text-muted-foreground">Gracias, lo tendremos en cuenta.</p>
+                            ):(
+                              <>
+                                <span className="text-xs text-muted-foreground">¿Te resolvió la duda?</span>
+                                <Button variant="secondary" size="sm" onClick={()=>{void votar(articulo.id,true);}}>Sí</Button>
+                                <Button variant="secondary" size="sm" onClick={()=>{void votar(articulo.id,false);}}>No</Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </Card>
 
@@ -7869,10 +7969,8 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 ))}
               </div>
               <div className="mt-4 rounded-lg border border-border p-3 text-xs text-muted-foreground">
-                Si necesitas soporte adicional, escribe por chat interno y comparte el codigo de cotizacion u orden.
-              </div>
-              <div className="mt-3 rounded-lg border border-border p-3 text-xs text-muted-foreground">
-                Tip: usa palabras clave en el chat como Incoterm, MOQ o fecha objetivo para acelerar la atencion del equipo.
+                Al abrir un ticket, incluye el código de cotización (COT-…) o de orden (ORD-…) y el mensaje de error
+                completo. Con eso el equipo reproduce el caso sin tener que preguntarte.
               </div>
             </Card>
           </div>
