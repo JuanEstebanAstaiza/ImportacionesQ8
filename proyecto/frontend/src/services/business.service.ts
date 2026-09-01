@@ -48,6 +48,8 @@ export interface BackendCotizacion {
   modalidad_importacion?: string | null;
   cantidad_minima: number;
   precio_objetivo_usd: number | null;
+  precio_objetivo_moneda?: string | null;
+  moneda_precio_objetivo?: string | null;
   incoterm: string;
   notas_adicionales?: string | null;
   /** Parte del shipping mark que escribe el cliente (ej. "prendas control"). */
@@ -76,7 +78,9 @@ export interface CreateCotizacionPayload {
   modalidad_importacion?: string;
   cantidad_minima: number;
   precio_objetivo_usd?: number;
-  incoterm: string;
+  precio_objetivo_moneda?: string;
+  moneda_precio_objetivo?: string;
+  incoterm?: string;
   notas_adicionales?: string;
   shipping_mark_sufijo?: string;
   campos_personalizados_valores?: Record<string, unknown>;

@@ -18,6 +18,7 @@ export interface Quote {
   quality: string;
   minQuantity: string;
   targetPrice: string;
+  targetPriceCurrency?: string;
   incoterm: string;
   description?: string;
   notes?: string;

@@ -12,7 +12,7 @@ import { cn } from "@/app/components/ui/utils";
 
 const loginSchema = z.object({
   email: z.string().email("Ingresa un correo valido."),
-  password: z.string().min(1, "La contrasena es requerida."),
+  password: z.string().min(1, "La contraseña es requerida."),
 });
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
@@ -117,13 +117,13 @@ export function LoginForm({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="login-password">Contrasena</Label>
+              <Label htmlFor="login-password">Contraseña</Label>
               <button
                 type="button"
                 onClick={onForgotPassword}
                 className="text-xs font-medium text-primary hover:underline"
               >
-                Olvidaste tu contrasena?
+                Olvidaste tu contraseña?
               </button>
             </div>
             <div className="relative">

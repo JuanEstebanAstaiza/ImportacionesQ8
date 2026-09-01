@@ -21,12 +21,12 @@ const resetSchema = z
     otp: z.string().min(6, "Ingresa el codigo OTP de 6 digitos."),
     nuevaPassword: z
       .string()
-      .min(9, "La nueva contrasena debe tener al menos 9 caracteres."),
-    confirmarPassword: z.string().min(1, "Confirma la nueva contrasena."),
+      .min(9, "La nueva contraseña debe tener al menos 9 caracteres."),
+    confirmarPassword: z.string().min(1, "Confirma la nueva contraseña."),
   })
   .refine((data) => data.nuevaPassword === data.confirmarPassword, {
     path: ["confirmarPassword"],
-    message: "Las contrasenas no coinciden.",
+    message: "Las contraseñas no coinciden.",
   });
 
 type ResetFormValues = z.infer<typeof resetSchema>;
@@ -77,7 +77,7 @@ export function ResetPasswordForm({
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "No se pudo restablecer la contrasena"
+          : "No se pudo restablecer la contraseña"
       );
     } finally {
       setIsPending(false);
@@ -89,11 +89,11 @@ export function ResetPasswordForm({
       <Card className="border-border shadow-sm">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-xl font-semibold tracking-tight">
-            Contrasena actualizada
+            Contraseña actualizada
           </CardTitle>
 
           <CardDescription>
-            Ya puedes iniciar sesion con tu nueva contrasena.
+            Ya puedes iniciar sesion con tu nueva contraseña.
           </CardDescription>
         </CardHeader>
 
@@ -119,11 +119,11 @@ export function ResetPasswordForm({
     <Card className="border-border shadow-sm">
       <CardHeader className="space-y-2 text-center">
         <CardTitle className="text-xl font-semibold tracking-tight">
-          Restablecer contrasena
+          Restablecer contraseña
         </CardTitle>
 
         <CardDescription>
-          Ingresa el OTP recibido y define una nueva contrasena.
+          Ingresa el OTP recibido y define una nueva contraseña.
         </CardDescription>
       </CardHeader>
 
@@ -162,7 +162,7 @@ export function ResetPasswordForm({
           {/* Nueva contraseña */}
           <div className="space-y-2">
             <Label htmlFor="reset-new-password">
-              Nueva contrasena
+              Nueva contraseña
             </Label>
 
             <div className="relative">
@@ -197,7 +197,7 @@ export function ResetPasswordForm({
           {/* Confirmar contraseña */}
           <div className="space-y-2">
             <Label htmlFor="reset-confirm-password">
-              Confirmar nueva contrasena
+              Confirmar nueva contraseña
             </Label>
 
             <div className="relative">
@@ -213,7 +213,7 @@ export function ResetPasswordForm({
                   focus-visible:border-ring
                   focus-visible:ring-ring/50
                 "
-                placeholder="Repite la nueva contrasena"
+                placeholder="Repite la nueva contraseña"
                 autoComplete="new-password"
                 aria-invalid={Boolean(
                   form.formState.errors.confirmarPassword
@@ -248,7 +248,7 @@ export function ResetPasswordForm({
                 Actualizando...
               </>
             ) : (
-              "Actualizar contrasena"
+              "Actualizar contraseña"
             )}
           </Button>
         </form>

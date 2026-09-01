@@ -51,7 +51,8 @@ class Cotizacion(Base):
     modalidad_importacion = Column(String(20), nullable=True)
     cantidad_minima = Column(Integer, nullable=False)
     precio_objetivo_usd = Column(Float, nullable=True)
-    incoterm = Column(String(50), nullable=False)
+    moneda_precio_objetivo = Column(String(10), nullable=False, default="USD", server_default="USD")
+    incoterm = Column(String(50), nullable=False, default="DDP", server_default="DDP")
     notas_adicionales = Column(Text, nullable=True)
     # Parte del shipping mark que aporta el cliente (ej. "prendas control"). Se
     # combina con el prefijo de la empresa importadora para rotular las cajas.
@@ -87,6 +88,14 @@ class Cotizacion(Base):
     # exponga automáticamente el enlace al chat y el contacto asignado, sin tener
     # que reconstruir la respuesta a mano en cada endpoint que ya hace
     # `return cotizacion`/`return cotizaciones`.
+
+    @property
+    def precio_objetivo_moneda(self):
+        return self.moneda_precio_objetivo or "USD"
+
+    @precio_objetivo_moneda.setter
+    def precio_objetivo_moneda(self, value):
+        self.moneda_precio_objetivo = value or "USD"
 
     @property
     def conversacion_id(self):

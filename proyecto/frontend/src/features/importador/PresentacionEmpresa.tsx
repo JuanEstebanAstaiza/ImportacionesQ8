@@ -102,17 +102,7 @@ export function PresentacionPublica({ importadorId }: { importadorId: string }) 
   // desaparecer: al solicitante le dice algo real sobre el proveedor que está
   // comparando, y a la empresa le hace descubrir que la sección existe.
   if (piezas.length === 0) {
-    return (
-      <section className="rounded-xl border border-dashed border-border bg-white p-4">
-        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <Film className="w-4 h-4 text-muted-foreground" />
-          Conoce a la empresa
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          Esta empresa todavía no publicó su video de presentación ni fotos de su operación.
-        </p>
-      </section>
-    );
+    return null;
   }
 
   // El video de presentación va primero: es lo que resume la empresa de un vistazo.
