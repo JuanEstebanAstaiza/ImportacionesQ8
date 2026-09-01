@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -16,6 +16,12 @@ class ContactoAsignadoResponse(BaseModel):
 
 class CotizacionCreate(BaseModel):
     modalidad: str = Field(..., description="Modalidad de cotización: 'dirigida' o 'abierta'")
+
+    @field_validator("incoterm")
+    @classmethod
+    def validar_incoterm(cls, v: str) -> str:
+        valor = (v or "DDP").strip().upper()
+        return valor or "DDP"
     
     @field_validator("modalidad")
     @classmethod
@@ -44,8 +50,15 @@ class CotizacionCreate(BaseModel):
     tipo_calidad: str = Field(..., description="Tipo de calidad: 'economica', 'estandar' o 'premium'")
     modalidad_importacion: Optional[str] = None
     cantidad_minima: int = Field(..., ge=1, description="Cantidad mínima a importar")
-    precio_objetivo_usd: Optional[float] = None
-    incoterm: str = Field(..., min_length=1, max_length=50, description="Incoterm acordado (FOB, CIF, etc.)")
+    precio_objetivo_usd: Optional[float] = Field(default=None, ge=0, description="Precio objetivo en USD, mayor o igual a cero")
+    precio_objetivo_moneda: str = Field(
+        default="USD",
+        min_length=3,
+        max_length=10,
+        validation_alias=AliasChoices("precio_objetivo_moneda", "moneda_precio_objetivo"),
+        description="Moneda del precio objetivo (USD, EUR, COP, etc.)",
+    )
+    incoterm: str = Field(default="DDP", min_length=1, max_length=50, description="Incoterm acordado (FOB, CIF, etc.)")
     notas_adicionales: Optional[str] = None
     shipping_mark_sufijo: Optional[str] = Field(
         None,
@@ -58,6 +71,16 @@ class CotizacionCreate(BaseModel):
     campos_personalizados_valores: Optional[Dict[str, Any]] = Field(
         None, description="Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor}"
     )
+
+    @field_validator("precio_objetivo_moneda")
+    @classmethod
+    def validar_moneda_precio_objetivo(cls, v: str) -> str:
+        moneda = (v or "USD").strip().upper()
+        if not moneda:
+            return "USD"
+        if len(moneda) < 3 or len(moneda) > 10:
+            raise ValueError("La moneda del precio objetivo debe tener entre 3 y 10 caracteres")
+        return moneda
 
     @field_validator("shipping_mark_sufijo")
     @classmethod
@@ -90,9 +113,13 @@ class CotizacionResponse(BaseModel):
     tipo_calidad: str
     modalidad_importacion: Optional[str]
     cantidad_minima: int
-    precio_objetivo_usd: Optional[float]
-    incoterm: str
+    precio_objetivo_usd: Optional[float] = Field(default=None, ge=0)
+    precio_objetivo_moneda: str = "USD"
+    moneda_precio_objetivo: Optional[str] = None
+    incoterm: str = "DDP"
     notas_adicionales: Optional[str]
+
+    model_config = {"from_attributes": True}
     shipping_mark_sufijo: Optional[str] = None
     # Marca de embarque ya compuesta ("ctl-prendascontrol"). Es None mientras no
     # se sepa qué empresa importará: en modalidad abierta, hasta que una gane.

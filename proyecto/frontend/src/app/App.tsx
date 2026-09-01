@@ -825,6 +825,8 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
   const importerName = cot.importador_id
     ? importers.find((imp) => imp.id === cot.importador_id)?.name ?? "Importadora"
     : "Red abierta";
+  const currency = parseTargetPriceCurrency(cot.precio_objetivo_moneda ?? cot.moneda_precio_objetivo ?? "USD");
+  const targetPriceValue = Number.isFinite(cot.precio_objetivo_usd as number) ? Number(cot.precio_objetivo_usd) : null;
 
   return {
     id: cot.id,
@@ -840,8 +842,9 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     productLine: cot.linea_producto,
     quality: cot.tipo_calidad,
     minQuantity: String(cot.cantidad_minima),
-    targetPrice: cot.precio_objetivo_usd ? `${cot.precio_objetivo_usd} USD` : "N/A",
-    incoterm: cot.incoterm,
+    targetPrice: targetPriceValue !== null ? `${targetPriceValue} ${currency}` : "N/A",
+    targetPriceCurrency: currency,
+    incoterm: cot.incoterm || "DDP",
     description: cot.descripcion_cliente,
     notes: cot.notas_adicionales ?? "",
     referenceLink: cot.link_referencia ?? "",
@@ -5330,8 +5333,15 @@ function Stepper({current}:{current:number}) {
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",incoterm:"",notes:"",shippingMarkSufijo:""};
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
+const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
+const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
+function normalizeTargetPriceInput(value: string): string {
+  const normalized = value.replace(",", ".");
+  return POSITIVE_DECIMAL_INPUT.test(normalized) ? normalized : "";
+}
+function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
 
 function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
@@ -5458,9 +5468,35 @@ function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormSta
         <div className="space-y-4">
           <div><p className="text-sm font-medium mb-2">Propósito</p><div className="flex gap-2">{(["ecommerce","corporativo"]as const).map(opt=><button key={opt} onClick={()=>upd("purpose",opt)} className={clsx("flex-1 h-9 rounded-lg border text-sm font-medium transition-all",form.purpose===opt?"bg-primary text-white border-primary shadow-sm":"bg-white text-muted-foreground border-border hover:border-primary/40")}>{opt==="ecommerce"?"Ecommerce":"Corporativo"}</button>)}</div></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Cantidad mínima" placeholder="Ej. 500" type="number" value={form.minQuantity} onChange={e=>upd("minQuantity",e.target.value)} hint="En unidades"/>
-            <Input label="Precio objetivo" placeholder="Ej. 8.50 USD/u" value={form.targetPrice} onChange={e=>upd("targetPrice",e.target.value)}/>
-            <Select label="Incoterm" value={form.incoterm} onChange={e=>upd("incoterm",e.target.value)}><option value="">Seleccionar</option>{INCOTERMS.map(t=><option key={t}>{t}</option>)}</Select>
+            <Input
+              label="Cantidad mínima"
+              placeholder="Ej. 500"
+              type="number"
+              min={0}
+              value={form.minQuantity}
+              onChange={e=>upd("minQuantity",String(Math.max(1,Number(e.target.value))))}
+              hint="En unidades"
+            />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between"><label htmlFor="precio-objetivo" className="text-sm font-medium text-foreground">Precio objetivo</label></div>
+              <div className="relative flex items-center">
+                <input id="precio-objetivo" type="text" inputMode="decimal" className="w-full h-10 bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary border-border pl-3 pr-20" placeholder="Ej. 8.50" value={form.targetPrice} onChange={e=>upd("targetPrice", normalizeTargetPriceInput(e.target.value))}/>
+                <div className="absolute right-1">
+                  <select value={form.targetPriceCurrency} onChange={e=>setForm(p=>({...p,targetPriceCurrency:e.target.value}))} className="h-8 rounded-md border border-border bg-white px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer pr-6">
+                    {PRICE_CURRENCIES.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"/>
+                </div>
+              </div>
+            </div>
+            <Select label="Incoterm" value={form.incoterm || "DDP"} onChange={e=>upd("incoterm",e.target.value)}><option value="">Seleccionar</option>{INCOTERMS.map(t=><option key={t} value={t}>{t}</option>)}</Select>
+          </div>
+          <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Importación incluida:</span>{" "}
+              El proveedor se encargará de la nacionalización de la mercancía antes de
+              realizar la facturación electrónica correspondiente.
+            </p>
           </div>
           <Textarea label="Notas" placeholder="Información adicional..." rows={3} value={form.notes} onChange={e=>upd("notes",e.target.value)}/>
         </div>
@@ -5499,7 +5535,7 @@ function Step3Dirigida({form,importer,confirmed,setConfirmed}:{form:QuoteFormSta
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2"><CheckCircle2 className="w-5 h-5 text-primary"/><h2 className="text-base font-semibold">Revisa tu solicitud</h2></div>
-      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?`${form.minQuantity} u`:"—"],["Precio objetivo",form.targetPrice||"—"],["Incoterm",form.incoterm||"—"]]}].map(({title,icon:Icon,rows})=>(
+      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?`${form.minQuantity} u`:"—"],["Precio objetivo",form.targetPrice ? `${form.targetPrice} ${form.targetPriceCurrency || "USD"}` : "—"],["Incoterm",form.incoterm || "DDP"]]}].map(({title,icon:Icon,rows})=>(
         <Card key={title} padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5"/>{title}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">{rows.map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div></Card>
       ))}
       <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"/><span className="text-sm leading-relaxed">Confirmo que la información es correcta y autorizo el envío de esta solicitud.</span></label>
@@ -5592,7 +5628,8 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       modalidad_importacion:form.purpose,
       cantidad_minima:parsedMinQuantity,
       precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
-      incoterm:form.incoterm,
+      precio_objetivo_moneda:form.targetPriceCurrency || "USD",
+      incoterm:form.incoterm || "DDP",
       notas_adicionales:form.notes||undefined,
       shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
     };
@@ -7487,11 +7524,11 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 
     const password=form.password;
     if(password.length<9){
-      setSubmitError("La contrasena debe tener minimo 9 caracteres.");
+      setSubmitError("La contraseña debe tener minimo 9 caracteres.");
       return;
     }
     if(form.password!==form.confirmPassword){
-      setSubmitError("Las contrasenas no coinciden.");
+      setSubmitError("Las contraseñas no coinciden.");
       return;
     }
 
@@ -7659,7 +7696,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                       <>
                         <Input label="Correo electrónico" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
                         <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
-                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contrasena" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
+                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contraseña" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
                         <div className="grid grid-cols-2 gap-3">
                           <Select label="Tipo de documento" value={form.docType} onChange={e=>f("docType",e.target.value)}>{docTypes.map(d=><option key={d}>{d}</option>)}</Select>
                           <Input label="Número de documento" placeholder="1234567890" value={form.docNum} onChange={e=>f("docNum",e.target.value)} required/>
@@ -7677,7 +7714,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                       <>
                         <Input label="Correo del representante" type="email" placeholder="representante@empresa.com" value={form.repEmail} onChange={e=>f("repEmail",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
                         <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
-                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contrasena" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
+                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contraseña" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
                         <Input label="NIT" placeholder="900.123.456-7" value={form.nit} onChange={e=>f("nit",e.target.value)} required/>
                         <Input label="Razón social" placeholder="Mi Empresa S.A.S." value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)} required/>
                         <div className="flex gap-2">
@@ -8968,6 +9005,7 @@ export default function App() {
    * envía después es una cotización nueva y corriente.
    */
   function duplicateQuote(quote:Quote){
+    const extractedCurrency = parseTargetPriceCurrency(quote.targetPriceCurrency || "USD");
     setQuotePrefill({
       productName:quote.product||"",
       description:quote.description||"",
@@ -8978,8 +9016,9 @@ export default function App() {
       quality:quote.quality||"",
       customization:quote.personalizationLevel||"",
       minQuantity:quote.minQuantity||"",
-      targetPrice:quote.targetPrice||"",
-      incoterm:quote.incoterm||"",
+      targetPrice:quote.targetPrice ? quote.targetPrice.replace(new RegExp(`\\s*${extractedCurrency}$`, "i"), "").trim() : "",
+      targetPriceCurrency: extractedCurrency,
+      incoterm:quote.incoterm||"DDP",
       notes:quote.notes||"",
       shippingMarkSufijo:quote.shippingMarkSufijo||"",
     });

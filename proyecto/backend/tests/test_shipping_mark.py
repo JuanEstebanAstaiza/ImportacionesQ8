@@ -206,6 +206,30 @@ class TestSufijoDelCliente:
         assert respuesta.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+class TestCotizacionDefaults:
+    def test_la_cotizacion_usa_ddp_y_usd_por_defecto(self, client, solicitante):
+        _, headers = solicitante
+
+        respuesta = client.post(
+            "/cotizaciones",
+            json={
+                "modalidad": "abierta",
+                "pais_importacion": "China",
+                "nombre_producto": "Camisetas personalizadas",
+                "descripcion_cliente": "500 camisetas con logo impreso en algodón premium",
+                "linea_producto": "Textil",
+                "tipo_calidad": "estandar",
+                "cantidad_minima": 500,
+                "precio_objetivo_usd": 8.5,
+            },
+            headers=headers,
+        )
+
+        assert respuesta.status_code == status.HTTP_201_CREATED, respuesta.text
+        assert respuesta.json()["incoterm"] == "DDP"
+        assert respuesta.json()["precio_objetivo_moneda"] == "USD"
+
+
 class TestMarcaEnLaOrden:
     def _cotizacion_dirigida(self, db_session, solicitante_id, importador_id, sufijo="prendas control"):
         cotizacion = Cotizacion(
