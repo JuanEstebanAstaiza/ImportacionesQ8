@@ -8,11 +8,9 @@ import { mapBackendRoleToAppRole } from "@/utils/auth-roles";
 import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/auth/components/ForgotPasswordForm";
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
 import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
+import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 
 type AuthView = "login" | "forgot" | "otp";
-// Rol con el que se entra tras autenticarse. Incluye "soporte" (equipo de
-// atención al cliente): no es un botón del formulario —nadie elige entrar como
-// soporte—, pero sí es un destino posible al que lleva la sesión.
 export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
 
 interface AuthScreenProps {
@@ -27,7 +25,7 @@ interface AuthScreenProps {
 export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, initialEmail }: AuthScreenProps) {
   const { signIn, verifyLoginOtp, requestPasswordReset } = useAuth();
   const [view, setView] = useState<AuthView>("login");
-  const [dark, setDark] = useState(false);
+  const { dark, toggleTheme } = useBrandTheme();
   const [success, setSuccess] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
   const [otpEmail, setOtpEmail] = useState("");
@@ -165,19 +163,29 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F0F2F5]" style={{ fontFamily: "Inter,system-ui,sans-serif" }}>
-      <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3.5">
+    <div className="min-h-screen flex flex-col bg-background">
+      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-3.5 relative z-10">
         <button onClick={onLanding}>{logo}</button>
         <button
-          onClick={() => setDark((value) => !value)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={toggleTheme}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 py-10">
-        <div className="w-full max-w-[420px]">
+      <main className="relative flex flex-1 items-center justify-center px-4 py-10 overflow-hidden">
+        {/* Fondo*/}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <img
+            src={dark ? "brand/fondo-2.png" : "brand/fondo-5.png"}
+            alt="Fondo de autenticación"
+            className="w-full h-full object-cover object-center transition-all duration-300"
+          />
+        </div>
+
+        {/* Formulario/Card por encima de la imagen */}
+        <div className="relative z-10 w-full max-w-[420px]">
           {view === "login" ? (
             <LoginForm
               onSubmit={handleLogin}
@@ -213,13 +221,13 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         </div>
       </main>
 
-      <footer className="flex items-center justify-center gap-4 border-t border-border bg-white py-4 text-center text-xs text-muted-foreground">
-        <span>© 2025 ImportacionesQ8</span>
+      <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+        <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>
         <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
-          Terminos
+          Términos
         </button>
       </footer>
     </div>

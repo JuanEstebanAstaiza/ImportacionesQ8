@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, FileText, Package2 } from "lucide-react";
+import { ChevronLeft, FileText } from "lucide-react";
 
 import { legalService } from "@/services/legal.service";
 import type { LegalPage } from "@/features/legal/types";
+import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 
 type LegalPolicyScreenProps = {
   page: LegalPage;
@@ -12,6 +13,7 @@ type LegalPolicyScreenProps = {
 const FALLBACK_MESSAGE = "Este documento se encuentra en construccion y sera publicado proximamente.";
 
 export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
+  const { dark } = useBrandTheme();
   const [apiMessage, setApiMessage] = useState("");
   const [loadError, setLoadError] = useState("");
 
@@ -53,14 +55,9 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
   }, [apiMessage]);
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "Inter,system-ui,sans-serif" }}>
+    <div className="min-h-screen bg-background">
       <header className="sticky top-0 flex items-center justify-between px-6 py-3.5 bg-white border-b border-border z-10">
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center flex-shrink-0">
-            <Package2 className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold text-foreground tracking-tight text-[14px] whitespace-nowrap">ImportacionesQ8</span>
-        </div>
+        <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-8 w-28 object-contain object-left" />
 
         <button
           onClick={onBack}

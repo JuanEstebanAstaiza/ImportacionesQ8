@@ -40,6 +40,7 @@ import { useChatSocket } from "@/hooks/useChatSocket";
 import { usePlatformConfig } from "@/hooks/usePlatformConfig";
 import { authService } from "@/services/auth.service";
 import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
+import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 import { HELP_SUPPORT_CONTENT, normalizeHelpRole } from "@/features/help/help-support-content";
@@ -87,17 +88,17 @@ type BadgeVariant = "created"|"directed"|"open"|"accepted"|"active-order"|"neutr
 
 const BADGE_MAP: Record<BadgeVariant,{label:string;cls:string;dot:string}> = {
   "created":        {label:"Creada",       cls:"bg-slate-100 text-slate-600",    dot:"bg-slate-400"},
-  "directed":       {label:"Dirigida",     cls:"bg-blue-50 text-blue-700",       dot:"bg-blue-500"},
-  "open":           {label:"Abierta",      cls:"bg-orange-50 text-orange-700",   dot:"bg-orange-500"},
+  "directed":       {label:"Dirigida",     cls:"bg-primary/10 text-primary border border-primary/20", dot:"bg-primary"},
+  "open":           {label:"Abierta",      cls:"bg-accent text-accent-foreground border border-accent/70", dot:"bg-foreground"},
   "accepted":       {label:"Aceptada",     cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
-  "active-order":   {label:"Orden activa", cls:"bg-purple-50 text-purple-700",   dot:"bg-purple-500"},
+  "active-order":   {label:"Orden activa", cls:"bg-primary text-primary-foreground border border-primary", dot:"bg-accent"},
   "rejected-importer": {label:"Rechazada por importadora", cls:"bg-rose-50 text-rose-700", dot:"bg-rose-500"},
   "neutral":        {label:"",             cls:"bg-slate-100 text-slate-600",    dot:"bg-slate-400"},
-  "resp-nueva":     {label:"Nueva",        cls:"bg-orange-50 text-orange-700",   dot:"bg-orange-500"},
-  "resp-vista":     {label:"Vista",        cls:"bg-blue-50 text-blue-700",       dot:"bg-blue-500"},
+  "resp-nueva":     {label:"Nueva",        cls:"bg-accent text-accent-foreground border border-accent/70", dot:"bg-foreground"},
+  "resp-vista":     {label:"Vista",        cls:"bg-primary/10 text-primary border border-primary/20", dot:"bg-primary"},
   "resp-aceptada":  {label:"Aceptada",     cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
   "resp-rechazada": {label:"Rechazada",    cls:"bg-red-50 text-red-700",         dot:"bg-red-500"},
-  "info":           {label:"",             cls:"bg-blue-50 text-blue-700",       dot:"bg-blue-500"},
+  "info":           {label:"",             cls:"bg-primary/10 text-primary border border-primary/20", dot:"bg-primary"},
   "warning":        {label:"",             cls:"bg-amber-50 text-amber-700",     dot:"bg-amber-500"},
   "success":        {label:"",             cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
 };
@@ -120,8 +121,8 @@ interface BtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 function Button({variant="primary",size="md",loading=false,fullWidth=false,icon,iconRight,children,className,disabled,...props}:BtnProps) {
   const base="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none";
   const variants:Record<BtnVariant,string>={
-    primary:"bg-primary text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm",
-    secondary:"bg-white text-foreground border border-border hover:bg-muted shadow-sm",
+    primary:"bg-primary text-primary-foreground hover:bg-[#3f05bc] active:bg-[#2e038a] shadow-sm",
+    secondary:"bg-muted text-foreground border border-border hover:bg-accent hover:text-accent-foreground hover:border-accent active:bg-accent active:text-accent-foreground shadow-sm",
     danger:"bg-destructive text-white hover:bg-red-700 shadow-sm",
     ghost:"text-muted-foreground hover:text-foreground hover:bg-muted",
   };
@@ -251,10 +252,10 @@ function Avatar({initials,size="md",color="bg-primary",src}:{initials:string;siz
 }
 
 function Logo() {
+  const { dark } = useBrandTheme();
   return (
-    <div className="flex items-center gap-2.5 overflow-hidden">
-      <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center flex-shrink-0"><Package2 className="w-4 h-4 text-white"/></div>
-      <span className="font-semibold text-foreground tracking-tight text-[14px] whitespace-nowrap">ImportacionesQ8</span>
+    <div className="flex items-center overflow-hidden">
+      <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-8 w-28 object-contain object-left" />
     </div>
   );
 }
@@ -1149,6 +1150,7 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
 function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte}:SidebarCtrl) {
+  const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
   const floating=!pinned&&hovered;
@@ -1170,11 +1172,8 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
           ? "absolute top-0 left-0 z-50 shadow-2xl shadow-black/10 w-52"
           : pinned ? "w-full" : "w-14"
       )}>
-        <div className={clsx("flex items-center h-[57px] border-b border-border",isExpanded?"px-4 gap-2.5":"justify-center px-0")}>
-          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center flex-shrink-0"><Package2 className="w-4 h-4 text-white"/></div>
-          <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100 ml-0":"w-0 opacity-0")}>
-            <span className="font-semibold text-foreground tracking-tight text-[14px] whitespace-nowrap">ImportacionesQ8</span>
-          </div>
+        <div className={clsx("flex items-center h-[57px] border-b border-sidebar-border",isExpanded?"px-4":"justify-center px-0")}>
+          <img src={dark ? (isExpanded ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-isotipo-acid.svg") : (isExpanded ? "/brand/zarpi-wordmark.svg" : "/brand/zarpi-isotipo.svg")} alt="Zarpi" className={clsx("object-contain object-left transition-all duration-200",isExpanded?"h-8 w-28":"h-8 w-8")} />
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1">
@@ -1340,6 +1339,7 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
 // APP HEADER
 // ─────────────────────────────────────────────────────────────────────────────
 function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string;photoUrl?:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
+  const { dark, toggleTheme } = useBrandTheme();
   const { user: authUser } = useAuth();
   const count=sb?.notifCount??notifCount;
   const handler=sb?.onNotif??onNotif;
@@ -1353,7 +1353,7 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayInitials = initialsFromName(initialsSource);
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
-  const displayPhotoUrl = authUserPhoto || user.photoUrl || "";
+  const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
       <div/>
@@ -1366,6 +1366,14 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
         </div>
         <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
         {showHelp&&<NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
+        <button
+          onClick={toggleTheme}
+          title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+        </button>
         <div className="w-px h-5 bg-border mx-2"/>
         <div className="flex items-center gap-2.5">
           <div className="text-right hidden sm:block">
@@ -1397,7 +1405,7 @@ function CoursesPortalScreen({
   onGoDashboard: () => void;
 }) {
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="courses"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
@@ -1410,83 +1418,211 @@ function CoursesPortalScreen({
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER CARD — used in Dashboard and profile screens
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterCard({imp,onViewProfile,onCreateQuote,featured=false}:{
-  imp:Importer;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;featured?:boolean;
+function ImporterCard({
+  imp,
+  onViewProfile,
+  onCreateQuote,
+  featured = false,
+}: {
+  imp: Importer;
+  onViewProfile: (id: string) => void;
+  onCreateQuote: (id: string) => void;
+  featured?: boolean;
 }) {
-  const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Importadora con experiencia en comercio internacional.";
-  const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
-  // Sellos que respalda la plataforma: pesan más que las certificaciones que la
-  // propia empresa declara, así que se muestran primero y con su logo.
-  const platformCerts=imp.platformCerts??[];
-  const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
-  const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
+  const desc =
+    imp.description ||
+    IMP_DESCRIPTIONS[imp.id] ||
+    "Importadora con experiencia en comercio internacional.";
+
+  const certs =
+    imp.certs && imp.certs.length > 0
+      ? imp.certs
+      : IMP_CERTS[imp.id] || [];
+
+  const platformCerts = imp.platformCerts ?? [];
+  const bannerUrl = imp.bannerUrl ? resolveApiUrl(imp.bannerUrl) : "";
+  const logoUrl = imp.logoUrl ? resolveApiUrl(imp.logoUrl) : "";
+
   return (
-    <div className={clsx(
-      "bg-white border rounded-xl p-4 flex flex-col gap-3.5 hover:shadow-md transition-all duration-200 group",
-      featured?"border-primary/20 shadow-sm ring-1 ring-primary/10":"border-border"
-    )}>
-      <div className="relative">
-        <div className={clsx("h-16 rounded-lg overflow-hidden border border-border",bannerUrl?"bg-slate-100":"bg-gradient-to-r from-blue-50 via-cyan-50 to-amber-50")}>
-          {bannerUrl&&<img src={bannerUrl} alt="" className="w-full h-full object-cover"/>}
-        </div>
-        <div className="absolute -bottom-5 left-3 w-10 h-10 rounded-lg ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
-          {logoUrl
-            ? <img src={logoUrl} alt={`Logo de ${imp.name}`} className="w-full h-full object-cover"/>
-            : <Avatar initials={imp.initials} size="md" color={imp.color}/>}
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-start gap-3 mt-3">
-        <div className="w-10"/>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <p className="font-semibold text-sm leading-tight">{imp.name}</p>
-            {imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}
-            {featured&&<span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[10px] font-semibold"><Award className="w-2.5 h-2.5"/>Destacada</span>}
+    <div
+      className={clsx(
+        "bg-white border rounded-xl p-4 flex flex-col min-h-[420px] hover:shadow-md transition-all duration-200 group",
+        featured
+          ? "border-primary/20 shadow-sm ring-1 ring-primary/10 landing-glow"
+          : "border-border"
+      )}
+    >
+      {/* CONTENIDO SUPERIOR */}
+      <div className="flex flex-col gap-3.5">
+        {/* Banner */}
+        <div className="relative">
+          <div
+            className={clsx(
+              "h-16 rounded-lg overflow-hidden border border-border",
+              bannerUrl
+                ? "bg-slate-100"
+                : "bg-muted"
+            )}
+          >
+            {bannerUrl && (
+              <img
+                src={bannerUrl}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{imp.specialty}</p>
-          <p className="text-xs text-muted-foreground/70 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3"/>{imp.country}</p>
+
+          <div className="absolute -bottom-5 left-3 w-10 h-10 rounded-lg ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={`Logo de ${imp.name}`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Avatar initials={imp.initials} size="md" color={imp.color} />
+            )}
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          {/* Las certificaciones sustituyen a la calificación: son un dato
-              verificable de la empresa, no una nota agregada sin reseñas reales. */}
-          {(platformCerts.length+certs.length)>0&&<div className="flex items-center gap-1 text-emerald-700"><Shield className="w-3.5 h-3.5"/><span className="text-xs font-semibold">{platformCerts.length+certs.length}</span></div>}
-          <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span className="text-xs">{imp.responseTime}</span></div>
+
+        {/* Header */}
+        <div className="flex items-start gap-3 mt-3">
+          <div className="w-10" />
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-1.5 flex-wrap">
+              <p className="font-semibold text-sm leading-tight">
+                {imp.name}
+              </p>
+
+              {imp.verified && (
+                <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+              )}
+
+              {featured && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[10px] font-semibold">
+                  <Award className="w-2.5 h-2.5" />
+                  Destacada
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {imp.specialty}
+            </p>
+
+            <p className="text-xs text-muted-foreground/70 mt-0.5 flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              {imp.country}
+            </p>
+          </div>
+
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            {(platformCerts.length + certs.length) > 0 && (
+              <div className="flex items-center gap-1 text-emerald-700">
+                <Shield className="w-3.5 h-3.5" />
+                <span className="text-xs font-semibold">
+                  {platformCerts.length + certs.length}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              <span className="text-xs">{imp.responseTime}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+          {desc}
+        </p>
+
+        {/* Categories + certs */}
+        <div className="flex flex-wrap gap-1.5">
+          {imp.categories.map((c) => (
+            <span
+              key={c}
+              className="px-2 py-0.5 bg-muted rounded-md text-[10px] font-medium text-muted-foreground"
+            >
+              {c}
+            </span>
+          ))}
+
+          {platformCerts.map((c) => (
+            <span
+              key={c.id}
+              title={c.descripcion || `Respaldado por ImportacionesQ8`}
+              className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-semibold text-primary flex items-center gap-1"
+            >
+              {c.logoUrl ? (
+                <img
+                  src={resolveApiUrl(c.logoUrl)}
+                  alt=""
+                  className="w-3 h-3 object-contain"
+                />
+              ) : (
+                <BadgeCheck className="w-2.5 h-2.5" />
+              )}
+
+              {c.nombre}
+            </span>
+          ))}
+
+          {certs.map((c) => (
+            <span
+              key={c}
+              className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md text-[10px] font-medium text-emerald-700 flex items-center gap-1"
+            >
+              <Shield className="w-2.5 h-2.5" />
+              {c}
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* Description */}
-      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{desc}</p>
+      {/* CONTENIDO INFERIOR */}
+      <div className="mt-auto">
+        {/* Stats */}
+        <div className="flex items-center gap-4 py-2.5 border-t border-border">
+          <div className="flex items-center gap-1.5">
+            <Package2 className="w-3 h-3 text-muted-foreground/60" />
+            <span className="text-xs text-muted-foreground">
+              {imp.projects} proyectos
+            </span>
+          </div>
 
-      {/* Categories + certs */}
-      <div className="flex flex-wrap gap-1.5">
-        {imp.categories.map(c=>(
-          <span key={c} className="px-2 py-0.5 bg-muted rounded-md text-[10px] font-medium text-muted-foreground">{c}</span>
-        ))}
-        {platformCerts.map(c=>(
-          <span key={c.id} title={c.descripcion||`Respaldado por ImportacionesQ8`} className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-semibold text-primary flex items-center gap-1">
-            {c.logoUrl
-              ? <img src={resolveApiUrl(c.logoUrl)} alt="" className="w-3 h-3 object-contain"/>
-              : <BadgeCheck className="w-2.5 h-2.5"/>}
-            {c.nombre}
-          </span>
-        ))}
-        {certs.map(c=>(
-          <span key={c} className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md text-[10px] font-medium text-emerald-700 flex items-center gap-1"><Shield className="w-2.5 h-2.5"/>{c}</span>
-        ))}
-      </div>
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3 h-3 text-muted-foreground/60" />
+            <span className="text-xs text-muted-foreground">
+              Desde {imp.memberSince}
+            </span>
+          </div>
+        </div>
 
-      {/* Stats */}
-      <div className="flex items-center gap-4 py-2.5 border-t border-border">
-        <div className="flex items-center gap-1.5"><Package2 className="w-3 h-3 text-muted-foreground/60"/><span className="text-xs text-muted-foreground">{imp.projects} proyectos</span></div>
-        <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-muted-foreground/60"/><span className="text-xs text-muted-foreground">Desde {imp.memberSince}</span></div>
-      </div>
+        {/* Actions */}
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            fullWidth
+            onClick={() => onViewProfile(imp.id)}
+          >
+            Ver perfil
+          </Button>
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm" fullWidth onClick={()=>onViewProfile(imp.id)}>Ver perfil</Button>
-        <Button variant="primary" size="sm" fullWidth icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Cotizar</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            fullWidth
+            icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={() => onCreateQuote(imp.id)}
+          >
+            Cotizar
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1528,7 +1664,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
   const avgResponseHours=responseHours.length>0?Math.round(responseHours.reduce((acc,value)=>acc+value,0)/responseHours.length):null;
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -1547,16 +1683,22 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
             </div>
           </div>
 
-          {/* Stats bar */}
+         {/* Stats bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary"},
-              {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600"},
-              {label:"Respaldadas por Q8",value:importers.filter(i=>(i.platformCerts??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600"},
-              {label:"Tiempo prom. respuesta",value:avgResponseHours!==null?`~${avgResponseHours}h`:"N/D",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600"},
+              {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary dark:text-[#EDF953]"},
+              {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600 dark:text-emerald-400"},
+              {label:"Respaldadas por Q8",value:importers.filter(i=>(i.platformCerts??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600 dark:text-emerald-400"},
+              {label:"Tiempo prom. respuesta",value:avgResponseHours!==null?`~${avgResponseHours}h`:"N/D",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600 dark:text-[#EDF953]"},
             ].map(s=>(
-              <Card key={s.label} padding="md" className="flex flex-col gap-2">
-                <div className={clsx("w-7 h-7 rounded-lg bg-muted flex items-center justify-center",s.color)}>{s.icon}</div>
+              <Card 
+                key={s.label} 
+                padding="md" 
+                className="metric-card flex flex-col gap-2 transition-all duration-300 dark:bg-[#EDF953]/10 dark:border-[#EDF953]/25 dark:shadow-[0_0_15px_rgba(237,249,83,0.15)]"
+              >
+                <div className={clsx("metric-icon w-7 h-7 rounded-lg flex items-center justify-center dark:bg-[#EDF953]/20", s.color)}>
+                  {s.icon}
+                </div>
                 <p className="text-xl font-semibold">{s.value}</p>
                 <p className="text-xs text-muted-foreground">{s.label}</p>
               </Card>
@@ -1663,7 +1805,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   ];
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -1854,7 +1996,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
     return ms&&mst&&mm&&mr;
   });
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="quotes"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -1989,7 +2131,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
 
   if(!quote){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active="quotes"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
@@ -2056,7 +2198,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   ];
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="quotes"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -2216,7 +2358,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
   const resp=responses.find(r=>r.id===responseId)||responses[0];
   if(!resp){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active="responses"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden"><AppHeader user={USER} sb={sb}/><main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Respuesta no disponible.</p></Card></main></div>
       </div>
@@ -2266,7 +2408,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
 
   if(orderCreated){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active={from==="quote-detail"?"quotes":"responses"}/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
@@ -2289,7 +2431,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active={from==="quote-detail"?"quotes":"responses"}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -2378,7 +2520,7 @@ function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote
     return ms&&(!statusF||r.status===statusF)&&(!empresaF||r.importerId===empresaF);
   });
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="responses"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -2428,7 +2570,7 @@ function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote
 // ─────────────────────────────────────────────────────────────────────────────
 function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[];importers:Importer[]}) {
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="orders"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -2476,7 +2618,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
   const irA=(ref:React.RefObject<HTMLDivElement|null>)=>ref.current?.scrollIntoView({behavior:"smooth",block:"start"});
   if(isLoading){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active="orders"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
@@ -2488,7 +2630,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
 
   if(!order){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active="orders"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
@@ -2542,7 +2684,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
     : [{ estado: order.status || "Sin estado", fecha: new Date().toISOString(), nota: null }];
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="orders"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -3118,7 +3260,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     const popup = window.open("about:blank", "_blank");
     if (popup) {
       popup.document.title = `Abriendo ${fileName}...`;
-      popup.document.body.innerHTML = "<p style=\"font-family: system-ui, sans-serif; padding: 16px;\">Cargando recurso...</p>";
+      popup.document.body.innerHTML = "<p style=\"font-family: 'AT Avenor', sans-serif; padding: 16px;\">Cargando recurso...</p>";
     }
 
     try {
@@ -3413,7 +3555,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   }, []);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="chats"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -3723,7 +3865,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     onClick={()=>{void sendMsg();}}
                     disabled={!input.trim()||sending}
                     className={clsx("w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0",
-                      input.trim()?"bg-primary text-white hover:bg-blue-700 shadow-sm":"bg-muted text-muted-foreground cursor-not-allowed")}>
+                      input.trim()?"bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent shadow-sm":"bg-muted text-muted-foreground cursor-not-allowed")}>
                     <Send className="w-4 h-4"/>
                   </button>
                 </div>
@@ -4139,18 +4281,18 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                   className={clsx(
                     "rounded-xl border text-left transition-colors w-full",
                     folder.is_protected || folder.is_system
-                      ? "border-indigo-200 bg-indigo-50/70 hover:bg-indigo-50"
+                      ? "doc-system-folder"
                       : "border-border bg-sky-50/40 hover:bg-sky-50",
                     resourceViewMode === "grid" ? "p-4" : "px-3 py-2.5 flex items-center justify-between gap-3"
                   )}
                 >
-                  <FolderTree className={clsx("w-8 h-8", folder.is_protected || folder.is_system ? "text-indigo-600" : "text-sky-600", resourceViewMode === "grid" ? "mb-2" : "mb-0")}/>
+                  <FolderTree className={clsx("w-8 h-8", folder.is_protected || folder.is_system ? "doc-system-folder-icon" : "doc-folder-icon", resourceViewMode === "grid" ? "mb-2" : "mb-0")}/>
                   <div className={clsx("min-w-0", resourceViewMode === "grid" ? "" : "flex-1") }>
                     <p className="text-sm font-semibold truncate">{folder.nombre}</p>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
                       Carpeta
                       {(folder.is_protected || folder.is_system) && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                        <span className="doc-system-badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold">
                           <LockKeyhole className="w-2.5 h-2.5" />
                           Sistema
                         </span>
@@ -4566,7 +4708,7 @@ function DocumentosScreen({
     if (popup) {
       popup.document.title = `Abriendo ${fileName}...`;
       popup.document.body.innerHTML =
-        '<p style="font-family: system-ui, sans-serif; padding: 16px;">Cargando recurso...</p>';
+        '<p style="font-family: \'AT Avenor\', sans-serif; padding: 16px;">Cargando recurso...</p>';
     }
     try {
       const blob = await fetchProtectedBlob(url);
@@ -4706,10 +4848,7 @@ function DocumentosScreen({
   }, []);
 
   return (
-    <div
-      className="flex h-screen bg-background overflow-hidden"
-      style={{ fontFamily: "Inter,system-ui,sans-serif" }}
-    >
+    <div className="flex h-screen bg-background overflow-hidden font-sans">
       <Sidebar {...sb} active="documentos" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb} />
@@ -4959,8 +5098,8 @@ function DocumentosScreen({
                         isHoveredForUpload
                           ? "border-primary bg-primary/20 scale-[1.01]"
                           : isProtectedFolder(folder.id)
-                          ? "border-indigo-200 bg-indigo-50/70"
-                          : "border-border bg-sky-50/40 hover:bg-sky-50/80",
+                          ? "doc-system-folder"
+                          : "doc-folder",
                         viewMode === "grid"
                           ? "min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
                           : "px-3 py-2.5 flex items-center justify-between gap-3"
@@ -4979,7 +5118,7 @@ function DocumentosScreen({
                       >
                         <FolderTree
                           className={clsx(
-                            isProtectedFolder(folder.id) ? "text-indigo-600" : "text-sky-600",
+                            isProtectedFolder(folder.id) ? "doc-system-folder-icon" : "doc-folder-icon",
                             viewMode === "grid" ? "w-12 h-12 mb-3" : "w-4 h-4"
                           )}
                         />
@@ -4992,7 +5131,7 @@ function DocumentosScreen({
                           {folder.nombre}
                         </p>
                         {isProtectedFolder(folder.id) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          <span className="doc-system-badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold">
                             <LockKeyhole className="w-2.5 h-2.5" />
                             Sistema
                           </span>
@@ -5281,7 +5420,7 @@ function DocumentosScreen({
 function PagosScreen({sb}:{sb:SidebarCtrl}) {
   if (!SHOW_PAYMENTS_MODULE) {
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active="pagos"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
@@ -5296,7 +5435,7 @@ function PagosScreen({sb}:{sb:SidebarCtrl}) {
   const mp=[{id:"PAG-001",amount:"$4,600 USD",concept:"Orden #ORD-2025-0042",date:"10 Mar 2025",status:"Completado"},{id:"PAG-002",amount:"$3,200 USD",concept:"Orden #ORD-2025-0038",date:"02 Mar 2025",status:"Pendiente"},{id:"PAG-003",amount:"$8,900 USD",concept:"Orden #ORD-2025-0031",date:"22 Feb 2025",status:"Parcial"}];
   const sc:Record<string,string>={"Completado":"bg-emerald-50 text-emerald-700","Pendiente":"bg-orange-50 text-orange-700","Parcial":"bg-blue-50 text-blue-700"};
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="pagos"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -5647,7 +5786,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   }
   const slideStyle:React.CSSProperties={opacity:visible?1:0,transform:visible?"translateX(0)":direction==="fwd"?"translateX(12px)":"translateX(-12px)",transition:"opacity 180ms ease,transform 180ms ease"};
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="quotes"/>
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -5759,7 +5898,7 @@ function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:App
     update:  <Bell className="w-4 h-4 text-rose-600"/>,
   };
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="notifications"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
@@ -5823,7 +5962,7 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
   ];
   const recentActivity: {text:string;time:string;icon:React.ReactNode}[] = [];
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="imp-dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER_IMPORTADORA} sb={sb}/>
@@ -5835,8 +5974,8 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map((m,i)=>(
-              <Card key={i} padding="md" className="flex items-start gap-3">
-                <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",m.bg,m.color)}>{m.icon}</div>
+              <Card key={i} padding="md" className="metric-card flex items-start gap-3">
+                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",m.bg,m.color)}>{m.icon}</div>
                 <div className="min-w-0">
                   <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
@@ -6039,7 +6178,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
 
   if(!company){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active="imp-profile"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER_IMPORTADORA} sb={sb}/>
@@ -6053,7 +6192,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="imp-profile"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER_IMPORTADORA} sb={sb}/>
@@ -6331,7 +6470,7 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
   const AVAIL_CLS:Record<CompanyAdvisor["availability"],string>={alta:"text-emerald-600",media:"text-amber-600",baja:"text-rose-600"};
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="imp-advisors"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER_IMPORTADORA} sb={sb}/>
@@ -6486,7 +6625,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
     return ms&&mf;
   });
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="imp-quotes"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER_IMPORTADORA} sb={sb}/>
@@ -6699,7 +6838,7 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
   ];
   const activity:{text:string;time:string}[]=[];
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="adv-dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
@@ -6801,7 +6940,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="adv-available"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
@@ -6862,7 +7001,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
   const chatDe=(quoteId:string)=>chats.find((c)=>(c.type==="cotizacion"||c.type==="orden")&&(c.refId===quoteId||c.quoteId===quoteId));
   const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="adv-my-quotes"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
@@ -7098,7 +7237,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   const steps=[{label:"Económica"},{label:"Logística"},{label:"Observaciones"}];
   if(!quote){
     return (
-      <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+      <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar {...sb} active={activeNav}/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <AppHeader user={headerUser}/>
@@ -7115,7 +7254,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     );
   }
   if(submitted)return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active={activeNav}/>
       <div className="flex-1 flex flex-col"><AppHeader user={headerUser}/>
         <div className="flex-1 flex items-center justify-center"><div className="flex flex-col items-center gap-4 text-center max-w-sm">
@@ -7130,7 +7269,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     </div>
   );
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active={activeNav}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser}/>
@@ -7277,6 +7416,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:"data"|"terms")=>void;importers:Importer[]}) {
+  const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const featuredImporters=importers.filter(i=>i.verified||(i.platformCerts??[]).length>0).slice(0,6);
   const uniqueCountries=[...new Set(importers.map((item)=>item.country).filter(Boolean))];
@@ -7288,10 +7428,23 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
     {value:uniqueCategories.length.toString(),label:"Líneas de producto"},
   ];
   const benefits=[
-    {icon:<BadgeCheck className="w-6 h-6 text-primary"/>,title:"Importadores verificados",desc:"Todas las empresas pasan por un proceso de verificación antes de ser listadas en la plataforma."},
-    {icon:<Zap className="w-6 h-6 text-amber-500"/>,title:"Respuestas rápidas",desc:"Los asesores especializados reciben y responden tus solicitudes de cotización en pocas horas."},
-    {icon:<Scale className="w-6 h-6 text-emerald-600"/>,title:"Negociación transparente",desc:"Todo el proceso de cotización, respuesta y negociación queda registrado en un solo lugar."},
-    {icon:<ShoppingCart className="w-6 h-6 text-purple-600"/>,title:"Seguimiento de órdenes",desc:"Una vez confirmada la operación, puedes hacer seguimiento en tiempo real de tu pedido."},
+    {icon:<MoveRight className="w-6 h-6 text-primary"/>,title:"Abrimos caminos",desc:"Conectamos tus necesidades con productos y empresas que hacen posible llegar más lejos."},
+    {icon:<BadgeCheck className="w-6 h-6 text-primary"/>,title:"Confianza que se comprueba",desc:"Las empresas pasan por un proceso de verificación antes de aparecer en Zarpi."},
+    {icon:<Scale className="w-6 h-6 text-primary"/>,title:"Todo más claro",desc:"Cotizaciones, condiciones y negociaciones quedan ordenadas en un solo lugar."},
+    {icon:<ShoppingCart className="w-6 h-6 text-primary"/>,title:"Más posibilidades, menos barreras",desc:"Explora opciones globales, compara propuestas y sigue cada etapa de tu orden."},
+  ];
+  const brandPrinciples=[
+    {label:"Misión",title:"Acercar lo que mueve tus ideas",desc:"Hacemos más simple encontrar productos, empresas y oportunidades confiables en cualquier parte del mundo."},
+    {label:"Visión",title:"Un mundo más conectado",desc:"Imaginamos un comercio exterior claro, accesible y abierto a más personas y negocios."},
+    {label:"Valores",title:"Claridad, confianza y movimiento",desc:"Verificamos lo importante, mostramos las opciones y avanzamos contigo en cada decisión."},
+  ];
+  const brandVisuals=[
+    {src:"/brand/container-1.jpg",alt:"Contenedores Zarpi en tránsito",label:"Movemos lo que imaginas."},
+    {src:"/brand/shipping-1.jpg",alt:"Logística y shipping Zarpi",label:"Del mundo a tus manos."},
+    {src:"/brand/container-2.jpg",alt:"Operación de containers Zarpi",label:"Más cerca, en cada etapa."},
+    {src:"/brand/shipping-2.jpg",alt:"Envío de productos Zarpi",label:"Descubre. Compara. Elige."},
+    {src:"/brand/container-3.jpg",alt:"Operación de containers Zarpi",label:"Productos del mundo, más cerca."},
+    {src:"/brand/shipping-3.png",alt:"Envío de productos Zarpi",label:"Tu negocio. Tu elección."},
   ];
   const steps=[
     {n:"01",title:"Crea tu solicitud",desc:"Describe el producto que necesitas importar, especifica cantidades, país de origen y demás detalles relevantes."},
@@ -7307,39 +7460,78 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
     {q:"¿Cómo funciona el seguimiento de la orden?",a:"Una vez creada la orden, el representante de la empresa importadora actualiza el estado en cada etapa: producción, tránsito, aduana y entrega."},
   ];
   return (
-    <div className="min-h-screen bg-white" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="min-h-screen bg-background overflow-hidden">
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-md border-b border-border">
+        <div className="max-w-9xl mx-auto px-6 h-16 flex items-center justify-between">
           <Logo/>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onLogin}>Iniciar sesión</Button>
+            <button onClick={toggleTheme} title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+              {dark?<Sun className="w-4 h-4"/>:<Moon className="w-4 h-4"/>}
+            </button>
+            <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
             <Button variant="primary" size="sm" onClick={onRegister}>Registrarse</Button>
           </div>
         </div>
       </nav>
 
       {/* HERO */}
-      <section className="pt-32 pb-20 px-6" style={{background:"linear-gradient(135deg,#EFF6FF 0%,#F8FAFC 60%,#FFF7ED 100%)"}}>
-        <div className="max-w-5xl mx-auto text-center">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold mb-6"><BadgeCheck className="w-3.5 h-3.5"/>Plataforma B2B de importaciones verificadas</span>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground leading-tight mb-5">
-            Importa con confianza.<br/>
-            <span className="text-primary">Conecta con los mejores.</span>
+      <section className="pt-32 pb-20 px-6 bg-foreground text-background relative overflow-hidden">
+        <div className="absolute inset-0 bg-primary/25 pointer-events-none z-0"/>
+        <div className="zarpi-blob zarpi-blob-violet absolute -top-24 -left-24 z-0 pointer-events-none"/>
+        <div className="zarpi-blob zarpi-blob-acid absolute top-20 -right-20 z-0 pointer-events-none"/>
+        <div className="zarpi-blob zarpi-blob-neutral absolute -bottom-36 left-1/3 z-0 pointer-events-none"/>
+        
+        <div className="landing-hero-content relative z-10 max-w-5xl mx-auto text-center">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent text-accent-foreground rounded-full text-xs font-semibold mb-6"><BadgeCheck className="w-3.5 h-3.5"/>Del mundo a tus manos</span>
+          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mb-5">
+            Un mundo de productos,<br/>
+            <span className="text-accent">más cerca.</span>
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed mb-8">
-            ImportacionesQ8 conecta empresas con importadores verificados en todo el mundo. Solicita cotizaciones, negocia condiciones y rastrea tus órdenes desde un solo lugar.
+          <p className="text-lg text-background/75 max-w-2xl mx-auto leading-relaxed mb-8">
+            Descubre productos, compara cotizaciones y elige con claridad. Zarpi acerca lo que necesitas.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button variant="primary" size="lg" icon={<LogIn className="w-4 h-4"/>} onClick={onLogin} className="px-8">Iniciar sesión</Button>
-            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={onRegister} className="px-8">Crear cuenta gratis</Button>
+            <Button variant="secondary" size="lg" icon={<LogIn className="w-4 h-4"/>} onClick={onLogin} className="px-8 bg-accent text-accent-foreground hover:bg-accent/85">Iniciar sesión</Button>
+            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={onRegister} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Crear cuenta gratis</Button>
+          </div>
+          <p className="mt-8 text-xs uppercase tracking-[0.18em] font-bold text-accent">
+            Descubre. Compara. Elige. Zarpi it.
+          </p>
+        </div>
+      </section>
+
+      {/* BRAND VISUALS (Infinite Carousel) */}
+      <section className="relative px-6 py-10 bg-background overflow-hidden">
+        {/* Degradados laterales para suavizar la entrada/salida */}
+        <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+        <div className="relative z-0 max-w-10xl mx-auto overflow-hidden">
+          <div className="flex w-max gap-4 animate-marquee hover:[animation-play-state:paused]">
+            {[...brandVisuals, ...brandVisuals].map((visual, index) => (
+              <figure 
+                key={`${visual.src}-${index}`} 
+                className="group relative w-64 md:w-80 shrink-0 overflow-hidden rounded-2xl border border-border bg-card aspect-[4/3]"
+              >
+                <img 
+                  src={visual.src} 
+                  alt={visual.alt} 
+                  loading="eager" 
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-102" 
+                />
+                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-3 pb-3 pt-8 text-xs font-semibold text-white">
+                  {visual.label}
+                </figcaption>
+              </figure>
+            ))}
           </div>
         </div>
       </section>
 
       {/* STATS */}
-      <section className="py-12 bg-white border-y border-border">
-        <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-8">
+      <section className="py-12 bg-card border-y border-border relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-8 relative z-10">
           {stats.map((s,i)=>(
             <div key={i} className="text-center">
               <p className="text-3xl font-bold text-primary">{s.value}</p>
@@ -7350,16 +7542,21 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       </section>
 
       {/* BENEFITS */}
-      <section className="py-20 px-6 bg-[#F8FAFC]">
-        <div className="max-w-5xl mx-auto">
+      <section className="py-20 px-6 bg-muted relative overflow-hidden">
+        <div className="zarpi-blob zarpi-blob-acid absolute -right-16 top-10 pointer-events-none opacity-30 scale-90" />
+        <div className="zarpi-blob zarpi-blob-violet absolute -left-20 bottom-10 pointer-events-none opacity-25 scale-75" />
+
+        <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight">¿Por qué usar ImportacionesQ8?</h2>
-            <p className="text-muted-foreground mt-2">Una plataforma diseñada para simplificar el comercio exterior</p>
+            <h2 className="text-2xl font-bold tracking-tight">Más cerca de lo que buscas</h2>
+            <p className="text-muted-foreground mt-2">Una forma más clara de encontrar, comparar y elegir.</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {benefits.map((b,i)=>(
-              <div key={i} className="bg-white border border-border rounded-2xl p-6 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-4">{b.icon}</div>
+            {benefits.map((b, i) => (
+              <div key={i} className="landing-reveal bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 hover:shadow-md transition-shadow" style={{animationDelay:`${i*90}ms`}}>
+                <div className="landing-icon w-12 h-12 rounded-xl flex items-center justify-center mb-4 border bg-primary/10 border-primary/20 text-primary dark:bg-[#EDF953]/15 dark:border-[#EDF953]/30 dark:text-[#EDF953]">
+                  {b.icon}
+                </div>
                 <h3 className="font-semibold text-sm mb-2">{b.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">{b.desc}</p>
               </div>
@@ -7368,39 +7565,69 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="py-20 px-6 bg-white">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight">¿Cómo funciona?</h2>
-            <p className="text-muted-foreground mt-2">En cuatro pasos, desde la solicitud hasta la entrega</p>
+      {/* MISION, VISION Y VALORES */}
+      <section className="py-20 px-6 bg-background relative overflow-hidden">
+        <div className="zarpi-blob zarpi-blob-violet absolute right-0 top-1/4 pointer-events-none opacity-50 scale-110" />
+        <div className="zarpi-blob zarpi-blob-acid absolute -left-16 bottom-0 pointer-events-none opacity-40 scale-90" />
+
+        <div className="relative z-10 max-w-5xl mx-auto">
+          <div className="max-w-2xl mb-10">
+            <p className="text-xs uppercase tracking-[0.18em] text-primary font-semibold mb-3">La forma Zarpi</p>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Un comercio más cerca, más claro y más humano.</h2>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {steps.map((s,i)=>(
-              <div key={i} className="relative">
-                {i<steps.length-1&&<div className="hidden lg:block absolute top-7 left-full w-full h-0.5 bg-border z-0" style={{width:"calc(100% - 2rem)",left:"calc(100% - 0.5rem)"}}/>}
-                <div className="relative z-10">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                    <span className="text-lg font-bold text-primary">{s.n}</span>
-                  </div>
-                  <h3 className="font-semibold text-sm mb-2">{s.title}</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
+          <div className="grid md:grid-cols-3 gap-5">
+            {brandPrinciples.map((principle, i) => (
+              <article key={principle.label} className="landing-reveal relative overflow-hidden bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 landing-glow" style={{animationDelay:`${i*100}ms`}}>
+                <div className="relative">
+                  <p className="text-xs uppercase tracking-[0.16em] text-primary font-semibold mb-5">{principle.label}</p>
+                  <h3 className="text-lg font-bold mb-3">{principle.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{principle.desc}</p>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
+      {/* HOW IT WORKS */}
+      <section className="py-20 px-6 bg-background relative overflow-hidden">
+        
+        <div className="max-w-5xl mx-auto relative z-10">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl font-bold tracking-tight">¿Cómo funciona?</h2>
+            <p className="text-muted-foreground mt-2">En cuatro pasos, desde la solicitud hasta la entrega</p>
+          </div>
+          
+          <div className="relative">
+            <div className="hidden lg:block absolute top-7 left-[0%] right-[0%] h-0.5 bg-border z-0" />
+
+            <div className="flex justify-center items-center gap-6 sm:gap-10">
+              {steps.map((s, i) => (
+                <div key={i} className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-accent border border-accent flex items-center justify-center mb-4 shadow-sm relative z-10">
+                    <span className="text-lg font-bold text-accent-foreground">{s.n}</span>
+                  </div>
+                  <h3 className="font-semibold text-sm mb-1">{s.title}</h3>
+                  <p className="text-xs text-muted-foreground max-w-[200px]">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FEATURED IMPORTERS */}
-      <section className="py-20 px-6 bg-[#F8FAFC]">
-        <div className="max-w-5xl mx-auto">
+      <section className="py-20 px-6 bg-muted relative overflow-hidden">
+        <div className="zarpi-blob zarpi-blob-violet absolute -right-24 bottom-10 pointer-events-none opacity-35 scale-90" />
+        <div className="zarpi-blob zarpi-blob-acid absolute -left-20 top-10 pointer-events-none opacity-30 scale-75" />
+
+        <div className="max-w-5xl mx-auto relative z-10">
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold tracking-tight">Empresas importadoras destacadas</h2>
             <p className="text-muted-foreground mt-2">Verificadas, calificadas y listas para atenderte</p>
           </div>
           {featuredImporters.length===0?(
-            <Card padding="lg" className="border-dashed">
+            <Card padding="lg" className="border-dashed bg-card/60 backdrop-blur-sm">
               <p className="text-sm text-muted-foreground text-center">No hay empresas visibles en este momento.</p>
             </Card>
           ):(
@@ -7417,14 +7644,19 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       </section>
 
       {/* FAQ */}
-      <section className="py-20 px-6 bg-white">
-        <div className="max-w-3xl mx-auto">
+      <section className="py-20 px-6 bg-background relative overflow-hidden">
+        {/* Blob Lima: visible únicamente en modo oscuro */}
+        <div className="hidden dark:block zarpi-blob zarpi-blob-acid absolute right-10 top-1/3 pointer-events-none opacity-25 scale-90" />
+        {/* Blob Violeta: visible únicamente en modo claro */}
+        <div className="block dark:hidden zarpi-blob zarpi-blob-violet absolute left-10 bottom-10 pointer-events-none opacity-25 scale-90" />
+
+        <div className="max-w-3xl mx-auto relative z-10">
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold tracking-tight">Preguntas frecuentes</h2>
           </div>
           <div className="space-y-3">
             {faqs.map((f,i)=>(
-              <div key={i} className="border border-border rounded-xl overflow-hidden">
+              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card/70 backdrop-blur-sm">
                 <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors">
                   <span className="font-medium text-sm">{f.q}</span>
                   <ChevronDown className={clsx("w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200",faqOpen===i&&"rotate-180")}/>
@@ -7437,35 +7669,52 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       </section>
 
       {/* CTA BANNER */}
-      <section className="py-16 px-6" style={{background:"linear-gradient(135deg,#1D4ED8,#2563EB)"}}>
-        <div className="max-w-3xl mx-auto text-center text-white">
-          <h2 className="text-2xl font-bold mb-3">Comienza hoy mismo</h2>
-          <p className="text-blue-100 mb-7 leading-relaxed">Regístrate gratis y accede al marketplace de importadoras verificadas más completo de la región.</p>
+      <section className="py-16 px-6 bg-primary relative overflow-hidden">
+        <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
+          <h2 className="text-2xl font-bold mb-3">Del mundo a tus manos</h2>
+          <p className="text-primary-foreground/75 mb-7 leading-relaxed">Empieza a descubrir oportunidades y encuentra todo más cerca.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button variant="secondary" size="lg" onClick={onRegister} className="px-8 bg-white text-primary hover:bg-blue-50">Crear cuenta gratis</Button>
-            <Button size="lg" onClick={onLogin} className="px-8 bg-white/15 text-white border border-white/30 hover:bg-white/25">Iniciar sesión</Button>
+            <Button 
+              variant="secondary" 
+              size="lg" 
+              onClick={onRegister} 
+              className="px-8 bg-accent text-accent-foreground hover:bg-accent"
+            >
+              Crear cuenta gratis
+            </Button>
+            <Button 
+              variant="secondary" 
+              size="lg" 
+              onClick={onLogin} 
+              className="px-8 bg-accent text-accent-foreground hover:bg-accent"
+            >
+              Iniciar sesión
+            </Button>
           </div>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-foreground text-white/70 py-10 px-6">
-        <div className="max-w-5xl mx-auto">
+      <footer className="bg-[#0F0F0F] text-white py-10 px-6 relative overflow-hidden">
+        <div className="zarpi-blob zarpi-blob-neutral absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-15 scale-125" />
+        
+        <div className="mx-auto relative z-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center flex-shrink-0"><Package2 className="w-3.5 h-3.5 text-white"/></div>
-                <span className="font-semibold text-white text-sm">ImportacionesQ8</span>
+              <div className="mb-2">
+                <img src="/brand/zarpi-wordmark-acid.svg" alt="Zarpi" className="h-8 w-28 object-contain object-left" />
               </div>
-              <p className="text-xs text-white/50">Plataforma B2B de comercio exterior</p>
+              <p className="text-xs text-white/50">Un mundo de productos, más cerca.</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 text-xs">
-              <button onClick={()=>onPolicy("data")} className="hover:text-white transition-colors text-left">Política de Tratamiento de Datos</button>
-              <button onClick={()=>onPolicy("terms")} className="hover:text-white transition-colors text-left">Términos y Condiciones</button>
-              <button onClick={onLogin} className="hover:text-white transition-colors text-left">Iniciar sesión</button>
+            <div className="flex flex-col sm:flex-row gap-4 text-xs text-white/70">
+              <button onClick={()=>onPolicy("data")} className="hover:text-accent transition-colors text-left">Política de Tratamiento de Datos</button>
+              <button onClick={()=>onPolicy("terms")} className="hover:text-accent transition-colors text-left">Términos y Condiciones</button>
+              <button onClick={onLogin} className="hover:text-accent transition-colors text-left">Iniciar sesión</button>
             </div>
           </div>
-          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center">© 2025 ImportacionesQ8. Todos los derechos reservados.</div>
+          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center">
+            © 2026 Zarpi. Todos los derechos reservados.
+          </div>
         </div>
       </footer>
     </div>
@@ -7610,7 +7859,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
   const docTypes=["CC","CE","Pasaporte","NIT","DNI"];
 
   if(success)return(
-    <div className="min-h-screen flex flex-col bg-[#F0F2F5] items-center justify-center px-4" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4">
       <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center">
         {!otpSuccess?(
           <>
@@ -7648,7 +7897,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="min-h-screen flex flex-col bg-background">
       <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-border">
         <Logo/>
         <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
@@ -7762,7 +8011,7 @@ function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLog
 
 function ResetPasswordScreen({ token, onBackToLogin }: { token: string; onBackToLogin: () => void }) {
   return (
-    <div className="min-h-screen flex flex-col bg-[#F0F2F5]" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="min-h-screen flex flex-col bg-background">
       <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3.5">
         <Logo/>
       </header>
@@ -7799,13 +8048,15 @@ function AdminDashboardScreen({sb,onRefreshGlobal,screen}:{sb:SidebarCtrl;onRefr
   }, [section]);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active={screen}/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F0F2F5]">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         <AppHeader user={USER} sb={sb}/>
         <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-6">
           <div className="max-w-6xl mx-auto">
-          <AdminDashboard onRefreshGlobal={onRefreshGlobal} section={section}/>
+          <div className="admin-dashboard">
+            <AdminDashboard onRefreshGlobal={onRefreshGlobal} section={section}/>
+          </div>
           </div>
         </main>
         </div>
@@ -7858,7 +8109,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="help-support"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={role === "importadora" ? USER_IMPORTADORA : role === "asesor" ? USER_ASESOR : USER} sb={sb}/>
@@ -8047,7 +8298,7 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="dashboard"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
@@ -8096,6 +8347,7 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
 // `Screen` y la correspondencia con las URL viven en `@/app/rutas`.
 
 export default function App() {
+  useBrandTheme();
   const storedRole = normalizeStoredRole(getStoredRole());
   const hasStoredSession = Boolean(getStoredToken() && storedRole);
 
@@ -8837,12 +9089,14 @@ export default function App() {
       ? `${companyProfile.nombre_empresa} (Empresa Importadora Madre)`
       : USER_ASESOR.company,
     initials: initialsFromName(currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_ASESOR.name),
+    photoUrl: currentUserProfile?.foto_url || undefined,
   };
 
   const importerHeaderUser = {
     name: currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_IMPORTADORA.name,
     company: companyProfile?.nombre_empresa || USER_IMPORTADORA.company,
     initials: initialsFromName(currentUserProfile?.nombre?.trim() || currentUserProfile?.email || USER_IMPORTADORA.name),
+    photoUrl: currentUserProfile?.foto_url || undefined,
   };
 
   const companyIdForAdvisor = currentUserProfile?.importador_id || "unknown-company";
@@ -8928,6 +9182,7 @@ export default function App() {
     onSoporte:()=>setSoporteAbierto(true),
     showSoporte:userRole!=="admin",
     profileSubtitle:headerSubtitle,
+    profilePhotoUrl:currentUserProfile?.foto_url || null,
     onLogout:()=>{void handleLogout();},
     onProfile:handleProfileClick,
   };
@@ -9340,7 +9595,7 @@ export default function App() {
   }, [isAuthenticated, isInitializing, appRole, allowedRoles, userRole, screen]);
 
   const loadingFallback = (
-    <div className="min-h-screen flex items-center justify-center bg-[#F0F2F5]">
+    <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="w-4 h-4 animate-spin" />
         Verificando sesion...
@@ -9359,7 +9614,7 @@ export default function App() {
   );
 
   const unauthorizedFallback = (
-    <div className="min-h-screen bg-[#F0F2F5] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <Card className="max-w-md w-full p-6">
         <h2 className="text-lg font-semibold">Acceso restringido</h2>
         <p className="text-sm text-muted-foreground mt-2">Tu rol no tiene permisos para esta vista.</p>
