@@ -65,6 +65,7 @@ export interface SidebarCtrl {
   onSoporte?: () => void;
   showSoporte?: boolean;
   profileSubtitle?: string;
+  profilePhotoUrl?: string | null;
   onLogout?: () => void;
   onProfile?: () => void;
 }

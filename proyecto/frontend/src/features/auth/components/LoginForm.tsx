@@ -167,11 +167,6 @@ export function LoginForm({
           </Button>
         </form>
 
-        <div className="flex gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-          <p>Acceso conectado al backend real de autenticacion.</p>
-        </div>
-
         <div className="space-y-1 text-center text-xs text-muted-foreground">
           <p>
             No tienes cuenta?{" "}
