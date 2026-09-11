@@ -432,11 +432,60 @@
   color: var(--accent-foreground) !important;
 }
 
+@keyframes landing-move {
+  100% {
+    transform: translate3d(0, 0, 1px) rotate(360deg);
+  }
+}
+
+.landing-anim-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+
+  background: #fff;
+}
+
+.dark .landing-anim-background {
+  background: #0f0f0f;
+}
+
+.landing-anim-background span {
+  position: absolute;
+  backface-visibility: hidden;
+
+  animation-name: landing-move;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.landing-orb-primary, .landing-orb-accent {
+  color: #edf953;
+}
+
+.landing-orb-neutral {
+  color: #fff;
+}
+
+.dark .landing-orb-primary, .dark .landing-orb-accent {
+  color: #4f03eb;
+}
+
+.dark .landing-orb-neutral {
+  color: #0f0f0f;
+}
+
 @theme inline {
   --font-sans: "Elvellon";
   --font-display: "Elvellon";
   --font-mono: "Elvellon";
   --font-accent: "AT Avenor";
+  --font-elvellon: "Elvellon";
+  --font-avenor: "AT Avenor";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

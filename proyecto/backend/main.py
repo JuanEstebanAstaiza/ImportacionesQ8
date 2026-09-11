@@ -27,6 +27,7 @@ from routers.cursos import router as cursos_router
 from routers.notificaciones import router as notificaciones_router
 from routers.documentos import router as documentos_router
 from routers.ayuda import router as ayuda_router
+from routers.landing import router as landing_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -187,6 +188,7 @@ app.include_router(cursos_router)
 app.include_router(notificaciones_router)
 app.include_router(documentos_router)
 app.include_router(ayuda_router)
+app.include_router(landing_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

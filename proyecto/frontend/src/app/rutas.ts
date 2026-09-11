@@ -43,6 +43,7 @@ export type Screen =
   | "admin-usuarios"
   | "admin-soporte"
   | "admin-certificaciones"
+  | "admin-landing"
   | "create-response"
   | "notifications"
   | "user-profile"
@@ -109,6 +110,7 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-usuarios", path: "/admin/usuarios" },
   { screen: "admin-soporte", path: "/admin/soporte" },
   { screen: "admin-certificaciones", path: "/admin/certificaciones" },
+  { screen: "admin-landing", path: "/admin/landing" },
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";
