@@ -260,6 +260,13 @@ def reenviar_otp(solicitud: ReenviarOtpRequest, db: Session) -> ReenviarOtpRespo
     return ReenviarOtpResponse(challenge_token=challenge)
 
 
+def _normalizar_rol_login(valor: str) -> str:
+    normalizado = valor.strip().lower()
+    if normalizado in ("importador", "importadora"):
+        return "importador"
+    return normalizado
+
+
 def login_user(login: LoginRequest, db: Session) -> LoginResponse:
     usuario = db.query(Usuario).filter(Usuario.email == login.email).first()
 
@@ -275,6 +282,18 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Cuenta desactivada. Contacta al administrador de tu cuenta",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # El selector de rol del login es un paso de seguridad, no un adorno: si la
+    # cuenta no es admin, el rol elegido en la pantalla tiene que coincidir con
+    # el que de verdad tiene el usuario, o se rechaza el acceso.
+    if login.rol and usuario.rol != "admin" and _normalizar_rol_login(login.rol) != _normalizar_rol_login(usuario.rol):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Esta cuenta no tiene el rol seleccionado ('{login.rol}'). "
+                "Elige el rol correcto para iniciar sesión."
+            ),
         )
 
     if not usuario.email_verificado:
