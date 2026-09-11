@@ -78,7 +78,11 @@ export function LoginOtpForm({
           {errorMessage && <p className="text-xs text-destructive text-center">{errorMessage}</p>}
           {infoMessage && <p className="text-xs text-muted-foreground text-center">{infoMessage}</p>}
 
-          <Button className="w-full" type="submit" disabled={isPending || otp.length !== 6}>
+          <Button
+            className="w-full bg-purple-600 text-white hover:bg-purple-700 dark:bg-accent dark:text-black dark:hover:bg-accent/70 transition-colors"
+            type="submit"
+            disabled={isPending || otp.length !== 6}
+          >
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -90,7 +94,7 @@ export function LoginOtpForm({
           </Button>
         </form>
 
-        <div className="space-y-2">
+        <div className="w-full bg-purple-600 text-white hover:bg-purple-700 dark:bg-accent dark:text-black dark:hover:bg-accent/70 transition-colors">
           <Button type="button" variant="outline" className="w-full" onClick={onResend} disabled={isResending}>
             {isResending ? (
               <>

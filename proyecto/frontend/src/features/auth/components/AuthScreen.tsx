@@ -168,9 +168,11 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         <button onClick={onLanding}>{logo}</button>
         <button
           onClick={toggleTheme}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground transition-colors"
         >
-          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
         </button>
       </header>
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, FileText } from "lucide-react";
+import { Moon, Sun, ChevronLeft, FileText } from "lucide-react";
 
 import { legalService } from "@/services/legal.service";
 import type { LegalPage } from "@/features/legal/types";
@@ -13,7 +13,7 @@ type LegalPolicyScreenProps = {
 const FALLBACK_MESSAGE = "Este documento se encuentra en construccion y sera publicado proximamente.";
 
 export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
-  const { dark } = useBrandTheme();
+  const { dark, toggleTheme } = useBrandTheme();
   const [apiMessage, setApiMessage] = useState("");
   const [loadError, setLoadError] = useState("");
 
@@ -58,14 +58,23 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 flex items-center justify-between px-6 py-3.5 bg-white border-b border-border z-10">
         <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-8 w-28 object-contain object-left" />
-
-        <button
-          onClick={onBack}
-          className="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none text-muted-foreground hover:text-foreground hover:bg-muted h-8 px-3 text-xs"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          Volver
-        </button>
+        <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+            </button>
+          <button
+            onClick={onBack}
+            className="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none text-muted-foreground hover:text-foreground hover:bg-muted h-8 px-3 text-xs"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Volver
+          </button>
+        </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-16">
