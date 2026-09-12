@@ -7522,7 +7522,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
                 onClick={()=>setActiveTab(section.key)}
                 className={clsx(
                   "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                  activeTab===section.key?"bg-accent text-accent-foreground":"text-muted-foreground hover:bg-muted",
+                  activeTab === section.key 
+                    ? "bg-primary text-white dark:bg-accent dark:text-accent-foreground" 
+                    : "text-muted-foreground hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white"
                 )}
               >
                 {section.label}
@@ -7709,7 +7711,10 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             </div>
           )}
           <div className="text-center mt-8">
-            <Button variant="secondary" size="md" icon={<Building2 className="w-4 h-4"/>} onClick={onLogin}>Ver todas las importadoras</Button>
+            <Button variant="secondary"
+              className="text-white hover:text-white border-transparent hover:border-primary dark:hover:border-accent dark:text-accent-foreground bg-primary hover:bg-primary/80 dark:bg-accent dark:hover:bg-accent/80"
+              size="md" icon={<Building2 className="w-4 h-4"/>}
+              onClick={onLogin}>Ver todas las importadoras</Button>
           </div>
         </div>
       </section>
@@ -8482,7 +8487,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
           <img
             src={dark ? "brand/fondo-1.png" : "brand/fondo-4.png"}
             alt="Fondo de registro"
-            className="w-full h-full object-cover object-center transition-all duration-300"
+            className="auth-background w-full h-full object-cover object-center transition-all duration-300"
           />
         </div>
 
@@ -8654,7 +8659,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
       </main>
 
       <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>© 2026 ImportacionesQ8</span>
+        <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>
