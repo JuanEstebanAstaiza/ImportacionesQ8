@@ -1180,19 +1180,28 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1">
-          {navItems.map(({icon:Icon,label,key})=>{
-            const isActive=active===key;
+          {navItems.map(({ icon: Icon, label, key }) => {
+            const isActive = active === key;
             return (
-              <button key={key} onClick={()=>onNav(key)}
-                className={clsx("flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
-                  isActive?"bg-primary/8 text-primary":"text-muted-foreground hover:text-foreground hover:bg-muted",
-                  isExpanded?"gap-2.5":"justify-center gap-0")}
-                title={!isExpanded?label:undefined}>
-                <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary")}/>
-                <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+              <button
+                key={key}
+                onClick={() => onNav(key)}
+                className={clsx(
+                  "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
+                  isActive
+                    ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  isExpanded ? "gap-2.5" : "justify-center gap-0"
+                )}
+                title={!isExpanded ? label : undefined}
+              >
+                <Icon className={clsx("w-4 h-4 flex-shrink-0", isActive && "text-primary dark:text-accent")} />
+                <div className={clsx("overflow-hidden transition-all duration-200", isExpanded ? "w-auto opacity-100" : "w-0 opacity-0")}>
                   <span className="whitespace-nowrap">{label}</span>
                 </div>
-                {isExpanded&&isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary flex-shrink-0"/>}
+                {isExpanded && isActive && (
+                  <span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0" />
+                )}
               </button>
             );
           })}
@@ -7540,8 +7549,23 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             >
               {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </button>
-            <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
-            <Button variant="primary" size="sm" onClick={onRegister}>Registrarse</Button>
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              className="hover:bg-primary hover:text-white hover:border-primary dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:border-accent" 
+              onClick={onLogin}
+            >
+              Iniciar sesión
+            </Button>
+
+            <Button 
+              variant="primary" 
+              size="sm" 
+              className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" 
+              onClick={onRegister}
+            >
+              Registrarse
+            </Button>
           </div>
         </div>
       </nav>
@@ -7756,7 +7780,11 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       {activeTab!=="contact" && (
       <>
       {/* CTA BANNER */}
-      <section className="py-16 px-6 bg-primary relative overflow-hidden">
+      <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
+
+        <div className="zarpi-blob zarpi-blob-violet absolute right-20 top-1/3 pointer-events-none opacity-25 scale-80" />
+
+        <div className="zarpi-blob zarpi-blob-violet absolute left-15 bottom-15 pointer-events-none opacity-25 scale-80 -rotate-[90deg]" />
         <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
           <h2 className="text-2xl font-bold mb-3">Del mundo a tus manos</h2>
           <p className="text-primary-foreground/75 mb-7 leading-relaxed">Empieza a descubrir oportunidades y encuentra todo más cerca.</p>
@@ -7765,7 +7793,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
               variant="secondary" 
               size="lg" 
               onClick={onRegister} 
-              className="px-8 bg-accent text-accent-foreground hover:bg-accent"
+              className="px-8 text-accent-foreground"
             >
               Crear cuenta gratis
             </Button>
@@ -7773,7 +7801,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
               variant="secondary" 
               size="lg" 
               onClick={onLogin} 
-              className="px-8 bg-accent text-accent-foreground hover:bg-accent"
+              className="px-8 text-accent-foreground"
             >
               Iniciar sesión
             </Button>
@@ -8754,8 +8782,6 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   const [expandido, setExpandido] = useState<string|null>(null);
   const [votados, setVotados] = useState<Record<string, boolean>>({});
 
-  // La documentación vive en el backend y la mantiene el equipo de soporte, así
-  // que se pide cada vez: lo que escriban hoy se ve hoy, sin desplegar nada.
   useEffect(()=>{
     let vigente = true;
     setCargandoAyuda(true);
@@ -8764,13 +8790,11 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
         .then((datos)=>{
           if(!vigente) return;
           setArticulos(datos.articulos);
-          // Las categorías solo se refrescan sin filtro puesto: si no,
-          // filtrar por una dejaría el resto fuera de la lista de filtros.
           if(!categoria) setCategorias(datos.categorias);
         })
         .catch(()=>{ if(vigente) setArticulos([]); })
         .finally(()=>{ if(vigente) setCargandoAyuda(false); });
-    }, faqSearch ? 250 : 0);  // Teclear no dispara una petición por letra.
+    }, faqSearch ? 250 : 0);
     return ()=>{ vigente = false; clearTimeout(t); };
   },[faqSearch, categoria]);
 
@@ -8799,12 +8823,11 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
             <p className="text-sm text-muted-foreground mt-1">Guia de uso y preguntas frecuentes para rol {roleContent.roleLabel}.</p>
           </div>
 
-          {/* Quien entra aquí ya tiene un problema: la salida a una persona va
-              arriba y visible, no escondida en el pie del menú. */}
-          <Card padding="md" className="border-primary/30 bg-primary/[0.03]">
+          {/* Card con borde y fondo accent en modo oscuro */}
+          <Card padding="md" className="border-primary/30 dark:border-accent/30 bg-primary/[0.03] dark:bg-accent/[0.05]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-accent/20 text-primary dark:text-accent flex items-center justify-center flex-shrink-0">
                   <LifeBuoy className="w-4 h-4"/>
                 </div>
                 <div>
@@ -8814,7 +8837,12 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                   </p>
                 </div>
               </div>
-              <Button variant="primary" icon={<LifeBuoy className="w-4 h-4"/>} onClick={onPedirSoporte}>
+              <Button 
+                variant="primary" 
+                icon={<LifeBuoy className="w-4 h-4"/>} 
+                onClick={onPedirSoporte}
+                className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+              >
                 Pedir soporte técnico
               </Button>
             </div>
@@ -8828,14 +8856,12 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»…"
                 prefix={<Search className="w-4 h-4"/>}
               />
-              {/* Las categorías salen de lo que hay publicado para este perfil,
-                  no de una lista fija que pueda quedar vacía. */}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={()=>setCategoria("")}
                   className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    categoria===""?"bg-primary text-white border-primary":"border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
+                    categoria==="" ? "bg-primary dark:bg-accent text-white dark:text-accent-foreground border-primary dark:border-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
                 >
                   Todo
                 </button>
@@ -8845,7 +8871,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                     type="button"
                     onClick={()=>setCategoria(c===categoria?"":c)}
                     className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                      categoria===c?"bg-primary text-white border-primary":"border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
+                      categoria===c ? "bg-primary dark:bg-accent text-white dark:text-accent-foreground border-primary dark:border-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
                   >
                     {c}
                   </button>
@@ -8858,7 +8884,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
             <Card padding="md" className="md:col-span-2">
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-primary"/>
+                  <HelpCircle className="w-4 h-4 text-primary dark:text-accent"/>
                   <h2 className="text-sm font-semibold">Documentación</h2>
                 </div>
                 <span className="text-xs text-muted-foreground">
@@ -8875,7 +8901,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 {articulos.map((articulo)=>{
                   const abierto = expandido===articulo.id;
                   return (
-                    <div key={articulo.id} className="rounded-lg border border-border bg-white overflow-hidden">
+                    <div key={articulo.id} className="rounded-lg border border-border bg-card overflow-hidden">
                       <button
                         type="button"
                         onClick={()=>abrirArticulo(articulo)}
@@ -8891,7 +8917,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                           </span>
                         </div>
                         {articulo.contenido&&(
-                          <span className="mt-1.5 inline-block text-xs font-medium text-primary">
+                          <span className="mt-1.5 inline-block text-xs font-medium text-primary dark:text-accent">
                             {abierto?"Ocultar detalle":"Ver paso a paso"}
                           </span>
                         )}
@@ -8902,8 +8928,6 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                           <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                             {articulo.contenido}
                           </p>
-                          {/* Señal de qué documentación falla: un artículo muy
-                              leído y marcado como inútil es donde nacen los tickets. */}
                           <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 flex-wrap">
                             {votados[articulo.id]?(
                               <p className="text-xs text-muted-foreground">Gracias, lo tendremos en cuenta.</p>
@@ -8925,7 +8949,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
 
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
-                <BookOpen className="w-4 h-4 text-primary"/>
+                <BookOpen className="w-4 h-4 text-primary dark:text-accent"/>
                 <h2 className="text-sm font-semibold">Buenas practicas</h2>
               </div>
               <div className="space-y-3">
