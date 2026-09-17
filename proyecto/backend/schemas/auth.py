@@ -66,6 +66,10 @@ class RegistroRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # Rol elegido en el selector de la pantalla de login. Opcional para no
+    # romper integraciones antiguas, pero si viene se valida contra el rol
+    # real del usuario (ver `login_user`): el selector deja de ser decorativo.
+    rol: Optional[str] = None
 
 
 class ForgotPasswordRequest(BaseModel):

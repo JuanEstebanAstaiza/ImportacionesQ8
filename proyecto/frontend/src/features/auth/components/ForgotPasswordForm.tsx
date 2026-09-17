@@ -49,7 +49,7 @@ export function ForgotPasswordForm({
           <div className="flex justify-center">
             <CheckCircle2 className="h-10 w-10 text-emerald-500" />
           </div>
-          <Button type="button" variant="secondary" onClick={onBackToLogin} className="w-full">
+          <Button type="button" variant="secondary" onClick={onBackToLogin} className="w-full bg-purple-600 text-white hover:bg-purple-700 dark:bg-accent dark:text-black dark:hover:bg-accent/70 transition-colors">
             Volver al inicio de sesion
           </Button>
         </CardContent>
@@ -85,7 +85,7 @@ export function ForgotPasswordForm({
 
           {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
 
-          <Button className="w-full" type="submit" disabled={isPending}>
+          <Button className="w-full bg-purple-600 text-white hover:bg-purple-700 dark:bg-accent dark:text-black dark:hover:bg-accent/70 transition-colors" type="submit" disabled={isPending}>
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

@@ -18,6 +18,7 @@ from models.curso import CompraCurso, Curso, EstadoCurso, LeccionCurso
 from models.certificacion import Certificacion
 from models.evidencia import EstadoEvidenciaImportador, EvidenciaImportador
 from models.importador import Importador
+from models.landing import LandingAlly, LandingBlock, LandingNews
 from models.documental import (
     Archivo,
     ArchivoEtiqueta,
@@ -933,6 +934,45 @@ def _es_imagen_publica_de_empresa(db: Session, archivo_id: str) -> bool:
     return presentacion is not None
 
 
+def _es_recurso_publico_de_landing(db: Session, archivo_id: str) -> bool:
+    """Imagen/video de un bloque activo, logo de aliado o portada de novedad.
+
+    La Landing la ve cualquier visitante sin sesión, así que sus imágenes y
+    videos (subidos desde el editor CMS del admin) tienen que abrir sin token:
+    un `<img>`/`<video>` normal nunca manda `Authorization`, y sin esta regla
+    el navegador recibía 401 y el editor/la página pública caían al fallback.
+    """
+    try:
+        PyUUID(archivo_id)
+    except ValueError:
+        return False
+
+    patron = f"%/{archivo_id}/%"
+
+    bloque = (
+        db.query(LandingBlock.id)
+        .filter(LandingBlock.activo.is_(True), LandingBlock.contenido.like(patron))
+        .first()
+    )
+    if bloque is not None:
+        return True
+
+    aliado = (
+        db.query(LandingAlly.id)
+        .filter(LandingAlly.activo.is_(True), LandingAlly.logo_url.like(patron))
+        .first()
+    )
+    if aliado is not None:
+        return True
+
+    noticia = (
+        db.query(LandingNews.id)
+        .filter(LandingNews.activo.is_(True), LandingNews.imagen_url.like(patron))
+        .first()
+    )
+    return noticia is not None
+
+
 def _tiene_acceso_por_curso(db: Session, archivo_id: str, current_user: dict) -> bool:
     """Alumno inscrito en el curso, o cuenta de la empresa que lo publica.
 
@@ -971,7 +1011,11 @@ async def descargar_archivo(
     if not file_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Archivo no encontrado")
 
-    allowed = _es_recurso_publico_de_curso(db, archivo_id) or _es_imagen_publica_de_empresa(db, archivo_id)
+    allowed = (
+        _es_recurso_publico_de_curso(db, archivo_id)
+        or _es_imagen_publica_de_empresa(db, archivo_id)
+        or _es_recurso_publico_de_landing(db, archivo_id)
+    )
 
     if not allowed and current_user is not None:
         user_id = _current_user_id(current_user)

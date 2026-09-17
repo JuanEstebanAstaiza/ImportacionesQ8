@@ -36,6 +36,7 @@ from .documental import (
     MensajeAdjunto,
     OrdenDocumento,
 )
+from .landing import LandingBlock, LandingAlly, LandingNews
 
 __all__ = [
     "Usuario",
@@ -102,4 +103,7 @@ __all__ = [
     "CursoRecurso",
     "MensajeAdjunto",
     "OrdenDocumento",
+    "LandingBlock",
+    "LandingAlly",
+    "LandingNews",
 ]

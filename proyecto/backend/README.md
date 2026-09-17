@@ -292,6 +292,19 @@ docker-compose down
 docker-compose up -d --build
 ```
 
+El backend es *image-based* (sin bind mount): un cambio en el código de Python
+no se ve en el contenedor hasta que se reconstruye la imagen. Reconstrucción
+completa tras tocar backend (modelos, routers, migraciones nuevas, etc.):
+
+```bash
+docker-compose up -d --build backend
+```
+
+`entrypoint.sh` corre `alembic upgrade head` automáticamente antes de levantar
+Uvicorn en cada arranque del contenedor (con MySQL; con SQLite se resuelve solo
+con `create_all`), así que las tablas nuevas (`landing_blocks`, `landing_allies`,
+`landing_news`, etc.) quedan creadas sin intervención manual.
+
 ### Ver logs
 
 ```bash

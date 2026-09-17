@@ -38,7 +38,7 @@ export default defineConfig({
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
-  assetsInclude: ['**/*.svg', '**/*.csv'],
+  assetsInclude: ['**/*.svg', '**/*.csv', '**/*.png', '**/*.PNG'],
 
   // Configuración del Servidor de Desarrollo y Proxy para Docker
   server: {
@@ -66,6 +66,9 @@ export default defineConfig({
         // Elimina el prefijo /api antes de enviar la petición a FastAPI
         rewrite: (p) => p.replace(/^\/api/, ''),
       },
+    },
+    fs: {
+      strict: false, // Permite servir archivos fuera del estricto scope si hay symlinks
     },
   },
 })

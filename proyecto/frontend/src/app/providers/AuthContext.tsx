@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const normalizedPayload: LoginRequest = {
         email: String(payload.email ?? "").trim(),
         password: String(payload.password ?? ""),
+        rol: payload.rol,
       };
 
       if (!normalizedPayload.email || !normalizedPayload.password) {

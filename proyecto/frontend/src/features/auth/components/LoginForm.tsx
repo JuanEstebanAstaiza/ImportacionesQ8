@@ -9,13 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/components/ui/utils";
+import type { BackendAuthRole } from "@/types/auth";
 
 const loginSchema = z.object({
   email: z.string().email("Ingresa un correo valido."),
   password: z.string().min(1, "La contraseña es requerida."),
 });
 
-export type LoginFormValues = z.infer<typeof loginSchema>;
+export type LoginFormValues = z.infer<typeof loginSchema> & { rol?: BackendAuthRole };
 export type PortalRole = "solicitante" | "importadora" | "asesor";
 
 interface LoginFormProps {
@@ -28,10 +29,12 @@ interface LoginFormProps {
   initialEmail?: string;
 }
 
-const ROLE_OPTIONS: Array<{ role: PortalRole; label: string; icon: React.ReactNode }> = [
-  { role: "solicitante", label: "Solicitante", icon: <UserRound className="h-4 w-4" /> },
-  { role: "importadora", label: "Importadora", icon: <Building2 className="h-4 w-4" /> },
-  { role: "asesor", label: "Asesor", icon: <Users className="h-4 w-4" /> },
+// El backend guarda "importador", no "importadora": este selector es la única
+// pantalla donde ese desajuste de nombres tiene que traducirse antes de viajar.
+const ROLE_OPTIONS: Array<{ role: PortalRole; backendRole: BackendAuthRole; label: string; icon: React.ReactNode }> = [
+  { role: "solicitante", backendRole: "solicitante", label: "Solicitante", icon: <UserRound className="h-4 w-4" /> },
+  { role: "importadora", backendRole: "importador", label: "Importadora", icon: <Building2 className="h-4 w-4" /> },
+  { role: "asesor", backendRole: "asesor", label: "Asesor", icon: <Users className="h-4 w-4" /> },
 ];
 
 export function LoginForm({
@@ -60,9 +63,11 @@ export function LoginForm({
   }, [initialEmail, form]);
 
   function handleSubmit(values: LoginFormValues) {
+    const backendRole = ROLE_OPTIONS.find((option) => option.role === selectedRole)?.backendRole;
     onSubmit({
       email: String(values.email ?? "").trim(),
       password: String(values.password ?? ""),
+      rol: backendRole,
     });
   }
 
@@ -84,8 +89,8 @@ export function LoginForm({
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
                   selectedRole === option.role
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40",
+                    ? "border-primary bg-primary/20 text-primary dark:border-accent dark:bg-accent/10 dark:text-accent"
+                    : "border-border text-muted-foreground hover:border-primary/40 dark:hover:border-accent/40"
                 )}
               >
                 {option.icon}
@@ -121,7 +126,7 @@ export function LoginForm({
               <button
                 type="button"
                 onClick={onForgotPassword}
-                className="text-xs font-medium text-primary hover:underline"
+                className="text-xs font-medium text-primary dark:text-accent hover:underline"
               >
                 Olvidaste tu contraseña?
               </button>
@@ -152,7 +157,11 @@ export function LoginForm({
 
           {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
 
-          <Button className="w-full" type="submit" disabled={isPending}>
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="w-full bg-primary text-white hover:bg-primary dark:bg-accent dark:text-black dark:hover:bg-accent/70 transition-colors"
+          >
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -169,8 +178,8 @@ export function LoginForm({
 
         <div className="space-y-1 text-center text-xs text-muted-foreground">
           <p>
-            No tienes cuenta?{" "}
-            <button type="button" onClick={onRegister} className="font-medium text-primary hover:underline">
+            No tienes cuenta?{"  "}
+            <button type="button" onClick={onRegister} className="text-primary dark:text-accent hover:underline">
               Registrate gratis
             </button>
           </p>

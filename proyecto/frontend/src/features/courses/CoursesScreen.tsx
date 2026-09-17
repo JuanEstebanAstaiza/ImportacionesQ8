@@ -1286,9 +1286,20 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
 
       {role === "solicitante" ? (
         <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as "all" | "mine")} className="space-y-6">
-          <TabsList className="w-full justify-start overflow-x-auto rounded-2xl bg-white p-1 shadow-sm sm:w-fit">
-            <TabsTrigger value="all" className="data-[state=active]:bg-primary data-[state=active]:text-white">Todos los cursos</TabsTrigger>
-            <TabsTrigger value="mine" className="data-[state=active]:bg-primary data-[state=active]:text-white">Mis cursos</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto rounded-2xl bg-white p-1 shadow-sm dark:border dark:border-border dark:bg-background sm:w-fit">
+            <TabsTrigger
+              value="all"
+              className="rounded-xl text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-white dark:data-[state=active]:bg-accent dark:data-[state=active]:text-accent-foreground"
+            >
+              Todos los cursos
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="mine"
+              className="rounded-xl text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-white dark:data-[state=active]:bg-accent dark:data-[state=active]:text-accent-foreground"
+            >
+              Mis cursos
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="space-y-6">
@@ -1342,10 +1353,21 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
             </section>
 
             <Tabs value={exploreTab} onValueChange={(value) => setExploreTab(value as "recommended" | "popular" | "categories")} className="space-y-5">
-              <TabsList className="w-full justify-start overflow-x-auto rounded-2xl bg-white p-1 shadow-sm sm:w-fit">
-                <TabsTrigger value="recommended" className="data-[state=active]:bg-primary data-[state=active]:text-white"><Sparkles className="size-4" />Para ti</TabsTrigger>
-                <TabsTrigger value="popular" className="data-[state=active]:bg-primary data-[state=active]:text-white"><Flame className="size-4" />Tendencias</TabsTrigger>
-                <TabsTrigger value="categories" className="data-[state=active]:bg-primary data-[state=active]:text-white"><LibraryBig className="size-4" />Por categorias</TabsTrigger>
+              <TabsList className="w-full justify-start overflow-x-auto rounded-2xl bg-white p-1 shadow-sm dark:border dark:border-border dark:bg-background sm:w-fit">
+                {[
+                  { value: "recommended", icon: Sparkles, label: "Para ti" },
+                  { value: "popular", icon: Flame, label: "Tendencias" },
+                  { value: "categories", icon: LibraryBig, label: "Por categorias" },
+                ].map(({ value, icon: Icon, label }) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className="rounded-xl text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-white dark:data-[state=active]:bg-accent dark:data-[state=active]:text-accent-foreground"
+                  >
+                    <Icon className="size-4" />
+                    {label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
 
               <TabsContent value="recommended" className="space-y-4">
@@ -1389,50 +1411,112 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
           </TabsContent>
 
           <TabsContent value="mine" className="space-y-6">
-            <Card className="overflow-hidden border-primary/20 bg-linear-to-br from-primary/10 via-white to-white shadow-sm">
-              <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-                <div className="space-y-4">
-                  <Badge variant="secondary" className="bg-primary/10 text-primary">Continuar aprendiendo</Badge>
-                  {continueCourse ? (
-                    <>
-                      <div>
-                        <h2 className="text-2xl font-semibold">{continueCourse.titulo}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">{continueCourse.importadora_nombre} · {continueCourse.categoria}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="h-2 overflow-hidden rounded-full bg-white/70">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${continueProgress}%` }} />
+            <Card className="overflow-hidden border-primary/20 bg-linear-to-br from-primary/10 via-white to-white shadow-sm dark:border-accent/20 dark:from-primary/25 dark:via-primary/10 dark:to-background">
+              <CardContent className="grid gap-8 p-6 lg:grid-cols-[1.3fr_0.7fr] lg:p-7 lg:items-stretch">
+                
+                {/* Información del curso */}
+                <div className="flex flex-col justify-between gap-6">
+                  <div className="space-y-4">
+                    <Badge
+                      variant="secondary"
+                      className="bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent"
+                    >
+                      Continuar aprendiendo
+                    </Badge>
+
+                    {continueCourse ? (
+                      <>
+                        <div>
+                          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                            {continueCourse.titulo}
+                          </h2>
+
+                          <p className="mt-1.5 text-sm text-muted-foreground">
+                            {continueCourse.importadora_nombre} · {continueCourse.categoria}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{continueProgress}% completado</p>
+
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Progreso</span>
+                            <span className="font-semibold text-primary dark:text-accent">
+                              {continueProgress}%
+                            </span>
+                          </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-white/70 dark:bg-background/50">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all dark:bg-accent"
+                              style={{ width: `${continueProgress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-primary/10 bg-white/60 p-4 dark:border-accent/15 dark:bg-background/50">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            Siguiente clase
+                          </p>
+
+                          <p className="mt-1.5 text-base font-semibold leading-snug">
+                            {nextLesson?.titulo || "Listo para repasar"}
+                          </p>
+
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {nextLesson?.duracion || "Sin duracion"}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                          Aun no has iniciado un curso
+                        </h2>
+
+                        <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
+                          Compra uno desde el catalogo para desbloquear el acceso rapido.
+                        </p>
                       </div>
-                      <div className="rounded-2xl border bg-white/70 p-4">
-                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Siguiente clase</p>
-                        <p className="mt-2 text-lg font-semibold">{nextLesson?.titulo || "Listo para repasar"}</p>
-                        <p className="text-sm text-muted-foreground">{nextLesson?.duracion || "Sin duracion"}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <div>
-                      <h2 className="text-2xl font-semibold">Aun no has iniciado un curso</h2>
-                      <p className="mt-1 text-sm text-muted-foreground">Compra uno desde el catalogo para desbloquear el acceso rapido.</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-4 rounded-3xl bg-slate-950 p-6 text-white">
-                  <div className="flex items-center gap-3">
-                    <CirclePlay className="size-10 text-primary-foreground" />
-                    <div>
-                      <p className="text-sm text-white/70">Acceso de un clic</p>
-                      <p className="text-xl font-semibold">Ir a la clase</p>
+                {/* Acceso rápido */}
+                <div className="flex flex-col justify-between gap-6 rounded-3xl bg-slate-950 p-6 text-white dark:border dark:border-primary/20 dark:bg-primary/20 lg:p-7">
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white/10">
+                        <CirclePlay className="size-6 text-primary-foreground" />
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-medium text-white/60">
+                          Acceso de un clic
+                        </p>
+
+                        <p className="text-lg font-semibold">
+                          Ir a la clase
+                        </p>
+                      </div>
                     </div>
+
+                    <p className="text-sm leading-relaxed text-white/70">
+                      Abre el reproductor exactamente en el curso y leccion vistos recientemente.
+                    </p>
                   </div>
-                  <p className="text-sm text-white/70">Abre el reproductor exactamente en el curso y leccion vistos recientemente.</p>
-                  <Button className="w-full bg-white text-slate-950 hover:bg-white/90" onClick={() => continueCourse ? handleOpenPlayer(continueCourse.id, continueLessonId) : setMainTab("all")}>
+
+                  <Button
+                    className="w-full bg-white text-slate-950 hover:bg-white/90 dark:!bg-accent dark:!text-accent-foreground dark:hover:!bg-accent/90"
+                    onClick={() =>
+                      continueCourse
+                        ? handleOpenPlayer(continueCourse.id, continueLessonId)
+                        : setMainTab("all")
+                    }
+                  >
                     {continueCourse ? "Ir a la clase" : "Explorar cursos"}
                     <ChevronRight className="size-4" />
                   </Button>
                 </div>
+
               </CardContent>
             </Card>
 

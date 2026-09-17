@@ -61,6 +61,8 @@ import {
   type CreatePropuestaPayload,
 } from "@/services/business.service";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
+import { landingService, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
+import { safeHttpUrl } from "@/utils/safe-url";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
 import { ResenasImportador } from "@/features/resenas/ResenasImportador";
@@ -626,6 +628,7 @@ const NAV_ADMIN=[
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
   {icon:LifeBuoy,      label:"Soporte",         key:"admin-soporte"},
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
+  {icon:Layers,        label:"Landing",         key:"admin-landing"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
@@ -1177,19 +1180,28 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1">
-          {navItems.map(({icon:Icon,label,key})=>{
-            const isActive=active===key;
+          {navItems.map(({ icon: Icon, label, key }) => {
+            const isActive = active === key;
             return (
-              <button key={key} onClick={()=>onNav(key)}
-                className={clsx("flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
-                  isActive?"bg-primary/8 text-primary":"text-muted-foreground hover:text-foreground hover:bg-muted",
-                  isExpanded?"gap-2.5":"justify-center gap-0")}
-                title={!isExpanded?label:undefined}>
-                <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary")}/>
-                <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+              <button
+                key={key}
+                onClick={() => onNav(key)}
+                className={clsx(
+                  "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
+                  isActive
+                    ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  isExpanded ? "gap-2.5" : "justify-center gap-0"
+                )}
+                title={!isExpanded ? label : undefined}
+              >
+                <Icon className={clsx("w-4 h-4 flex-shrink-0", isActive && "text-primary dark:text-accent")} />
+                <div className={clsx("overflow-hidden transition-all duration-200", isExpanded ? "w-auto opacity-100" : "w-0 opacity-0")}>
                   <span className="whitespace-nowrap">{label}</span>
                 </div>
-                {isExpanded&&isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary flex-shrink-0"/>}
+                {isExpanded && isActive && (
+                  <span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0" />
+                )}
               </button>
             );
           })}
@@ -1369,8 +1381,8 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
         <button
           onClick={toggleTheme}
           title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
         </button>
@@ -3882,22 +3894,49 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
               <div className="p-3 space-y-3 flex-1">
                 {conv.type==="soporte"?(
                   <div className={clsx("rounded-lg border px-2.5 py-2 space-y-1.5",conv.closed?"bg-emerald-50 border-emerald-200":"bg-rose-50 border-rose-200")}>
-                    <p className={clsx("text-[10px] font-semibold uppercase tracking-wide",conv.closed?"text-emerald-800":"text-rose-800")}>
-                      {conv.closed?"Ticket cerrado":"Soporte técnico"}
+                    <p
+                      className={clsx(
+                        "text-[10px] font-semibold uppercase tracking-wide",
+                        conv.closed
+                          ? "text-emerald-800 dark:text-accent"
+                          : "text-rose-800 dark:text-accent"
+                      )}
+                    >
+                      {conv.closed ? "Ticket cerrado" : "Soporte técnico"}
                     </p>
+
                     {[
-                      ["Asunto",conv.subject||"—"],
-                      ["Urgencia",URGENCIA_SOPORTE[conv.urgency||""]?.label||"—"],
-                      ["Nivel de mesa",conv.level?`Nivel ${conv.level}`:"—"],
-                      ["Atiende",conv.agentName||"Sin asignar"],
-                      ["Solicita",conv.counterpartName||"—"],
-                      ["Perfil",conv.requesterRole||"—"],
-                      ...(conv.closed?[["Cerró",conv.closedBy||"—"]]:[]),
-                      ...(conv.rating?[["Calificación",`${conv.rating} de 5`]]:[]),
-                    ].map(([k,v])=>(
+                      ["Asunto", conv.subject || "—"],
+                      ["Urgencia", URGENCIA_SOPORTE[conv.urgency || ""]?.label || "—"],
+                      ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "—"],
+                      ["Atiende", conv.agentName || "Sin asignar"],
+                      ["Solicita", conv.counterpartName || "—"],
+                      ["Perfil", conv.requesterRole || "—"],
+                      ...(conv.closed ? [["Cerró", conv.closedBy || "—"]] : []),
+                      ...(conv.rating ? [["Calificación", `${conv.rating} de 5`]] : []),
+                    ].map(([k, v]) => (
                       <div key={k} className="flex justify-between items-start gap-1">
-                        <span className={clsx("text-[10px]",conv.closed?"text-emerald-900/70":"text-rose-900/70")}>{k}</span>
-                        <span className={clsx("text-[10px] font-medium text-right",conv.closed?"text-emerald-900":"text-rose-900")}>{v}</span>
+                        <span
+                          className={clsx(
+                            "text-[10px]",
+                            conv.closed
+                              ? "text-emerald-900/70 dark:text-accent/70"
+                              : "text-rose-900/70 dark:text-accent/70"
+                          )}
+                        >
+                          {k}
+                        </span>
+
+                        <span
+                          className={clsx(
+                            "text-[10px] font-medium text-right",
+                            conv.closed
+                              ? "text-emerald-900 dark:text-accent"
+                              : "text-rose-900 dark:text-accent"
+                          )}
+                        >
+                          {v}
+                        </span>
                       </div>
                     ))}
 
@@ -7415,9 +7454,29 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
+const LANDING_TABS:{key:LandingSection;label:string}[]=[
+  {key:"home",label:"Inicio"},
+  {key:"about",label:"Quiénes somos"},
+  {key:"how-it-works",label:"Cómo funciona"},
+  {key:"news",label:"Novedades y aliados"},
+  {key:"contact",label:"Contacto"},
+];
+
 function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:"data"|"terms")=>void;importers:Importer[]}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
+  const [activeTab,setActiveTab]=useState<LandingSection>("home");
+  const [profileModalImporter,setProfileModalImporter]=useState<Importer|null>(null);
+  const [dynamicContent,setDynamicContent]=useState<LandingDynamicContent|null>(null);
+  const [dynamicContentError,setDynamicContentError]=useState("");
+
+  useEffect(()=>{
+    if(activeTab!=="news"||dynamicContent)return;
+    landingService.getDynamicContent()
+      .then(setDynamicContent)
+      .catch(()=>setDynamicContentError("No se pudo cargar el contenido de novedades y aliados."));
+  },[activeTab,dynamicContent]);
+
   const featuredImporters=importers.filter(i=>i.verified||(i.platformCerts??[]).length>0).slice(0,6);
   const uniqueCountries=[...new Set(importers.map((item)=>item.country).filter(Boolean))];
   const uniqueCategories=[...new Set(importers.flatMap((item)=>item.categories).filter(Boolean))];
@@ -7463,18 +7522,56 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
     <div className="min-h-screen bg-background overflow-hidden">
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-9xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-9xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <Logo/>
+          <div className="hidden md:flex items-center gap-1">
+            {LANDING_TABS.map(section=>(
+              <button
+                key={section.key}
+                onClick={()=>setActiveTab(section.key)}
+                className={clsx(
+                  "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  activeTab === section.key 
+                    ? "bg-primary text-white dark:bg-accent dark:text-accent-foreground" 
+                    : "text-muted-foreground hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white"
+                )}
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-2">
-            <button onClick={toggleTheme} title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
-              {dark?<Sun className="w-4 h-4"/>:<Moon className="w-4 h-4"/>}
+            <button
+              onClick={toggleTheme}
+              title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </button>
-            <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
-            <Button variant="primary" size="sm" onClick={onRegister}>Registrarse</Button>
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              className="hover:bg-primary hover:text-white hover:border-primary dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:border-accent" 
+              onClick={onLogin}
+            >
+              Iniciar sesión
+            </Button>
+
+            <Button 
+              variant="primary" 
+              size="sm" 
+              className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" 
+              onClick={onRegister}
+            >
+              Registrarse
+            </Button>
           </div>
         </div>
       </nav>
 
+      {activeTab==="home" && (
+      <>
       {/* HERO */}
       <section className="pt-32 pb-20 px-6 bg-foreground text-background relative overflow-hidden">
         <div className="absolute inset-0 bg-primary/25 pointer-events-none z-0"/>
@@ -7534,7 +7631,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-8 relative z-10">
           {stats.map((s,i)=>(
             <div key={i} className="text-center">
-              <p className="text-3xl font-bold text-primary">{s.value}</p>
+              <p className="text-3xl font-bold text-primary dark:text-accent">{s.value}</p>
               <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
             </div>
           ))}
@@ -7572,14 +7669,14 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
 
         <div className="relative z-10 max-w-5xl mx-auto">
           <div className="max-w-2xl mb-10">
-            <p className="text-xs uppercase tracking-[0.18em] text-primary font-semibold mb-3">La forma Zarpi</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">La forma Zarpi</p>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Un comercio más cerca, más claro y más humano.</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-5">
             {brandPrinciples.map((principle, i) => (
               <article key={principle.label} className="landing-reveal relative overflow-hidden bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 landing-glow" style={{animationDelay:`${i*100}ms`}}>
                 <div className="relative">
-                  <p className="text-xs uppercase tracking-[0.16em] text-primary font-semibold mb-5">{principle.label}</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-primary dark:text-accent font-semibold mb-5">{principle.label}</p>
                   <h3 className="text-lg font-bold mb-3">{principle.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{principle.desc}</p>
                 </div>
@@ -7633,12 +7730,15 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
           ):(
             <div className="grid grid-flow-col auto-cols-[85%] gap-5 overflow-x-auto pb-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-3 sm:overflow-visible">
               {featuredImporters.map(imp=>(
-                <ImporterCard key={imp.id} imp={imp} onViewProfile={()=>onLogin()} onCreateQuote={()=>onLogin()} featured/>
+                <ImporterCard key={imp.id} imp={imp} onViewProfile={()=>setProfileModalImporter(imp)} onCreateQuote={()=>onLogin()} featured/>
               ))}
             </div>
           )}
           <div className="text-center mt-8">
-            <Button variant="secondary" size="md" icon={<Building2 className="w-4 h-4"/>} onClick={onLogin}>Ver todas las importadoras</Button>
+            <Button variant="secondary"
+              className="text-white hover:text-white border-transparent hover:border-primary dark:hover:border-accent dark:text-accent-foreground bg-primary hover:bg-primary/80 dark:bg-accent dark:hover:bg-accent/80"
+              size="md" icon={<Building2 className="w-4 h-4"/>}
+              onClick={onLogin}>Ver todas las importadoras</Button>
           </div>
         </div>
       </section>
@@ -7667,9 +7767,24 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
           </div>
         </div>
       </section>
+      </>
+      )}
 
+      {activeTab==="about" && <LandingAboutSection/>}
+      {activeTab==="how-it-works" && <LandingHowItWorksSection/>}
+      {activeTab==="news" && (
+        <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
+      )}
+      {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={onRegister}/>}
+
+      {activeTab!=="contact" && (
+      <>
       {/* CTA BANNER */}
-      <section className="py-16 px-6 bg-primary relative overflow-hidden">
+      <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
+
+        <div className="zarpi-blob zarpi-blob-violet absolute right-20 top-1/3 pointer-events-none opacity-25 scale-80" />
+
+        <div className="zarpi-blob zarpi-blob-violet absolute left-15 bottom-15 pointer-events-none opacity-25 scale-80 -rotate-[90deg]" />
         <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
           <h2 className="text-2xl font-bold mb-3">Del mundo a tus manos</h2>
           <p className="text-primary-foreground/75 mb-7 leading-relaxed">Empieza a descubrir oportunidades y encuentra todo más cerca.</p>
@@ -7678,7 +7793,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
               variant="secondary" 
               size="lg" 
               onClick={onRegister} 
-              className="px-8 bg-accent text-accent-foreground hover:bg-accent"
+              className="px-8 text-accent-foreground"
             >
               Crear cuenta gratis
             </Button>
@@ -7686,13 +7801,15 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
               variant="secondary" 
               size="lg" 
               onClick={onLogin} 
-              className="px-8 bg-accent text-accent-foreground hover:bg-accent"
+              className="px-8 text-accent-foreground"
             >
               Iniciar sesión
             </Button>
           </div>
         </div>
       </section>
+      </>
+      )}
 
       {/* FOOTER */}
       <footer className="bg-[#0F0F0F] text-white py-10 px-6 relative overflow-hidden">
@@ -7717,12 +7834,487 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
           </div>
         </div>
       </footer>
+
+      <ImporterProfileModal
+        imp={profileModalImporter}
+        open={Boolean(profileModalImporter)}
+        onClose={()=>setProfileModalImporter(null)}
+        onLogin={onLogin}
+      />
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REGISTER SCREEN
+// LANDING — Perfil de empresa (QuickView) y subpáginas públicas
+// ─────────────────────────────────────────────────────────────────────────────
+function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open:boolean;onClose:()=>void;onLogin:()=>void}) {
+  if(!imp)return null;
+  const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
+  const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
+  const certs=imp.certs??[];
+  const platformCerts=imp.platformCerts??[];
+
+  return (
+    <Modal open={open} onClose={onClose} title={imp.name} width="max-w-2xl">
+      <div className="space-y-4">
+        {bannerUrl&&<img src={bannerUrl} alt="" className="h-32 w-full rounded-xl object-cover"/>}
+        <div className="flex items-center gap-3">
+          <Avatar initials={imp.initials} size="xl" color={imp.color} src={logoUrl||undefined}/>
+          <div className="min-w-0">
+            <p className="font-semibold text-base truncate">{imp.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{imp.specialty} · {imp.country}</p>
+          </div>
+          {imp.verified&&(
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold flex-shrink-0">
+              <BadgeCheck className="w-3.5 h-3.5"/>Verificada
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed">{imp.description||"Esta empresa aún no ha publicado su descripción."}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          <div><p className="text-xs text-muted-foreground">Tiempo de respuesta</p><p className="font-medium">{imp.responseTime}</p></div>
+          <div><p className="text-xs text-muted-foreground">Miembro desde</p><p className="font-medium">{imp.memberSince}</p></div>
+          <div><p className="text-xs text-muted-foreground">Proyectos</p><p className="font-medium">{imp.projects}</p></div>
+        </div>
+        {imp.categories.length>0&&(
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Especialidades</p>
+            <div className="flex flex-wrap gap-1.5">{imp.categories.map(c=><span key={c} className="px-2 py-1 rounded-full bg-muted text-xs">{c}</span>)}</div>
+          </div>
+        )}
+        {(certs.length>0||platformCerts.length>0)&&(
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Certificaciones</p>
+            <div className="flex flex-wrap gap-1.5">
+              {platformCerts.map(c=><span key={c.id} className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">{c.nombre}</span>)}
+              {certs.map(c=><span key={c} className="px-2 py-1 rounded-full bg-muted text-xs">{c}</span>)}
+            </div>
+          </div>
+        )}
+        <Button variant="primary" size="lg" fullWidth onClick={onLogin}>Solicitar cotización / Cotizar</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function LandingBackground() {
+  const particles = Array.from({ length: 15 }, (_, i) => {
+    const random = (min: number, max: number) =>
+      Math.random() * (max - min) + min;
+
+    const colors = ["primary", "accent", "neutral"];
+
+    return {
+      id: i,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: random(12, 30),
+      top: random(0, 100),
+      left: random(0, 100),
+      duration: random(80, 100),
+      delay: random(-16, 0),
+      originX: random(-25, 25),
+      originY: random(-25, 25),
+      shadowX: Math.random() > 0.5 ? 1 : -1,
+      blur: random(5, 30),
+    };
+  });
+
+  return (
+    <div className="landing-anim-background" aria-hidden="true">
+      {particles.map((particle) => (
+        <span
+          key={particle.id}
+          className={`landing-orb-${particle.color}`}
+          style={{
+            width: `${particle.size}vmin`,
+            height: `${particle.size}vmin`,
+            borderRadius: `${particle.size}vmin`,
+            top: `${particle.top}%`,
+            left: `${particle.left}%`,
+            animationDuration: `${particle.duration}s`,
+            animationDelay: `${particle.delay}s`,
+            transformOrigin: `${particle.originX}vw ${particle.originY}vh`,
+            boxShadow: `${particle.size * 2 * particle.shadowX}px 0 ${
+              particle.blur
+            }vmin currentColor`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** "Quiénes somos": los tres principios del negocio (Zarpi_Modelo_de_Monetizacion). */
+function LandingAboutSection() {
+  const principios=[
+    {title:"No somos importadores de registro",desc:"Conectamos solicitantes con empresas nacionalizadoras verificadas; no figuramos como importador de registro en ninguna operación."},
+    {title:"No custodiamos dinero de terceros",desc:"El pago del servicio se acuerda y se ejecuta entre el solicitante y la nacionalizadora; la plataforma no retiene ni administra esos fondos."},
+    {title:"Garantizamos verificación y trazabilidad documental",desc:"Cada empresa pasa por un proceso de verificación documental, y cada cotización, propuesta y orden queda registrada y trazable dentro de la plataforma."},
+  ];
+  return (
+    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+      <LandingBackground />
+
+      <div className="max-w-4xl mx-auto relative z-10">
+        <div className="text-center mb-12">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Quiénes somos</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Un modelo claro, desde el primer día</h1>
+          <p className="text-muted-foreground mt-3 max-w-xl mx-auto">Zarpi conecta, no custodia ni interviene como importador. Así protegemos tanto al solicitante como a la empresa importadora.</p>
+        </div>
+        <div className="grid sm:grid-cols-1 gap-5">
+          {principios.map((principio,i)=>(
+            <Card key={principio.title} padding="lg" className="border-primary/15">
+              <p className="text-xs font-semibold text-primary dark:text-accent mb-2">Principio {i+1}</p>
+              <h3 className="text-lg font-bold mb-2">{principio.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{principio.desc}</p>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** "Cómo funciona": 8 pasos + condiciones de monetización para comprador y nacionalizadora. */
+function LandingHowItWorksSection() {
+  const pasos=[
+    "El solicitante crea su solicitud de cotización con los detalles del producto.",
+    "La solicitud llega a nacionalizadoras verificadas, dirigida o abierta.",
+    "Las nacionalizadoras envían sus propuestas con precio, tiempos y condiciones.",
+    "El solicitante compara y negocia por el chat integrado con el asesor asignado.",
+    "Al aceptar una propuesta, la plataforma crea la orden automáticamente.",
+    "La nacionalizadora actualiza el estado: producción, tránsito, aduana y bodega.",
+    "El solicitante y la nacionalizadora hacen seguimiento documental en cada etapa.",
+    "Se confirma la entrega y, si aplica, se declara el cierre de la operación.",
+  ];
+  return (
+    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+      <LandingBackground />
+      <div className="max-w-5xl mx-auto relative z-10">
+        <div className="text-center mb-12">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Cómo funciona</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Un flujo transparente, de principio a fin</h1>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4 mb-14">
+          {pasos.map((paso,i)=>(
+            <Card key={i} padding="md" className="flex items-start gap-3">
+              <span className="w-7 h-7 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
+              <p className="text-sm text-muted-foreground leading-relaxed">{paso}</p>
+            </Card>
+          ))}
+        </div>
+        <div className="grid md:grid-cols-2 gap-5">
+          <Card padding="lg">
+            <h3 className="text-base font-bold mb-3">Para compradores</h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>• Primera cotización, gratis.</li>
+              <li>• COP 40.000 por cada cotización adicional dentro del mismo mes.</li>
+              <li>• 6 meses de cotizaciones gratis al declarar el cierre de una operación.</li>
+            </ul>
+          </Card>
+          <Card padding="lg">
+            <h3 className="text-base font-bold mb-3">Para nacionalizadoras</h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>• 5% de comisión sobre el servicio cobrado, vía bolsa prepagada.</li>
+              <li>• Founders Program: 5% de por vida para las primeras empresas aliadas.</li>
+            </ul>
+          </Card>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** "Novedades y aliados": bloques dinámicos, miniblog y muro de aliados del CMS. */
+const LANDING_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80";
+// Tokens de marca con su variante clara/oscura resuelta vía Tailwind `dark:`,
+// nunca HEX fijo en lo renderizado (ver Zarpi_Modelo_de_Monetizacion).
+const LANDING_TOKEN_TEXT_CLASS:Record<string,string>={
+  primary:"text-[#4F06EB] dark:text-[#EDF953]",
+  surface:"text-black dark:text-white",
+  border:"text-slate-400 dark:text-zinc-500",
+  foreground:"text-black dark:text-white",
+  muted:"text-slate-500 dark:text-zinc-400",
+};
+const LANDING_TOKEN_BUTTON_CLASS:Record<string,string>={
+  primary:"bg-[#4F06EB] text-white dark:bg-[#EDF953] dark:text-black",
+  surface:"bg-white text-black dark:bg-[#0F0F0F] dark:text-white",
+  border:"bg-transparent border border-slate-200 dark:border-zinc-800",
+  foreground:"bg-black text-white dark:bg-white dark:text-black",
+  muted:"bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300",
+};
+const LANDING_FONT_CLASS:Record<string,string>={elvellon:"font-elvellon",avenor:"font-avenor"};
+const LANDING_HEADING_SIZE_CLASS:Record<string,string>={xl:"text-3xl font-bold",lg:"text-2xl font-bold",md:"text-xl font-semibold",sm:"text-lg font-semibold"};
+const LANDING_TEXT_SIZE_CLASS:Record<string,string>={lg:"text-base",md:"text-sm",sm:"text-xs"};
+const LANDING_ALIGN_CLASS:Record<string,string>={left:"text-left",center:"text-center",right:"text-right"};
+
+/** Un bloque del CMS renderizado con las mismas reglas que la previsualización del admin. */
+function LandingDynamicBlock({block,onLogin,onRegister}:{block:LandingBlock;onLogin:()=>void;onRegister:()=>void}) {
+  const alignClass=LANDING_ALIGN_CLASS[block.alineacion]||"text-left";
+  const tokenTextClass=LANDING_TOKEN_TEXT_CLASS[block.token_color]||LANDING_TOKEN_TEXT_CLASS.foreground;
+  const tokenButtonClass=LANDING_TOKEN_BUTTON_CLASS[block.token_color]||LANDING_TOKEN_BUTTON_CLASS.primary;
+  const fontClass=LANDING_FONT_CLASS[block.fuente]||LANDING_FONT_CLASS.avenor;
+
+  if(block.tipo==="heading"){
+    return <p className={clsx(alignClass,tokenTextClass,fontClass,LANDING_HEADING_SIZE_CLASS[block.tamano_fuente]||LANDING_HEADING_SIZE_CLASS.md)}>{block.contenido}</p>;
+  }
+  if(block.tipo==="paragraph"){
+    return <p className={clsx(alignClass,tokenTextClass,fontClass,LANDING_TEXT_SIZE_CLASS[block.tamano_fuente]||LANDING_TEXT_SIZE_CLASS.md)}>{block.contenido}</p>;
+  }
+  if(block.tipo==="image"){
+    if(!block.contenido)return null;
+    return (
+      <div className={alignClass}>
+        <img
+          src={safeHttpUrl(resolveApiUrl(block.contenido),LANDING_IMAGE_FALLBACK)}
+          alt=""
+          className="inline-block max-h-80 rounded-xl border border-slate-200 dark:border-zinc-800 object-cover"
+          onError={(event)=>{event.currentTarget.src=LANDING_IMAGE_FALLBACK;}}
+        />
+      </div>
+    );
+  }
+  if(block.tipo==="video"){
+    return block.contenido?<div className={alignClass}><video src={resolveApiUrl(block.contenido)} controls className="inline-block max-h-80 w-full max-w-2xl rounded-xl border border-slate-200 dark:border-zinc-800"/></div>:null;
+  }
+  if(block.tipo==="button"){
+    const handleClick=block.accion_boton==="open_register"?onRegister
+      :block.accion_boton==="external_link"&&block.accion_url?()=>window.open(block.accion_url as string,"_blank","noopener,noreferrer")
+      :onLogin;
+    return <div className={alignClass}><button type="button" onClick={handleClick} className={clsx("inline-flex items-center rounded-lg px-6 py-3 text-sm font-semibold",tokenButtonClass)}>{block.contenido||"Continuar"}</button></div>;
+  }
+  return null;
+}
+
+function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:LandingDynamicContent|null;error:string;onLogin:()=>void;onRegister:()=>void}) {
+  const dynamicBlocks=(content?.blocks??[]).filter(b=>b.tipo!=="allies_grid").sort((a,b)=>a.orden-b.orden);
+  return (
+    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+      <LandingBackground />
+      <div className="max-w-5xl mx-auto space-y-14 relative z-10">
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Novedades y aliados</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Lo último de Zarpi</h1>
+        </div>
+
+        {error&&(
+          <Card padding="md" className="border-destructive/30 bg-red-50 text-center">
+            <p className="text-sm text-destructive">{error}</p>
+          </Card>
+        )}
+
+        {!content&&!error&&(
+          <p className="text-center text-sm text-muted-foreground">Cargando contenido...</p>
+        )}
+
+        {content&&(
+          <>
+            {dynamicBlocks.length>0&&(
+              <Card padding="lg" className="space-y-5 bg-white/30 !backdrop-blur-md">
+                {dynamicBlocks.map(block=><LandingDynamicBlock key={block.id} block={block} onLogin={onLogin} onRegister={onRegister}/>)}
+              </Card>
+            )}
+
+            <div>
+              <h2 className="text-xl font-bold mb-5">Novedades</h2>
+              {content.news.length===0?(
+                <p className="text-sm text-muted-foreground">Todavía no hay novedades publicadas.</p>
+              ):(
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {content.news.map(item=>(
+                    <Card key={item.id} padding="md">
+                      {item.imagen_url&&(
+                        <img
+                          src={safeHttpUrl(resolveApiUrl(item.imagen_url),LANDING_IMAGE_FALLBACK)}
+                          alt=""
+                          className="h-32 w-full rounded-lg object-cover mb-3"
+                          onError={(event)=>{event.currentTarget.src=LANDING_IMAGE_FALLBACK;}}
+                        />
+                      )}
+                      <h3 className="font-semibold text-sm mb-1.5">{item.titulo}</h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{item.resumen}</p>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold mb-5">Aliados</h2>
+              {content.allies.length===0?(
+                <p className="text-sm text-muted-foreground">Todavía no hay aliados publicados.</p>
+              ):(
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {content.allies.map(ally=>{
+                    const card=(
+                      <Card padding="md" className="flex flex-col items-center text-center gap-2">
+                        {ally.logo_url?(
+                          <img
+                            src={safeHttpUrl(resolveApiUrl(ally.logo_url),LANDING_IMAGE_FALLBACK)}
+                            alt={ally.nombre}
+                            className="h-12 object-contain"
+                            onError={(event)=>{event.currentTarget.src=LANDING_IMAGE_FALLBACK;}}
+                          />
+                        ):(
+                          <Building2 className="w-8 h-8 text-muted-foreground/40"/>
+                        )}
+                        <p className="text-xs font-medium">{ally.nombre}</p>
+                      </Card>
+                    );
+                    return ally.enlace?(
+                      <a key={ally.id} href={ally.enlace} target="_blank" rel="noopener noreferrer">{card}</a>
+                    ):(
+                      <div key={ally.id}>{card}</div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** "Contacto": selector de perfil (comprador / nacionalizadora) + FAQ. */
+function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister:()=>void}) {
+  const [perfil,setPerfil]=useState<"comprador"|"nacionalizadora">("comprador");
+  const [nombre,setNombre]=useState("");
+  const [email,setEmail]=useState("");
+  const [telefono,setTelefono]=useState("");
+  const [mensaje,setMensaje]=useState("");
+  const [enviado,setEnviado]=useState(false);
+  const [enviando,setEnviando]=useState(false);
+  const [errorEnvio,setErrorEnvio]=useState("");
+
+  const faqsContacto=[
+    {q:"¿Cómo empiezo si soy comprador?",a:"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."},
+    {q:"¿Cómo empiezo si soy nacionalizadora?",a:"Escríbenos desde este formulario: el equipo revisa tu documentación antes del alta."},
+  ];
+
+  async function enviarContacto(event:React.FormEvent){
+    event.preventDefault();
+    setErrorEnvio("");
+    setEnviando(true);
+    try{
+      await landingService.sendContact({
+        nombre:nombre.trim(),
+        email:email.trim(),
+        telefono:telefono.trim()||undefined,
+        perfil,
+        mensaje:mensaje.trim(),
+      });
+      setEnviado(true);
+    }catch(error){
+      setErrorEnvio(error instanceof Error&&error.message.trim()?error.message:"No se pudo enviar tu mensaje. Intenta nuevamente.");
+    }finally{
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+      <LandingBackground />
+      <div className="max-w-3xl mx-auto space-y-12 relative z-10">
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Contacto</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Hablemos</h1>
+        </div>
+
+        <Card padding="lg">
+          {enviado ? (
+            <div className="text-center py-6">
+              <CheckCircle2 className="w-10 h-10 text-accent mx-auto mb-3" />
+              <p className="font-semibold">Gracias, recibimos tu mensaje.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Te responderemos pronto a {email || "tu correo"}.
+              </p>
+            </div>
+          ) : (
+            <form
+              className="space-y-4"
+              onSubmit={(event) => { void enviarContacto(event); }}
+            >
+              <div className="flex gap-2">
+                {(["comprador", "nacionalizadora"] as const).map(opt => (
+                  <button
+                    type="button"
+                    key={opt}
+                    onClick={() => setPerfil(opt)}
+                    className={clsx(
+                      "flex-1 h-9 rounded-lg border text-sm font-medium transition-all",
+                      perfil === opt
+                        ? "bg-primary text-white border-primary dark:bg-accent dark:text-accent-foreground dark:border-accent"
+                        : "bg-white text-muted-foreground border-border hover:border-primary/40 dark:bg-transparent dark:hover:border-accent/40"
+                    )}
+                  >
+                    {opt === "comprador" ? "Soy comprador" : "Soy nacionalizadora"}
+                  </button>
+                ))}
+              </div>
+
+              <Input
+                label="Nombre"
+                value={nombre}
+                onChange={(event) => setNombre(event.target.value)}
+                required
+                className="focus:border-primary dark:focus:border-accent"
+              />
+
+              <Input
+                label="Correo"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                className="focus:border-primary dark:focus:border-accent"
+              />
+
+              <Input
+                label="Teléfono (opcional)"
+                type="tel"
+                value={telefono}
+                onChange={(event) => setTelefono(event.target.value)}
+                className="focus:border-primary dark:focus:border-accent"
+              />
+
+              <Textarea
+                label="Mensaje"
+                rows={4}
+                value={mensaje}
+                onChange={(event) => setMensaje(event.target.value)}
+                required
+                className="focus:border-primary dark:focus:border-accent"
+              />
+
+              {errorEnvio ? <p className="text-sm text-destructive">{errorEnvio}</p> : null}
+
+              <Button type="submit" variant="primary" fullWidth loading={enviando} className="dark:bg-accent dark:hover:bg-accent/80 dark:text-accent-foreground">
+                {enviando ? "Enviando..." : "Enviar mensaje"}
+              </Button>
+            </form>
+          )}
+        </Card>
+
+        <div className="space-y-3">
+          {faqsContacto.map((f,i)=>(
+            <Card key={f.q} padding="md">
+              <p className="text-sm font-semibold mb-1">{f.q}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">{f.a}</p>
+            </Card>
+          ))}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button variant="secondary" size="lg" onClick={onRegister}>Crear cuenta gratis</Button>
+          <Button variant="primary" size="lg" onClick={onLogin}>Iniciar sesión</Button>
+        </div>
+      </div>
+    </section>
+  );
+}
 // ─────────────────────────────────────────────────────────────────────────────
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
@@ -7739,11 +8331,14 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
   const [otpError,setOtpError]=useState("");
   const [otpSuccess,setOtpSuccess]=useState(false);
   const [submitError,setSubmitError]=useState("");
+  const { dark, toggleTheme } = useBrandTheme();
   const [form,setForm]=useState({
     email:"",docType:"CC",docNum:"",name:"",lastName:"",phone:"",country:"+57",
     nit:"",razonSocial:"",repEmail:"",repPhone:"",repCountry:"+57",password:"",confirmPassword:"",
   });
+
   function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
+
   function getErrorMessage(error: unknown){
     if(error instanceof Error&&error.message){
       return error.message;
@@ -7765,6 +8360,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
     }
     return "No se pudo completar el registro";
   }
+
   async function submit(e:React.FormEvent){
     e.preventDefault();
     if(!accepted||loading)return;
@@ -7785,7 +8381,6 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
     const telefono=(personType==="natural"?form.phone:form.repPhone).trim();
     const indicativo=(personType==="natural"?form.country:form.repCountry).trim();
 
-    // Codigo de quien invito, leido del enlace compartido (?ref=Q8ABC12345).
     const codigoReferido = leerCodigoReferidoDeLaUrl();
 
     const payload: RegisterRequest = personType === "natural"
@@ -7855,12 +8450,13 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
       setOtpLoading(false);
     }
   }
+
   const countryPhones=["+57","+1","+52","+34","+44","+49","+55","+54","+56","+51"];
   const docTypes=["CC","CE","Pasaporte","NIT","DNI"];
 
   if(success)return(
     <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4">
-      <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center">
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center relative z-10">
         {!otpSuccess?(
           <>
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
@@ -7898,45 +8494,118 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-border">
+      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-3.5 relative z-10">
         <Logo/>
-        <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
+        <div className="flex items-center gap-1.5 w-fit">
+          <button
+            onClick={toggleTheme}
+            title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground transition-colors"
+          >
+            {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+          </button>
+          <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
+        </div>
       </header>
-      <main className="flex-1 flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-[480px]">
+
+      <main className="relative flex flex-1 items-center justify-center px-4 py-10 overflow-hidden">
+        {/* Fondo con z-0 */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <img
+            src={dark ? "brand/fondo-1.png" : "brand/fondo-4.png"}
+            alt="Fondo de registro"
+            className="auth-background w-full h-full object-cover object-center transition-all duration-300"
+          />
+        </div>
+
+        {/* Card principal con z-10 por encima de la imagen */}
+        <div className="relative z-10 w-full max-w-[480px]">
           <div className="bg-white rounded-2xl border border-border shadow-sm">
             <div className="px-8 pt-8 pb-2">
-              <h1 className="text-xl font-semibold tracking-tight mb-1">Crear cuenta</h1>
-              <p className="text-sm text-muted-foreground mb-6">Elige el tipo de cuenta que deseas registrar</p>
+              <h1 className="text-xl font-semibold tracking-tight mb-1">
+                Crear cuenta
+              </h1>
+
+              <p className="text-sm text-muted-foreground mb-6">
+                Elige el tipo de cuenta que deseas registrar
+              </p>
+
               {/* User type */}
               <div className="flex gap-2 mb-6">
-                {(["solicitante","importadora"]as const).map(t=>(
-                  <button key={t} onClick={()=>setUserType(t)} className={clsx("flex-1 py-3 flex flex-col items-center gap-1.5 border rounded-xl text-xs font-semibold transition-all capitalize",userType===t?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground hover:border-primary/40")}>
-                    {t==="solicitante"?<UserRound className="w-5 h-5"/>:<Building2 className="w-5 h-5"/>}
-                    {t==="solicitante"?"Soy solicitante":"Soy empresa importadora"}
+                {(["solicitante", "importadora"] as const).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setUserType(t)}
+                    className={clsx(
+                      "flex-1 py-3 flex flex-col items-center gap-1.5 border rounded-xl text-xs font-semibold transition-all capitalize",
+                      userType === t
+                        ? "border-primary bg-primary/5 text-primary dark:border-accent dark:bg-accent/5 dark:text-accent"
+                        : "border-border text-muted-foreground hover:border-primary/40 dark:hover:border-accent/40"
+                    )}
+                  >
+                    {t === "solicitante" ? (
+                      <UserRound className="w-5 h-5" />
+                    ) : (
+                      <Building2 className="w-5 h-5" />
+                    )}
+
+                    {t === "solicitante"
+                      ? "Soy solicitante"
+                      : "Soy empresa importadora"}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="px-8 pb-8">
-              {userType==="importadora"?(
+              {userType === "importadora" ? (
                 <div className="flex flex-col items-center text-center gap-5 py-6">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center"><Building2 className="w-8 h-8 text-primary"/></div>
+                  <div className="w-16 h-16 rounded-2xl bg-primary/20 dark:bg-accent/20 flex items-center justify-center">
+                    <Building2 className="w-8 h-8 text-primary dark:text-accent" />
+                  </div>
+
                   <div>
                     <h2 className="font-semibold mb-2">Registro de empresa importadora</h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">Actualmente las empresas importadoras son registradas directamente por el equipo administrativo. Contáctanos para iniciar el proceso.</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+                      Actualmente las empresas importadoras son registradas directamente por el equipo administrativo. Contáctanos para iniciar el proceso.
+                    </p>
                   </div>
-                  <Button variant="primary" size="md" icon={<MailIcon className="w-4 h-4"/>} onClick={()=>openSmartContact({type:"email",email:CORREO_ADMINISTRACION})}>Contactar al equipo administrativo</Button>
-                  <button onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Volver al inicio</button>
+
+                  <Button
+                    variant="primary"
+                    className="dark:bg-accent dark:hover:bg-accent/90 dark:text-accent-foreground"
+                    size="md"
+                    icon={<MailIcon className="w-4 h-4" />}
+                    onClick={() => openSmartContact({ type: "email", email: CORREO_ADMINISTRACION })}
+                  >
+                    Contactar al equipo administrativo
+                  </Button>
+
+                  <button
+                    onClick={onBack}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ← Volver al inicio
+                  </button>
                 </div>
               ):(
                 <form onSubmit={submit} noValidate>
                   {/* Person type */}
                   <div className="flex gap-2 mb-5">
-                    {(["natural","juridica"]as const).map(t=>(
-                      <button type="button" key={t} onClick={()=>setPersonType(t)} className={clsx("flex-1 py-2 text-xs font-semibold border rounded-lg transition-all",personType===t?"border-primary bg-primary/5 text-primary":"border-border text-muted-foreground hover:border-primary/40")}>
-                        {t==="natural"?"Persona Natural":"Persona Jurídica"}
+                    {(["natural", "juridica"] as const).map(t => (
+                      <button
+                        type="button"
+                        key={t}
+                        onClick={() => setPersonType(t)}
+                        className={clsx(
+                          "flex-1 py-2 text-xs font-semibold border rounded-lg transition-all",
+                          personType === t
+                            ? "border-primary bg-primary/5 text-primary dark:border-accent dark:bg-accent/5 dark:text-accent"
+                            : "border-border text-muted-foreground hover:border-primary/40 dark:hover:border-accent/40"
+                        )}
+                      >
+                        {t === "natural" ? "Persona Natural" : "Persona Jurídica"}
                       </button>
                     ))}
                   </div>
@@ -7974,13 +8643,41 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     )}
                     {submitError&&<p className="text-xs text-destructive">{submitError}</p>}
                     <div className="flex items-start gap-2.5 mt-1">
-                      <input type="checkbox" id="acepta" checked={accepted} onChange={e=>setAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary flex-shrink-0 cursor-pointer"/>
+                      <input 
+                        type="checkbox" 
+                        id="acepta" 
+                        checked={accepted} 
+                        onChange={e => setAccepted(e.target.checked)} 
+                        className="
+                          mt-0.5
+                          h-4 w-4
+                          flex-shrink-0
+                          cursor-pointer
+                          rounded
+                          border
+                          border-primary
+                          bg-white
+                          accent-primary
+                          transition-colors
+                          duration-150
+                          dark:border-accent
+                          dark:bg-accent
+                          dark:accent-accent
+                        "
+                      />
                       <label htmlFor="acepta" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-                        Acepto la <button type="button" onClick={()=>onPolicy("data")} className="text-primary underline">Política de Tratamiento de Datos</button> y los <button type="button" onClick={()=>onPolicy("terms")} className="text-primary underline">Términos y Condiciones</button> de la plataforma.
+                        Acepto la <button type="button" onClick={()=>onPolicy("data")} className="text-xs font-medium text-purple-600 dark:text-green-500 underline">Política de Tratamiento de Datos</button> y los <button type="button" onClick={()=>onPolicy("terms")} className="text-xs font-medium text-purple-600 dark:text-green-500 underline">Términos y Condiciones</button> de la plataforma.
                       </label>
                     </div>
-                    <Button type="submit" variant="primary" fullWidth loading={loading} disabled={!accepted} className="mt-1 h-10 uppercase tracking-wide text-[13px]">{!loading&&"Crear cuenta"}</Button>
-                    <p className="text-center text-xs text-muted-foreground">¿Ya tienes cuenta? <button type="button" onClick={onBack} className="text-primary hover:text-blue-700 font-medium">Iniciar sesión</button></p>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      fullWidth loading={loading}
+                      disabled={!accepted}
+                      className="mt-1 h-10 uppercase tracking-wide text-[13px] dark:bg-accent dark:hover:bg-accent dark:text-black">
+                        {!loading&&"Crear cuenta"}
+                    </Button>
+                    <p className="text-center text-xs text-muted-foreground">¿Ya tienes cuenta? <button type="button" onClick={onBack} className="text-purple-600 dark:text-green-500 hover:underline font-medium">Iniciar sesión</button></p>
                   </div>
                 </form>
               )}
@@ -7988,7 +8685,16 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
           </div>
         </div>
       </main>
-      <footer className="py-4 text-center text-xs text-muted-foreground border-t border-border bg-white">© 2025 ImportacionesQ8. Todos los derechos reservados.</footer>
+
+      <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+        <span>© 2026 Zarpi</span>
+        <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
+          Tratamiento de Datos
+        </button>
+        <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
+          Términos
+        </button>
+      </footer>
     </div>
   );
 }
@@ -8032,6 +8738,7 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-usuarios": "usuarios",
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
+  "admin-landing": "landing",
 } as const;
 
 type AdminScreen = keyof typeof ADMIN_SECTION_BY_SCREEN;
@@ -8075,8 +8782,6 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   const [expandido, setExpandido] = useState<string|null>(null);
   const [votados, setVotados] = useState<Record<string, boolean>>({});
 
-  // La documentación vive en el backend y la mantiene el equipo de soporte, así
-  // que se pide cada vez: lo que escriban hoy se ve hoy, sin desplegar nada.
   useEffect(()=>{
     let vigente = true;
     setCargandoAyuda(true);
@@ -8085,13 +8790,11 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
         .then((datos)=>{
           if(!vigente) return;
           setArticulos(datos.articulos);
-          // Las categorías solo se refrescan sin filtro puesto: si no,
-          // filtrar por una dejaría el resto fuera de la lista de filtros.
           if(!categoria) setCategorias(datos.categorias);
         })
         .catch(()=>{ if(vigente) setArticulos([]); })
         .finally(()=>{ if(vigente) setCargandoAyuda(false); });
-    }, faqSearch ? 250 : 0);  // Teclear no dispara una petición por letra.
+    }, faqSearch ? 250 : 0);
     return ()=>{ vigente = false; clearTimeout(t); };
   },[faqSearch, categoria]);
 
@@ -8120,12 +8823,11 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
             <p className="text-sm text-muted-foreground mt-1">Guia de uso y preguntas frecuentes para rol {roleContent.roleLabel}.</p>
           </div>
 
-          {/* Quien entra aquí ya tiene un problema: la salida a una persona va
-              arriba y visible, no escondida en el pie del menú. */}
-          <Card padding="md" className="border-primary/30 bg-primary/[0.03]">
+          {/* Card con borde y fondo accent en modo oscuro */}
+          <Card padding="md" className="border-primary/30 dark:border-accent/30 bg-primary/[0.03] dark:bg-accent/[0.05]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-accent/20 text-primary dark:text-accent flex items-center justify-center flex-shrink-0">
                   <LifeBuoy className="w-4 h-4"/>
                 </div>
                 <div>
@@ -8135,7 +8837,12 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                   </p>
                 </div>
               </div>
-              <Button variant="primary" icon={<LifeBuoy className="w-4 h-4"/>} onClick={onPedirSoporte}>
+              <Button 
+                variant="primary" 
+                icon={<LifeBuoy className="w-4 h-4"/>} 
+                onClick={onPedirSoporte}
+                className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+              >
                 Pedir soporte técnico
               </Button>
             </div>
@@ -8149,14 +8856,12 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»…"
                 prefix={<Search className="w-4 h-4"/>}
               />
-              {/* Las categorías salen de lo que hay publicado para este perfil,
-                  no de una lista fija que pueda quedar vacía. */}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={()=>setCategoria("")}
                   className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    categoria===""?"bg-primary text-white border-primary":"border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
+                    categoria==="" ? "bg-primary dark:bg-accent text-white dark:text-accent-foreground border-primary dark:border-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
                 >
                   Todo
                 </button>
@@ -8166,7 +8871,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                     type="button"
                     onClick={()=>setCategoria(c===categoria?"":c)}
                     className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                      categoria===c?"bg-primary text-white border-primary":"border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
+                      categoria===c ? "bg-primary dark:bg-accent text-white dark:text-accent-foreground border-primary dark:border-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground")}
                   >
                     {c}
                   </button>
@@ -8179,7 +8884,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
             <Card padding="md" className="md:col-span-2">
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-primary"/>
+                  <HelpCircle className="w-4 h-4 text-primary dark:text-accent"/>
                   <h2 className="text-sm font-semibold">Documentación</h2>
                 </div>
                 <span className="text-xs text-muted-foreground">
@@ -8196,7 +8901,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 {articulos.map((articulo)=>{
                   const abierto = expandido===articulo.id;
                   return (
-                    <div key={articulo.id} className="rounded-lg border border-border bg-white overflow-hidden">
+                    <div key={articulo.id} className="rounded-lg border border-border bg-card overflow-hidden">
                       <button
                         type="button"
                         onClick={()=>abrirArticulo(articulo)}
@@ -8212,7 +8917,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                           </span>
                         </div>
                         {articulo.contenido&&(
-                          <span className="mt-1.5 inline-block text-xs font-medium text-primary">
+                          <span className="mt-1.5 inline-block text-xs font-medium text-primary dark:text-accent">
                             {abierto?"Ocultar detalle":"Ver paso a paso"}
                           </span>
                         )}
@@ -8223,8 +8928,6 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                           <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                             {articulo.contenido}
                           </p>
-                          {/* Señal de qué documentación falla: un artículo muy
-                              leído y marcado como inútil es donde nacen los tickets. */}
                           <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 flex-wrap">
                             {votados[articulo.id]?(
                               <p className="text-xs text-muted-foreground">Gracias, lo tendremos en cuenta.</p>
@@ -8246,7 +8949,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
 
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
-                <BookOpen className="w-4 h-4 text-primary"/>
+                <BookOpen className="w-4 h-4 text-primary dark:text-accent"/>
                 <h2 className="text-sm font-semibold">Buenas practicas</h2>
               </div>
               <div className="space-y-3">
@@ -9569,6 +10272,7 @@ export default function App() {
     // Única área del panel que comparte el equipo de atención al cliente.
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
+    "admin-landing": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];

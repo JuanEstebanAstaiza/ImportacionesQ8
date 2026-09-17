@@ -3,6 +3,8 @@ export type BackendAuthRole = "solicitante" | "importador" | "admin" | "asesor";
 export interface LoginRequest {
 	email: string;
 	password: string;
+	/** Rol elegido en el selector de login; el backend lo valida contra el real. */
+	rol?: BackendAuthRole;
 }
 
 export interface LoginResponse {
