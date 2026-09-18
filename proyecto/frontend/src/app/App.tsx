@@ -8092,7 +8092,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
           </div>
           <div className="space-y-3">
             {faqs.map((f,i)=>(
-              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card/70 backdrop-blur-sm">
+              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card backdrop-blur-sm">
                 <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors">
                   <span className="font-medium text-sm">{f.q}</span>
                   <ChevronDown className={clsx("w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200",faqOpen===i&&"rotate-180")}/>
