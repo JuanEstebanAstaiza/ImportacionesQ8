@@ -8091,13 +8091,32 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             <h2 className="text-2xl font-bold tracking-tight">Preguntas frecuentes</h2>
           </div>
           <div className="space-y-3">
-            {faqs.map((f,i)=>(
+            {faqs.map((f, i) => (
               <div key={i} className="border border-border rounded-xl overflow-hidden bg-card backdrop-blur-sm">
-                <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors">
+                <button 
+                  onClick={() => setFaqOpen(faqOpen === i ? null : i)} 
+                  className="group w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors"
+                >
                   <span className="font-medium text-sm">{f.q}</span>
-                  <ChevronDown className={clsx("w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200",faqOpen===i&&"rotate-180")}/>
+                  
+                  {/* Contenedor circular con bordes y hover por tema */}
+                  <div className={clsx(
+                    "w-7 h-7 rounded-full border border-border flex items-center justify-center flex-shrink-0 transition-colors duration-200",
+                    "group-hover:bg-primary group-hover:border-primary",
+                    "dark:group-hover:bg-accent dark:group-hover:border-accent"
+                  )}>
+                    <ChevronDown className={clsx(
+                      "w-4 h-4 text-muted-foreground transition-all duration-200",
+                      "group-hover:text-white dark:group-hover:text-accent-foreground",
+                      faqOpen === i && "rotate-180"
+                    )}/>
+                  </div>
                 </button>
-                {faqOpen===i&&<div className="px-5 pb-4"><p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p></div>}
+                {faqOpen === i && (
+                  <div className="px-5 pb-4">
+                    <p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
