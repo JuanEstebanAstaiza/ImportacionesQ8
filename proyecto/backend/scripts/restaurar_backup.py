@@ -47,7 +47,7 @@ def _leer_manifiesto(zf: zipfile.ZipFile) -> dict:
     try:
         return json.loads(zf.read("manifest.json").decode("utf-8"))
     except KeyError:
-        raise SystemExit("El ZIP no tiene manifest.json: no parece un backup de ImportacionesQ8.")
+        raise SystemExit("El ZIP no tiene manifest.json: no parece un backup de Zarpi.")
 
 
 def _tablas_en_orden_de_carga():
@@ -184,7 +184,7 @@ def _restaurar_archivos(zf: zipfile.ZipFile, aplicar: bool) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Restaura una copia de seguridad de ImportacionesQ8.")
+    parser = argparse.ArgumentParser(description="Restaura una copia de seguridad de Zarpi.")
     parser.add_argument("zip", type=Path, help="Ruta del archivo .zip generado por GET /admin/backup")
     parser.add_argument(
         "--aplicar",

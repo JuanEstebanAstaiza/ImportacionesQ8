@@ -73,8 +73,8 @@ export function TarjetaReferidos() {
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({
-          title: "ImportacionesQ8",
-          text: "Te invito a cotizar tus importaciones en ImportacionesQ8",
+          title: "Zarpi",
+          text: "Te invito a cotizar tus importaciones en Zarpi",
           url: enlace,
         });
         return;

@@ -40,7 +40,7 @@ logger = logging.getLogger("importacionesq8")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestiona el inicio y parada de la aplicación"""
-    print("Iniciando servidor ImportacionesQ8...")
+    print("Iniciando servidor Zarpi...")
     try:
         from database import init_db
         init_db()
@@ -49,15 +49,15 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    print("Apagando servidor ImportacionesQ8...")
+    print("Apagando servidor Zarpi...")
 
 # Crear la aplicación FastAPI
 _docs = None if APP_ENV == "production" else "/docs"
 _redoc = None if APP_ENV == "production" else "/redoc"
 _openapi = None if APP_ENV == "production" else "/openapi.json"
 app = FastAPI(
-    title="ImportacionesQ8 API",
-    description="API REST para la plataforma de importaciones Q8",
+    title="Zarpi API",
+    description="API REST para la plataforma Zarpi",
     version="1.0.0",
     lifespan=lifespan,
     redirect_slashes=False,
@@ -195,7 +195,7 @@ async def root():
     """Endpoint de salud - verifica que el servidor está funcionando"""
     return {
         "success": True,
-        "message": "API ImportacionesQ8 funcionando correctamente",
+        "message": "API Zarpi funcionando correctamente",
         "version": "1.0.0"
     }
 

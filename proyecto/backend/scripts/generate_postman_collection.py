@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 OPENAPI = Path(__file__).resolve().parents[1] / "openapi_snapshot.json"
 OUT_DIR = ROOT / "ImportacionesQ8V" / "02-Integracion-API"
-OUT = OUT_DIR / "ImportacionesQ8.postman_collection.json"
+OUT = OUT_DIR / "Zarpi.postman_collection.json"
 
 PUBLIC_PREFIXES = (
     ("GET", "/"),
@@ -246,7 +246,7 @@ def main() -> None:
 
     collection = {
         "info": {
-            "name": "ImportacionesQ8 API",
+            "name": "Zarpi API",
             "description": (
                 "Colección generada desde OpenAPI del backend.\n\n"
                 "1. Importa en Postman o Insomnia.\n"

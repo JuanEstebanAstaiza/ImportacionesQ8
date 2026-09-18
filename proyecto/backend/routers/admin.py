@@ -1178,7 +1178,7 @@ async def responder_conversacion_admin(
         id=str(uuid4()),
         conversacion_id=conversacion.id,
         remitente_id=current_user["user_id"],
-        contenido=f"[Soporte ImportacionesQ8] {texto}",
+        contenido=f"[Soporte Zarpi] {texto}",
         tipo=TipoMensajeChat.sistema.value,
     )
     db.add(mensaje)
@@ -1193,7 +1193,7 @@ async def responder_conversacion_admin(
             db,
             usuario_id=destinatario_id,
             tipo="soporte",
-            titulo="Mensaje del equipo de ImportacionesQ8",
+            titulo="Mensaje del equipo de Zarpi",
             mensaje=texto[:160],
             data={"conversacion_id": str(conversacion.id)},
             enlace_relativo="/chats",

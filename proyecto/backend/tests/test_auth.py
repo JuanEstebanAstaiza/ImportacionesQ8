@@ -221,7 +221,7 @@ class TestHealthCheck:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["success"] is True
-        assert "API ImportacionesQ8 funcionando correctamente" in data["message"]
+        assert "API Zarpi funcionando correctamente" in data["message"]
 
     def test_health_endpoint(self, client):
         response = client.get("/health")

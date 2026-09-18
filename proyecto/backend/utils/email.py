@@ -54,7 +54,7 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
 def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str) -> bool:
     """Construye y envía el correo de recuperación de contraseña con el OTP y el enlace."""
     enlace = f"{config.FRONTEND_URL}/restablecer-password?token={token}"
-    asunto = "Recupera tu contraseña — ImportacionesQ8"
+    asunto = "Recupera tu contraseña — Zarpi"
     cuerpo_texto = (
         f"Recibimos una solicitud para restablecer tu contraseña.\n\n"
         f"Tu código de verificación (OTP) es: {otp}\n"
@@ -81,29 +81,29 @@ def enviar_correo_notificacion(
         f"{titulo}\n\n"
         f"{mensaje}\n\n"
         f"Entra a la plataforma: {enlace}\n\n"
-        f"— ImportacionesQ8"
+        f"— Zarpi"
     )
     cuerpo_html = (
         f"<p><strong>{titulo}</strong></p>"
         f"<p>{mensaje}</p>"
         f'<p><a href="{enlace}">Entrar a la plataforma</a></p>'
-        f"<p>— ImportacionesQ8</p>"
+        f"<p>— Zarpi</p>"
     )
-    return enviar_correo(destinatario, f"{titulo} — ImportacionesQ8", cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html)
 
 
 def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
     """Envía OTP de verificación de email o de login tras inactividad prolongada."""
     if proposito == "verificacion_email":
-        asunto = "Verifica tu cuenta — ImportacionesQ8"
+        asunto = "Verifica tu cuenta — Zarpi"
         cuerpo_texto = (
-            f"Gracias por registrarte en ImportacionesQ8.\n\n"
+            f"Gracias por registrarte en Zarpi.\n\n"
             f"Tu código de verificación es: {otp}\n"
             f"Caduca en {config.OTP_EXPIRE_MINUTES} minutos.\n\n"
             f"Si no creaste esta cuenta, ignora este correo."
         )
     else:
-        asunto = "Confirma tu inicio de sesión — ImportacionesQ8"
+        asunto = "Confirma tu inicio de sesión — Zarpi"
         cuerpo_texto = (
             f"Detectamos un inicio de sesión tras un periodo de inactividad.\n\n"
             f"Tu código de verificación es: {otp}\n"
