@@ -355,7 +355,7 @@ class TestSoporteEnConversacion:
         cuerpo = response.json()
         # Marcado como sistema para que no se confunda con la negociación.
         assert cuerpo["tipo"] == "sistema"
-        assert cuerpo["contenido"].startswith("[Soporte ImportacionesQ8]")
+        assert cuerpo["contenido"].startswith("[Soporte Zarpi]")
 
     def test_ambas_partes_reciben_aviso(self, client, db_session, solicitante, empresa, auth_headers_admin):
         from models.notificacion import Notificacion
@@ -393,7 +393,7 @@ class TestSoporteEnConversacion:
             headers=auth_headers_for(solicitante),
         )
         assert visto.status_code == status.HTTP_200_OK
-        assert any("Soporte ImportacionesQ8" in m["contenido"] for m in visto.json())
+        assert any("Soporte Zarpi" in m["contenido"] for m in visto.json())
 
     def test_una_empresa_no_puede_escribir_como_soporte(self, client, db_session, solicitante, empresa):
         importador, dueño = empresa

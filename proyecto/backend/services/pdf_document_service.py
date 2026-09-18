@@ -111,7 +111,7 @@ def generate_course_certificate(
     lineas = [
         "CERTIFICADO DE FINALIZACION",
         "",
-        "ImportacionesQ8 certifica que",
+        "Zarpi certifica que",
         "",
         nombre_alumno,
         "",

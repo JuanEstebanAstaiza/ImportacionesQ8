@@ -84,7 +84,7 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
           </div>
           <div>
             <h1 className="text-2xl font-bold">{heading}</h1>
-            <p className="text-muted-foreground mt-2 text-sm">ImportacionesQ8 - Version 1.0</p>
+            <p className="text-muted-foreground mt-2 text-sm">Zarpi - Version 1.0</p>
           </div>
 
           <p className="text-sm text-muted-foreground max-w-2xl">{description}</p>
@@ -94,7 +94,7 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
           <div className="p-6 bg-muted rounded-xl border border-border">
             <p className="font-semibold text-foreground mb-2">Aviso importante</p>
             <p>
-              La {isData ? "Politica de Tratamiento de Datos Personales" : "politica de Terminos y Condiciones"} de ImportacionesQ8 esta siendo redactada por nuestro equipo legal y estara disponible antes del lanzamiento oficial de la plataforma.
+              La {isData ? "Politica de Tratamiento de Datos Personales" : "politica de Terminos y Condiciones"} de Zarpi esta siendo redactada por nuestro equipo legal y estara disponible antes del lanzamiento oficial de la plataforma.
             </p>
           </div>
 
@@ -114,7 +114,7 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
         </div>
       </main>
 
-      <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">© 2025 ImportacionesQ8. Todos los derechos reservados.</footer>
+      <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">© 2025 Zarpi. Todos los derechos reservados.</footer>
     </div>
   );
 }

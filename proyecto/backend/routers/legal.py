@@ -18,7 +18,7 @@ async def politica_tratamiento_datos():
     return {
         "titulo": "Política de Tratamiento de Datos Personales",
         "contenido": (
-            "Este documento está en construcción. ImportacionesQ8 publicará aquí la "
+            "Este documento está en construcción. Zarpi publicará aquí la "
             "política completa de tratamiento de datos personales antes del lanzamiento "
             "a producción, conforme a la normativa aplicable."
         ),
@@ -33,7 +33,7 @@ async def terminos_condiciones():
     return {
         "titulo": "Términos y Condiciones de Uso",
         "contenido": (
-            "Este documento está en construcción. ImportacionesQ8 solo actúa como "
+            "Este documento está en construcción. Zarpi solo actúa como "
             "intermediario que conecta solicitantes con empresas importadoras; no se "
             "hace responsable por el cumplimiento de los acuerdos comerciales que las "
             "partes concreten entre sí. El texto legal completo se publicará aquí antes "

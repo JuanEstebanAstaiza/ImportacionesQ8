@@ -115,7 +115,7 @@ export function PresentacionPublica({ importadorId }: { importadorId: string }) 
         Conoce a la empresa
       </h3>
       <p className="text-xs text-muted-foreground mb-4">
-        Material que publica la propia empresa, revisado por el equipo de ImportacionesQ8.
+        Material que publica la propia empresa, revisado por el equipo de Zarpi.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         {ordenadas.map((pieza) => (

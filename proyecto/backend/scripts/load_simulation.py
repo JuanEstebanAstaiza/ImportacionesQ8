@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simulación de carga y transacciones de negocio para ImportacionesQ8.
+Simulación de carga y transacciones de negocio para Zarpi.
 
 Flujos cubiertos por usuario virtual:
   1. Registro / login de solicitante
@@ -333,7 +333,7 @@ def summarize(results: List[UserResult], wall_ms: float) -> Dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Load + transaction simulation for ImportacionesQ8")
+    parser = argparse.ArgumentParser(description="Load + transaction simulation for Zarpi")
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--users", type=int, default=20)
     parser.add_argument("--concurrency", type=int, default=10)

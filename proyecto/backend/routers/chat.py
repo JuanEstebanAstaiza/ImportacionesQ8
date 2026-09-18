@@ -73,7 +73,7 @@ async def emitir_ticket_ws(
 
 
 def _es_equipo_plataforma(rol: str) -> bool:
-    """¿Es una cuenta interna de ImportacionesQ8 (administración o soporte)?
+    """¿Es una cuenta interna de Zarpi (administración o soporte)?
 
     Los agentes de soporte atienden los mismos hilos que un administrador; lo
     que no pueden es administrar la plataforma. Esa distinción vive en los
@@ -227,7 +227,7 @@ def _contraparte(db: Session, conversacion: ConversacionChat, current_user: dict
         # Para el equipo de soporte la contraparte es quien pidió ayuda; para el
         # usuario, la plataforma (que no es una persona con ficha).
         if conversacion.solicitante_id == user_id:
-            return _Contraparte(nombre="Soporte ImportacionesQ8", rol="plataforma")
+            return _Contraparte(nombre="Soporte Zarpi", rol="plataforma")
         return _persona(db, conversacion.solicitante_id)
 
     if _es_interna(conversacion):

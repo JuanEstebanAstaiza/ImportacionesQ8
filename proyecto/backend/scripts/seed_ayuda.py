@@ -43,7 +43,7 @@ ARTICULOS_POR_CATEGORIA = {
         "• **Solicitante**: quien necesita importar. Crea cotizaciones y elige con qué empresa trabaja.\n"
         "• **Empresa importadora (cuenta dueña)**: el representante legal. Responde cotizaciones, da de alta a sus asesores y es quien confirma la orden.\n"
         "• **Asesor**: empleado de una empresa importadora. Toma cotizaciones, negocia con el cliente y hace el seguimiento del embarque.\n"
-        "• **Equipo de ImportacionesQ8**: administración y atención al cliente.\n\n"
+        "• **Equipo de Zarpi**: administración y atención al cliente.\n\n"
         "Una cuenta pertenece a un solo perfil. Si necesitas otro, se crea una cuenta aparte.",
         TODOS,
         1,
@@ -192,7 +192,7 @@ ARTICULOS_POR_CATEGORIA = {
         "Comprueba el estado en el detalle de la orden; el historial y el chat registran cada cambio con su fecha.",
         "Cada cambio de estado deja tres rastros: el estado actual en el detalle de la orden, una entrada en el historial de eventos con fecha, y un mensaje en el chat de seguimiento.\n\n"
         "Si el estado no avanza, no es que no se vea: es que la empresa aún no lo ha movido. Pregúntaselo por el chat de la orden, que es el mismo hilo donde negociaste.\n\n"
-        "Si además hay un problema con la mercancía, usa «Reportar problema» en la orden: eso abre un incidente que revisa el equipo de ImportacionesQ8.",
+        "Si además hay un problema con la mercancía, usa «Reportar problema» en la orden: eso abre un incidente que revisa el equipo de Zarpi.",
         CLIENTE,
         4,
     ),
@@ -200,10 +200,10 @@ ARTICULOS_POR_CATEGORIA = {
     "Chats": [
     (
         "Los tres tipos de chat y quién lee cada uno",
-        "Negociación (cliente ↔ empresa), interno (empresa ↔ su asesor) y soporte (tú ↔ ImportacionesQ8).",
+        "Negociación (cliente ↔ empresa), interno (empresa ↔ su asesor) y soporte (tú ↔ Zarpi).",
         "• **Negociación**: entre el solicitante y la empresa. Nace al reclamarse la cotización y, cuando se crea la orden, pasa a ser el del seguimiento del embarque. Mismo hilo, sin perder el contexto.\n"
         "• **Interno**: entre la cuenta dueña y un asesor. El cliente no lo ve ni entrando por la URL.\n"
-        "• **Soporte**: entre un usuario y el equipo de ImportacionesQ8. Solo lo ven quien lo abrió y el equipo.\n\n"
+        "• **Soporte**: entre un usuario y el equipo de Zarpi. Solo lo ven quien lo abrió y el equipo.\n\n"
         "En la lista de chats se distinguen por color e icono, y puedes filtrarlos por tipo.",
         TODOS,
         1,
@@ -264,7 +264,7 @@ ARTICULOS_POR_CATEGORIA = {
     (
         "Qué necesita mi empresa para estar verificada",
         "Cuenta dueña activa con correo verificado, especialidad, países de origen, prefijo de embarque y ningún incidente abierto.",
-        "El sello de «socio verificado» lo otorga el equipo de ImportacionesQ8 y lo ve el cliente al elegir con quién contratar.\n\n"
+        "El sello de «socio verificado» lo otorga el equipo de Zarpi y lo ve el cliente al elegir con quién contratar.\n\n"
         "**Requisitos obligatorios:**\n\n"
         "• Cuenta dueña activa.\n"
         "• Correo del representante verificado.\n"
@@ -293,7 +293,7 @@ ARTICULOS_POR_CATEGORIA = {
         "Cuando la orden esté entregada. Una reseña por orden.",
         "Las reseñas se dejan sobre órdenes ya entregadas, y solo una por orden: así la nota refleja tratos reales y no opiniones repetidas.\n\n"
         "Puntúas de 1 a 5 y puedes desglosar puntualidad, calidad y comunicación. La empresa tiene derecho a réplica pública.\n\n"
-        "El equipo de ImportacionesQ8 puede ocultar una reseña que incumpla las normas, pero nunca la borra ni la edita.",
+        "El equipo de Zarpi puede ocultar una reseña que incumpla las normas, pero nunca la borra ni la edita.",
         CLIENTE,
         2,
     ),

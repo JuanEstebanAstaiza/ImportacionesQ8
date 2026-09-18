@@ -1810,7 +1810,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
 
             <div className="space-y-2 border-t border-border p-3">
               <p className="text-[11px] text-muted-foreground">
-                Lo que escribas aquí entra en el hilo como <strong>equipo de ImportacionesQ8</strong> y avisa a las dos
+                Lo que escribas aquí entra en el hilo como <strong>equipo de Zarpi</strong> y avisa a las dos
                 partes. Consultar el hilo sin escribir no deja rastro.
               </p>
               <div className="flex items-end gap-2">

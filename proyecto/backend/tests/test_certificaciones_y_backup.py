@@ -25,7 +25,7 @@ def admin(db_session):
 def _crear_certificacion(client, headers, **overrides):
     payload = {
         "nombre": f"Sello {uuid4().hex[:6]}",
-        "descripcion": "Respaldado por ImportacionesQ8",
+        "descripcion": "Respaldado por Zarpi",
         "peso_publicidad": 10,
         **overrides,
     }

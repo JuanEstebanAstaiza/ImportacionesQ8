@@ -9,7 +9,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]  # ImportacionesQ8
+ROOT = Path(__file__).resolve().parents[3]  # Zarpi
 OPENAPI = Path(__file__).resolve().parents[1] / "openapi_snapshot.json"
 OUT = ROOT / "ImportacionesQ8V" / "02-Integracion-API"
 PREAMBULOS = OUT / "_preambulos"
@@ -391,7 +391,7 @@ def main() -> None:
     cat.append("## Colección HTTP")
     cat.append("")
     cat.append("- Postman/Insomnia: [[14-Postman-Insomnia]]")
-    cat.append("- Archivo: `ImportacionesQ8.postman_collection.json` (en `02-Integracion-API/`)")
+    cat.append("- Archivo: `Zarpi.postman_collection.json` (en `02-Integracion-API/`)")
     cat.append("- Índice de la carpeta: [[Indice-Integracion-API]]")
     cat.append("")
     cat.append("## Índice por módulo")

@@ -1348,7 +1348,7 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
     <Modal open={open} onClose={onClose} title="Pedir soporte técnico">
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Abre una conversación con el equipo de ImportacionesQ8. Se atiende por urgencia, así que
+          Abre una conversación con el equipo de Zarpi. Se atiende por urgencia, así que
           marca la que corresponda de verdad.
         </p>
         <Input
@@ -1617,7 +1617,7 @@ function ImporterCard({
           {platformCerts.map((c) => (
             <span
               key={c.id}
-              title={c.descripcion || `Respaldado por ImportacionesQ8`}
+              title={c.descripcion || `Respaldado por Zarpi`}
               className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-semibold text-primary flex items-center gap-1"
             >
               {c.logoUrl ? (
@@ -1774,7 +1774,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
               <div className="flex items-center gap-2 mb-4">
                 <Award className="w-4 h-4 text-amber-500"/>
                 <h2 className="text-sm font-semibold">Empresas destacadas</h2>
-                <span className="text-xs text-muted-foreground">· Con mayor respaldo de ImportacionesQ8</span>
+                <span className="text-xs text-muted-foreground">· Con mayor respaldo de Zarpi</span>
               </div>
               <div className="grid grid-flow-col auto-cols-[85%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 md:overflow-visible">
                 {featured.map(imp=>(
@@ -1950,7 +1950,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
                   <div className="flex items-center gap-4 mt-2 flex-wrap">
-                    {platformCerts.length>0&&<div className="flex items-center gap-1 text-primary"><BadgeCheck className="w-3.5 h-3.5"/><span className="text-xs font-medium">{platformCerts.length} {platformCerts.length===1?"sello":"sellos"} de ImportacionesQ8</span></div>}
+                    {platformCerts.length>0&&<div className="flex items-center gap-1 text-primary"><BadgeCheck className="w-3.5 h-3.5"/><span className="text-xs font-medium">{platformCerts.length} {platformCerts.length===1?"sello":"sellos"} de Zarpi</span></div>}
                     {certs.length>0&&<div className="flex items-center gap-1 text-muted-foreground"><Award className="w-3.5 h-3.5"/><span className="text-xs">{certs.length} {certs.length===1?"certificación":"certificaciones"}</span></div>}
                     <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime} respuesta</span></div>
                     <div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div>
@@ -2002,10 +2002,10 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
               </Card>
 
               {/* Respaldo de la plataforma: distinto de las certificaciones que
-                  la propia empresa declara, porque este lo otorga ImportacionesQ8. */}
+                  la propia empresa declara, porque este lo otorga Zarpi. */}
               {platformCerts.length>0&&(
                 <Card padding="md" className="border-primary/20 bg-primary/5">
-                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck className="w-4 h-4 text-primary"/>Respaldada por ImportacionesQ8</h3>
+                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck className="w-4 h-4 text-primary"/>Respaldada por Zarpi</h3>
                   <p className="text-xs text-muted-foreground mb-3">Sellos que nuestro equipo otorgó tras verificar a esta empresa.</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {platformCerts.map(c=>(
@@ -2948,7 +2948,7 @@ const ETIQUETA_ROL_CONTRAPARTE: Record<string, string> = {
   solicitante: "Cliente",
   importador: "Empresa importadora",
   asesor: "Asesor de la empresa",
-  admin: "Equipo ImportacionesQ8",
+  admin: "Equipo Zarpi",
   soporte: "Mesa de ayuda",
   plataforma: "Mesa de ayuda",
 };
@@ -9188,7 +9188,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 <div>
                   <p className="text-sm font-semibold">¿No encuentras la respuesta aquí?</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Abre un ticket y te atiende una persona del equipo de ImportacionesQ8. Se prioriza por urgencia.
+                    Abre un ticket y te atiende una persona del equipo de Zarpi. Se prioriza por urgencia.
                   </p>
                 </div>
               </div>
