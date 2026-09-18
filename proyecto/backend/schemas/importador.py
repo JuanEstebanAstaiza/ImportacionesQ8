@@ -23,6 +23,9 @@ class ImportadorResponse(BaseModel):
     # es lo que ordena el catálogo del solicitante.
     certificaciones: List["CertificacionOtorgadaResponse"] = Field(default_factory=list)
     puntaje_publicidad: float = 0.0
+    # Órdenes que la empresa llevó hasta "entregado". La ficha pública lo enseña
+    # como "N proyectos"; antes el frontend dibujaba un 0 fijo para todas.
+    proyectos_completados: int = 0
     especialidad_producto: List[str]
     paises_origen: List[str]
     calificacion_promedio: float
@@ -118,6 +121,26 @@ class AdminCrearImportadorRequest(BaseModel):
         if not normalizado:
             raise ValueError("El prefijo del shipping mark debe contener al menos una letra o un número")
         return normalizado
+
+    # El alta desde el panel de administración ya sube logo y banner, así que
+    # necesita la misma normalización que el autoservicio de la empresa: sin
+    # ella una URL absoluta al host de turno deja de resolver en otro entorno.
+    @field_validator("logo_url")
+    @classmethod
+    def logo_seguro(cls, v: Optional[str]) -> Optional[str]:
+        return canonicalize_resource_url(v, campo="logo_url")
+
+    @field_validator("perfil_publico")
+    @classmethod
+    def imagenes_perfil_seguras(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not v:
+            return v
+        limpio = dict(v)
+        for clave in CLAVES_IMAGEN_PERFIL:
+            valor = limpio.get(clave)
+            if isinstance(valor, str) and valor.strip():
+                limpio[clave] = canonicalize_resource_url(valor, campo=clave)
+        return limpio
 
 class AdminCrearImportadorResponse(BaseModel):
     importador: ImportadorResponse

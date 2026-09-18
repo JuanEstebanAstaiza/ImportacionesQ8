@@ -183,6 +183,13 @@ export interface CreateImporterWithOwnerPayload {
   tiempo_respuesta_promedio: string;
   capacidad_volumen?: number;
   solo_cotizaciones_directas?: boolean;
+  /**
+   * Ficha pública de la empresa (sitio web, contacto, NIT...). Antes estos
+   * datos solo vivían en el `localStorage` del navegador del administrador que
+   * dio de alta la empresa: nadie más los veía y se perdían al limpiar el
+   * navegador.
+   */
+  perfil_publico?: Record<string, unknown>;
   email_dueño: string;
   password_dueño: string;
   nombre_dueño?: string;

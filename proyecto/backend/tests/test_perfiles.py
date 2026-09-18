@@ -6,9 +6,45 @@ from uuid import uuid4
 from datetime import datetime
 from fastapi import status
 
+from models.cotizacion import Cotizacion, EstadoCotizacion
+from models.orden import EstadoOrden, Orden
 from models.usuario import Usuario
 from utils.security import hash_password, create_access_token
 from conftest import crear_empresa_importadora, auth_headers_for
+
+
+def _orden_entregada(db_session, importador_id, solicitante_id):
+    """Una orden ya entregada: es lo que cuenta como proyecto completado."""
+    cotizacion = Cotizacion(
+        id=str(uuid4()),
+        solicitante_id=solicitante_id,
+        importador_id=importador_id,
+        modalidad="dirigida",
+        pais_importacion="China",
+        nombre_producto="Camisetas",
+        descripcion_cliente="500 camisetas con logo",
+        linea_producto="Textil",
+        tipo_calidad="estandar",
+        cantidad_minima=500,
+        precio_objetivo_usd=3.5,
+        incoterm="FOB",
+        estado=EstadoCotizacion.dirigida,
+    )
+    db_session.add(cotizacion)
+    db_session.commit()
+
+    orden = Orden(
+        id=str(uuid4()),
+        cotizacion_id=cotizacion.id,
+        importador_id=importador_id,
+        solicitante_id=solicitante_id,
+        estado=EstadoOrden.entregado.value,
+        precio_acordado_usd=3.2,
+        tiempo_estimado_entrega="45 días",
+    )
+    db_session.add(orden)
+    db_session.commit()
+    return orden
 
 
 @pytest.fixture()
@@ -133,3 +169,116 @@ class TestPerfilEmpresa:
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["solo_cotizaciones_directas"] is True
+
+
+class TestFichaPublicaDeLaEmpresa:
+    """Lo que la empresa escribe en su perfil tiene que volver tal cual.
+
+    El autoguardado del formulario reenvía el perfil entero cada vez que el
+    usuario deja de escribir, así que un campo que el backend descartara en
+    silencio se perdía sin que nadie viera un error.
+    """
+
+    def test_logo_y_datos_de_contacto_persisten(self, client, empresa_a):
+        importador, dueño = empresa_a
+        respuesta = client.put(
+            f"/importadores/{importador.id}",
+            json={
+                "logo_url": "/api/documentos/archivos/abc-123/descargar",
+                "perfil_publico": {
+                    "website": "https://empresa-a.example.com",
+                    "email": "contacto@empresa-a.example.com",
+                    "phone": "+57 300 000 0000",
+                    "address": "Calle 1 #2-3",
+                    "year": "2014",
+                    "industries": ["Retail"],
+                    "certs": ["ISO 9001"],
+                },
+            },
+            headers=auth_headers_for(dueño),
+        )
+        assert respuesta.status_code == status.HTTP_200_OK
+
+        # El `/api` es prefijo del proxy de Vite: se guarda la ruta del backend.
+        assert respuesta.json()["logo_url"] == "/documentos/archivos/abc-123/descargar"
+
+        leido = client.get(f"/importadores/{importador.id}").json()
+        assert leido["logo_url"] == "/documentos/archivos/abc-123/descargar"
+        perfil = leido["perfil_publico"]
+        assert perfil["website"] == "https://empresa-a.example.com"
+        assert perfil["email"] == "contacto@empresa-a.example.com"
+        assert perfil["phone"] == "+57 300 000 0000"
+        assert perfil["address"] == "Calle 1 #2-3"
+        assert perfil["year"] == "2014"
+        assert perfil["industries"] == ["Retail"]
+        assert perfil["certs"] == ["ISO 9001"]
+
+    def test_logo_vacio_lo_quita(self, client, empresa_a):
+        importador, dueño = empresa_a
+        cabeceras = auth_headers_for(dueño)
+        client.put(
+            f"/importadores/{importador.id}",
+            json={"logo_url": "/documentos/archivos/abc-123/descargar"},
+            headers=cabeceras,
+        )
+
+        respuesta = client.put(
+            f"/importadores/{importador.id}",
+            json={"logo_url": ""},
+            headers=cabeceras,
+        )
+        assert respuesta.status_code == status.HTTP_200_OK
+        assert not respuesta.json()["logo_url"]
+
+    def test_guardados_sucesivos_no_pierden_lo_anterior(self, client, empresa_a):
+        """El autoguardado dispara varios PUT seguidos con el perfil completo."""
+        importador, dueño = empresa_a
+        cabeceras = auth_headers_for(dueño)
+
+        client.put(
+            f"/importadores/{importador.id}",
+            json={"perfil_publico": {"website": "empresa.example.com", "phone": ""}},
+            headers=cabeceras,
+        )
+        respuesta = client.put(
+            f"/importadores/{importador.id}",
+            json={"perfil_publico": {"website": "empresa.example.com", "phone": "+57 1 2223344"}},
+            headers=cabeceras,
+        )
+
+        assert respuesta.status_code == status.HTTP_200_OK
+        perfil = respuesta.json()["perfil_publico"]
+        assert perfil["website"] == "empresa.example.com"
+        assert perfil["phone"] == "+57 1 2223344"
+
+
+class TestProyectosCompletados:
+    """`proyectos_completados` es la trayectoria que ve el solicitante."""
+
+    def test_cero_sin_ordenes_entregadas(self, client, empresa_a):
+        importador, _ = empresa_a
+        assert client.get(f"/importadores/{importador.id}").json()["proyectos_completados"] == 0
+
+    def test_cuenta_solo_las_ordenes_entregadas(self, client, db_session, empresa_a, solicitante):
+        importador, _ = empresa_a
+        _orden_entregada(db_session, importador.id, solicitante.id)
+        _orden_entregada(db_session, importador.id, solicitante.id)
+
+        ficha = client.get(f"/importadores/{importador.id}").json()
+        assert ficha["proyectos_completados"] == 2
+
+        # Una orden en curso no es un proyecto completado.
+        en_curso = _orden_entregada(db_session, importador.id, solicitante.id)
+        en_curso.estado = EstadoOrden.en_produccion.value
+        db_session.commit()
+
+        assert client.get(f"/importadores/{importador.id}").json()["proyectos_completados"] == 2
+
+    def test_no_se_mezclan_entre_empresas(self, client, db_session, empresa_a, empresa_b, solicitante):
+        importador_a, _ = empresa_a
+        importador_b, _ = empresa_b
+        _orden_entregada(db_session, importador_a.id, solicitante.id)
+
+        catalogo = {fila["id"]: fila for fila in client.get("/importadores").json()}
+        assert catalogo[str(importador_a.id)]["proyectos_completados"] == 1
+        assert catalogo[str(importador_b.id)]["proyectos_completados"] == 0

@@ -52,7 +52,23 @@ class ConversacionChatResponse(BaseModel):
     importador_id: Optional[str] = None
     # Con quién se habla, ya resuelto por el backend: el frontend no tiene forma
     # de traducir un id de usuario a un nombre sin pedir el directorio entero.
+    #
+    # No basta con el nombre. La cabecera del chat mostraba siempre el mismo
+    # rótulo genérico y las iniciales de la empresa, así que un asesor no podía
+    # distinguir a un cliente de otro, y el equipo de soporte no sabía si le
+    # escribía un solicitante o una importadora. Estos campos identifican a la
+    # persona concreta y su papel en la conversación.
     contraparte_nombre: Optional[str] = None
+    # Id del usuario con quien se habla: da un color de avatar estable, distinto
+    # para cada interlocutor. Nulo cuando la contraparte no es una persona
+    # (la plataforma, en un ticket de soporte visto por quien lo abrió).
+    contraparte_id: Optional[str] = None
+    # "solicitante", "asesor", "importador", "admin"/"soporte", o "plataforma".
+    contraparte_rol: Optional[str] = None
+    # Empresa a la que pertenece la contraparte, si pertenece a alguna. Deja ver
+    # "Marcela Ríos · Control Textil S.A.S." en vez de solo un nombre suelto.
+    contraparte_empresa: Optional[str] = None
+    contraparte_foto_url: Optional[str] = None
     # Solo en los tickets de soporte.
     asunto: Optional[str] = None
     urgencia: Optional[str] = None

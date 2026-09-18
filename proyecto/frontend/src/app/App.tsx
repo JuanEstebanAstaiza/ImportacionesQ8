@@ -16,7 +16,7 @@ import {
   Image as ImageIcon, PanelRightClose, PanelRightOpen,
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
-  MoveRight, MoreHorizontal, Video,
+  MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -245,12 +245,21 @@ function Card({children,className,padding="md",...props}:CardProps) {
   return <div className={clsx("bg-white border border-border rounded-xl shadow-sm",p[padding],className)} {...props}>{children}</div>;
 }
 
-function Avatar({initials,size="md",color="bg-primary",src}:{initials:string;size?:"sm"|"md"|"lg"|"xl";color?:string;src?:string}) {
-  const s={sm:"w-7 h-7 text-xs",md:"w-9 h-9 text-sm",lg:"w-10 h-10 text-sm",xl:"w-12 h-12 text-base"};
+/**
+ * Avatar de persona (redondo) o logo de empresa (`variant="logo"`).
+ *
+ * Los tamaños `2xl`/`3xl` y la variante de logo existen porque el logo de la
+ * empresa se pintaba a 48 px y recortado en círculo: las marcas apaisadas
+ * perdían el texto y la ficha parecía no tener logo. En `logo` la imagen se
+ * escala entera (`object-contain`) sobre fondo blanco.
+ */
+function Avatar({initials,size="md",color="bg-primary",src,variant="avatar"}:{initials:string;size?:"sm"|"md"|"lg"|"xl"|"2xl"|"3xl";color?:string;src?:string;variant?:"avatar"|"logo"}) {
+  const s={sm:"w-7 h-7 text-xs",md:"w-9 h-9 text-sm",lg:"w-10 h-10 text-sm",xl:"w-12 h-12 text-base","2xl":"w-20 h-20 text-2xl","3xl":"w-28 h-28 text-3xl"};
+  const esLogo=variant==="logo";
   if(src){
-    return <img src={src} alt={initials} className={clsx("rounded-full object-cover flex-shrink-0 border border-border",s[size])}/>;
+    return <img src={src} alt={initials} className={clsx("flex-shrink-0 border border-border",esLogo?"rounded-xl object-contain bg-white p-1":"rounded-full object-cover",s[size])}/>;
   }
-  return <div className={clsx("rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0",color,s[size])}>{initials}</div>;
+  return <div className={clsx("flex items-center justify-center font-semibold text-white flex-shrink-0",esLogo?"rounded-xl":"rounded-full",color,s[size])}>{initials}</div>;
 }
 
 function Logo() {
@@ -487,6 +496,10 @@ interface ChatConv {
   // Ambos van vacíos en los hilos internos y en los de soporte.
   quoteId:string;
   counterpartName?:string;
+  counterpartId?:string;
+  counterpartRole?:string;
+  counterpartCompany?:string;
+  counterpartPhotoUrl?:string;
   // Solo en tickets de soporte.
   subject?:string;
   urgency?:string;
@@ -746,6 +759,32 @@ function readPerfilPublicoStringArray(perfil: Record<string, unknown> | null | u
   return [];
 }
 
+/**
+ * Convierte lo que la empresa escribió en «Sitio web» en un href navegable.
+ *
+ * Casi nadie escribe el esquema: el campo llega como "miempresa.com" y un
+ * `<a href="miempresa.com">` navega a una ruta relativa de la propia
+ * plataforma. Se antepone `https://` y se descarta cualquier cosa que no acabe
+ * siendo http(s) (defensa en profundidad: el texto lo escribe la empresa).
+ */
+function enlaceSitioWeb(valor: string | null | undefined): string {
+  const limpio = String(valor ?? "").trim();
+  if (!limpio) {
+    return "";
+  }
+  const conEsquema = /^[a-z][a-z0-9+.-]*:\/\//i.test(limpio) ? limpio : `https://${limpio}`;
+  return safeHttpUrl(conEsquema);
+}
+
+/** Texto del enlace: sin esquema ni "www.", que es como se lee una web. */
+function etiquetaSitioWeb(valor: string | null | undefined): string {
+  return String(valor ?? "")
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/+$/, "");
+}
+
 function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | undefined, companyName: string) {
   const advisorName =
     readPerfilPublicoString(perfil, "advisor_name", "asesor_nombre", "contact_name", "nombre_contacto") ||
@@ -776,6 +815,14 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
     bannerUrl: readPerfilPublicoString(perfil, "banner_url", "banner"),
     logoUrl: imp.logo_url ?? "",
+    // Ficha corporativa: la empresa ya rellenaba estos campos en su perfil,
+    // pero nadie los leía, así que no aparecían en ninguna pantalla pública.
+    website: readPerfilPublicoString(perfil, "website", "sitio_web", "web"),
+    email: readPerfilPublicoString(perfil, "email", "correo", "email_contacto"),
+    phone: readPerfilPublicoString(perfil, "phone", "telefono", "whatsapp"),
+    address: readPerfilPublicoString(perfil, "address", "direccion"),
+    foundedYear: readPerfilPublicoString(perfil, "year", "anio_fundacion", "fundacion"),
+    industries: readPerfilPublicoStringArray(perfil, "industries", "industrias", "sectores"),
     platformCerts: (imp.certificaciones ?? []).map((cert) => ({
       id: cert.certificacion_id,
       nombre: cert.nombre,
@@ -792,7 +839,9 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     initials: initialsFromName(name),
     color: importerColorFromId(imp.id),
     memberSince: formatShortDate(imp.fecha_registro),
-    projects: 0,
+    // Órdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
+    // empresas se presentaban como si no hubieran cerrado ni un proyecto.
+    projects: Number(imp.proyectos_completados ?? 0),
     verified: Boolean(imp.verificado),
     country: primaryCountry,
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
@@ -1485,22 +1534,24 @@ function ImporterCard({
             )}
           </div>
 
-          <div className="absolute -bottom-5 left-3 w-10 h-10 rounded-lg ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
+          {/* El logo se apoya sobre el banner y es la única marca visual de la
+              empresa en el catálogo: a 40 px no se distinguía una de otra. */}
+          <div className="absolute -bottom-7 left-3 w-16 h-16 rounded-xl ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
             {logoUrl ? (
               <img
                 src={logoUrl}
                 alt={`Logo de ${imp.name}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain p-1"
               />
             ) : (
-              <Avatar initials={imp.initials} size="md" color={imp.color} />
+              <Avatar initials={imp.initials} size="lg" color={imp.color} variant="logo" />
             )}
           </div>
         </div>
 
         {/* Header */}
-        <div className="flex items-start gap-3 mt-3">
-          <div className="w-10" />
+        <div className="flex items-start gap-3 mt-5">
+          <div className="w-16" />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-1.5 flex-wrap">
@@ -1793,6 +1844,57 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
   );
 }
 
+/** Sitio web, correo, teléfono, dirección y año de fundación de la empresa. */
+function DatosDeContactoEmpresa({imp}:{imp:Importer}) {
+  const sitio=enlaceSitioWeb(imp.website);
+  const filas:Array<{icono:React.ReactNode;etiqueta:string;valor:React.ReactNode}>=[];
+
+  if(sitio){
+    filas.push({
+      icono:<Globe className="w-3.5 h-3.5"/>,
+      etiqueta:"Sitio web",
+      valor:<a href={sitio} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{etiquetaSitioWeb(imp.website)}</a>,
+    });
+  }
+  if(imp.email){
+    filas.push({
+      icono:<MailIcon className="w-3.5 h-3.5"/>,
+      etiqueta:"Correo",
+      valor:<a href={`mailto:${imp.email}`} className="text-primary hover:underline break-all">{imp.email}</a>,
+    });
+  }
+  if(imp.phone){
+    filas.push({icono:<Phone className="w-3.5 h-3.5"/>,etiqueta:"Teléfono",valor:<span className="break-all">{imp.phone}</span>});
+  }
+  if(imp.address){
+    filas.push({icono:<MapPin className="w-3.5 h-3.5"/>,etiqueta:"Dirección",valor:<span>{imp.address}</span>});
+  }
+  if(imp.foundedYear){
+    filas.push({icono:<CalendarIcon className="w-3.5 h-3.5"/>,etiqueta:"Fundada en",valor:<span>{imp.foundedYear}</span>});
+  }
+
+  if(filas.length===0){
+    return null;
+  }
+
+  return (
+    <Card padding="md">
+      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary"/>Datos de la empresa</h3>
+      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+        {filas.map(f=>(
+          <div key={f.etiqueta} className="flex items-start gap-2.5 min-w-0">
+            <span className="text-muted-foreground mt-0.5 flex-shrink-0">{f.icono}</span>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.etiqueta}</p>
+              <p className="text-sm text-foreground mt-0.5">{f.valor}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1840,7 +1942,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
           <Card padding="md" className={clsx("mb-5",bannerUrl?"mt-3":"mt-4")}>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
               <div className="flex items-start gap-4">
-                <Avatar initials={imp.initials} size="xl" color={imp.color} src={logoUrl||undefined}/>
+                <Avatar initials={imp.initials} size="2xl" color={imp.color} src={logoUrl||undefined} variant="logo"/>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-semibold">{imp.name}</h1>
@@ -1875,7 +1977,19 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                     <span key={c} className="px-2.5 py-1 bg-primary/5 text-primary rounded-lg text-xs font-medium">{c}</span>
                   ))}
                 </div>
+                {imp.industries&&imp.industries.length>0&&(
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {imp.industries.map(i=>(
+                      <span key={i} className="px-2.5 py-1 bg-muted text-muted-foreground rounded-lg text-xs font-medium">{i}</span>
+                    ))}
+                  </div>
+                )}
               </Card>
+
+              {/* Ficha de contacto que la empresa rellena en su propio perfil.
+                  Estaba guardándose en `perfil_publico` sin que ninguna pantalla
+                  la leyera, así que rellenarla no cambiaba nada para el cliente. */}
+              <DatosDeContactoEmpresa imp={imp}/>
 
               {/* Presentacion en video y fotos que sube la propia empresa. El
                   componente no pinta nada si todavia no hay material aprobado. */}
@@ -2452,7 +2566,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-4 flex-1">
-                <Avatar initials={imp?.initials || "IM"} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/>
+                <Avatar initials={imp?.initials || "IM"} size="2xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap"><h1 className="text-lg font-semibold">{companyName}</h1>{imp?.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}<Badge variant={resp.status}/></div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"}</p>
@@ -2465,7 +2579,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
+                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
                 <div className="flex gap-2">
                   <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp?.advisor.phone,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
@@ -2829,6 +2943,58 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
+/** Cómo se llama en pantalla cada rol cuando es la contraparte de un chat. */
+const ETIQUETA_ROL_CONTRAPARTE: Record<string, string> = {
+  solicitante: "Cliente",
+  importador: "Empresa importadora",
+  asesor: "Asesor de la empresa",
+  admin: "Equipo ImportacionesQ8",
+  soporte: "Mesa de ayuda",
+  plataforma: "Mesa de ayuda",
+};
+
+/** Etiqueta legible de un rol; devuelve el valor crudo si no se conoce. */
+function etiquetaDeRol(rol:string|undefined|null):string{
+  const clave=String(rol??"").trim();
+  if(!clave)return "";
+  return ETIQUETA_ROL_CONTRAPARTE[clave]||clave;
+}
+
+/**
+ * Con quién se está hablando en una conversación, para pintarlo en pantalla.
+ *
+ * La cabecera del chat mostraba siempre el texto «Asesor asignado» y las
+ * iniciales de la empresa importadora, daba igual el rol de quien mirara: un
+ * asesor no distinguía a un cliente de otro, el cliente no sabía qué persona de
+ * la empresa le escribía, y desde la mesa de ayuda todos los tickets parecían
+ * el mismo. El backend ya resuelve la contraparte según quién consulta
+ * (`contraparte_*`); aquí solo se le da forma.
+ */
+function resolverContraparteChat(conv:ChatConv|null,imp:Importer|null){
+  const nombre = conv?.counterpartName
+    || (conv?.type==="interno" ? "Equipo" : "")
+    || imp?.name
+    || "Conversación";
+  const etiquetaRol = conv?.counterpartRole
+    ? (ETIQUETA_ROL_CONTRAPARTE[conv.counterpartRole] || conv.counterpartRole)
+    : "";
+  // La empresa solo aporta contexto cuando no es ya el propio interlocutor.
+  const empresa = conv?.counterpartCompany && conv.counterpartCompany!==nombre
+    ? conv.counterpartCompany
+    : "";
+  return {
+    nombre,
+    etiquetaRol,
+    empresa,
+    iniciales: initialsFromName(nombre),
+    // Color estable por PERSONA, no por conversación: si dependiera del id del
+    // hilo, el mismo interlocutor (soporte, por ejemplo) saldría de un color
+    // distinto en cada chat y el avatar dejaría de servir para reconocerlo.
+    color: importerColorFromId(conv?.counterpartId || nombre || imp?.id || "chat"),
+    fotoUrl: conv?.counterpartPhotoUrl ? resolveApiUrl(conv.counterpartPhotoUrl) : "",
+  };
+}
+
 function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
@@ -2914,6 +3080,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const conv=selectedId?conversations.find(c=>c.id===selectedId)||null:null;
   const imp=conv?importers.find(i=>i.id===conv.importerId)||null:null;
   const chatCompanyName = conv?.importerName || imp?.name || "Empresa importadora";
+  // Con quién se habla de verdad. Antes la cabecera usaba `chatAdvisorName`,
+  // que para casi todas las empresas es el literal «Asesor asignado».
+  const contraparte = resolverContraparteChat(conv, imp);
   const chatAdvisorName = conv?.advisorName || imp?.advisor.name || "Asesor";
   const chatAdvisorRole = conv?.advisorRole || imp?.advisor.role || "Asesor";
   const chatAdvisorEmail = conv?.advisorEmail || imp?.advisor.email || "";
@@ -3600,17 +3769,24 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 const companyName = c.type==="interno"
                   ? (c.counterpartName || "Equipo")
                   : c.type==="soporte"
-                    ? [c.counterpartName, c.requesterRole].filter(Boolean).join(" · ")
+                    ? [c.counterpartName, etiquetaDeRol(c.requesterRole)].filter(Boolean).join(" · ")
                     : (c.counterpartName || c.importerName || cImp?.name || "Empresa importadora");
                 const urgencia = c.type==="soporte" ? URGENCIA_SOPORTE[c.urgency||""] : undefined;
                 const isSelected=selectedId===c.id;
+                const suContraparte=resolverContraparteChat(c,cImp||null);
                 return (
                   <button key={c.id} onClick={()=>setSelectedId(c.id)}
                     className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
                       isSelected?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
-                    <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5",
-                      c.type==="orden"?"bg-purple-50 text-purple-600":c.type==="interno"?"bg-amber-50 text-amber-600":c.type==="soporte"?"bg-rose-50 text-rose-600":"bg-blue-50 text-blue-600")}>
-                      {c.type==="orden"?<ShoppingCart className="w-4 h-4"/>:c.type==="interno"?<Users className="w-4 h-4"/>:c.type==="soporte"?<LifeBuoy className="w-4 h-4"/>:<FileText className="w-4 h-4"/>}
+                    {/* El avatar es de la PERSONA y el distintivo pequeño dice de
+                        qué hilo se trata: antes solo había un icono por tipo,
+                        igual para todas las conversaciones de esa clase. */}
+                    <div className="relative flex-shrink-0 mt-0.5">
+                      <Avatar initials={suContraparte.iniciales} size="lg" color={suContraparte.color} src={suContraparte.fotoUrl||undefined}/>
+                      <span className={clsx("absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-background",
+                        c.type==="orden"?"bg-purple-100 text-purple-600":c.type==="interno"?"bg-amber-100 text-amber-600":c.type==="soporte"?"bg-rose-100 text-rose-600":"bg-blue-100 text-blue-600")}>
+                        {c.type==="orden"?<ShoppingCart className="w-2.5 h-2.5"/>:c.type==="interno"?<Users className="w-2.5 h-2.5"/>:c.type==="soporte"?<LifeBuoy className="w-2.5 h-2.5"/>:<FileText className="w-2.5 h-2.5"/>}
+                      </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
@@ -3624,7 +3800,9 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                                 {urgencia.label}
                               </span>
                             )}
-                            <p className="text-xs text-muted-foreground truncate">{companyName}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {[companyName, c.type!=="soporte"?suContraparte.etiquetaRol:""].filter(Boolean).join(" · ")}
+                            </p>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -3656,19 +3834,24 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
               {/* Chat header */}
               <div className="flex-shrink-0 border-b border-border bg-white px-4 py-3 flex items-center gap-3">
-                <Avatar initials={imp?.initials || "NA"} size="md" color={imp?.color || "bg-slate-500"}/>
+                <Avatar initials={contraparte.iniciales} size="md" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm text-foreground">
-                      {conv.type==="interno"?(conv.counterpartName||"Equipo")
-                        :conv.type==="soporte"?(conv.subject||"Solicitud de soporte")
-                        :chatAdvisorName}
+                      {conv.type==="soporte"?(conv.subject||"Solicitud de soporte"):contraparte.nombre}
                     </p>
+                    {/* Qué es esa persona: sin esto no se distinguía un cliente
+                        de un asesor ni de la cuenta dueña de una empresa. */}
+                    {conv.type!=="soporte"&&contraparte.etiquetaRol&&(
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        {contraparte.etiquetaRol}
+                      </span>
+                    )}
                     {conv.type==="soporte"&&(
                       <>
                         <span className="text-muted-foreground/40 text-xs">·</span>
                         <p className="text-xs text-muted-foreground">
-                          {[conv.counterpartName, conv.requesterRole].filter(Boolean).join(" · ")}
+                          {[conv.counterpartName, etiquetaDeRol(conv.requesterRole)].filter(Boolean).join(" · ")}
                         </p>
                         {URGENCIA_SOPORTE[conv.urgency||""]&&(
                           <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold",URGENCIA_SOPORTE[conv.urgency||""].clase)}>
@@ -3677,10 +3860,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         )}
                       </>
                     )}
-                    {conv.type!=="interno"&&conv.type!=="soporte"&&(
+                    {conv.type!=="interno"&&conv.type!=="soporte"&&contraparte.empresa&&(
                       <>
                         <span className="text-muted-foreground/40 text-xs">·</span>
-                        <p className="text-xs text-muted-foreground">{chatCompanyName}</p>
+                        <p className="text-xs text-muted-foreground">{contraparte.empresa}</p>
                       </>
                     )}
                     {conv.type!=="soporte"&&(
@@ -3723,7 +3906,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         </div>
                       )}
                       <div className={clsx("flex gap-2 items-end mb-0.5",isClient?"justify-end":"justify-start")}>
-                        {!isClient&&<Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/>}
+                        {!isClient&&<Avatar initials={contraparte.iniciales} size="sm" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>}
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
                           {messageAttachments.length>0 && (
@@ -3911,7 +4094,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                       ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "—"],
                       ["Atiende", conv.agentName || "Sin asignar"],
                       ["Solicita", conv.counterpartName || "—"],
-                      ["Perfil", conv.requesterRole || "—"],
+                      ["Perfil", etiquetaDeRol(conv.requesterRole) || "—"],
                       ...(conv.closed ? [["Cerró", conv.closedBy || "—"]] : []),
                       ...(conv.rating ? [["Calificación", `${conv.rating} de 5`]] : []),
                     ].map(([k, v]) => (
@@ -4036,17 +4219,29 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 ):(
                   <>
                     <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
-                      <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{chatCompanyName}</p></div></div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Hablas con</p>
+                      <div className="flex items-center gap-2">
+                        <Avatar initials={contraparte.iniciales} size="sm" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate">{contraparte.nombre}</p>
+                          {contraparte.etiquetaRol&&<p className="text-[10px] text-muted-foreground">{contraparte.etiquetaRol}</p>}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
-                      <div className="flex items-center gap-2"><Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/><div><p className="text-xs font-semibold">{chatAdvisorName}</p><p className="text-[10px] text-muted-foreground">{chatAdvisorRole}</p></div></div>
-                      <div className="flex gap-1 mt-2">
+                    {/* La empresa es el contexto de la negociación; solo se
+                        repite aquí cuando no es el propio interlocutor. */}
+                    {contraparte.empresa&&(
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
+                        <div className="flex items-center gap-2"><Avatar initials={imp?.initials || initialsFromName(contraparte.empresa)} size="sm" color={imp?.color || "bg-slate-500"} variant="logo" src={imp?.logoUrl?resolveApiUrl(imp.logoUrl):undefined}/><div><p className="text-xs font-semibold">{contraparte.empresa}</p></div></div>
+                      </div>
+                    )}
+                    {contraparte.empresa&&(chatAdvisorWhatsapp||chatAdvisorEmail)&&(
+                      <div className="flex gap-1">
                         <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
                         <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
                 <div className="border-t border-border"/>
@@ -6085,94 +6280,252 @@ const BANNER_FORMATS_LABEL="PNG, JPG o WebP";
 const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 const BANNER_MAX_BYTES=5*1024*1024;
 
+/** Estado del autoguardado del perfil de empresa, en la cabecera. */
+function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
+  if(estado==="sin-cambios"){
+    return <span className="text-xs text-muted-foreground">Se guarda automáticamente</span>;
+  }
+  if(estado==="pendiente"){
+    return <span className="text-xs text-amber-700 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/>Cambios sin guardar</span>;
+  }
+  if(estado==="guardando"){
+    return <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/>Guardando…</span>;
+  }
+  return <span className="text-xs text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5"/>Guardado</span>;
+}
+
+/**
+ * Retardo del autoguardado. Suficiente para no disparar una petición por
+ * pulsación y corto para que el usuario vea "Guardado" mientras sigue en el
+ * mismo campo: el perfil se perdía porque nadie volvía a pulsar el botón.
+ */
+const RETARDO_AUTOGUARDADO_MS = 1200;
+
+type FormularioEmpresa = {
+  razonSocial:string;description:string;year:string;website:string;email:string;logoUrl:string;
+  phone:string;address:string;
+  categories:string[];countries:string[];industries:string[];
+  avgResponse:string;capacityVolume:string;soloCotizacionesDirectas:boolean;
+  shippingMarkPrefijo:string;certs:string[];banner:string;
+};
+
+// Formulario vacío de verdad. Antes venía sembrado con una dirección de Bogotá,
+// un teléfono y las certificaciones "ISO 9001"/"CE" de ejemplo: cualquier
+// empresa que guardara su perfil publicaba esos datos inventados como propios.
+const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
+  razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
+  phone:"",address:"",
+  categories:[],countries:[],industries:[],
+  avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
+  shippingMarkPrefijo:"",certs:[],banner:"",
+};
+
 function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;})=>Promise<void>}) {
-  const [saved,setSaved]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [form,setForm]=useState({
-    razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
-    phone:"+57 1 234 5678",address:"Calle 90 #15-20, Bogotá, Colombia",
-    categories:[] as string[],countries:[] as string[],
-    industries:["Retail","Industrial"],avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
-    shippingMarkPrefijo:"",
-    certs:["ISO 9001","CE"],banner:"",
-  });
+  const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
+  const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
   const [bannerUploading,setBannerUploading]=useState(false);
   const [bannerError,setBannerError]=useState("");
-  const [bannerPendienteDeGuardar,setBannerPendienteDeGuardar]=useState(false);
+  const [logoUploading,setLogoUploading]=useState(false);
   const [logoUploadError,setLogoUploadError]=useState("");
   const bannerInputRef=useRef<HTMLInputElement>(null);
+  const logoInputRef=useRef<HTMLInputElement>(null);
+
+  /**
+   * Vistas previas del archivo que acaba de elegir el usuario, como `blob:`.
+   *
+   * Hacen falta porque el backend solo sirve una imagen sin sesión cuando ya
+   * figura como imagen pública de la empresa, y eso no ocurre hasta que el
+   * perfil se guarda. Entre la subida y el autoguardado, el `<img>` apuntando al
+   * servidor recibía un 401 y el navegador NO reintenta una imagen fallida: se
+   * quedaba rota hasta recargar la página, justo lo que hacía pensar que la
+   * subida no había funcionado.
+   */
+  const [previaLocal,setPreviaLocal]=useState<{logo:string;banner:string}>({logo:"",banner:""});
+  const previaLocalRef=useRef(previaLocal);
+  useEffect(()=>{previaLocalRef.current=previaLocal;},[previaLocal]);
+  // Un `blob:` retiene el archivo en memoria hasta que se revoca.
+  useEffect(()=>()=>{
+    Object.values(previaLocalRef.current).forEach((url)=>{if(url)URL.revokeObjectURL(url);});
+  },[]);
+
+  function fijarPreviaLocal(clave:"logo"|"banner",archivo:File|null){
+    setPreviaLocal((prev)=>{
+      if(prev[clave])URL.revokeObjectURL(prev[clave]);
+      return {...prev,[clave]:archivo?URL.createObjectURL(archivo):""};
+    });
+  }
+
+  // `revision` sube en cada edición del usuario (nunca al hidratar desde el
+  // servidor) y es lo que dispara el autoguardado con retardo.
+  const [revision,setRevision]=useState(0);
+  const formRef=useRef(form);
+  const empresaHidratadaRef=useRef<string|null>(null);
+  const guardadoEnCursoRef=useRef(false);
+  const cambiosSinGuardarRef=useRef(false);
+
+  useEffect(()=>{formRef.current=form;},[form]);
 
   useEffect(()=>{
     if(!company)return;
+    // Se hidrata una sola vez por empresa. Volver a copiar la respuesta del
+    // servidor en cada recarga pisaba lo que el usuario estuviera escribiendo,
+    // y con autoguardado esa recarga ocurre cada pocos segundos.
+    if(empresaHidratadaRef.current===company.id)return;
+    empresaHidratadaRef.current=company.id;
+
     const perfilPublico = company.perfil_publico && typeof company.perfil_publico === "object" ? company.perfil_publico : {};
-    const getString = (key: string, fallback = "") => {
+    const getString = (key: string) => {
       const value = perfilPublico[key];
-      return typeof value === "string" ? value : fallback;
+      return typeof value === "string" ? value : "";
     };
-    const getStringArray = (key: string, fallback: string[]) => {
+    const getStringArray = (key: string) => {
       const value = perfilPublico[key];
       if (!Array.isArray(value)) {
-        return fallback;
+        return [] as string[];
       }
       return value.filter((entry): entry is string => typeof entry === "string");
     };
 
-    setForm((prev)=>(
-      {
-        ...prev,
-        razonSocial:company.nombre_empresa,
-        logoUrl:company.logo_url || "",
-        description:getString("description", ""),
-        year:getString("year", ""),
-        website:getString("website", ""),
-        email:getString("email", ""),
-        phone:getString("phone", prev.phone),
-        address:getString("address", prev.address),
-        categories:company.especialidad_producto ?? [],
-        countries:company.paises_origen ?? [],
-        industries:getStringArray("industries", prev.industries),
-        avgResponse:company.tiempo_respuesta_promedio || "~24h",
-        capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
-        certs:getStringArray("certs", prev.certs),
-        banner:getString("banner", ""),
-        soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
-        shippingMarkPrefijo:company.shipping_mark_prefijo || "",
-      }
-    ));
+    setForm({
+      razonSocial:company.nombre_empresa,
+      logoUrl:company.logo_url || "",
+      description:getString("description"),
+      year:getString("year"),
+      website:getString("website"),
+      email:getString("email"),
+      phone:getString("phone"),
+      address:getString("address"),
+      categories:company.especialidad_producto ?? [],
+      countries:company.paises_origen ?? [],
+      industries:getStringArray("industries"),
+      avgResponse:company.tiempo_respuesta_promedio || "~24h",
+      capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
+      certs:getStringArray("certs"),
+      banner:getString("banner"),
+      soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
+      shippingMarkPrefijo:company.shipping_mark_prefijo || "",
+    });
+    cambiosSinGuardarRef.current=false;
+    setRevision(0);
+    setEstadoGuardado("sin-cambios");
   },[company]);
 
-  function f(k:string,v:string){setForm(p=>({...p,[k]:v}));setSaved(false);}
+  /** Aplica un cambio del usuario y programa el autoguardado. */
+  const editar=useCallback((cambios:Partial<FormularioEmpresa>)=>{
+    setForm(p=>({...p,...cambios}));
+    cambiosSinGuardarRef.current=true;
+    setEstadoGuardado("pendiente");
+    setRevision(r=>r+1);
+  },[]);
+
+  function f(k:keyof FormularioEmpresa,v:string){editar({[k]:v} as Partial<FormularioEmpresa>);}
+
+  /** Alterna un valor dentro de una lista de etiquetas (categorías, países...). */
+  function alternar(clave:"categories"|"countries"|"certs",valor:string){
+    const actual=form[clave];
+    editar({[clave]:actual.includes(valor)?actual.filter(x=>x!==valor):[...actual,valor]} as Partial<FormularioEmpresa>);
+  }
+
+  const persistir=useCallback(async()=>{
+    if(guardadoEnCursoRef.current){
+      // Hay un envío en vuelo: se reintenta en el siguiente ciclo del retardo,
+      // en vez de solapar dos PUT sobre la misma empresa.
+      setRevision(r=>r+1);
+      return;
+    }
+
+    const actual=formRef.current;
+    guardadoEnCursoRef.current=true;
+    cambiosSinGuardarRef.current=false;
+    setEstadoGuardado("guardando");
+    setSaveError("");
+    try{
+      await onSave({
+        nombre_empresa:actual.razonSocial,
+        // Se manda siempre, también vacío: con `|| undefined` no había manera de
+        // quitar un logo ya puesto, porque el backend no veía el campo.
+        logo_url:actual.logoUrl.trim(),
+        especialidad_producto:actual.categories,
+        paises_origen:actual.countries,
+        shipping_mark_prefijo:actual.shippingMarkPrefijo.trim(),
+        tiempo_respuesta_promedio:actual.avgResponse,
+        capacidad_volumen:actual.capacityVolume.trim() ? Number.parseInt(actual.capacityVolume, 10) : undefined,
+        perfil_publico: {
+          description: actual.description.trim(),
+          year: actual.year.trim(),
+          website: actual.website.trim(),
+          email: actual.email.trim(),
+          phone: actual.phone.trim(),
+          address: actual.address.trim(),
+          industries: actual.industries,
+          certs: actual.certs,
+          banner: actual.banner.trim(),
+        },
+        solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
+      });
+      setEstadoGuardado(prev=>prev==="guardando"?"guardado":prev);
+    }catch(err){
+      // Lo escrito sigue en pantalla y vuelve a marcarse como pendiente: el
+      // siguiente intento (automático o manual) lo reenvía entero.
+      cambiosSinGuardarRef.current=true;
+      setEstadoGuardado("pendiente");
+      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
+    }finally{
+      guardadoEnCursoRef.current=false;
+    }
+  },[onSave]);
+
+  // El envío se invoca siempre por referencia. `onSave` se redefine en cada
+  // render de la aplicación, así que depender de `persistir` en el efecto
+  // reiniciaba el temporizador con cada repintado ajeno (sondeos, chat...) y el
+  // autoguardado podía no llegar a dispararse nunca.
+  const persistirRef=useRef(persistir);
+  useEffect(()=>{persistirRef.current=persistir;},[persistir]);
+
+  // Autoguardado: cada edición reinicia el reloj, así que solo se envía cuando
+  // el usuario deja de escribir.
+  useEffect(()=>{
+    if(revision===0)return;
+    const temporizador=window.setTimeout(()=>{void persistirRef.current();},RETARDO_AUTOGUARDADO_MS);
+    return ()=>window.clearTimeout(temporizador);
+  },[revision]);
+
+  // Si se sale de la pantalla dentro de la ventana del retardo, lo último
+  // escrito se envía igualmente en lugar de perderse.
+  useEffect(()=>()=>{
+    if(cambiosSinGuardarRef.current){
+      void persistirRef.current();
+    }
+  },[]);
 
   /**
-   * Sube el banner a gestión documental y guarda su ruta canónica.
+   * Sube una imagen del perfil (logo o banner) a gestión documental y devuelve
+   * su ruta canónica.
    *
    * La imagen tiene que vivir en la plataforma (no una URL pegada a mano) para
    * que el backend la reconozca como imagen pública de la empresa y la sirva
    * sin sesión al solicitante que abre la ficha.
    */
-  async function handleUploadBanner(archivo:File){
-    setBannerError("");
+  async function subirImagenDePerfil(archivo:File):Promise<string>{
     const extension=(archivo.name.split(".").pop()||"").toLowerCase();
     if(!BANNER_EXTENSIONS.includes(extension)){
-      setBannerError(`Formato no soportado (.${extension}). Usa ${BANNER_FORMATS_LABEL}.`);
-      return;
+      throw new Error(`Formato no soportado (.${extension}). Usa ${BANNER_FORMATS_LABEL}.`);
     }
     if(archivo.size>BANNER_MAX_BYTES){
-      setBannerError("La imagen supera 5 MB. Comprímela antes de subirla.");
-      return;
+      throw new Error("La imagen supera 5 MB. Comprímela antes de subirla.");
     }
+    const subido=await businessService.uploadDocumentFile(archivo,null,"perfil-empresa");
+    return toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
+  }
 
+  async function handleUploadBanner(archivo:File){
+    setBannerError("");
     setBannerUploading(true);
     try{
-      const subido=await businessService.uploadDocumentFile(archivo,null,"perfil-empresa");
-      const url=toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
-      setForm(p=>({...p,banner:url}));
-      setSaved(false);
-      // La subida solo deja la imagen en el formulario: hasta que no se guarda
-      // el perfil, el banner no existe para nadie mas. Sin este aviso el usuario
-      // veia la vista previa, se iba de la pantalla y el banner desaparecia.
-      setBannerPendienteDeGuardar(true);
+      const ruta=await subirImagenDePerfil(archivo);
+      fijarPreviaLocal("banner",archivo);
+      editar({banner:ruta});
     }catch(err){
       setBannerError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir la imagen del banner.");
     }finally{
@@ -6180,40 +6533,23 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
     }
   }
 
-  async function save(){
-    setSaveError("");
-    setSaving(true);
+  async function handleUploadLogo(archivo:File){
+    setLogoUploadError("");
+    setLogoUploading(true);
     try{
-      await onSave({
-        nombre_empresa:form.razonSocial,
-        logo_url:form.logoUrl.trim() || undefined,
-        especialidad_producto:form.categories,
-        paises_origen:form.countries,
-        shipping_mark_prefijo:form.shippingMarkPrefijo.trim(),
-        tiempo_respuesta_promedio:form.avgResponse,
-        capacidad_volumen:form.capacityVolume.trim() ? Number.parseInt(form.capacityVolume, 10) : undefined,
-        perfil_publico: {
-          description: form.description.trim(),
-          year: form.year.trim(),
-          website: form.website.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          address: form.address.trim(),
-          industries: form.industries,
-          certs: form.certs,
-          banner: form.banner.trim(),
-        },
-        solo_cotizaciones_directas:form.soloCotizacionesDirectas,
-      });
-      setSaved(true);
-      setBannerPendienteDeGuardar(false);
-      setTimeout(()=>setSaved(false),3000);
+      const ruta=await subirImagenDePerfil(archivo);
+      fijarPreviaLocal("logo",archivo);
+      editar({logoUrl:ruta});
     }catch(err){
-      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
+      setLogoUploadError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir el logo.");
     }finally{
-      setSaving(false);
+      setLogoUploading(false);
     }
   }
+
+  const guardando=estadoGuardado==="guardando";
+  const logoPreview=previaLocal.logo||(form.logoUrl?resolveApiUrl(form.logoUrl):"");
+  const bannerPreview=previaLocal.banner||(form.banner?resolveApiUrl(form.banner):"");
 
   if(!company){
     return (
@@ -6242,7 +6578,12 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
               <h1 className="text-xl font-semibold mt-3">Perfil de la empresa</h1>
               <p className="text-sm text-muted-foreground mt-0.5">Esta información es visible para los solicitantes.</p>
             </div>
-            <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
+            <div className="flex items-center gap-3">
+              {/* El formulario se guarda solo; el indicador es lo que le dice al
+                  usuario que no tiene que pulsar nada para no perder lo escrito. */}
+              <IndicadorAutoguardado estado={estadoGuardado}/>
+              <Button variant="primary" loading={guardando} icon={<Save className="w-4 h-4"/>} onClick={()=>{void persistir();}}>Guardar ahora</Button>
+            </div>
           </div>
           {saveError&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{saveError}</p></Card>}
           <div className="grid lg:grid-cols-3 gap-6">
@@ -6254,21 +6595,10 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Input label="Año de fundación" type="number" value={form.year} onChange={e=>f("year",e.target.value)}/>
                   <Input label="Sitio web" value={form.website} onChange={e=>f("website",e.target.value)} prefix={<Globe className="w-4 h-4"/>}/>
                   <div>
-                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>f("logoUrl",e.target.value)} prefix={<ImageIcon className="w-4 h-4"/>}/>
+                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>{fijarPreviaLocal("logo",null);f("logoUrl",e.target.value);}} prefix={<ImageIcon className="w-4 h-4"/>} hint="Súbelo desde aquí o pega la URL de tu logo."/>
                     <div className="mt-2 flex gap-2">
-                      <DocumentUploadButton
-                        label="Subir logo"
-                        accept={BANNER_UPLOAD_ACCEPT}
-                        origen="perfil-empresa"
-                        onUploaded={(fileItem)=>{
-                          setLogoUploadError("");
-                          const path = toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
-                          setForm((prev)=>({...prev,logoUrl:path}));
-                          setSaved(false);
-                        }}
-                        onError={(message)=>setLogoUploadError(message)}
-                      />
-                      {form.logoUrl&&<Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.logoUrl);}}>Ver logo</Button>}
+                      <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Reemplazar logo":"Subir logo"}</Button>
+                      {form.logoUrl&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("logo",null);editar({logoUrl:""});}}>Quitar</Button>}
                     </div>
                     {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
                   </div>
@@ -6281,7 +6611,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
                 </div>
                 <div className="mt-4 flex items-center gap-2">
-                  <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>setForm(p=>({...p,soloCotizacionesDirectas:e.target.checked}))} className="h-4 w-4 rounded border-border"/>
+                  <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>editar({soloCotizacionesDirectas:e.target.checked})} className="h-4 w-4 rounded border-border"/>
                   <label htmlFor="solo-cotizaciones-directas" className="text-sm text-foreground">Solo cotizaciones dirigidas</label>
                 </div>
               </Card>
@@ -6293,15 +6623,15 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   </Select>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
-                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>{const arr=form.categories.includes(c)?form.categories.filter(x=>x!==c):[...form.categories,c];setForm(p=>({...p,categories:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Países atendidos</p>
-                    <div className="flex flex-wrap gap-1.5">{COUNTRIES.slice(0,8).map(c=><button key={c} onClick={()=>{const arr=form.countries.includes(c)?form.countries.filter(x=>x!==c):[...form.countries,c];setForm(p=>({...p,countries:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.countries.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{COUNTRIES.slice(0,8).map(c=><button key={c} onClick={()=>alternar("countries",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.countries.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Certificaciones</p>
-                    <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>{const arr=form.certs.includes(c)?form.certs.filter(x=>x!==c):[...form.certs,c];setForm(p=>({...p,certs:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>alternar("certs",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
                   </div>
                 </div>
               </Card>
@@ -6356,11 +6686,11 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 {form.banner?(
                   <div className="space-y-3">
                     <div className="rounded-xl overflow-hidden border border-border bg-muted/40">
-                      <img src={resolveApiUrl(form.banner)} alt="Banner de la empresa" className="w-full h-32 object-cover"/>
+                      <img src={bannerPreview} alt="Banner de la empresa" className="w-full h-32 object-cover"/>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="secondary" size="sm" loading={bannerUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>bannerInputRef.current?.click()}>Reemplazar</Button>
-                      <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{setForm(p=>({...p,banner:""}));setSaved(false);}}>Quitar</Button>
+                      <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("banner",null);editar({banner:""});}}>Quitar</Button>
                     </div>
                   </div>
                 ):(
@@ -6373,35 +6703,41 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 )}
 
                 {bannerError&&<p className="text-xs text-destructive mt-3">{bannerError}</p>}
-                {bannerPendienteDeGuardar&&!bannerError&&(
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
-                    Imagen cargada. Pulsa <strong>Guardar cambios</strong> para que aparezca en tu perfil público.
-                  </p>
-                )}
-                {form.banner&&!saved&&<p className="text-xs text-muted-foreground mt-3">Recuerda pulsar «Guardar cambios» para publicar el banner.</p>}
               </Card>
             </div>
             <div>
               <Card padding="md">
                 <p className="font-semibold text-sm mb-4">Vista previa del logo</p>
+                {/* Input oculto compartido por los dos botones de "subir logo". */}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept={BANNER_UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={e=>{
+                    const archivo=e.target.files?.[0];
+                    e.target.value="";
+                    if(archivo)void handleUploadLogo(archivo);
+                  }}
+                />
                 <div className="flex flex-col items-center gap-3">
-                  <div className={clsx("w-20 h-20 rounded-xl flex items-center justify-center text-white text-2xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
-                  <DocumentUploadButton
-                    label="Cambiar logo"
-                    accept={BANNER_UPLOAD_ACCEPT}
-                    origen="perfil-empresa"
-                    onUploaded={(fileItem)=>{
-                      setLogoUploadError("");
-                      const path = toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
-                      setForm((prev)=>({...prev,logoUrl:path}));
-                      setSaved(false);
-                    }}
-                    onError={(message)=>setLogoUploadError(message)}
-                  />
+                  {/* Antes esta vista previa pintaba siempre las iniciales, así
+                      que tras subir el logo no cambiaba nada en pantalla y la
+                      subida parecía no haber funcionado. */}
+                  {logoPreview?(
+                    <img src={logoPreview} alt="Logo de la empresa" className="w-32 h-32 rounded-2xl border border-border bg-white object-contain p-2"/>
+                  ):(
+                    <div className={clsx("w-32 h-32 rounded-2xl flex items-center justify-center text-white text-3xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Cambiar logo":"Subir logo"}</Button>
+                    {form.logoUrl&&<Button variant="ghost" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.logoUrl);}}>Ver</Button>}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">PNG, JPG o WebP hasta 5 MB. Se recomienda un cuadrado de 512×512 px.</p>
                 </div>
                 <div className="mt-5 pt-5 border-t border-border space-y-2">
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Certificaciones</span><span className="font-semibold flex items-center gap-1 text-emerald-700"><Shield className="w-3 h-3"/>{form.certs.length}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos</span><span className="font-semibold">N/D</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos completados</span><span className="font-semibold">{company.proyectos_completados ?? 0}</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Miembro desde</span><span className="font-semibold">{formatShortDate(company.fecha_registro)}</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Verificada</span><span className="font-semibold flex items-center gap-1 text-emerald-600"><BadgeCheck className="w-3 h-3"/>{company.verificado?"Sí":"No"}</span></div>
                 </div>
@@ -7860,7 +8196,7 @@ function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open
       <div className="space-y-4">
         {bannerUrl&&<img src={bannerUrl} alt="" className="h-32 w-full rounded-xl object-cover"/>}
         <div className="flex items-center gap-3">
-          <Avatar initials={imp.initials} size="xl" color={imp.color} src={logoUrl||undefined}/>
+          <Avatar initials={imp.initials} size="2xl" color={imp.color} src={logoUrl||undefined} variant="logo"/>
           <div className="min-w-0">
             <p className="font-semibold text-base truncate">{imp.name}</p>
             <p className="text-xs text-muted-foreground truncate">{imp.specialty} · {imp.country}</p>
@@ -9334,6 +9670,10 @@ export default function App() {
         refId: row.orden_id ?? row.cotizacion_id ?? "",
         quoteId: row.cotizacion_id ?? "",
         counterpartName: row.contraparte_nombre ?? undefined,
+        counterpartId: row.contraparte_id ?? undefined,
+        counterpartRole: row.contraparte_rol ?? undefined,
+        counterpartCompany: row.contraparte_empresa ?? undefined,
+        counterpartPhotoUrl: row.contraparte_foto_url ?? undefined,
         subject: row.asunto ?? undefined,
         urgency: row.urgencia ?? undefined,
         requesterRole: row.solicitante_rol ?? undefined,

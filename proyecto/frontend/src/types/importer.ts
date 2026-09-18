@@ -40,6 +40,18 @@ export interface Importer {
   /** Imagen de portada ancha que encabeza la ficha pública. */
   bannerUrl?: string;
   logoUrl?: string;
+  /**
+   * Datos de contacto y ficha corporativa que la empresa escribe en su propio
+   * perfil. Se guardaban en `perfil_publico` pero no se leían en ninguna
+   * pantalla, así que rellenarlos no cambiaba nada de lo que veía el cliente.
+   */
+  website?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  foundedYear?: string;
+  /** Sectores a los que la empresa dice atender ("Retail", "Industrial"...). */
+  industries?: string[];
   advisor: {
     name: string;
     role: string;

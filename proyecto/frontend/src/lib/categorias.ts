@@ -31,6 +31,7 @@ export const CATEGORIAS_PRODUCTO = [
   "Farmacéutico",
   "Consumo masivo",
   "Seguridad",
+  "Televenta",
 ] as const;
 
 export type CategoriaProducto = (typeof CATEGORIAS_PRODUCTO)[number];

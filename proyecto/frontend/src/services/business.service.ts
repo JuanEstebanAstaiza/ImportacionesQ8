@@ -18,6 +18,8 @@ export interface BackendImporter {
   certificaciones?: BackendCertificacionOtorgada[];
   /** Suma de los pesos de sus sellos: define el orden del catálogo. */
   puntaje_publicidad?: number;
+  /** Órdenes que la empresa llevó hasta "entregado" (trayectoria pública). */
+  proyectos_completados?: number;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;
@@ -373,6 +375,15 @@ export interface BackendChatConversation {
   importador_id: string | null;
   /** Nombre de la otra parte, ya resuelto por el backend. */
   contraparte_nombre: string | null;
+  /**
+   * Quién está al otro lado, resuelto por el backend según quién consulta.
+   * Sin el rol y la empresa, la cabecera del chat rotulaba todas las
+   * conversaciones igual y no se distinguía un cliente de un asesor.
+   */
+  contraparte_id?: string | null;
+  contraparte_rol?: string | null;
+  contraparte_empresa?: string | null;
+  contraparte_foto_url?: string | null;
   /** Solo en tickets de soporte. */
   asunto: string | null;
   urgencia: UrgenciaSoporte | null;

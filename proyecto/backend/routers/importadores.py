@@ -28,7 +28,7 @@ from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.campo_personalizado import CampoPersonalizado
-from models.orden import Orden
+from models.orden import EstadoOrden, Orden
 from services.certificacion_service import (
     adjuntar_certificaciones,
     subconsulta_puntaje_publicidad,
@@ -536,10 +536,13 @@ async def metricas_importador(
     ordenes_totales = db.query(func.count(Orden.id)).filter(
         Orden.importador_id == importador_id
     ).scalar() or 0
-    estados_cerrados = ("entregada", "cancelada", "completada")
+    # `EstadoOrden.entregado` es el único estado final del modelo. La lista que
+    # había aquí ("entregada", "cancelada", "completada") no existe en el enum,
+    # así que ninguna orden casaba y las ya entregadas seguían contando como
+    # activas en el panel de la empresa.
     ordenes_activas = db.query(func.count(Orden.id)).filter(
         Orden.importador_id == importador_id,
-        Orden.estado.notin_(list(estados_cerrados)),
+        Orden.estado != EstadoOrden.entregado.value,
     ).scalar() or 0
 
     asesores_activos = db.query(func.count(Usuario.id)).filter(
@@ -1022,7 +1025,6 @@ async def listar_ordenes_activas_importador(
             detail="No autorizado - Solo puede ver sus propias órdenes"
         )
     
-    from models.orden import Orden, EstadoOrden
     
     # Listar órdenes activas (estado diferente a "entregado")
     estados_activos = [e.value for e in EstadoOrden if e != EstadoOrden.entregado]
