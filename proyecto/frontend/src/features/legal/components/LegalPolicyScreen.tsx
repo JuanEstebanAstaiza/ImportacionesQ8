@@ -109,12 +109,12 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
           )}
 
           <p>
-            Si tienes preguntas, puedes contactarnos a <span className="text-primary font-medium">legal@importacionesq8.co</span>
+            Si tienes preguntas, puedes contactarnos a <span className="text-primary font-medium">legal@zarpi.com</span>
           </p>
         </div>
       </main>
 
-      <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">© 2025 Zarpi. Todos los derechos reservados.</footer>
+      <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">© 2026 Zarpi. Todos los derechos reservados.</footer>
     </div>
   );
 }

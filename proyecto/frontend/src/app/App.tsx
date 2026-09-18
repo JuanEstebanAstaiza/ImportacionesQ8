@@ -6209,7 +6209,7 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map((m,i)=>(
               <Card key={i} padding="md" className="metric-card flex items-start gap-3">
-                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",m.bg,m.color)}>{m.icon}</div>
+                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
                 <div className="min-w-0">
                   <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
