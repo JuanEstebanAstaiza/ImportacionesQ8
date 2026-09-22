@@ -17,7 +17,7 @@ import {
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
-  LockKeyhole, LifeBuoy,
+  LockKeyhole, LifeBuoy, WalletCards,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -50,6 +50,7 @@ import {
   type BackendArchivoItem,
   type BackendAsesor,
   type BackendChatAttachmentItem,
+  type BackendChatConversation,
   type BackendCotizacion,
   type BackendExplorerResponse,
   type BackendImporter,
@@ -68,6 +69,8 @@ import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
 import { ResenasImportador } from "@/features/resenas/ResenasImportador";
 import { PendientesDeResena } from "@/features/resenas/PendientesDeResena";
 import { PresentacionPublica, EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
+import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
+import { TierBadge } from "@/features/cotizante/TierBadge";
 import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
 import {
   componerShippingMark,
@@ -495,6 +498,7 @@ interface ChatConv {
   // aparte porque es lo que identifica al responsable que se puede reasignar.
   // Ambos van vacíos en los hilos internos y en los de soporte.
   quoteId:string;
+  cotizanteTier?:string;
   counterpartName?:string;
   counterpartId?:string;
   counterpartRole?:string;
@@ -639,6 +643,7 @@ const NAV_ADMIN=[
   {icon:LayoutGrid,    label:"Resumen",         key:"admin-dashboard"},
   {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
+  {icon:WalletCards,   label:"Cotizantes",      key:"admin-cotizantes"},
   {icon:LifeBuoy,      label:"Soporte",         key:"admin-soporte"},
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
@@ -809,6 +814,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
   const primaryCountry = imp.paises_origen[0] ?? "N/A";
   const name = imp.nombre_empresa;
   const perfil = imp.perfil_publico ?? null;
+  const tierMinimoRequerido = readPerfilPublicoString(perfil, "tier_minimo_requerido") || imp.tier_minimo_requerido || "Bronze";
   const advisorProfile = resolveImporterAdvisorProfile(perfil, name);
   return {
     description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
@@ -845,6 +851,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     verified: Boolean(imp.verificado),
     country: primaryCountry,
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
+    tierMinimoRequerido: ["Bronze", "Silver", "Gold", "Élite"].includes(tierMinimoRequerido) ? tierMinimoRequerido as Importer["tierMinimoRequerido"] : "Bronze",
     shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
     advisor: {
       name: advisorProfile.advisorName,
@@ -908,6 +915,10 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     shippingMarkSufijo: cot.shipping_mark_sufijo ?? null,
     customFields: cot.campos_personalizados_valores ?? null,
     requesterId: cot.solicitante_id,
+    tierMinimoRequerido: cot.tier_minimo_requerido ?? "Bronze",
+    solicitanteTier: cot.solicitante_tier ?? "Bronze",
+    solicitantePuntosCotizacion: cot.solicitante_puntos_cotizacion ?? 0,
+    bloqueada: Boolean(cot.bloqueada),
   };
 }
 
@@ -1175,6 +1186,7 @@ const COMPANY_ADVISORS:CompanyAdvisor[]=[
 interface AppNotification {
   id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
   title:string;body:string;date:string;read:boolean;
+  cotizacionId?:string;conversationId?:string;approval?:boolean;
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1188,14 +1200,26 @@ function mapBackendNotificationTypeToUi(type: string): AppNotification["type"] {
   return "status";
 }
 
-function mapBackendNotificationToUi(notification: { id: string; tipo: string; titulo: string; mensaje: string; fecha_creacion: string; leida: boolean; }): AppNotification {
+function mapBackendNotificationToUi(notification: { id: string; tipo: string; titulo: string; mensaje: string; fecha_creacion: string; leida: boolean; data?: Record<string, unknown> | null; }, companyName?: string): AppNotification {
+  const data = notification.data || {};
+  const cotizacionId = typeof data.cotizacion_id === "string" ? data.cotizacion_id : undefined;
+  const conversationId = typeof data.conversacion_id === "string" ? data.conversacion_id : undefined;
+  const approval = notification.tipo === "negociacion" || /cotizaci[oó]n aprobada/i.test(notification.titulo);
+  const company = companyName || (typeof data.nombre_empresa === "string" ? data.nombre_empresa : "la empresa importadora");
+  const title = approval ? "Cotización Aprobada" : notification.titulo;
+  const body = approval && cotizacionId
+    ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
+    : notification.mensaje;
   return {
     id: notification.id,
     type: mapBackendNotificationTypeToUi(notification.tipo),
-    title: notification.titulo,
-    body: notification.mensaje,
+    title,
+    body,
     date: formatShortDate(notification.fecha_creacion),
     read: notification.leida,
+    cotizacionId,
+    conversationId,
+    approval,
   };
 }
 
@@ -1415,6 +1439,7 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const displayInitials = initialsFromName(initialsSource);
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
   const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
+  const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
       <div/>
@@ -1426,6 +1451,11 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
           {count>0&&<span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">{count>9?"9+":count}</span>}
         </div>
         <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
+        {authUser?.rol === "solicitante" && (
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles">
+            <WalletCards className="h-3.5 w-3.5" />{creditos}
+          </span>
+        )}
         {showHelp&&<NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
         <button
           onClick={toggleTheme}
@@ -2106,8 +2136,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
+function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;onRefreshQuotes?:()=>Promise<void>;creditos:number;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
+  const [quoteToUnlock,setQuoteToUnlock]=useState<Quote|null>(null);
+  const [unlocking,setUnlocking]=useState(false);
+  const [unlockError,setUnlockError]=useState("");
   const lastQ=quotes[0]??null;
   const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
     acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
@@ -2121,6 +2154,21 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
     const mr=!respF||(respF==="sin"?count===0:count>0);
     return ms&&mst&&mm&&mr;
   });
+
+  async function unlockQuote() {
+    if (!quoteToUnlock) return;
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      await businessService.unlockQuoteByPoint(quoteToUnlock.id);
+      setQuoteToUnlock(null);
+      await onRefreshQuotes?.();
+    } catch (error) {
+      setUnlockError(error instanceof Error ? error.message : "No se pudo desbloquear la cotización.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="quotes"/>
@@ -2130,7 +2178,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
             <div className="flex items-center justify-between mt-3">
-              <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
+              <div className="flex items-center gap-3"><h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1><span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"><WalletCards className="h-3.5 w-3.5" />{creditos} créditos</span></div>
               <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
@@ -2193,10 +2241,22 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
                         <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
                         <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
-                        <td className="px-4 py-3"><Badge variant={row.status}/></td>
+                        <td className="px-4 py-3">
+                          {row.bloqueada ? (
+                            <div className="flex min-w-[150px] flex-col items-start gap-1">
+                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">Cotización bloqueada</span>
+                              <span className="text-[11px] text-muted-foreground">Requiere <TierBadge tier={row.tierMinimoRequerido} /></span>
+                            </div>
+                          ) : <Badge variant={row.status}/>}
+                        </td>
                         <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id]||0}</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
-                        <td className="px-4 py-3"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button></td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button>
+                            {row.bloqueada && <Button variant="primary" size="sm" onClick={()=>{setUnlockError("");setQuoteToUnlock(row);}}>Desbloquear por 1 punto</Button>}
+                          </div>
+                        </td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -2206,6 +2266,24 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
           </div>
         </main>
       </div>
+      <Modal open={Boolean(quoteToUnlock)} onClose={()=>{if(!unlocking)setQuoteToUnlock(null);}} title="Desbloquear cotización">
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-sm font-semibold">{quoteToUnlock?.code} · {quoteToUnlock?.product}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Tu nivel:</span><TierBadge tier={quoteToUnlock?.solicitanteTier} />
+              <span>Requerido:</span><TierBadge tier={quoteToUnlock?.tierMinimoRequerido} />
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">Se descontará 1 punto de cotización de tu saldo para habilitar esta oportunidad.</p>
+          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? 0} puntos</span></p>
+          {unlockError && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">{unlockError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" disabled={unlocking} onClick={()=>setQuoteToUnlock(null)}>Cancelar</Button>
+            <Button variant="primary" loading={unlocking} onClick={()=>{void unlockQuote();}}>Desbloquear por 1 punto</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -2995,6 +3073,13 @@ function resolverContraparteChat(conv:ChatConv|null,imp:Importer|null){
   };
 }
 
+function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterpartRole: string | undefined, tier: string | undefined): boolean {
+  const rolContraparte = String(counterpartRole || "").trim().toLowerCase();
+  const esCotizante = rolContraparte === "cotizante" || rolContraparte === "solicitante";
+  const esRolAutorizado = currentUserRole === "asesor" || currentUserRole === "importadora" || currentUserRole === "admin";
+  return Boolean(tier) && esCotizante && esRolAutorizado;
+}
+
 function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
@@ -3083,6 +3168,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // Con quién se habla de verdad. Antes la cabecera usaba `chatAdvisorName`,
   // que para casi todas las empresas es el literal «Asesor asignado».
   const contraparte = resolverContraparteChat(conv, imp);
+  const mostrarTierContraparte = conv ? puedeVerTierDeContraparte(currentUserRole, conv.counterpartRole, conv.cotizanteTier) : false;
   const chatAdvisorName = conv?.advisorName || imp?.advisor.name || "Asesor";
   const chatAdvisorRole = conv?.advisorRole || imp?.advisor.role || "Asesor";
   const chatAdvisorEmail = conv?.advisorEmail || imp?.advisor.email || "";
@@ -3803,6 +3889,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                             <p className="text-xs text-muted-foreground truncate">
                               {[companyName, c.type!=="soporte"?suContraparte.etiquetaRol:""].filter(Boolean).join(" · ")}
                             </p>
+                            {puedeVerTierDeContraparte(currentUserRole, c.counterpartRole, c.cotizanteTier) && <TierBadge tier={c.cotizanteTier} />}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -3840,6 +3927,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     <p className="font-semibold text-sm text-foreground">
                       {conv.type==="soporte"?(conv.subject||"Solicitud de soporte"):contraparte.nombre}
                     </p>
+                    {mostrarTierContraparte && <TierBadge tier={conv.cotizanteTier} />}
                     {/* Qué es esa persona: sin esto no se distinguía un cliente
                         de un asesor ni de la cuenta dueña de una empresa. */}
                     {conv.type!=="soporte"&&contraparte.etiquetaRol&&(
@@ -4225,6 +4313,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{contraparte.nombre}</p>
                           {contraparte.etiquetaRol&&<p className="text-[10px] text-muted-foreground">{contraparte.etiquetaRol}</p>}
+                          {mostrarTierContraparte && <TierBadge tier={conv.cotizanteTier} />}
                         </div>
                       </div>
                     </div>
@@ -5709,6 +5798,7 @@ function Stepper({current}:{current:number}) {
 interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
 const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
 const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
+const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
 const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
 function normalizeTargetPriceInput(value: string): string {
   const normalized = value.replace(",", ".");
@@ -5926,7 +6016,7 @@ function Step3Abierta() {
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload)=>Promise<void>;prefill?:Partial<QuoteFormState>}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -5934,9 +6024,13 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   // y el usuario solo ajusta lo que cambie.
   const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
   const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
+  const [desbloquearPorCredito,setDesbloquearPorCredito]=useState(false);
   const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
   const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
   const si=importers.find(i=>i.id===selectedId)??null;
+  const tierCotizante = cotizanteTier;
+  const tierRequerido = si?.tierMinimoRequerido || "Bronze";
+  const tierBloqueado = Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
   // El backend exige una descripcion de al menos 10 caracteres. Se comprueba
@@ -5963,9 +6057,17 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     setStepError("");
     navigate(step+1,"fwd");
   }
-  async function handleSubmit(){
+  async function handleSubmit(forceUnlock = desbloquearPorCredito){
     if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
     if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+    if(tierBloqueado && !forceUnlock){
+      setStepError(`Esta empresa requiere nivel ${tierRequerido} o superior. Tu nivel actual es ${tierCotizante}.`);
+      return;
+    }
+    if(tierBloqueado && creditos < 1){
+      setStepError("No tienes créditos suficientes para desbloquear esta cotización.");
+      return;
+    }
 
     if(form.description.trim().length<DESCRIPCION_MINIMA){
       setStepError(`Describe el producto con al menos ${DESCRIPCION_MINIMA} caracteres.`);
@@ -6005,12 +6107,13 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       incoterm:form.incoterm || "DDP",
       notas_adicionales:form.notes||undefined,
       shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
+      tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
     };
 
     try{
       setSubmitting(true);
       setStepError("");
-      await onSubmitQuote(payload);
+      await onSubmitQuote(payload, tierBloqueado && forceUnlock);
       setSubmitted(true);
     }catch(error){
       setStepError(error instanceof Error?error.message:"No se pudo crear la cotización.");
@@ -6054,7 +6157,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2">
                   <div style={slideStyle}>
-                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}
+                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
                     {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}
                     {step===3 && modalidad==="dirigida" && si && <Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}
                     {step===3 && modalidad==="abierta" && <Step3Abierta/>}
@@ -6074,6 +6177,13 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               </div>
             </div>
 
+            {tierBloqueado && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-accent/30 dark:bg-accent/10">
+                <p className="text-xs font-semibold text-amber-900 dark:text-accent">Esta empresa requiere nivel {tierRequerido} o superior. Tu nivel actual es {tierCotizante}.</p>
+                <p className="mt-1 text-xs text-amber-800 dark:text-accent/80">Saldo disponible: {creditos} créditos. 1 crédito desbloquea 1 cotización.</p>
+              </div>
+            )}
+
             {/* Barra Inferior de Navegación (SIEMPRE FIJA EN EL BOTTOM) */}
             <div className="pt-3 mt-3 border-t border-border flex-shrink-0 bg-background z-10">
               <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -6087,10 +6197,17 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                   {step < 3 ? (
                     <Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext} className="w-full sm:w-auto justify-center">Continuar</Button>
                   ) : (
-                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} onClick={handleSubmit} className="w-full sm:w-auto justify-center">Solicitar cotización</Button>
+                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} disabled={tierBloqueado} onClick={()=>{void handleSubmit(false);}} className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                      {tierBloqueado ? "Solicitar cotización" : "Solicitar cotización"}
+                    </Button>
                   )}
                 </div>
               </div>
+              {step === 3 && tierBloqueado && creditos >= 1 && (
+                <Button variant="primary" size="md" icon={<WalletCards className="w-4 h-4"/>} loading={submitting} onClick={()=>{setDesbloquearPorCredito(true);void handleSubmit(true);}} className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                  Desbloquear y enviar cotización por 1 crédito
+                </Button>
+              )}
             </div>
 
           </main>
@@ -6121,7 +6238,7 @@ function Modal({open,onClose,title,children,width="max-w-lg"}:{open:boolean;onCl
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICATIONS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onBack:()=>void;sb:SidebarCtrl}) {
+function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onOpen:(notification:AppNotification)=>Promise<void>;onBack:()=>void;sb:SidebarCtrl}) {
   const NOTIF_ICON:Record<AppNotification["type"],React.ReactNode>={
     response:<ClipboardList className="w-4 h-4 text-blue-600"/>,
     message: <MessageSquare className="w-4 h-4 text-purple-600"/>,
@@ -6153,17 +6270,17 @@ function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:App
               </div>
             )}
             {notifications.map(n=>(
-              <div key={n.id} onClick={()=>onMark(n.id)} className={clsx("flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-muted/50 transition-colors",!n.read&&"bg-blue-50/40")}>
+              <button key={n.id} type="button" onClick={()=>{onMark(n.id);void onOpen(n);}} className={clsx("w-full text-left flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-primary/5 dark:hover:bg-accent/10 transition-colors",!n.read&&"bg-primary/5 dark:bg-accent/10")}>
                 <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">{NOTIF_ICON[n.type]}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p className={clsx("text-sm",!n.read?"font-semibold text-foreground":"font-medium text-foreground/80")}>{n.title}</p>
+                    <p className={clsx("text-sm",!n.read?"font-semibold text-primary dark:text-accent":"font-medium text-foreground/80")}>{n.title}</p>
                     <span className="text-xs text-muted-foreground flex-shrink-0">{n.date}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
                 </div>
-                {!n.read&&<span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5"/>}
-              </div>
+                {!n.read&&<span className="w-2 h-2 rounded-full bg-primary dark:bg-accent flex-shrink-0 mt-1.5"/>}
+              </button>
             ))}
           </Card>
         </main>
@@ -6307,6 +6424,7 @@ type FormularioEmpresa = {
   categories:string[];countries:string[];industries:string[];
   avgResponse:string;capacityVolume:string;soloCotizacionesDirectas:boolean;
   shippingMarkPrefijo:string;certs:string[];banner:string;
+  tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
 };
 
 // Formulario vacío de verdad. Antes venía sembrado con una dirección de Bogotá,
@@ -6318,6 +6436,7 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   categories:[],countries:[],industries:[],
   avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
   shippingMarkPrefijo:"",certs:[],banner:"",
+  tierMinimoRequerido:"Bronze",
 };
 
 function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;})=>Promise<void>}) {
@@ -6405,6 +6524,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       banner:getString("banner"),
       soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
       shippingMarkPrefijo:company.shipping_mark_prefijo || "",
+      tierMinimoRequerido: (["Bronze", "Silver", "Gold", "Élite"].includes(getString("tier_minimo_requerido")) ? getString("tier_minimo_requerido") : "Bronze") as FormularioEmpresa["tierMinimoRequerido"],
     });
     cambiosSinGuardarRef.current=false;
     setRevision(0);
@@ -6461,6 +6581,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
           industries: actual.industries,
           certs: actual.certs,
           banner: actual.banner.trim(),
+          tier_minimo_requerido: actual.tierMinimoRequerido,
         },
         solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
       });
@@ -6620,6 +6741,9 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 <div className="grid sm:grid-cols-2 gap-4">
                   <Select label="Tiempo promedio de respuesta" value={form.avgResponse} onChange={e=>f("avgResponse",e.target.value)}>
                     {["~12h","~24h","~36h","~48h","~72h"].map(v=><option key={v}>{v}</option>)}
+                  </Select>
+                  <Select label="Tier mínimo requerido para cotizar" value={form.tierMinimoRequerido} onChange={e=>f("tierMinimoRequerido",e.target.value)}>
+                    {["Bronze", "Silver", "Gold", "Élite"].map((tier)=><option key={tier}>{tier}</option>)}
                   </Select>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
@@ -7119,7 +7243,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
   );
 }
 
-function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boolean;onClose:()=>void}) {
+function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean}) {
   if (!quote) {
     return null;
   }
@@ -7137,8 +7261,13 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
       <div className="space-y-5">
         <div className="grid sm:grid-cols-2 gap-4">
           <Card padding="sm">
-            <p className="text-xs text-muted-foreground">Producto</p>
-            <p className="text-sm font-semibold mt-1">{quote.product}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Producto</p>
+                <p className="mt-1 truncate text-sm font-semibold">{quote.product}</p>
+              </div>
+              <TierBadge tier={quote.solicitanteTier} />
+            </div>
           </Card>
           <Card padding="sm">
             <p className="text-xs text-muted-foreground">Modalidad</p>
@@ -7176,6 +7305,22 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
             </div>
           </div>
         </Card>
+
+        <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
+
+        {onAccept && (
+          <div className="flex justify-end border-t border-border pt-4">
+            <Button
+              variant="primary"
+              loading={accepting}
+              icon={<CheckCircle2 className="w-4 h-4" />}
+              onClick={() => { void onAccept(); }}
+              className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+            >
+              Aceptar y abrir chat
+            </Button>
+          </div>
+        )}
 
         <Card padding="md">
           <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
@@ -7236,10 +7381,12 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {metrics.map((m,i)=>(
-              <Card key={i} padding="md" className="flex flex-col gap-2">
-                <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center",m.bg,m.color)}>{m.icon}</div>
-                <p className="text-2xl font-bold">{m.value}</p>
-                <p className="text-xs text-muted-foreground">{m.label}</p>
+              <Card key={i} padding="md" className="metric-card flex items-start gap-3">
+                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
+                </div>
               </Card>
             ))}
           </div>
@@ -7314,6 +7461,12 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
     }
   }
 
+  async function handleAcceptFromDetail() {
+    if (!selectedQuote) return;
+    await handleClaim(selectedQuote.id);
+    setSelectedQuote(null);
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="adv-available"/>
@@ -7349,9 +7502,8 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{q.updatedAt}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2">
-                  <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Ver Detalle Completo</Button>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5"/>} loading={claimingId===q.id} onClick={()=>{void handleClaim(q.id);}}>Asignarme</Button>
+                  <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Revisar y aceptar</Button>
+                  <div className="grid grid-cols-1 gap-2">
                     <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>{void handleDiscard(q);}}>{q.mode==="Abierta"?"Descartar":"Rechazar"}</Button>
                   </div>
                 </div>
@@ -7360,7 +7512,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
           </div>
         </main>
       </div>
-      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
+      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)} onAccept={handleAcceptFromDetail} accepting={Boolean(selectedQuote && claimingId===selectedQuote.id)}/>
     </div>
   );
 }
@@ -7649,6 +7801,8 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:items-start">
+          <section className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
           </div>
@@ -7668,75 +7822,112 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
             </div>
           )}
           {/* Stepper */}
-          <div className="flex items-center gap-2 mb-8">
-            {steps.map((s,i)=>(
+          <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-1">
+            {steps.map((s, i) => (
               <div key={i} className="flex items-center gap-2">
-                <div className={clsx("flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                  step===i+1?"bg-primary text-white":step>i+1?"bg-emerald-50 text-emerald-700 border border-emerald-200":"bg-muted text-muted-foreground")}>
-                  {step>i+1?<CheckCircle2 className="w-3.5 h-3.5"/>:<span className="w-4 h-4 rounded-full flex items-center justify-center bg-white/20 text-[10px]">{i+1}</span>}
+                <div
+                  className={clsx(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 whitespace-nowrap",
+                    step === i + 1
+                      ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground shadow-sm"
+                      : step > i + 1
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60"
+                      : "bg-muted/60 text-muted-foreground border border-transparent"
+                  )}
+                >
+                  {step > i + 1 ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <span className="w-4 h-4 rounded-full flex items-center justify-center bg-foreground/10 text-[10px] font-semibold">
+                      {i + 1}
+                    </span>
+                  )}
                   {s.label}
                 </div>
-                {i<steps.length-1&&<ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0"/>}
+                {i < steps.length - 1 && (
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
+                )}
               </div>
             ))}
           </div>
+
           <div className="flex gap-6">
-            <div className="flex-1 min-w-0 max-w-2xl">
-              {step===1&&(
-                <Card padding="lg">
-                  <p className="font-semibold mb-5 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información económica</p>
+            <div className="flex-1 min-w-0 max-w-2xl space-y-6">
+              {step === 1 && (
+                <Card padding="lg" className="border-border bg-card">
+                  <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
+                    <Receipt className="w-4 h-4 text-primary dark:text-accent" />
+                    Información económica
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Input label="Precio unitario" placeholder="9.20 USD/kg" value={form.unitPrice} onChange={e=>f("unitPrice",e.target.value)}/>
-                    <Input label="MOQ (cantidad mínima)" placeholder="300 kg" value={form.moq} onChange={e=>f("moq",e.target.value)}/>
-                    <Input label="Precio total estimado" placeholder="2,760 USD" value={form.totalPrice} onChange={e=>f("totalPrice",e.target.value)} className="sm:col-span-2"/>
+                    <Input label="Precio unitario" placeholder="9.20 USD/kg" value={form.unitPrice} onChange={e => f("unitPrice", e.target.value)} />
+                    <Input label="MOQ (cantidad mínima)" placeholder="300 kg" value={form.moq} onChange={e => f("moq", e.target.value)} />
+                    <Input label="Precio total estimado" placeholder="2,760 USD" value={form.totalPrice} onChange={e => f("totalPrice", e.target.value)} className="sm:col-span-2" />
                   </div>
                 </Card>
               )}
-              {step===2&&(
-                <Card padding="lg">
-                  <p className="font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Información logística</p>
+
+              {step === 2 && (
+                <Card padding="lg" className="border-border bg-card">
+                  <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
+                    <Truck className="w-4 h-4 text-primary dark:text-accent" />
+                    Información logística
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Select label="Incoterm" value={form.incoterm} onChange={e=>f("incoterm",e.target.value)}>{INCOTERMS.map(v=><option key={v}>{v}</option>)}</Select>
-                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e=>f("port",e.target.value)}/>
-                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e=>f("productionTime",e.target.value)}/>
-                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e=>f("shippingTime",e.target.value)}/>
-                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e=>f("totalTime",e.target.value)} className="sm:col-span-2"/>
+                    <Select label="Incoterm" value={form.incoterm} onChange={e => f("incoterm", e.target.value)}>
+                      {INCOTERMS.map(v => <option key={v}>{v}</option>)}
+                    </Select>
+                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e => f("port", e.target.value)} />
+                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e => f("productionTime", e.target.value)} />
+                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e => f("shippingTime", e.target.value)} />
+                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e => f("totalTime", e.target.value)} className="sm:col-span-2" />
                   </div>
                 </Card>
               )}
-              {step===3&&(
+
+              {step === 3 && (
                 <div className="space-y-4">
-                  <Card padding="lg">
-                    <p className="font-semibold mb-4 flex items-center gap-2"><FileText className="w-4 h-4 text-primary"/>Observaciones</p>
+                  <Card padding="lg" className="border-border bg-card">
+                    <p className="font-semibold mb-4 flex items-center gap-2 text-foreground">
+                      <FileText className="w-4 h-4 text-primary dark:text-accent" />
+                      Observaciones
+                    </p>
                     <div className="space-y-4">
-                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
-                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e=>f("advantages",e.target.value)}/>
-                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e=>f("recommendations",e.target.value)}/>
+                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e => f("description", e.target.value)} />
+                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e => f("advantages", e.target.value)} />
+                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e => f("recommendations", e.target.value)} />
                     </div>
                   </Card>
-                  <Card padding="lg">
-                    <p className="font-semibold mb-4 flex items-center gap-2"><Paperclip className="w-4 h-4 text-primary"/>Archivos adjuntos</p>
-                    <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-center">
-                      <Upload className="w-7 h-7 text-muted-foreground/40"/>
+
+                  <Card padding="lg" className="border-border bg-card">
+                    <p className="font-semibold mb-4 flex items-center gap-2 text-foreground">
+                      <Paperclip className="w-4 h-4 text-primary dark:text-accent" />
+                      Archivos adjuntos
+                    </p>
+                    <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-center bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <Upload className="w-7 h-7 text-muted-foreground/60" />
                       <p className="text-sm text-muted-foreground">PDF, imágenes, fichas técnicas, cotización oficial</p>
                       <DocumentUploadButton
                         label="Seleccionar archivos"
                         multiple
                         origen="propuesta"
-                        onUploaded={(fileItem)=>setAttachedFiles((prev)=>{
-                          if(prev.some((row)=>row.id===fileItem.id)){
-                            return prev;
-                          }
-                          return [...prev,{id:fileItem.id,nombre:fileItem.nombre}];
+                        onUploaded={(fileItem) => setAttachedFiles((prev) => {
+                          if (prev.some((row) => row.id === fileItem.id)) return prev;
+                          return [...prev, { id: fileItem.id, nombre: fileItem.nombre }];
                         })}
-                        onError={(message)=>setError(message)}
+                        onError={(message) => setError(message)}
                       />
-                      {attachedFiles.length>0&&(
-                        <div className="w-full mt-2 space-y-1 text-left">
-                          {attachedFiles.map((file)=>(
-                            <div key={file.id} className="rounded-md border border-border px-2 py-1.5 flex items-center justify-between gap-2">
-                              <p className="text-xs truncate">{file.nombre}</p>
-                              <button className="text-[11px] text-muted-foreground hover:text-destructive" onClick={()=>setAttachedFiles((prev)=>prev.filter((row)=>row.id!==file.id))}>Quitar</button>
+                      {attachedFiles.length > 0 && (
+                        <div className="w-full mt-3 space-y-1.5 text-left">
+                          {attachedFiles.map((file) => (
+                            <div key={file.id} className="rounded-md border border-border bg-muted/40 px-3 py-2 flex items-center justify-between gap-2 transition-colors hover:bg-muted/60">
+                              <p className="text-xs font-medium text-foreground truncate">{file.nombre}</p>
+                              <button 
+                                className="text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors" 
+                                onClick={() => setAttachedFiles((prev) => prev.filter((row) => row.id !== file.id))}
+                              >
+                                Quitar
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -7745,41 +7936,81 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                   </Card>
                 </div>
               )}
+
+             {/* Acciones del Stepper */}
               <div className="flex items-center justify-between mt-6 pt-5 border-t border-border">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>
-                  {step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>setStep(s=>s-1)}>Anterior</Button>}
+                  <Button variant="ghost" size="sm" onClick={onBack}>
+                    Cancelar
+                  </Button>
+                  {step > 1 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ChevronLeft className="w-3.5 h-3.5" />}
+                      onClick={() => setStep(s => s - 1)}
+                      className="hover:!border-primary hover:text-primary hover:bg-primary/10 dark:hover:!border-accent dark:hover:text-accent dark:hover:bg-accent/15 transition-colors"
+                    >
+                      Anterior
+                    </Button>
+                  )}
                 </div>
                 <div className="flex gap-2">
-                  {step<3
-                    ?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={()=>setStep(s=>s+1)}>Continuar</Button>
-                    :<Button
-                       variant="primary"
-                       size="md"
-                       icon={userRole==="asesor"?<Save className="w-4 h-4"/>:<Send className="w-4 h-4"/>}
-                       loading={saving}
-                       onClick={submit}
-                     >
-                       {userRole==="asesor"?"Guardar borrador":"Enviar propuesta"}
-                     </Button>
-                  }
+                  {step < 3 ? (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      iconRight={<ChevronRight className="w-4 h-4" />}
+                      onClick={() => setStep(s => s + 1)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
+                    >
+                      Continuar
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={userRole === "asesor" ? <Save className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                      loading={saving}
+                      onClick={submit}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
+                    >
+                      {userRole === "asesor" ? "Guardar borrador" : "Enviar propuesta"}
+                    </Button>
+                  )}
                 </div>
               </div>
-              {error&&<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-destructive">{error}</div>}
+
+              {/* Banner de error adaptable */}
+              {error && (
+                <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive dark:bg-destructive/20 dark:border-destructive/30">
+                  {error}
+                </div>
+              )}
             </div>
-            <div className="w-64 hidden lg:block">
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-3">Resumen de la cotización</p>
-                <div className="space-y-2 text-xs">
-                  <div><span className="text-muted-foreground">Producto:</span><p className="font-medium">{quote?.product||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Código:</span><p className="font-medium">{quote?.code||"—"}</p></div>
-                  <div><span className="text-muted-foreground">País origen:</span><p className="font-medium">{quote?.country||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Incoterm deseado:</span><p className="font-medium">{quote?.incoterm||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Precio objetivo:</span><p className="font-medium">{quote?.targetPrice||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Cant. mínima:</span><p className="font-medium">{quote?.minQuantity?`${quote.minQuantity} u.`:"—"}</p></div>
+          </div>
+          </section>
+          <aside className="min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
+            <div className="space-y-4">
+              <Card padding="md" className="border-border bg-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary dark:text-accent">Cotizante</p>
+                    <h2 className="mt-1 truncate text-base font-semibold">Perfil de referencia</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">Información disponible mientras preparas la propuesta.</p>
+                  </div>
+                  <TierBadge tier={quote.solicitanteTier} />
+                </div>
+                <div className="mt-4 space-y-2 border-t border-border pt-4 text-xs">
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Producto</span><span className="text-right font-medium">{quote.product || "—"}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Código</span><span className="font-mono font-medium">{quote.code || "—"}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">País de origen</span><span className="text-right font-medium">{quote.country || "—"}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Tier actual</span><TierBadge tier={quote.solicitanteTier} /></div>
                 </div>
               </Card>
+              <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
             </div>
+          </aside>
           </div>
         </main>
       </div>
@@ -8354,7 +8585,7 @@ function LandingHowItWorksSection() {
         <div className="grid sm:grid-cols-2 gap-4 mb-14">
           {pasos.map((paso,i)=>(
             <Card key={i} padding="md" className="flex items-start gap-3">
-              <span className="w-7 h-7 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
+              <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
               <p className="text-sm text-muted-foreground leading-relaxed">{paso}</p>
             </Card>
           ))}
@@ -9091,6 +9322,7 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-dashboard": "metricas",
   "admin-empresas": "empresas",
   "admin-usuarios": "usuarios",
+  "admin-cotizantes": "cotizantes",
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
   "admin-landing": "landing",
@@ -9665,6 +9897,7 @@ export default function App() {
       businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
     ]);
     const importerByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.importador_id]));
+    const cotizanteTierByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.solicitante_tier || "Bronze"]));
     const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
     const mappedConversations: ChatConv[] = rows.map((row) => {
       // Ni el hilo interno ni el ticket de soporte cuelgan de una cotización.
@@ -9688,6 +9921,7 @@ export default function App() {
               : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
         refId: row.orden_id ?? row.cotizacion_id ?? "",
         quoteId: row.cotizacion_id ?? "",
+        cotizanteTier: row.cotizacion_id ? cotizanteTierByQuoteId.get(row.cotizacion_id) : undefined,
         counterpartName: row.contraparte_nombre ?? undefined,
         counterpartId: row.contraparte_id ?? undefined,
         counterpartRole: row.contraparte_rol ?? undefined,
@@ -9928,11 +10162,15 @@ export default function App() {
   const reloadNotifications = useCallback(async () => {
     try {
       const response = await businessService.listNotifications();
-      setNotifications(response.items.map(mapBackendNotificationToUi));
+      const companies = new Map(marketplaceImporters.map((company) => [company.id, company.name]));
+      setNotifications(response.items.map((notification) => {
+        const importadorId = typeof notification.data?.importador_id === "string" ? notification.data.importador_id : "";
+        return mapBackendNotificationToUi(notification, companies.get(importadorId));
+      }));
     } catch {
       setNotifications([]);
     }
-  }, []);
+  }, [marketplaceImporters]);
 
   useEffect(() => {
     if (window.location.pathname !== RESET_PASSWORD_PATH) {
@@ -10346,9 +10584,32 @@ export default function App() {
     setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
     void businessService.markNotificationAsRead(id).catch(() => undefined);
   }
+  async function openNotification(notification: AppNotification){
+    if (!notification.cotizacionId && !notification.conversationId) return;
+    const conversations = await businessService.listChatConversations().catch(() => []);
+    const conversation = notification.conversationId
+      ? conversations.find((item) => item.id === notification.conversationId)
+      : conversations.find((item) => item.cotizacion_id === notification.cotizacionId);
+    if (conversation) {
+      openChat(conversation.id);
+      return;
+    }
+    goTo("chats");
+  }
   async function claimQuote(id:string){
     await businessService.claimAdvisorQuote(id);
-    await Promise.all([reloadAdvisorAvailableQuotes(), reloadAdvisorAssignedQuotes()]);
+    const [, , conversations] = await Promise.all([
+      reloadAdvisorAvailableQuotes(),
+      reloadAdvisorAssignedQuotes(),
+      businessService.listChatConversations(),
+    ]);
+    await reloadChatData();
+    const conversation = conversations.find((item) => item.cotizacion_id === id);
+    if (conversation) {
+      openChat(conversation.id);
+      return;
+    }
+    goTo("chats");
   }
 
   async function discardAdvisorQuote(quote: Quote){
@@ -10385,10 +10646,18 @@ export default function App() {
     setScreen("login");
   }
 
-  async function handleCreateQuote(payload: CreateCotizacionPayload){
+  async function handleCreateQuote(payload: CreateCotizacionPayload, desbloquear = false){
     // La cotizacion se crea primero y sola: si esto falla, el error es real y el
     // formulario tiene que mostrarlo.
-    await businessService.createQuote(payload);
+    const creditosActuales = Number(currentUserProfile?.puntos_cotizacion ?? 0);
+    if (desbloquear && creditosActuales < 1) {
+      throw new Error("No tienes créditos suficientes para desbloquear esta cotización.");
+    }
+    const created = await businessService.createQuote(payload);
+    if (desbloquear) {
+      await businessService.unlockQuoteByPoint(created.id);
+      setCurrentUserProfile((profile) => profile ? { ...profile, puntos_cotizacion: creditosActuales - 1 } : profile);
+    }
 
     // El refresco posterior es cortesia, no parte de la operacion. Encadenado con
     // `await`, el 403 de una lista ajena al rol (las del asesor, p. ej.) subia
@@ -10628,6 +10897,7 @@ export default function App() {
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
+    "admin-cotizantes": ["admin"],
     // Única área del panel que comparte el equipo de atención al cliente.
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
@@ -10728,7 +10998,7 @@ export default function App() {
 
     // ── Shared ────────────────────────────────────────────────────────────────
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
-    if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
+    if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onOpen={openNotification} onBack={()=>goTo(prevScreen)} sb={sb}/>;
     if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole} onPedirSoporte={()=>setSoporteAbierto(true)}/>;
     if(screen==="courses")return (
       <CoursesPortalScreen
@@ -10743,8 +11013,8 @@ export default function App() {
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
+    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={refreshQuoteLists} sb={sb}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;

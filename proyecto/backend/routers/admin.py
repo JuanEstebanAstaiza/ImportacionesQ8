@@ -9,7 +9,8 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
 
 from database import Base
-from models.usuario import Usuario
+from models.usuario import Usuario, ORDEN_TIERS_COTIZANTE
+from models.tier import MovimientoPuntoCotizacion, UmbralTierCotizante
 from models.importador import Importador
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
@@ -32,6 +33,12 @@ from schemas.admin import (
     AgenteSoporteItem,
     ExpedienteVerificacion,
     RetirarVerificacionRequest,
+    CotizanteAdminResponse,
+    TierUpdateRequest,
+    UmbralTierResponse,
+    UmbralesTierUpdateRequest,
+    PuntosCotizacionUpdateRequest,
+    MovimientoPuntoCotizacionResponse,
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
@@ -59,6 +66,133 @@ from utils.security import hash_password
 logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/admin", tags=["Administración"])
+
+
+def _validar_tier_admin(tier: str) -> str:
+    if tier not in ORDEN_TIERS_COTIZANTE:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Tier inválido")
+    return tier
+
+
+def _cotizante_response(usuario: Usuario) -> CotizanteAdminResponse:
+    return CotizanteAdminResponse(
+        id=str(usuario.id),
+        email=usuario.email,
+        nombre=usuario.nombre or usuario.razon_social,
+        tier=usuario.tier,
+        tier_manual=bool(usuario.tier_manual),
+        puntos_cotizacion=int(usuario.puntos_cotizacion or 0),
+        fecha_creacion=usuario.fecha_creacion,
+    )
+
+
+@router.get("/cotizantes", response_model=List[CotizanteAdminResponse])
+async def listar_cotizantes_admin(
+    buscar: Optional[str] = Query(None, max_length=120),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    query = db.query(Usuario).filter(Usuario.rol == "solicitante")
+    if buscar and buscar.strip():
+        patron = f"%{buscar.strip()}%"
+        query = query.filter(or_(Usuario.nombre.ilike(patron), Usuario.razon_social.ilike(patron), Usuario.email.ilike(patron)))
+    return [_cotizante_response(usuario) for usuario in query.order_by(Usuario.fecha_creacion.desc()).limit(500).all()]
+
+
+@router.put("/cotizantes/{usuario_id}/tier", response_model=CotizanteAdminResponse)
+async def actualizar_tier_cotizante(
+    usuario_id: str,
+    datos: TierUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    tier = _validar_tier_admin(datos.tier)
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.rol == "solicitante").first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    usuario.tier = tier
+    usuario.tier_manual = True
+    db.commit()
+    db.refresh(usuario)
+    return _cotizante_response(usuario)
+
+
+@router.get("/cotizantes/tier-umbrales", response_model=List[UmbralTierResponse])
+async def listar_umbrales_tier(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    filas = db.query(UmbralTierCotizante).order_by(UmbralTierCotizante.tier).all()
+    return [UmbralTierResponse.model_validate(fila) for fila in filas]
+
+
+@router.put("/cotizantes/tier-umbrales", response_model=List[UmbralTierResponse])
+async def actualizar_umbrales_tier(
+    datos: UmbralesTierUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    tiers_recibidos = {item.tier for item in datos.umbrales}
+    if tiers_recibidos != set(ORDEN_TIERS_COTIZANTE):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Debes enviar los cuatro tiers")
+    for item in datos.umbrales:
+        _validar_tier_admin(item.tier)
+        umbral = db.query(UmbralTierCotizante).filter(UmbralTierCotizante.tier == item.tier).first()
+        if not umbral:
+            umbral = UmbralTierCotizante(tier=item.tier)
+            db.add(umbral)
+        umbral.minimo_cotizaciones = item.minimo_cotizaciones
+        umbral.minimo_ordenes = item.minimo_ordenes
+        umbral.minimo_valor_operaciones_usd = item.minimo_valor_operaciones_usd
+        umbral.actualizado_por_admin_id = current_user["user_id"]
+    db.commit()
+    filas = db.query(UmbralTierCotizante).order_by(UmbralTierCotizante.tier).all()
+    return [UmbralTierResponse.model_validate(fila) for fila in filas]
+
+
+@router.post("/cotizantes/{usuario_id}/puntos", response_model=CotizanteAdminResponse)
+async def ajustar_puntos_cotizante(
+    usuario_id: str,
+    datos: PuntosCotizacionUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.rol == "solicitante").first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    resultado = db.query(Usuario).filter(
+        Usuario.id == usuario_id,
+        Usuario.puntos_cotizacion + datos.delta >= 0,
+    ).update({Usuario.puntos_cotizacion: Usuario.puntos_cotizacion + datos.delta}, synchronize_session=False)
+    if resultado != 1:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El ajuste no puede dejar saldo negativo")
+    db.refresh(usuario)
+    db.add(MovimientoPuntoCotizacion(
+        usuario_id=usuario_id,
+        admin_id=current_user["user_id"],
+        tipo=datos.tipo,
+        delta=datos.delta,
+        saldo_resultante=int(usuario.puntos_cotizacion),
+        descripcion=datos.descripcion,
+    ))
+    db.commit()
+    db.refresh(usuario)
+    return _cotizante_response(usuario)
+
+
+@router.get("/cotizantes/{usuario_id}/puntos/movimientos", response_model=List[MovimientoPuntoCotizacionResponse])
+async def listar_movimientos_puntos_cotizante(
+    usuario_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    existe = db.query(Usuario.id).filter(Usuario.id == usuario_id, Usuario.rol == "solicitante").first()
+    if not existe:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    return db.query(MovimientoPuntoCotizacion).filter(
+        MovimientoPuntoCotizacion.usuario_id == usuario_id,
+    ).order_by(MovimientoPuntoCotizacion.fecha.desc()).limit(500).all()
 
 
 # ==================== Onboarding de empresas importadoras ====================

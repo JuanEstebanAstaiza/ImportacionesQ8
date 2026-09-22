@@ -13,6 +13,38 @@ export interface AdminUser {
   activo: boolean;
   perfil_completo: boolean;
   fecha_creacion: string;
+  tier?: string;
+  tier_manual?: boolean;
+  puntos_cotizacion?: number;
+}
+
+export interface AdminCotizante {
+  id: string;
+  email: string;
+  nombre: string | null;
+  tier: string;
+  tier_manual: boolean;
+  puntos_cotizacion: number;
+  fecha_creacion: string;
+}
+
+export interface AdminTierThreshold {
+  tier: string;
+  minimo_cotizaciones: number;
+  minimo_ordenes: number;
+  minimo_valor_operaciones_usd: number;
+}
+
+export interface AdminPointMovement {
+  id: string;
+  usuario_id: string;
+  admin_id: string | null;
+  cotizacion_id: string | null;
+  tipo: string;
+  delta: number;
+  saldo_resultante: number;
+  descripcion: string | null;
+  fecha: string;
 }
 
 export interface AdminMetricas {
@@ -271,6 +303,40 @@ export const adminService = {
       method: "PUT",
       body: { activo },
     });
+  },
+
+  listCotizantes(search?: string): Promise<AdminCotizante[]> {
+    const suffix = search?.trim() ? `?buscar=${encodeURIComponent(search.trim())}` : "";
+    return apiRequest<AdminCotizante[]>(`/admin/cotizantes${suffix}`, { method: "GET" });
+  },
+
+  updateCotizanteTier(usuarioId: string, tier: string): Promise<AdminCotizante> {
+    return apiRequest<AdminCotizante>(`/admin/cotizantes/${usuarioId}/tier`, {
+      method: "PUT",
+      body: { tier },
+    });
+  },
+
+  getTierThresholds(): Promise<AdminTierThreshold[]> {
+    return apiRequest<AdminTierThreshold[]>("/admin/cotizantes/tier-umbrales", { method: "GET" });
+  },
+
+  updateTierThresholds(umbrales: AdminTierThreshold[]): Promise<AdminTierThreshold[]> {
+    return apiRequest<AdminTierThreshold[]>("/admin/cotizantes/tier-umbrales", {
+      method: "PUT",
+      body: { umbrales },
+    });
+  },
+
+  adjustCotizantePoints(usuarioId: string, delta: number, tipo: "recarga" | "ajuste", descripcion?: string): Promise<AdminCotizante> {
+    return apiRequest<AdminCotizante>(`/admin/cotizantes/${usuarioId}/puntos`, {
+      method: "POST",
+      body: { delta, tipo, descripcion: descripcion?.trim() || undefined },
+    });
+  },
+
+  listCotizantePointMovements(usuarioId: string): Promise<AdminPointMovement[]> {
+    return apiRequest<AdminPointMovement[]>(`/admin/cotizantes/${usuarioId}/puntos/movimientos`, { method: "GET" });
   },
 
   getMetricas(): Promise<AdminMetricas> {

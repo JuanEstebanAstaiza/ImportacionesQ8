@@ -6,6 +6,9 @@ class UsuarioAdminResponse(BaseModel):
     id: str
     email: str
     rol: str
+    tier: str = "Bronze"
+    tier_manual: bool = False
+    puntos_cotizacion: int = 0
     importador_id: Optional[str] = None
     nombre: Optional[str] = None
     activo: bool
@@ -146,3 +149,50 @@ class MetricasResponse(BaseModel):
     importadores_activos: int
     importadores_verificados: int
     ordenes_en_disputa: int
+
+
+class CotizanteAdminResponse(BaseModel):
+    id: str
+    email: str
+    nombre: Optional[str] = None
+    tier: str
+    tier_manual: bool
+    puntos_cotizacion: int
+    fecha_creacion: datetime
+
+
+class TierUpdateRequest(BaseModel):
+    tier: str
+
+
+class UmbralTierResponse(BaseModel):
+    tier: str
+    minimo_cotizaciones: int
+    minimo_ordenes: int
+    minimo_valor_operaciones_usd: float
+
+    model_config = {"from_attributes": True}
+
+
+class UmbralesTierUpdateRequest(BaseModel):
+    umbrales: List[UmbralTierResponse]
+
+
+class PuntosCotizacionUpdateRequest(BaseModel):
+    delta: int = Field(..., ne=0)
+    tipo: str = Field(default="recarga", pattern="^(recarga|ajuste)$")
+    descripcion: Optional[str] = Field(None, max_length=500)
+
+
+class MovimientoPuntoCotizacionResponse(BaseModel):
+    id: str
+    usuario_id: str
+    admin_id: Optional[str] = None
+    cotizacion_id: Optional[str] = None
+    tipo: str
+    delta: int
+    saldo_resultante: int
+    descripcion: Optional[str] = None
+    fecha: datetime
+
+    model_config = {"from_attributes": True}

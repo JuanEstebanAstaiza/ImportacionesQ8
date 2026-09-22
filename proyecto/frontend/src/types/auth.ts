@@ -89,6 +89,8 @@ export interface CurrentUserResponse {
 	activo: boolean;
 	perfil_completo: boolean;
 	fecha_creacion: string;
+	tier?: string;
+	puntos_cotizacion?: number;
 }
 
 export interface AuthErrorResponse {

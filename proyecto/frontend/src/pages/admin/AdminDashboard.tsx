@@ -18,10 +18,11 @@ import {
 import { businessService } from "@/services/business.service";
 import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
+import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "metricas" | "empresas" | "usuarios" | "soporte" | "certificaciones" | "landing";
+type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "landing";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
 
 type CompanyUiDetails = {
@@ -77,6 +78,7 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   metricas: { label: "Resumen", hint: "Cómo va la plataforma" },
   empresas: { label: "Empresas", hint: "Alta y estado de importadoras" },
   usuarios: { label: "Usuarios", hint: "Cuentas, roles y acceso" },
+  cotizantes: { label: "Cotizantes", hint: "Tiers, umbrales y puntos" },
   soporte: { label: "Soporte", hint: "Incidentes y dudas" },
   certificaciones: { label: "Certificaciones", hint: "Sellos y respaldo" },
   landing: { label: "Landing", hint: "Contenido publico por bloques" },
@@ -1127,6 +1129,12 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               </div>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {tab === "cotizantes" ? (
+        <section className="space-y-4">
+          <GestionCotizantes />
         </section>
       ) : null}
 

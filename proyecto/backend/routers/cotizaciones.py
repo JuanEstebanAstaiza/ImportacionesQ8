@@ -14,6 +14,7 @@ from schemas.cotizacion import (
 )
 from schemas.credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse
 from models.cotizacion import Cotizacion, EstadoCotizacion
+from models.usuario import ORDEN_TIERS_COTIZANTE, Usuario
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.importador import Importador
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
@@ -32,6 +33,15 @@ router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
 
 # Router independiente para /propuestas (no anidado bajo /cotizaciones) - ver Tarea 2.1
 propuestas_router = APIRouter(prefix="/propuestas", tags=["Propuestas"])
+
+
+def _validar_tier(tier: str) -> str:
+    if tier not in ORDEN_TIERS_COTIZANTE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Tier inválido. Usa Bronze, Silver, Gold o Élite",
+        )
+    return tier
 
 
 def _empresa_puede_responder_abierta(empresa: Optional[Importador], cotizacion: Cotizacion) -> bool:
@@ -366,6 +376,8 @@ async def crear_cotizacion(
     if not solicitante:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
+    _validar_tier(cotizacion_data.tier_minimo_requerido)
+
     # Modelo actual: no se cobra al solicitante (natural/jurídica).
     # Si COBRO_A_SOLICITANTES=true, se restaura el débito de créditos al crear.
     if config.COBRO_A_SOLICITANTES:
@@ -456,6 +468,7 @@ async def crear_cotizacion(
         importador_id=cotizacion_data.importador_id if cotizacion_data.importador_id else None,
         campos_personalizados_valores=cotizacion_data.campos_personalizados_valores,
         modalidad=cotizacion_data.modalidad,
+        tier_minimo_requerido=cotizacion_data.tier_minimo_requerido,
         foto_producto=cotizacion_data.foto_producto,
         pais_importacion=cotizacion_data.pais_importacion,
         nivel_personalizacion=cotizacion_data.nivel_personalizacion,
@@ -1287,6 +1300,60 @@ async def aceptar_propuesta(
         )
         db.commit()
 
+    db.refresh(cotizacion)
+    return cotizacion
+
+
+@router.post("/{cotizacion_id}/desbloquear", response_model=CotizacionResponse)
+async def desbloquear_cotizacion_por_punto(
+    cotizacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("solicitante")),
+):
+    """Consume un punto para habilitar una cotización que supera el tier del cotizante."""
+    try:
+        cotizacion_id_str = str(UUID(cotizacion_id))
+        user_id_str = str(UUID(current_user["user_id"]))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID inválido")
+
+    cotizacion = db.query(Cotizacion).filter(
+        Cotizacion.id == cotizacion_id_str,
+        Cotizacion.solicitante_id == user_id_str,
+    ).first()
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    if not cotizacion.bloqueada:
+        return cotizacion
+
+    resultado = db.query(Usuario).filter(
+        Usuario.id == user_id_str,
+        Usuario.puntos_cotizacion >= 1,
+    ).update(
+        {Usuario.puntos_cotizacion: Usuario.puntos_cotizacion - 1},
+        synchronize_session=False,
+    )
+    if resultado != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="No tienes puntos de cotización disponibles para desbloquear esta oportunidad",
+        )
+
+    db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).update(
+        {Cotizacion.desbloqueada_por_puntos: True},
+        synchronize_session=False,
+    )
+    from models.tier import MovimientoPuntoCotizacion
+    db.add(MovimientoPuntoCotizacion(
+        usuario_id=user_id_str,
+        cotizacion_id=cotizacion_id_str,
+        tipo="consumo",
+        delta=-1,
+        saldo_resultante=int(db.query(Usuario.puntos_cotizacion).filter(Usuario.id == user_id_str).scalar() or 0),
+        descripcion="Desbloqueo de cotización por puntos",
+    ))
+    db.commit()
     db.refresh(cotizacion)
     return cotizacion
 

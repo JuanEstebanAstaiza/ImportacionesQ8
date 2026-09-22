@@ -11,6 +11,7 @@ export interface Importer {
   verified: boolean;
   country: string;
   categories: string[];
+  tierMinimoRequerido?: "Bronze" | "Silver" | "Gold" | "Élite";
   /**
    * Datos que la empresa configura en su propio perfil (`perfil_publico`).
    * Antes el perfil público los leía de diccionarios mock indexados por ids de

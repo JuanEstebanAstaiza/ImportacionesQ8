@@ -9,6 +9,7 @@ from sqlalchemy import and_
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from schemas.usuario import UsuarioMeResponse, UsuarioMeUpdate, CotizacionAsignadaItem
+from schemas.cotizante import CotizantePerfilPublicoResponse
 from utils.dependencies import get_db, get_current_user, require_rol_in
 
 logger = logging.getLogger("importacionesq8")
@@ -31,6 +32,21 @@ async def obtener_mi_perfil(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     return usuario
+
+
+@router.get("/{solicitante_id}/perfil-publico", response_model=CotizantePerfilPublicoResponse)
+async def obtener_perfil_publico_cotizante(
+    solicitante_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """Métricas operativas de un cotizante visibles para cuentas de empresa."""
+    from services.cotizante_service import obtener_perfil_publico_cotizante as obtener_metricas
+
+    perfil = obtener_metricas(db, solicitante_id)
+    if not perfil:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    return perfil
 
 
 @router.put("/me", response_model=UsuarioMeResponse)

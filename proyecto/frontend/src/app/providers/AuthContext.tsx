@@ -30,6 +30,7 @@ interface AuthContextValue {
   isInitializing: boolean;
   token: string | null;
   user: CurrentUserResponse | null;
+  creditos: number;
   appRole: AppUserRole | null;
   signIn: (payload: LoginRequest) => Promise<LoginResponse>;
   verifyLoginOtp: (payload: LoginOtpRequest, email: string) => Promise<LoginResponse>;
@@ -178,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing: Boolean(token) && meQuery.isLoading,
       token,
       user,
+      creditos: Number(user?.puntos_cotizacion ?? 0),
       appRole,
       signIn,
       verifyLoginOtp,

@@ -37,12 +37,15 @@ from .documental import (
     OrdenDocumento,
 )
 from .landing import LandingBlock, LandingAlly, LandingNews
+from .tier import UmbralTierCotizante, MovimientoPuntoCotizacion
 
 __all__ = [
     "Usuario",
     "Importador",
     "Cotizacion",
     "EstadoCotizacion",
+    "UmbralTierCotizante",
+    "MovimientoPuntoCotizacion",
     "Propuesta",
     "EstadoPropuesta",
     "Orden",

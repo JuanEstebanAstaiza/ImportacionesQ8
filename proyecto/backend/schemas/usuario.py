@@ -6,6 +6,8 @@ class UsuarioMeResponse(BaseModel):
     id: str
     email: str
     rol: str
+    tier: str = "Bronze"
+    puntos_cotizacion: int = 0
     importador_id: Optional[str] = None
     nombre: Optional[str] = None
     telefono: Optional[str] = None
