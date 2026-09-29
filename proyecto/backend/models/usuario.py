@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Integer
 from uuid import uuid4
 from datetime import datetime
+import enum
 from database import Base
 
 # Roles válidos del sistema:
@@ -28,6 +29,21 @@ NIVEL_SOPORTE_MINIMO = 1
 NIVEL_SOPORTE_MAXIMO = 3
 
 TIPOS_PERSONA_VALIDOS = ("natural", "juridica")
+
+
+class TierCotizante(str, enum.Enum):
+    bronze = "Bronze"
+    silver = "Silver"
+    gold = "Gold"
+    elite = "Élite"
+
+
+ORDEN_TIERS_COTIZANTE = {
+    TierCotizante.bronze.value: 0,
+    TierCotizante.silver.value: 1,
+    TierCotizante.gold.value: 2,
+    TierCotizante.elite.value: 3,
+}
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -70,6 +86,12 @@ class Usuario(Base):
     # Saldo de créditos personal (solicitante natural). Si pertenece a una
     # organización, el saldo efectivo es OrganizacionSolicitante.creditos_balance.
     creditos_balance = Column(Float, default=0.0, nullable=False)
+    tier = Column(String(10), default=TierCotizante.bronze.value, server_default=TierCotizante.bronze.value, nullable=False)
+    tier_manual = Column(Boolean, default=False, server_default="0", nullable=False)
+    puntos_cotizacion = Column(Integer, default=0, server_default="0", nullable=False)
+    # Importaciones que el cotizante declara haber hecho por fuera de la
+    # plataforma. Alimenta el desglose "dentro vs. fuera" de su perfil público.
+    importaciones_fuera_plataforma = Column(Integer, default=0, server_default="0", nullable=False)
 
     # Nivel de la mesa de soporte al que pertenece esta cuenta (solo rol
     # "soporte"). Determina qué tickets se le pueden asignar. NULL en el resto.

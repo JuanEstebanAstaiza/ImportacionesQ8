@@ -10,6 +10,9 @@
 set -e
 
 if [ -n "$DATABASE_URL" ] && [ "${DATABASE_URL#sqlite}" = "$DATABASE_URL" ]; then
+  # BD recién creada: esquema desde los modelos + `alembic stamp head` (la
+  # cadena de migraciones no sirve para partir de cero, ver database.py).
+  python -c "from database import create_database_if_not_exists, bootstrap_si_vacia; create_database_if_not_exists(); bootstrap_si_vacia()"
   echo "Aplicando migraciones de Alembic (upgrade head)..."
   alembic upgrade head
 else

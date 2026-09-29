@@ -424,7 +424,13 @@ async def actualizar_estado_orden(
             )
         except Exception:
             logger.warning("No se pudo publicar notificación Redis para orden %s", orden_id_str)
-    
+
+    if nuevo_estado_valor == EstadoOrden.entregado.value:
+        # Cierre del pedido: momento natural para reevaluar el tier.
+        from services.tier_service import recalcular_tier_best_effort
+
+        recalcular_tier_best_effort(db, orden.solicitante_id)
+
     db.commit()
     
     return {"success": True, "nuevo_estado": nuevo_estado_valor}

@@ -1,8 +1,8 @@
-# Backend ImportacionesQ8 - Semana 1
+# Backend Zarpi - Semana 1
 
 ## Descripción
 
-Backend de la plataforma ImportacionesQ8 construido con **FastAPI** (Python). Este README documenta los endpoints y estructura del proyecto para la Semana 1: Fundaciones y Módulo de Cotizaciones.
+Backend de la plataforma Zarpi construido con **FastAPI** (Python). Este README documenta los endpoints y estructura del proyecto para la Semana 1: Fundaciones y Módulo de Cotizaciones.
 
 ## Requisitos
 

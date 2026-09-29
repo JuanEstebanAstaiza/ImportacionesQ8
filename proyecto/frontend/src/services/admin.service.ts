@@ -13,6 +13,38 @@ export interface AdminUser {
   activo: boolean;
   perfil_completo: boolean;
   fecha_creacion: string;
+  tier?: string;
+  tier_manual?: boolean;
+  puntos_cotizacion?: number;
+}
+
+export interface AdminCotizante {
+  id: string;
+  email: string;
+  nombre: string | null;
+  tier: string;
+  tier_manual: boolean;
+  puntos_cotizacion: number;
+  fecha_creacion: string;
+}
+
+export interface AdminTierThreshold {
+  tier: string;
+  minimo_cotizaciones: number;
+  minimo_ordenes: number;
+  minimo_valor_operaciones_usd: number;
+}
+
+export interface AdminPointMovement {
+  id: string;
+  usuario_id: string;
+  admin_id: string | null;
+  cotizacion_id: string | null;
+  tipo: string;
+  delta: number;
+  saldo_resultante: number;
+  descripcion: string | null;
+  fecha: string;
 }
 
 export interface AdminMetricas {
@@ -183,6 +215,13 @@ export interface CreateImporterWithOwnerPayload {
   tiempo_respuesta_promedio: string;
   capacidad_volumen?: number;
   solo_cotizaciones_directas?: boolean;
+  /**
+   * Ficha pública de la empresa (sitio web, contacto, NIT...). Antes estos
+   * datos solo vivían en el `localStorage` del navegador del administrador que
+   * dio de alta la empresa: nadie más los veía y se perdían al limpiar el
+   * navegador.
+   */
+  perfil_publico?: Record<string, unknown>;
   email_dueño: string;
   password_dueño: string;
   nombre_dueño?: string;
@@ -200,6 +239,21 @@ export interface InviteSolicitantePayload {
   nombre: string;
   telefono: string;
   indicativo_pais_telefono: string;
+}
+
+export interface EnvioCorreoMasivoPayload {
+  asunto: string;
+  cuerpo: string;
+  roles?: string[];
+  usuarios_ids?: string[];
+  correos?: string[];
+}
+
+export interface EnvioCorreoMasivoResponse {
+  destinatarios: number;
+  enviados: number;
+  fallidos: number;
+  fallos: string[];
 }
 
 export const adminService = {
@@ -259,11 +313,52 @@ export const adminService = {
     });
   },
 
+  sendBulkEmail(payload: EnvioCorreoMasivoPayload): Promise<EnvioCorreoMasivoResponse> {
+    return apiRequest<EnvioCorreoMasivoResponse>("/admin/correos/masivo", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
   updateUserStatus(usuarioId: string, activo: boolean): Promise<AdminUser> {
     return apiRequest<AdminUser>(`/admin/usuarios/${usuarioId}/estado`, {
       method: "PUT",
       body: { activo },
     });
+  },
+
+  listCotizantes(search?: string): Promise<AdminCotizante[]> {
+    const suffix = search?.trim() ? `?buscar=${encodeURIComponent(search.trim())}` : "";
+    return apiRequest<AdminCotizante[]>(`/admin/cotizantes${suffix}`, { method: "GET" });
+  },
+
+  updateCotizanteTier(usuarioId: string, tier: string): Promise<AdminCotizante> {
+    return apiRequest<AdminCotizante>(`/admin/cotizantes/${usuarioId}/tier`, {
+      method: "PUT",
+      body: { tier },
+    });
+  },
+
+  getTierThresholds(): Promise<AdminTierThreshold[]> {
+    return apiRequest<AdminTierThreshold[]>("/admin/cotizantes/tier-umbrales", { method: "GET" });
+  },
+
+  updateTierThresholds(umbrales: AdminTierThreshold[]): Promise<AdminTierThreshold[]> {
+    return apiRequest<AdminTierThreshold[]>("/admin/cotizantes/tier-umbrales", {
+      method: "PUT",
+      body: { umbrales },
+    });
+  },
+
+  adjustCotizantePoints(usuarioId: string, delta: number, tipo: "recarga" | "ajuste", descripcion?: string): Promise<AdminCotizante> {
+    return apiRequest<AdminCotizante>(`/admin/cotizantes/${usuarioId}/puntos`, {
+      method: "POST",
+      body: { delta, tipo, descripcion: descripcion?.trim() || undefined },
+    });
+  },
+
+  listCotizantePointMovements(usuarioId: string): Promise<AdminPointMovement[]> {
+    return apiRequest<AdminPointMovement[]>(`/admin/cotizantes/${usuarioId}/puntos/movimientos`, { method: "GET" });
   },
 
   getMetricas(): Promise<AdminMetricas> {

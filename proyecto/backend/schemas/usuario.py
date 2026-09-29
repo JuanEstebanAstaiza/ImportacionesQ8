@@ -6,6 +6,9 @@ class UsuarioMeResponse(BaseModel):
     id: str
     email: str
     rol: str
+    tier: str = "Bronze"
+    puntos_cotizacion: int = 0
+    importaciones_fuera_plataforma: int = 0
     importador_id: Optional[str] = None
     nombre: Optional[str] = None
     telefono: Optional[str] = None
@@ -23,6 +26,8 @@ class UsuarioMeUpdate(BaseModel):
     telefono: Optional[str] = None
     foto_url: Optional[str] = None
     whatsapp: Optional[str] = None
+    # Solo tiene sentido para el cotizante: alimenta su perfil público.
+    importaciones_fuera_plataforma: Optional[int] = Field(None, ge=0, le=100_000)
 
 class AsesorCreate(BaseModel):
     email: EmailStr

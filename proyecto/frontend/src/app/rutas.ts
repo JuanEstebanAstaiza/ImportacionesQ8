@@ -41,9 +41,11 @@ export type Screen =
   | "admin-dashboard"
   | "admin-empresas"
   | "admin-usuarios"
+  | "admin-cotizantes"
   | "admin-soporte"
   | "admin-certificaciones"
   | "admin-landing"
+  | "admin-correos"
   | "create-response"
   | "notifications"
   | "user-profile"
@@ -108,9 +110,11 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-dashboard", path: "/admin" },
   { screen: "admin-empresas", path: "/admin/empresas" },
   { screen: "admin-usuarios", path: "/admin/usuarios" },
+  { screen: "admin-cotizantes", path: "/admin/cotizantes" },
   { screen: "admin-soporte", path: "/admin/soporte" },
   { screen: "admin-certificaciones", path: "/admin/certificaciones" },
   { screen: "admin-landing", path: "/admin/landing" },
+  { screen: "admin-correos", path: "/admin/correos" },
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";

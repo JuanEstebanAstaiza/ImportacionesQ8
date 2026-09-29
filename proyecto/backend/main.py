@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import FastAPI, Request, status
@@ -15,7 +16,7 @@ from routers.importadores import router as importadores_router
 from routers.cotizaciones import router as cotizaciones_router, propuestas_router
 from routers.ordenes import router as ordenes_router
 from routers.pagos import router as pagos_router, creditos_router
-from routers.usuarios import router as usuarios_router, asesores_router
+from routers.usuarios import router as usuarios_router, asesores_router, cotizantes_router
 from routers.chat import router as chat_router, ws_router as chat_ws_router
 from routers.admin import router as admin_router
 from routers.legal import router as legal_router
@@ -37,27 +38,57 @@ from utils.security_middleware import (
 
 logger = logging.getLogger("importacionesq8")
 
+async def _recalcular_tiers_periodicamente(intervalo_minutos: int) -> None:
+    """Pasada periódica de tiers por umbrales. Es idempotente, así que no pasa
+    nada si varios workers la ejecutan a la vez."""
+    from database import SessionLocal
+    from services.tier_service import recalcular_tiers_todos
+
+    def _pasada() -> None:
+        db = SessionLocal()
+        try:
+            resultado = recalcular_tiers_todos(db)
+            logger.info("Recálculo periódico de tiers: %s", resultado)
+        except Exception:
+            db.rollback()
+            logger.exception("Falló el recálculo periódico de tiers")
+        finally:
+            db.close()
+
+    while True:
+        await asyncio.to_thread(_pasada)
+        await asyncio.sleep(intervalo_minutos * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestiona el inicio y parada de la aplicación"""
-    print("Iniciando servidor ImportacionesQ8...")
+    print("Iniciando servidor Zarpi...")
     try:
         from database import init_db
         init_db()
     except Exception as e:
         logger.exception("No se pudo inicializar la base de datos: %s", e)
-    
+
+    import config
+
+    tarea_tiers = None
+    if config.TIER_RECALCULO_MINUTOS > 0:
+        tarea_tiers = asyncio.create_task(_recalcular_tiers_periodicamente(config.TIER_RECALCULO_MINUTOS))
+
     yield
-    
-    print("Apagando servidor ImportacionesQ8...")
+
+    if tarea_tiers:
+        tarea_tiers.cancel()
+    print("Apagando servidor Zarpi...")
 
 # Crear la aplicación FastAPI
 _docs = None if APP_ENV == "production" else "/docs"
 _redoc = None if APP_ENV == "production" else "/redoc"
 _openapi = None if APP_ENV == "production" else "/openapi.json"
 app = FastAPI(
-    title="ImportacionesQ8 API",
-    description="API REST para la plataforma de importaciones Q8",
+    title="Zarpi API",
+    description="API REST para la plataforma Zarpi",
     version="1.0.0",
     lifespan=lifespan,
     redirect_slashes=False,
@@ -176,6 +207,7 @@ app.include_router(pagos_router)
 app.include_router(creditos_router)
 app.include_router(usuarios_router)
 app.include_router(asesores_router)
+app.include_router(cotizantes_router)
 app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.include_router(admin_router)
@@ -195,7 +227,7 @@ async def root():
     """Endpoint de salud - verifica que el servidor está funcionando"""
     return {
         "success": True,
-        "message": "API ImportacionesQ8 funcionando correctamente",
+        "message": "API Zarpi funcionando correctamente",
         "version": "1.0.0"
     }
 

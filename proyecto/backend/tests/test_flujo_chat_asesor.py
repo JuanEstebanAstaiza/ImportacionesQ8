@@ -356,3 +356,90 @@ class TestCanalInterno:
             "/chat/interno", json={"asesor_id": str(ajeno.id)}, headers=auth_headers_for(dueño)
         )
         assert response.status_code == 404
+
+
+class TestQuienEstaAlOtroLado:
+    """Identidad de la contraparte en cada conversación.
+
+    La cabecera del chat mostraba siempre el mismo rótulo genérico y las
+    iniciales de la empresa importadora, así que ni el asesor distinguía a un
+    cliente de otro ni el cliente sabía qué persona le escribía. La interfaz
+    pinta lo que devuelven estos campos, de modo que tienen que identificar a
+    la persona concreta y su papel, y cambiar según quién pregunta.
+    """
+
+    def test_el_cliente_ve_a_la_persona_de_la_empresa_y_su_rol(
+        self, client, db_session, solicitante, empresa, asesor
+    ):
+        importador, _dueño = empresa
+        cotizacion = _crear_cotizacion(db_session, solicitante, importador.id)
+        client.post(f"/cotizaciones/{cotizacion.id}/reclamar", headers=auth_headers_for(asesor))
+
+        hilo = client.get("/chat/conversaciones", headers=auth_headers_for(solicitante)).json()[0]
+
+        assert hilo["contraparte_nombre"] == "Asesor Flujo"
+        assert hilo["contraparte_rol"] == "asesor"
+        assert hilo["contraparte_id"] == str(asesor.id)
+        # La empresa acompaña al nombre, no lo sustituye.
+        assert hilo["contraparte_empresa"] == "Empresa Flujo Chat"
+
+    def test_la_empresa_ve_al_cliente_en_el_mismo_hilo(
+        self, client, db_session, solicitante, empresa, asesor
+    ):
+        importador, _dueño = empresa
+        cotizacion = _crear_cotizacion(db_session, solicitante, importador.id)
+        client.post(f"/cotizaciones/{cotizacion.id}/reclamar", headers=auth_headers_for(asesor))
+
+        hilo = client.get("/chat/conversaciones", headers=auth_headers_for(asesor)).json()[0]
+
+        assert hilo["contraparte_nombre"] == "Cliente Flujo"
+        assert hilo["contraparte_rol"] == "solicitante"
+        assert hilo["contraparte_id"] == str(solicitante.id)
+        # Un cliente no pertenece a ninguna importadora.
+        assert hilo["contraparte_empresa"] is None
+
+    def test_dos_clientes_distintos_no_se_confunden(
+        self, client, db_session, solicitante, empresa, asesor
+    ):
+        importador, _dueño = empresa
+        otro = Usuario(
+            id=str(uuid4()), email="otro_cliente_flujochat@example.com",
+            password_hash=hash_password("123456789"), rol="solicitante",
+            nombre="Cliente Dos", perfil_completo=True, fecha_creacion=datetime.utcnow(),
+        )
+        db_session.add(otro)
+        db_session.commit()
+
+        for cliente in (solicitante, otro):
+            cotizacion = _crear_cotizacion(db_session, cliente, importador.id)
+            client.post(f"/cotizaciones/{cotizacion.id}/reclamar", headers=auth_headers_for(asesor))
+
+        hilos = client.get("/chat/conversaciones", headers=auth_headers_for(asesor)).json()
+
+        nombres = {h["contraparte_nombre"] for h in hilos}
+        ids = {h["contraparte_id"] for h in hilos}
+        assert nombres == {"Cliente Flujo", "Cliente Dos"}
+        assert len(ids) == 2
+
+    def test_el_canal_interno_identifica_al_asesor_y_a_la_empresa(
+        self, client, db_session, empresa, asesor
+    ):
+        """El mismo hilo, leído desde los dos lados, nombra al otro."""
+        _importador, dueño = empresa
+
+        visto_por_la_empresa = client.post(
+            "/chat/interno",
+            json={"asesor_id": str(asesor.id)},
+            headers=auth_headers_for(dueño),
+        ).json()
+        assert visto_por_la_empresa["contraparte_nombre"] == "Asesor Flujo"
+        assert visto_por_la_empresa["contraparte_rol"] == "asesor"
+        assert visto_por_la_empresa["contraparte_id"] == str(asesor.id)
+
+        # `POST /chat/interno` reutiliza el hilo existente, así que es el mismo.
+        visto_por_el_asesor = client.post(
+            "/chat/interno", json={}, headers=auth_headers_for(asesor)
+        ).json()
+        assert visto_por_el_asesor["id"] == visto_por_la_empresa["id"]
+        assert visto_por_el_asesor["contraparte_nombre"] == "Empresa Flujo Chat"
+        assert visto_por_el_asesor["contraparte_rol"] == "importador"

@@ -32,4 +32,8 @@ export interface Quote {
   shippingMarkSufijo?: string | null;
   customFields?: Record<string, unknown> | null;
   requesterId?: string;
+  tierMinimoRequerido?: string;
+  solicitanteTier?: string;
+  solicitantePuntosCotizacion?: number;
+  bloqueada?: boolean;
 }

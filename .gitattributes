@@ -1,0 +1,11 @@
+# `core.autocrlf=true` (el valor por defecto de Git para Windows) convertía a
+# CRLF todo lo que se sacaba del repositorio, incluidos los scripts que ejecuta
+# un contenedor Linux. Con `#!/bin/sh\r` el kernel busca un intérprete que no
+# existe y el arranque del backend moría con un desconcertante
+# «exec ./entrypoint.sh: no such file or directory» pese a estar el fichero ahí.
+# Estos ficheros se escriben siempre con LF en el disco, se clone desde donde se
+# clone.
+*.sh text eol=lf
+Dockerfile* text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

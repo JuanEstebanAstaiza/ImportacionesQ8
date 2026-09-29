@@ -18,6 +18,8 @@ export interface BackendImporter {
   certificaciones?: BackendCertificacionOtorgada[];
   /** Suma de los pesos de sus sellos: define el orden del catálogo. */
   puntaje_publicidad?: number;
+  /** Órdenes que la empresa llevó hasta "entregado" (trayectoria pública). */
+  proyectos_completados?: number;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;
@@ -30,6 +32,7 @@ export interface BackendImporter {
   /** Prefijo de la empresa en el shipping mark (ej. "ctl"). */
   shipping_mark_prefijo?: string | null;
   fecha_registro: string;
+  tier_minimo_requerido?: string;
 }
 
 export interface BackendCotizacion {
@@ -37,6 +40,11 @@ export interface BackendCotizacion {
   solicitante_id?: string;
   importador_id: string | null;
   modalidad: "dirigida" | "abierta";
+  tier_minimo_requerido?: string;
+  desbloqueada_por_puntos?: boolean;
+  solicitante_tier?: string;
+  solicitante_puntos_cotizacion?: number;
+  bloqueada?: boolean;
   foto_producto?: string | null;
   pais_importacion: string;
   nivel_personalizacion?: string | null;
@@ -84,6 +92,7 @@ export interface CreateCotizacionPayload {
   notas_adicionales?: string;
   shipping_mark_sufijo?: string;
   campos_personalizados_valores?: Record<string, unknown>;
+  tier_minimo_requerido?: string;
 }
 
 export interface BackendAsesor {
@@ -179,6 +188,29 @@ export interface BackendUserProfile {
   activo: boolean;
   perfil_completo: boolean;
   fecha_creacion: string;
+  tier?: string;
+  puntos_cotizacion?: number;
+}
+
+export interface BackendCotizantePerfilPublico {
+  solicitante_id: string;
+  nombre: string;
+  volumen_total_importaciones: {
+    peso_total_kg: number;
+    volumen_total_m3: number;
+    contenedores_total: number;
+  };
+  cantidad_importaciones: {
+    total: number;
+    dentro_plataforma: number;
+    fuera_plataforma: number;
+  };
+  valor_promedio_importacion_usd: number;
+  actividad_plataforma: {
+    cotizaciones_solicitadas: number;
+    ordenes_generadas: number;
+    valor_promedio_operaciones_usd: number;
+  };
 }
 
 export interface UpdateUserProfilePayload {
@@ -373,6 +405,15 @@ export interface BackendChatConversation {
   importador_id: string | null;
   /** Nombre de la otra parte, ya resuelto por el backend. */
   contraparte_nombre: string | null;
+  /**
+   * Quién está al otro lado, resuelto por el backend según quién consulta.
+   * Sin el rol y la empresa, la cabecera del chat rotulaba todas las
+   * conversaciones igual y no se distinguía un cliente de un asesor.
+   */
+  contraparte_id?: string | null;
+  contraparte_rol?: string | null;
+  contraparte_empresa?: string | null;
+  contraparte_foto_url?: string | null;
   /** Solo en tickets de soporte. */
   asunto: string | null;
   urgencia: UrgenciaSoporte | null;
@@ -521,6 +562,12 @@ export const businessService = {
     });
   },
 
+  unlockQuoteByPoint(cotizacionId: string): Promise<BackendCotizacion> {
+    return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}/desbloquear`, {
+      method: "POST",
+    });
+  },
+
   createQuote(payload: CreateCotizacionPayload): Promise<BackendCotizacion> {
     return apiRequest<BackendCotizacion>("/cotizaciones", {
       method: "POST",
@@ -561,6 +608,12 @@ export const businessService = {
 
   getMyUserProfile(): Promise<BackendUserProfile> {
     return apiRequest<BackendUserProfile>("/usuarios/me", { method: "GET" });
+  },
+
+  getCotizantePublicProfile(solicitanteId: string): Promise<BackendCotizantePerfilPublico> {
+    return apiRequest<BackendCotizantePerfilPublico>(`/usuarios/${solicitanteId}/perfil-publico`, {
+      method: "GET",
+    });
   },
 
   updateMyUserProfile(payload: UpdateUserProfilePayload): Promise<BackendUserProfile> {

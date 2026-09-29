@@ -30,11 +30,14 @@ interface AuthContextValue {
   isInitializing: boolean;
   token: string | null;
   user: CurrentUserResponse | null;
+  creditos: number;
   appRole: AppUserRole | null;
   signIn: (payload: LoginRequest) => Promise<LoginResponse>;
   verifyLoginOtp: (payload: LoginOtpRequest, email: string) => Promise<LoginResponse>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
+  /** Vuelve a pedir `/usuarios/me`: saldo de puntos y tier cambian en el servidor. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -164,6 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.forgotPassword({ email });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+  }, [queryClient]);
+
   const user = meQuery.data ?? null;
   const normalizedUserRole = String(user?.rol ?? "")
     .toLowerCase()
@@ -178,13 +185,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing: Boolean(token) && meQuery.isLoading,
       token,
       user,
+      creditos: Number(user?.puntos_cotizacion ?? 0),
       appRole,
       signIn,
       verifyLoginOtp,
       signOut,
       requestPasswordReset,
+      refreshUser,
     }),
-    [token, user, appRole, signIn, verifyLoginOtp, signOut, requestPasswordReset, meQuery.isLoading],
+    [token, user, appRole, signIn, verifyLoginOtp, signOut, requestPasswordReset, refreshUser, meQuery.isLoading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

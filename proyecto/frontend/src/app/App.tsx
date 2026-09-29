@@ -16,8 +16,8 @@ import {
   Image as ImageIcon, PanelRightClose, PanelRightOpen,
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
-  MoveRight, MoreHorizontal, Video,
-  LockKeyhole, LifeBuoy,
+  MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
+  LockKeyhole, LifeBuoy, WalletCards,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -50,6 +50,7 @@ import {
   type BackendArchivoItem,
   type BackendAsesor,
   type BackendChatAttachmentItem,
+  type BackendChatConversation,
   type BackendCotizacion,
   type BackendExplorerResponse,
   type BackendImporter,
@@ -68,6 +69,8 @@ import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
 import { ResenasImportador } from "@/features/resenas/ResenasImportador";
 import { PendientesDeResena } from "@/features/resenas/PendientesDeResena";
 import { PresentacionPublica, EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
+import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
+import { TierBadge } from "@/features/cotizante/TierBadge";
 import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
 import {
   componerShippingMark,
@@ -245,12 +248,21 @@ function Card({children,className,padding="md",...props}:CardProps) {
   return <div className={clsx("bg-white border border-border rounded-xl shadow-sm",p[padding],className)} {...props}>{children}</div>;
 }
 
-function Avatar({initials,size="md",color="bg-primary",src}:{initials:string;size?:"sm"|"md"|"lg"|"xl";color?:string;src?:string}) {
-  const s={sm:"w-7 h-7 text-xs",md:"w-9 h-9 text-sm",lg:"w-10 h-10 text-sm",xl:"w-12 h-12 text-base"};
+/**
+ * Avatar de persona (redondo) o logo de empresa (`variant="logo"`).
+ *
+ * Los tamaños `2xl`/`3xl` y la variante de logo existen porque el logo de la
+ * empresa se pintaba a 48 px y recortado en círculo: las marcas apaisadas
+ * perdían el texto y la ficha parecía no tener logo. En `logo` la imagen se
+ * escala entera (`object-contain`) sobre fondo blanco.
+ */
+function Avatar({initials,size="md",color="bg-primary",src,variant="avatar"}:{initials:string;size?:"sm"|"md"|"lg"|"xl"|"2xl"|"3xl";color?:string;src?:string;variant?:"avatar"|"logo"}) {
+  const s={sm:"w-7 h-7 text-xs",md:"w-9 h-9 text-sm",lg:"w-10 h-10 text-sm",xl:"w-12 h-12 text-base","2xl":"w-20 h-20 text-2xl","3xl":"w-28 h-28 text-3xl"};
+  const esLogo=variant==="logo";
   if(src){
-    return <img src={src} alt={initials} className={clsx("rounded-full object-cover flex-shrink-0 border border-border",s[size])}/>;
+    return <img src={src} alt={initials} className={clsx("flex-shrink-0 border border-border",esLogo?"rounded-xl object-contain bg-white p-1":"rounded-full object-cover",s[size])}/>;
   }
-  return <div className={clsx("rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0",color,s[size])}>{initials}</div>;
+  return <div className={clsx("flex items-center justify-center font-semibold text-white flex-shrink-0",esLogo?"rounded-xl":"rounded-full",color,s[size])}>{initials}</div>;
 }
 
 function Logo() {
@@ -486,7 +498,12 @@ interface ChatConv {
   // aparte porque es lo que identifica al responsable que se puede reasignar.
   // Ambos van vacíos en los hilos internos y en los de soporte.
   quoteId:string;
+  cotizanteTier?:string;
   counterpartName?:string;
+  counterpartId?:string;
+  counterpartRole?:string;
+  counterpartCompany?:string;
+  counterpartPhotoUrl?:string;
   // Solo en tickets de soporte.
   subject?:string;
   urgency?:string;
@@ -626,6 +643,8 @@ const NAV_ADMIN=[
   {icon:LayoutGrid,    label:"Resumen",         key:"admin-dashboard"},
   {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
+  {icon:WalletCards,   label:"Cotizantes",      key:"admin-cotizantes"},
+  {icon:Mail,          label:"Correos",         key:"admin-correos"},
   {icon:LifeBuoy,      label:"Soporte",         key:"admin-soporte"},
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
@@ -746,6 +765,32 @@ function readPerfilPublicoStringArray(perfil: Record<string, unknown> | null | u
   return [];
 }
 
+/**
+ * Convierte lo que la empresa escribió en «Sitio web» en un href navegable.
+ *
+ * Casi nadie escribe el esquema: el campo llega como "miempresa.com" y un
+ * `<a href="miempresa.com">` navega a una ruta relativa de la propia
+ * plataforma. Se antepone `https://` y se descarta cualquier cosa que no acabe
+ * siendo http(s) (defensa en profundidad: el texto lo escribe la empresa).
+ */
+function enlaceSitioWeb(valor: string | null | undefined): string {
+  const limpio = String(valor ?? "").trim();
+  if (!limpio) {
+    return "";
+  }
+  const conEsquema = /^[a-z][a-z0-9+.-]*:\/\//i.test(limpio) ? limpio : `https://${limpio}`;
+  return safeHttpUrl(conEsquema);
+}
+
+/** Texto del enlace: sin esquema ni "www.", que es como se lee una web. */
+function etiquetaSitioWeb(valor: string | null | undefined): string {
+  return String(valor ?? "")
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/+$/, "");
+}
+
 function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | undefined, companyName: string) {
   const advisorName =
     readPerfilPublicoString(perfil, "advisor_name", "asesor_nombre", "contact_name", "nombre_contacto") ||
@@ -770,12 +815,21 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
   const primaryCountry = imp.paises_origen[0] ?? "N/A";
   const name = imp.nombre_empresa;
   const perfil = imp.perfil_publico ?? null;
+  const tierMinimoRequerido = readPerfilPublicoString(perfil, "tier_minimo_requerido") || imp.tier_minimo_requerido || "Bronze";
   const advisorProfile = resolveImporterAdvisorProfile(perfil, name);
   return {
     description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
     certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
     bannerUrl: readPerfilPublicoString(perfil, "banner_url", "banner"),
     logoUrl: imp.logo_url ?? "",
+    // Ficha corporativa: la empresa ya rellenaba estos campos en su perfil,
+    // pero nadie los leía, así que no aparecían en ninguna pantalla pública.
+    website: readPerfilPublicoString(perfil, "website", "sitio_web", "web"),
+    email: readPerfilPublicoString(perfil, "email", "correo", "email_contacto"),
+    phone: readPerfilPublicoString(perfil, "phone", "telefono", "whatsapp"),
+    address: readPerfilPublicoString(perfil, "address", "direccion"),
+    foundedYear: readPerfilPublicoString(perfil, "year", "anio_fundacion", "fundacion"),
+    industries: readPerfilPublicoStringArray(perfil, "industries", "industrias", "sectores"),
     platformCerts: (imp.certificaciones ?? []).map((cert) => ({
       id: cert.certificacion_id,
       nombre: cert.nombre,
@@ -792,10 +846,13 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     initials: initialsFromName(name),
     color: importerColorFromId(imp.id),
     memberSince: formatShortDate(imp.fecha_registro),
-    projects: 0,
+    // Órdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
+    // empresas se presentaban como si no hubieran cerrado ni un proyecto.
+    projects: Number(imp.proyectos_completados ?? 0),
     verified: Boolean(imp.verificado),
     country: primaryCountry,
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
+    tierMinimoRequerido: ["Bronze", "Silver", "Gold", "Élite"].includes(tierMinimoRequerido) ? tierMinimoRequerido as Importer["tierMinimoRequerido"] : "Bronze",
     shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
     advisor: {
       name: advisorProfile.advisorName,
@@ -859,6 +916,10 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     shippingMarkSufijo: cot.shipping_mark_sufijo ?? null,
     customFields: cot.campos_personalizados_valores ?? null,
     requesterId: cot.solicitante_id,
+    tierMinimoRequerido: cot.tier_minimo_requerido ?? "Bronze",
+    solicitanteTier: cot.solicitante_tier ?? "Bronze",
+    solicitantePuntosCotizacion: cot.solicitante_puntos_cotizacion ?? 0,
+    bloqueada: Boolean(cot.bloqueada),
   };
 }
 
@@ -1126,6 +1187,7 @@ const COMPANY_ADVISORS:CompanyAdvisor[]=[
 interface AppNotification {
   id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
   title:string;body:string;date:string;read:boolean;
+  cotizacionId?:string;conversationId?:string;approval?:boolean;
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1139,14 +1201,26 @@ function mapBackendNotificationTypeToUi(type: string): AppNotification["type"] {
   return "status";
 }
 
-function mapBackendNotificationToUi(notification: { id: string; tipo: string; titulo: string; mensaje: string; fecha_creacion: string; leida: boolean; }): AppNotification {
+function mapBackendNotificationToUi(notification: { id: string; tipo: string; titulo: string; mensaje: string; fecha_creacion: string; leida: boolean; data?: Record<string, unknown> | null; }, companyName?: string): AppNotification {
+  const data = notification.data || {};
+  const cotizacionId = typeof data.cotizacion_id === "string" ? data.cotizacion_id : undefined;
+  const conversationId = typeof data.conversacion_id === "string" ? data.conversacion_id : undefined;
+  const approval = notification.tipo === "negociacion" || /cotizaci[oó]n aprobada/i.test(notification.titulo);
+  const company = companyName || (typeof data.nombre_empresa === "string" ? data.nombre_empresa : "la empresa importadora");
+  const title = approval ? "Cotización Aprobada" : notification.titulo;
+  const body = approval && cotizacionId
+    ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
+    : notification.mensaje;
   return {
     id: notification.id,
     type: mapBackendNotificationTypeToUi(notification.tipo),
-    title: notification.titulo,
-    body: notification.mensaje,
+    title,
+    body,
     date: formatShortDate(notification.fecha_creacion),
     read: notification.leida,
+    cotizacionId,
+    conversationId,
+    approval,
   };
 }
 
@@ -1299,7 +1373,7 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
     <Modal open={open} onClose={onClose} title="Pedir soporte técnico">
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Abre una conversación con el equipo de ImportacionesQ8. Se atiende por urgencia, así que
+          Abre una conversación con el equipo de Zarpi. Se atiende por urgencia, así que
           marca la que corresponda de verdad.
         </p>
         <Input
@@ -1366,6 +1440,7 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const displayInitials = initialsFromName(initialsSource);
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
   const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
+  const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
       <div/>
@@ -1377,6 +1452,11 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
           {count>0&&<span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">{count>9?"9+":count}</span>}
         </div>
         <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
+        {authUser?.rol === "solicitante" && (
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles">
+            <WalletCards className="h-3.5 w-3.5" />{creditos}
+          </span>
+        )}
         {showHelp&&<NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
         <button
           onClick={toggleTheme}
@@ -1485,22 +1565,24 @@ function ImporterCard({
             )}
           </div>
 
-          <div className="absolute -bottom-5 left-3 w-10 h-10 rounded-lg ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
+          {/* El logo se apoya sobre el banner y es la única marca visual de la
+              empresa en el catálogo: a 40 px no se distinguía una de otra. */}
+          <div className="absolute -bottom-7 left-3 w-16 h-16 rounded-xl ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
             {logoUrl ? (
               <img
                 src={logoUrl}
                 alt={`Logo de ${imp.name}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain p-1"
               />
             ) : (
-              <Avatar initials={imp.initials} size="md" color={imp.color} />
+              <Avatar initials={imp.initials} size="lg" color={imp.color} variant="logo" />
             )}
           </div>
         </div>
 
         {/* Header */}
-        <div className="flex items-start gap-3 mt-3">
-          <div className="w-10" />
+        <div className="flex items-start gap-3 mt-5">
+          <div className="w-16" />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-1.5 flex-wrap">
@@ -1566,7 +1648,7 @@ function ImporterCard({
           {platformCerts.map((c) => (
             <span
               key={c.id}
-              title={c.descripcion || `Respaldado por ImportacionesQ8`}
+              title={c.descripcion || `Respaldado por Zarpi`}
               className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-semibold text-primary flex items-center gap-1"
             >
               {c.logoUrl ? (
@@ -1723,7 +1805,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
               <div className="flex items-center gap-2 mb-4">
                 <Award className="w-4 h-4 text-amber-500"/>
                 <h2 className="text-sm font-semibold">Empresas destacadas</h2>
-                <span className="text-xs text-muted-foreground">· Con mayor respaldo de ImportacionesQ8</span>
+                <span className="text-xs text-muted-foreground">· Con mayor respaldo de Zarpi</span>
               </div>
               <div className="grid grid-flow-col auto-cols-[85%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 md:overflow-visible">
                 {featured.map(imp=>(
@@ -1793,6 +1875,57 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
   );
 }
 
+/** Sitio web, correo, teléfono, dirección y año de fundación de la empresa. */
+function DatosDeContactoEmpresa({imp}:{imp:Importer}) {
+  const sitio=enlaceSitioWeb(imp.website);
+  const filas:Array<{icono:React.ReactNode;etiqueta:string;valor:React.ReactNode}>=[];
+
+  if(sitio){
+    filas.push({
+      icono:<Globe className="w-3.5 h-3.5"/>,
+      etiqueta:"Sitio web",
+      valor:<a href={sitio} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{etiquetaSitioWeb(imp.website)}</a>,
+    });
+  }
+  if(imp.email){
+    filas.push({
+      icono:<MailIcon className="w-3.5 h-3.5"/>,
+      etiqueta:"Correo",
+      valor:<a href={`mailto:${imp.email}`} className="text-primary hover:underline break-all">{imp.email}</a>,
+    });
+  }
+  if(imp.phone){
+    filas.push({icono:<Phone className="w-3.5 h-3.5"/>,etiqueta:"Teléfono",valor:<span className="break-all">{imp.phone}</span>});
+  }
+  if(imp.address){
+    filas.push({icono:<MapPin className="w-3.5 h-3.5"/>,etiqueta:"Dirección",valor:<span>{imp.address}</span>});
+  }
+  if(imp.foundedYear){
+    filas.push({icono:<CalendarIcon className="w-3.5 h-3.5"/>,etiqueta:"Fundada en",valor:<span>{imp.foundedYear}</span>});
+  }
+
+  if(filas.length===0){
+    return null;
+  }
+
+  return (
+    <Card padding="md">
+      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary"/>Datos de la empresa</h3>
+      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+        {filas.map(f=>(
+          <div key={f.etiqueta} className="flex items-start gap-2.5 min-w-0">
+            <span className="text-muted-foreground mt-0.5 flex-shrink-0">{f.icono}</span>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.etiqueta}</p>
+              <p className="text-sm text-foreground mt-0.5">{f.valor}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1840,7 +1973,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
           <Card padding="md" className={clsx("mb-5",bannerUrl?"mt-3":"mt-4")}>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
               <div className="flex items-start gap-4">
-                <Avatar initials={imp.initials} size="xl" color={imp.color} src={logoUrl||undefined}/>
+                <Avatar initials={imp.initials} size="2xl" color={imp.color} src={logoUrl||undefined} variant="logo"/>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-semibold">{imp.name}</h1>
@@ -1848,7 +1981,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
                   <div className="flex items-center gap-4 mt-2 flex-wrap">
-                    {platformCerts.length>0&&<div className="flex items-center gap-1 text-primary"><BadgeCheck className="w-3.5 h-3.5"/><span className="text-xs font-medium">{platformCerts.length} {platformCerts.length===1?"sello":"sellos"} de ImportacionesQ8</span></div>}
+                    {platformCerts.length>0&&<div className="flex items-center gap-1 text-primary"><BadgeCheck className="w-3.5 h-3.5"/><span className="text-xs font-medium">{platformCerts.length} {platformCerts.length===1?"sello":"sellos"} de Zarpi</span></div>}
                     {certs.length>0&&<div className="flex items-center gap-1 text-muted-foreground"><Award className="w-3.5 h-3.5"/><span className="text-xs">{certs.length} {certs.length===1?"certificación":"certificaciones"}</span></div>}
                     <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime} respuesta</span></div>
                     <div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div>
@@ -1875,7 +2008,19 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                     <span key={c} className="px-2.5 py-1 bg-primary/5 text-primary rounded-lg text-xs font-medium">{c}</span>
                   ))}
                 </div>
+                {imp.industries&&imp.industries.length>0&&(
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {imp.industries.map(i=>(
+                      <span key={i} className="px-2.5 py-1 bg-muted text-muted-foreground rounded-lg text-xs font-medium">{i}</span>
+                    ))}
+                  </div>
+                )}
               </Card>
+
+              {/* Ficha de contacto que la empresa rellena en su propio perfil.
+                  Estaba guardándose en `perfil_publico` sin que ninguna pantalla
+                  la leyera, así que rellenarla no cambiaba nada para el cliente. */}
+              <DatosDeContactoEmpresa imp={imp}/>
 
               {/* Presentacion en video y fotos que sube la propia empresa. El
                   componente no pinta nada si todavia no hay material aprobado. */}
@@ -1888,10 +2033,10 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
               </Card>
 
               {/* Respaldo de la plataforma: distinto de las certificaciones que
-                  la propia empresa declara, porque este lo otorga ImportacionesQ8. */}
+                  la propia empresa declara, porque este lo otorga Zarpi. */}
               {platformCerts.length>0&&(
                 <Card padding="md" className="border-primary/20 bg-primary/5">
-                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck className="w-4 h-4 text-primary"/>Respaldada por ImportacionesQ8</h3>
+                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck className="w-4 h-4 text-primary"/>Respaldada por Zarpi</h3>
                   <p className="text-xs text-muted-foreground mb-3">Sellos que nuestro equipo otorgó tras verificar a esta empresa.</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {platformCerts.map(c=>(
@@ -1992,8 +2137,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
+function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;onRefreshQuotes?:()=>Promise<void>;creditos:number;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
+  const [quoteToUnlock,setQuoteToUnlock]=useState<Quote|null>(null);
+  const [unlocking,setUnlocking]=useState(false);
+  const [unlockError,setUnlockError]=useState("");
   const lastQ=quotes[0]??null;
   const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
     acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
@@ -2007,6 +2155,21 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
     const mr=!respF||(respF==="sin"?count===0:count>0);
     return ms&&mst&&mm&&mr;
   });
+
+  async function unlockQuote() {
+    if (!quoteToUnlock) return;
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      await businessService.unlockQuoteByPoint(quoteToUnlock.id);
+      setQuoteToUnlock(null);
+      await onRefreshQuotes?.();
+    } catch (error) {
+      setUnlockError(error instanceof Error ? error.message : "No se pudo desbloquear la cotización.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="quotes"/>
@@ -2016,7 +2179,7 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
             <div className="flex items-center justify-between mt-3">
-              <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
+              <div className="flex items-center gap-3"><h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1><span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"><WalletCards className="h-3.5 w-3.5" />{creditos} créditos</span></div>
               <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
@@ -2079,10 +2242,22 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
                         <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
                         <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
-                        <td className="px-4 py-3"><Badge variant={row.status}/></td>
+                        <td className="px-4 py-3">
+                          {row.bloqueada ? (
+                            <div className="flex min-w-[150px] flex-col items-start gap-1">
+                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">Cotización bloqueada</span>
+                              <span className="text-[11px] text-muted-foreground">Requiere <TierBadge tier={row.tierMinimoRequerido} /></span>
+                            </div>
+                          ) : <Badge variant={row.status}/>}
+                        </td>
                         <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id]||0}</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
-                        <td className="px-4 py-3"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button></td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button>
+                            {row.bloqueada && <Button variant="primary" size="sm" onClick={()=>{setUnlockError("");setQuoteToUnlock(row);}}>Desbloquear por 1 punto</Button>}
+                          </div>
+                        </td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -2092,6 +2267,24 @@ function QuotesScreen({onNewQuote,onViewDetail,sb,quotes,responses}:{onNewQuote:
           </div>
         </main>
       </div>
+      <Modal open={Boolean(quoteToUnlock)} onClose={()=>{if(!unlocking)setQuoteToUnlock(null);}} title="Desbloquear cotización">
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-sm font-semibold">{quoteToUnlock?.code} · {quoteToUnlock?.product}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Tu nivel:</span><TierBadge tier={quoteToUnlock?.solicitanteTier} />
+              <span>Requerido:</span><TierBadge tier={quoteToUnlock?.tierMinimoRequerido} />
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">Se descontará 1 punto de cotización de tu saldo para habilitar esta oportunidad.</p>
+          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? 0} puntos</span></p>
+          {unlockError && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">{unlockError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" disabled={unlocking} onClick={()=>setQuoteToUnlock(null)}>Cancelar</Button>
+            <Button variant="primary" loading={unlocking} onClick={()=>{void unlockQuote();}}>Desbloquear por 1 punto</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -2452,7 +2645,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-4 flex-1">
-                <Avatar initials={imp?.initials || "IM"} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/>
+                <Avatar initials={imp?.initials || "IM"} size="2xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap"><h1 className="text-lg font-semibold">{companyName}</h1>{imp?.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}<Badge variant={resp.status}/></div>
                   <p className="text-sm text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"}</p>
@@ -2465,7 +2658,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined}/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
+                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
                 <div className="flex gap-2">
                   <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp?.advisor.phone,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
@@ -2829,6 +3022,65 @@ function FileAttachmentBubble({file}:{file:MsgFile}) {
   );
 }
 
+/** Cómo se llama en pantalla cada rol cuando es la contraparte de un chat. */
+const ETIQUETA_ROL_CONTRAPARTE: Record<string, string> = {
+  solicitante: "Cliente",
+  importador: "Empresa importadora",
+  asesor: "Asesor de la empresa",
+  admin: "Equipo Zarpi",
+  soporte: "Mesa de ayuda",
+  plataforma: "Mesa de ayuda",
+};
+
+/** Etiqueta legible de un rol; devuelve el valor crudo si no se conoce. */
+function etiquetaDeRol(rol:string|undefined|null):string{
+  const clave=String(rol??"").trim();
+  if(!clave)return "";
+  return ETIQUETA_ROL_CONTRAPARTE[clave]||clave;
+}
+
+/**
+ * Con quién se está hablando en una conversación, para pintarlo en pantalla.
+ *
+ * La cabecera del chat mostraba siempre el texto «Asesor asignado» y las
+ * iniciales de la empresa importadora, daba igual el rol de quien mirara: un
+ * asesor no distinguía a un cliente de otro, el cliente no sabía qué persona de
+ * la empresa le escribía, y desde la mesa de ayuda todos los tickets parecían
+ * el mismo. El backend ya resuelve la contraparte según quién consulta
+ * (`contraparte_*`); aquí solo se le da forma.
+ */
+function resolverContraparteChat(conv:ChatConv|null,imp:Importer|null){
+  const nombre = conv?.counterpartName
+    || (conv?.type==="interno" ? "Equipo" : "")
+    || imp?.name
+    || "Conversación";
+  const etiquetaRol = conv?.counterpartRole
+    ? (ETIQUETA_ROL_CONTRAPARTE[conv.counterpartRole] || conv.counterpartRole)
+    : "";
+  // La empresa solo aporta contexto cuando no es ya el propio interlocutor.
+  const empresa = conv?.counterpartCompany && conv.counterpartCompany!==nombre
+    ? conv.counterpartCompany
+    : "";
+  return {
+    nombre,
+    etiquetaRol,
+    empresa,
+    iniciales: initialsFromName(nombre),
+    // Color estable por PERSONA, no por conversación: si dependiera del id del
+    // hilo, el mismo interlocutor (soporte, por ejemplo) saldría de un color
+    // distinto en cada chat y el avatar dejaría de servir para reconocerlo.
+    color: importerColorFromId(conv?.counterpartId || nombre || imp?.id || "chat"),
+    fotoUrl: conv?.counterpartPhotoUrl ? resolveApiUrl(conv.counterpartPhotoUrl) : "",
+  };
+}
+
+function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterpartRole: string | undefined, tier: string | undefined): boolean {
+  const rolContraparte = String(counterpartRole || "").trim().toLowerCase();
+  const esCotizante = rolContraparte === "cotizante" || rolContraparte === "solicitante";
+  const esRolAutorizado = currentUserRole === "asesor" || currentUserRole === "importadora" || currentUserRole === "admin";
+  return Boolean(tier) && esCotizante && esRolAutorizado;
+}
+
 function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
@@ -2914,6 +3166,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const conv=selectedId?conversations.find(c=>c.id===selectedId)||null:null;
   const imp=conv?importers.find(i=>i.id===conv.importerId)||null:null;
   const chatCompanyName = conv?.importerName || imp?.name || "Empresa importadora";
+  // Con quién se habla de verdad. Antes la cabecera usaba `chatAdvisorName`,
+  // que para casi todas las empresas es el literal «Asesor asignado».
+  const contraparte = resolverContraparteChat(conv, imp);
+  const mostrarTierContraparte = conv ? puedeVerTierDeContraparte(currentUserRole, conv.counterpartRole, conv.cotizanteTier) : false;
   const chatAdvisorName = conv?.advisorName || imp?.advisor.name || "Asesor";
   const chatAdvisorRole = conv?.advisorRole || imp?.advisor.role || "Asesor";
   const chatAdvisorEmail = conv?.advisorEmail || imp?.advisor.email || "";
@@ -3600,17 +3856,24 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 const companyName = c.type==="interno"
                   ? (c.counterpartName || "Equipo")
                   : c.type==="soporte"
-                    ? [c.counterpartName, c.requesterRole].filter(Boolean).join(" · ")
+                    ? [c.counterpartName, etiquetaDeRol(c.requesterRole)].filter(Boolean).join(" · ")
                     : (c.counterpartName || c.importerName || cImp?.name || "Empresa importadora");
                 const urgencia = c.type==="soporte" ? URGENCIA_SOPORTE[c.urgency||""] : undefined;
                 const isSelected=selectedId===c.id;
+                const suContraparte=resolverContraparteChat(c,cImp||null);
                 return (
                   <button key={c.id} onClick={()=>setSelectedId(c.id)}
                     className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
                       isSelected?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
-                    <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5",
-                      c.type==="orden"?"bg-purple-50 text-purple-600":c.type==="interno"?"bg-amber-50 text-amber-600":c.type==="soporte"?"bg-rose-50 text-rose-600":"bg-blue-50 text-blue-600")}>
-                      {c.type==="orden"?<ShoppingCart className="w-4 h-4"/>:c.type==="interno"?<Users className="w-4 h-4"/>:c.type==="soporte"?<LifeBuoy className="w-4 h-4"/>:<FileText className="w-4 h-4"/>}
+                    {/* El avatar es de la PERSONA y el distintivo pequeño dice de
+                        qué hilo se trata: antes solo había un icono por tipo,
+                        igual para todas las conversaciones de esa clase. */}
+                    <div className="relative flex-shrink-0 mt-0.5">
+                      <Avatar initials={suContraparte.iniciales} size="lg" color={suContraparte.color} src={suContraparte.fotoUrl||undefined}/>
+                      <span className={clsx("absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-background",
+                        c.type==="orden"?"bg-purple-100 text-purple-600":c.type==="interno"?"bg-amber-100 text-amber-600":c.type==="soporte"?"bg-rose-100 text-rose-600":"bg-blue-100 text-blue-600")}>
+                        {c.type==="orden"?<ShoppingCart className="w-2.5 h-2.5"/>:c.type==="interno"?<Users className="w-2.5 h-2.5"/>:c.type==="soporte"?<LifeBuoy className="w-2.5 h-2.5"/>:<FileText className="w-2.5 h-2.5"/>}
+                      </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
@@ -3624,7 +3887,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                                 {urgencia.label}
                               </span>
                             )}
-                            <p className="text-xs text-muted-foreground truncate">{companyName}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {[companyName, c.type!=="soporte"?suContraparte.etiquetaRol:""].filter(Boolean).join(" · ")}
+                            </p>
+                            {puedeVerTierDeContraparte(currentUserRole, c.counterpartRole, c.cotizanteTier) && <TierBadge tier={c.cotizanteTier} />}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -3656,19 +3922,25 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
               {/* Chat header */}
               <div className="flex-shrink-0 border-b border-border bg-white px-4 py-3 flex items-center gap-3">
-                <Avatar initials={imp?.initials || "NA"} size="md" color={imp?.color || "bg-slate-500"}/>
+                <Avatar initials={contraparte.iniciales} size="md" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm text-foreground">
-                      {conv.type==="interno"?(conv.counterpartName||"Equipo")
-                        :conv.type==="soporte"?(conv.subject||"Solicitud de soporte")
-                        :chatAdvisorName}
+                      {conv.type==="soporte"?(conv.subject||"Solicitud de soporte"):contraparte.nombre}
                     </p>
+                    {mostrarTierContraparte && <TierBadge tier={conv.cotizanteTier} />}
+                    {/* Qué es esa persona: sin esto no se distinguía un cliente
+                        de un asesor ni de la cuenta dueña de una empresa. */}
+                    {conv.type!=="soporte"&&contraparte.etiquetaRol&&(
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        {contraparte.etiquetaRol}
+                      </span>
+                    )}
                     {conv.type==="soporte"&&(
                       <>
                         <span className="text-muted-foreground/40 text-xs">·</span>
                         <p className="text-xs text-muted-foreground">
-                          {[conv.counterpartName, conv.requesterRole].filter(Boolean).join(" · ")}
+                          {[conv.counterpartName, etiquetaDeRol(conv.requesterRole)].filter(Boolean).join(" · ")}
                         </p>
                         {URGENCIA_SOPORTE[conv.urgency||""]&&(
                           <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold",URGENCIA_SOPORTE[conv.urgency||""].clase)}>
@@ -3677,10 +3949,10 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         )}
                       </>
                     )}
-                    {conv.type!=="interno"&&conv.type!=="soporte"&&(
+                    {conv.type!=="interno"&&conv.type!=="soporte"&&contraparte.empresa&&(
                       <>
                         <span className="text-muted-foreground/40 text-xs">·</span>
-                        <p className="text-xs text-muted-foreground">{chatCompanyName}</p>
+                        <p className="text-xs text-muted-foreground">{contraparte.empresa}</p>
                       </>
                     )}
                     {conv.type!=="soporte"&&(
@@ -3723,7 +3995,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         </div>
                       )}
                       <div className={clsx("flex gap-2 items-end mb-0.5",isClient?"justify-end":"justify-start")}>
-                        {!isClient&&<Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/>}
+                        {!isClient&&<Avatar initials={contraparte.iniciales} size="sm" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>}
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
                           {messageAttachments.length>0 && (
@@ -3911,7 +4183,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                       ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "—"],
                       ["Atiende", conv.agentName || "Sin asignar"],
                       ["Solicita", conv.counterpartName || "—"],
-                      ["Perfil", conv.requesterRole || "—"],
+                      ["Perfil", etiquetaDeRol(conv.requesterRole) || "—"],
                       ...(conv.closed ? [["Cerró", conv.closedBy || "—"]] : []),
                       ...(conv.rating ? [["Calificación", `${conv.rating} de 5`]] : []),
                     ].map(([k, v]) => (
@@ -4036,17 +4308,30 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                 ):(
                   <>
                     <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
-                      <div className="flex items-center gap-2"><Avatar initials={imp?.initials || "NA"} size="sm" color={imp?.color || "bg-slate-500"}/><div><p className="text-xs font-semibold">{chatCompanyName}</p></div></div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Hablas con</p>
+                      <div className="flex items-center gap-2">
+                        <Avatar initials={contraparte.iniciales} size="sm" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate">{contraparte.nombre}</p>
+                          {contraparte.etiquetaRol&&<p className="text-[10px] text-muted-foreground">{contraparte.etiquetaRol}</p>}
+                          {mostrarTierContraparte && <TierBadge tier={conv.cotizanteTier} />}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Asesor</p>
-                      <div className="flex items-center gap-2"><Avatar initials={chatAdvisorInitials} size="sm" color={chatAdvisorColor}/><div><p className="text-xs font-semibold">{chatAdvisorName}</p><p className="text-[10px] text-muted-foreground">{chatAdvisorRole}</p></div></div>
-                      <div className="flex gap-1 mt-2">
+                    {/* La empresa es el contexto de la negociación; solo se
+                        repite aquí cuando no es el propio interlocutor. */}
+                    {contraparte.empresa&&(
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Empresa</p>
+                        <div className="flex items-center gap-2"><Avatar initials={imp?.initials || initialsFromName(contraparte.empresa)} size="sm" color={imp?.color || "bg-slate-500"} variant="logo" src={imp?.logoUrl?resolveApiUrl(imp.logoUrl):undefined}/><div><p className="text-xs font-semibold">{contraparte.empresa}</p></div></div>
+                      </div>
+                    )}
+                    {contraparte.empresa&&(chatAdvisorWhatsapp||chatAdvisorEmail)&&(
+                      <div className="flex gap-1">
                         <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
                         <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
                 <div className="border-t border-border"/>
@@ -5514,6 +5799,7 @@ function Stepper({current}:{current:number}) {
 interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
 const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
 const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
+const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
 const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
 function normalizeTargetPriceInput(value: string): string {
   const normalized = value.replace(",", ".");
@@ -5731,7 +6017,7 @@ function Step3Abierta() {
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload)=>Promise<void>;prefill?:Partial<QuoteFormState>}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -5739,9 +6025,13 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   // y el usuario solo ajusta lo que cambie.
   const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
   const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
+  const [desbloquearPorCredito,setDesbloquearPorCredito]=useState(false);
   const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
   const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
   const si=importers.find(i=>i.id===selectedId)??null;
+  const tierCotizante = cotizanteTier;
+  const tierRequerido = si?.tierMinimoRequerido || "Bronze";
+  const tierBloqueado = Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
   // El backend exige una descripcion de al menos 10 caracteres. Se comprueba
@@ -5768,9 +6058,17 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     setStepError("");
     navigate(step+1,"fwd");
   }
-  async function handleSubmit(){
+  async function handleSubmit(forceUnlock = desbloquearPorCredito){
     if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
     if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+    if(tierBloqueado && !forceUnlock){
+      setStepError(`Esta empresa requiere nivel ${tierRequerido} o superior. Tu nivel actual es ${tierCotizante}.`);
+      return;
+    }
+    if(tierBloqueado && creditos < 1){
+      setStepError("No tienes créditos suficientes para desbloquear esta cotización.");
+      return;
+    }
 
     if(form.description.trim().length<DESCRIPCION_MINIMA){
       setStepError(`Describe el producto con al menos ${DESCRIPCION_MINIMA} caracteres.`);
@@ -5810,12 +6108,13 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       incoterm:form.incoterm || "DDP",
       notas_adicionales:form.notes||undefined,
       shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
+      tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
     };
 
     try{
       setSubmitting(true);
       setStepError("");
-      await onSubmitQuote(payload);
+      await onSubmitQuote(payload, tierBloqueado && forceUnlock);
       setSubmitted(true);
     }catch(error){
       setStepError(error instanceof Error?error.message:"No se pudo crear la cotización.");
@@ -5859,7 +6158,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2">
                   <div style={slideStyle}>
-                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setStepError("");}} selectedId={selectedId} setSelectedId={setSelectedId} preselectedId={preselectedImporterId} importers={importers}/>}
+                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
                     {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}
                     {step===3 && modalidad==="dirigida" && si && <Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}
                     {step===3 && modalidad==="abierta" && <Step3Abierta/>}
@@ -5879,6 +6178,13 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               </div>
             </div>
 
+            {tierBloqueado && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-accent/30 dark:bg-accent/10">
+                <p className="text-xs font-semibold text-amber-900 dark:text-accent">Esta empresa requiere nivel {tierRequerido} o superior. Tu nivel actual es {tierCotizante}.</p>
+                <p className="mt-1 text-xs text-amber-800 dark:text-accent/80">Saldo disponible: {creditos} créditos. 1 crédito desbloquea 1 cotización.</p>
+              </div>
+            )}
+
             {/* Barra Inferior de Navegación (SIEMPRE FIJA EN EL BOTTOM) */}
             <div className="pt-3 mt-3 border-t border-border flex-shrink-0 bg-background z-10">
               <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -5892,10 +6198,17 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                   {step < 3 ? (
                     <Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext} className="w-full sm:w-auto justify-center">Continuar</Button>
                   ) : (
-                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} onClick={handleSubmit} className="w-full sm:w-auto justify-center">Solicitar cotización</Button>
+                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} disabled={tierBloqueado} onClick={()=>{void handleSubmit(false);}} className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                      {tierBloqueado ? "Solicitar cotización" : "Solicitar cotización"}
+                    </Button>
                   )}
                 </div>
               </div>
+              {step === 3 && tierBloqueado && creditos >= 1 && (
+                <Button variant="primary" size="md" icon={<WalletCards className="w-4 h-4"/>} loading={submitting} onClick={()=>{setDesbloquearPorCredito(true);void handleSubmit(true);}} className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                  Desbloquear y enviar cotización por 1 crédito
+                </Button>
+              )}
             </div>
 
           </main>
@@ -5926,7 +6239,7 @@ function Modal({open,onClose,title,children,width="max-w-lg"}:{open:boolean;onCl
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICATIONS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onBack:()=>void;sb:SidebarCtrl}) {
+function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onOpen:(notification:AppNotification)=>Promise<void>;onBack:()=>void;sb:SidebarCtrl}) {
   const NOTIF_ICON:Record<AppNotification["type"],React.ReactNode>={
     response:<ClipboardList className="w-4 h-4 text-blue-600"/>,
     message: <MessageSquare className="w-4 h-4 text-purple-600"/>,
@@ -5958,17 +6271,17 @@ function NotificationsScreen({notifications,onMark,onBack,sb}:{notifications:App
               </div>
             )}
             {notifications.map(n=>(
-              <div key={n.id} onClick={()=>onMark(n.id)} className={clsx("flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-muted/50 transition-colors",!n.read&&"bg-blue-50/40")}>
+              <button key={n.id} type="button" onClick={()=>{onMark(n.id);void onOpen(n);}} className={clsx("w-full text-left flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-primary/5 dark:hover:bg-accent/10 transition-colors",!n.read&&"bg-primary/5 dark:bg-accent/10")}>
                 <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">{NOTIF_ICON[n.type]}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p className={clsx("text-sm",!n.read?"font-semibold text-foreground":"font-medium text-foreground/80")}>{n.title}</p>
+                    <p className={clsx("text-sm",!n.read?"font-semibold text-primary dark:text-accent":"font-medium text-foreground/80")}>{n.title}</p>
                     <span className="text-xs text-muted-foreground flex-shrink-0">{n.date}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
                 </div>
-                {!n.read&&<span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5"/>}
-              </div>
+                {!n.read&&<span className="w-2 h-2 rounded-full bg-primary dark:bg-accent flex-shrink-0 mt-1.5"/>}
+              </button>
             ))}
           </Card>
         </main>
@@ -6014,7 +6327,7 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map((m,i)=>(
               <Card key={i} padding="md" className="metric-card flex items-start gap-3">
-                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",m.bg,m.color)}>{m.icon}</div>
+                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
                 <div className="min-w-0">
                   <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
@@ -6085,94 +6398,256 @@ const BANNER_FORMATS_LABEL="PNG, JPG o WebP";
 const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
 const BANNER_MAX_BYTES=5*1024*1024;
 
+/** Estado del autoguardado del perfil de empresa, en la cabecera. */
+function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
+  if(estado==="sin-cambios"){
+    return <span className="text-xs text-muted-foreground">Se guarda automáticamente</span>;
+  }
+  if(estado==="pendiente"){
+    return <span className="text-xs text-amber-700 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/>Cambios sin guardar</span>;
+  }
+  if(estado==="guardando"){
+    return <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/>Guardando…</span>;
+  }
+  return <span className="text-xs text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5"/>Guardado</span>;
+}
+
+/**
+ * Retardo del autoguardado. Suficiente para no disparar una petición por
+ * pulsación y corto para que el usuario vea "Guardado" mientras sigue en el
+ * mismo campo: el perfil se perdía porque nadie volvía a pulsar el botón.
+ */
+const RETARDO_AUTOGUARDADO_MS = 1200;
+
+type FormularioEmpresa = {
+  razonSocial:string;description:string;year:string;website:string;email:string;logoUrl:string;
+  phone:string;address:string;
+  categories:string[];countries:string[];industries:string[];
+  avgResponse:string;capacityVolume:string;soloCotizacionesDirectas:boolean;
+  shippingMarkPrefijo:string;certs:string[];banner:string;
+  tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
+};
+
+// Formulario vacío de verdad. Antes venía sembrado con una dirección de Bogotá,
+// un teléfono y las certificaciones "ISO 9001"/"CE" de ejemplo: cualquier
+// empresa que guardara su perfil publicaba esos datos inventados como propios.
+const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
+  razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
+  phone:"",address:"",
+  categories:[],countries:[],industries:[],
+  avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
+  shippingMarkPrefijo:"",certs:[],banner:"",
+  tierMinimoRequerido:"Bronze",
+};
+
 function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;})=>Promise<void>}) {
-  const [saved,setSaved]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [form,setForm]=useState({
-    razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
-    phone:"+57 1 234 5678",address:"Calle 90 #15-20, Bogotá, Colombia",
-    categories:[] as string[],countries:[] as string[],
-    industries:["Retail","Industrial"],avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
-    shippingMarkPrefijo:"",
-    certs:["ISO 9001","CE"],banner:"",
-  });
+  const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
+  const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
   const [bannerUploading,setBannerUploading]=useState(false);
   const [bannerError,setBannerError]=useState("");
-  const [bannerPendienteDeGuardar,setBannerPendienteDeGuardar]=useState(false);
+  const [logoUploading,setLogoUploading]=useState(false);
   const [logoUploadError,setLogoUploadError]=useState("");
   const bannerInputRef=useRef<HTMLInputElement>(null);
+  const logoInputRef=useRef<HTMLInputElement>(null);
+
+  /**
+   * Vistas previas del archivo que acaba de elegir el usuario, como `blob:`.
+   *
+   * Hacen falta porque el backend solo sirve una imagen sin sesión cuando ya
+   * figura como imagen pública de la empresa, y eso no ocurre hasta que el
+   * perfil se guarda. Entre la subida y el autoguardado, el `<img>` apuntando al
+   * servidor recibía un 401 y el navegador NO reintenta una imagen fallida: se
+   * quedaba rota hasta recargar la página, justo lo que hacía pensar que la
+   * subida no había funcionado.
+   */
+  const [previaLocal,setPreviaLocal]=useState<{logo:string;banner:string}>({logo:"",banner:""});
+  const previaLocalRef=useRef(previaLocal);
+  useEffect(()=>{previaLocalRef.current=previaLocal;},[previaLocal]);
+  // Un `blob:` retiene el archivo en memoria hasta que se revoca.
+  useEffect(()=>()=>{
+    Object.values(previaLocalRef.current).forEach((url)=>{if(url)URL.revokeObjectURL(url);});
+  },[]);
+
+  function fijarPreviaLocal(clave:"logo"|"banner",archivo:File|null){
+    setPreviaLocal((prev)=>{
+      if(prev[clave])URL.revokeObjectURL(prev[clave]);
+      return {...prev,[clave]:archivo?URL.createObjectURL(archivo):""};
+    });
+  }
+
+  // `revision` sube en cada edición del usuario (nunca al hidratar desde el
+  // servidor) y es lo que dispara el autoguardado con retardo.
+  const [revision,setRevision]=useState(0);
+  const formRef=useRef(form);
+  const empresaHidratadaRef=useRef<string|null>(null);
+  const guardadoEnCursoRef=useRef(false);
+  const cambiosSinGuardarRef=useRef(false);
+
+  useEffect(()=>{formRef.current=form;},[form]);
 
   useEffect(()=>{
     if(!company)return;
+    // Se hidrata una sola vez por empresa. Volver a copiar la respuesta del
+    // servidor en cada recarga pisaba lo que el usuario estuviera escribiendo,
+    // y con autoguardado esa recarga ocurre cada pocos segundos.
+    if(empresaHidratadaRef.current===company.id)return;
+    empresaHidratadaRef.current=company.id;
+
     const perfilPublico = company.perfil_publico && typeof company.perfil_publico === "object" ? company.perfil_publico : {};
-    const getString = (key: string, fallback = "") => {
+    const getString = (key: string) => {
       const value = perfilPublico[key];
-      return typeof value === "string" ? value : fallback;
+      return typeof value === "string" ? value : "";
     };
-    const getStringArray = (key: string, fallback: string[]) => {
+    const getStringArray = (key: string) => {
       const value = perfilPublico[key];
       if (!Array.isArray(value)) {
-        return fallback;
+        return [] as string[];
       }
       return value.filter((entry): entry is string => typeof entry === "string");
     };
 
-    setForm((prev)=>(
-      {
-        ...prev,
-        razonSocial:company.nombre_empresa,
-        logoUrl:company.logo_url || "",
-        description:getString("description", ""),
-        year:getString("year", ""),
-        website:getString("website", ""),
-        email:getString("email", ""),
-        phone:getString("phone", prev.phone),
-        address:getString("address", prev.address),
-        categories:company.especialidad_producto ?? [],
-        countries:company.paises_origen ?? [],
-        industries:getStringArray("industries", prev.industries),
-        avgResponse:company.tiempo_respuesta_promedio || "~24h",
-        capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
-        certs:getStringArray("certs", prev.certs),
-        banner:getString("banner", ""),
-        soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
-        shippingMarkPrefijo:company.shipping_mark_prefijo || "",
-      }
-    ));
+    setForm({
+      razonSocial:company.nombre_empresa,
+      logoUrl:company.logo_url || "",
+      description:getString("description"),
+      year:getString("year"),
+      website:getString("website"),
+      email:getString("email"),
+      phone:getString("phone"),
+      address:getString("address"),
+      categories:company.especialidad_producto ?? [],
+      countries:company.paises_origen ?? [],
+      industries:getStringArray("industries"),
+      avgResponse:company.tiempo_respuesta_promedio || "~24h",
+      capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
+      certs:getStringArray("certs"),
+      banner:getString("banner"),
+      soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
+      shippingMarkPrefijo:company.shipping_mark_prefijo || "",
+      tierMinimoRequerido: (["Bronze", "Silver", "Gold", "Élite"].includes(getString("tier_minimo_requerido")) ? getString("tier_minimo_requerido") : "Bronze") as FormularioEmpresa["tierMinimoRequerido"],
+    });
+    cambiosSinGuardarRef.current=false;
+    setRevision(0);
+    setEstadoGuardado("sin-cambios");
   },[company]);
 
-  function f(k:string,v:string){setForm(p=>({...p,[k]:v}));setSaved(false);}
+  /** Aplica un cambio del usuario y programa el autoguardado. */
+  const editar=useCallback((cambios:Partial<FormularioEmpresa>)=>{
+    setForm(p=>({...p,...cambios}));
+    cambiosSinGuardarRef.current=true;
+    setEstadoGuardado("pendiente");
+    setRevision(r=>r+1);
+  },[]);
+
+  function f(k:keyof FormularioEmpresa,v:string){editar({[k]:v} as Partial<FormularioEmpresa>);}
+
+  /** Alterna un valor dentro de una lista de etiquetas (categorías, países...). */
+  function alternar(clave:"categories"|"countries"|"certs",valor:string){
+    const actual=form[clave];
+    editar({[clave]:actual.includes(valor)?actual.filter(x=>x!==valor):[...actual,valor]} as Partial<FormularioEmpresa>);
+  }
+
+  const persistir=useCallback(async()=>{
+    if(guardadoEnCursoRef.current){
+      // Hay un envío en vuelo: se reintenta en el siguiente ciclo del retardo,
+      // en vez de solapar dos PUT sobre la misma empresa.
+      setRevision(r=>r+1);
+      return;
+    }
+
+    const actual=formRef.current;
+    guardadoEnCursoRef.current=true;
+    cambiosSinGuardarRef.current=false;
+    setEstadoGuardado("guardando");
+    setSaveError("");
+    try{
+      await onSave({
+        nombre_empresa:actual.razonSocial,
+        // Se manda siempre, también vacío: con `|| undefined` no había manera de
+        // quitar un logo ya puesto, porque el backend no veía el campo.
+        logo_url:actual.logoUrl.trim(),
+        especialidad_producto:actual.categories,
+        paises_origen:actual.countries,
+        shipping_mark_prefijo:actual.shippingMarkPrefijo.trim(),
+        tiempo_respuesta_promedio:actual.avgResponse,
+        capacidad_volumen:actual.capacityVolume.trim() ? Number.parseInt(actual.capacityVolume, 10) : undefined,
+        perfil_publico: {
+          description: actual.description.trim(),
+          year: actual.year.trim(),
+          website: actual.website.trim(),
+          email: actual.email.trim(),
+          phone: actual.phone.trim(),
+          address: actual.address.trim(),
+          industries: actual.industries,
+          certs: actual.certs,
+          banner: actual.banner.trim(),
+          tier_minimo_requerido: actual.tierMinimoRequerido,
+        },
+        solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
+      });
+      setEstadoGuardado(prev=>prev==="guardando"?"guardado":prev);
+    }catch(err){
+      // Lo escrito sigue en pantalla y vuelve a marcarse como pendiente: el
+      // siguiente intento (automático o manual) lo reenvía entero.
+      cambiosSinGuardarRef.current=true;
+      setEstadoGuardado("pendiente");
+      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
+    }finally{
+      guardadoEnCursoRef.current=false;
+    }
+  },[onSave]);
+
+  // El envío se invoca siempre por referencia. `onSave` se redefine en cada
+  // render de la aplicación, así que depender de `persistir` en el efecto
+  // reiniciaba el temporizador con cada repintado ajeno (sondeos, chat...) y el
+  // autoguardado podía no llegar a dispararse nunca.
+  const persistirRef=useRef(persistir);
+  useEffect(()=>{persistirRef.current=persistir;},[persistir]);
+
+  // Autoguardado: cada edición reinicia el reloj, así que solo se envía cuando
+  // el usuario deja de escribir.
+  useEffect(()=>{
+    if(revision===0)return;
+    const temporizador=window.setTimeout(()=>{void persistirRef.current();},RETARDO_AUTOGUARDADO_MS);
+    return ()=>window.clearTimeout(temporizador);
+  },[revision]);
+
+  // Si se sale de la pantalla dentro de la ventana del retardo, lo último
+  // escrito se envía igualmente en lugar de perderse.
+  useEffect(()=>()=>{
+    if(cambiosSinGuardarRef.current){
+      void persistirRef.current();
+    }
+  },[]);
 
   /**
-   * Sube el banner a gestión documental y guarda su ruta canónica.
+   * Sube una imagen del perfil (logo o banner) a gestión documental y devuelve
+   * su ruta canónica.
    *
    * La imagen tiene que vivir en la plataforma (no una URL pegada a mano) para
    * que el backend la reconozca como imagen pública de la empresa y la sirva
    * sin sesión al solicitante que abre la ficha.
    */
-  async function handleUploadBanner(archivo:File){
-    setBannerError("");
+  async function subirImagenDePerfil(archivo:File):Promise<string>{
     const extension=(archivo.name.split(".").pop()||"").toLowerCase();
     if(!BANNER_EXTENSIONS.includes(extension)){
-      setBannerError(`Formato no soportado (.${extension}). Usa ${BANNER_FORMATS_LABEL}.`);
-      return;
+      throw new Error(`Formato no soportado (.${extension}). Usa ${BANNER_FORMATS_LABEL}.`);
     }
     if(archivo.size>BANNER_MAX_BYTES){
-      setBannerError("La imagen supera 5 MB. Comprímela antes de subirla.");
-      return;
+      throw new Error("La imagen supera 5 MB. Comprímela antes de subirla.");
     }
+    const subido=await businessService.uploadDocumentFile(archivo,null,"perfil-empresa");
+    return toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
+  }
 
+  async function handleUploadBanner(archivo:File){
+    setBannerError("");
     setBannerUploading(true);
     try{
-      const subido=await businessService.uploadDocumentFile(archivo,null,"perfil-empresa");
-      const url=toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
-      setForm(p=>({...p,banner:url}));
-      setSaved(false);
-      // La subida solo deja la imagen en el formulario: hasta que no se guarda
-      // el perfil, el banner no existe para nadie mas. Sin este aviso el usuario
-      // veia la vista previa, se iba de la pantalla y el banner desaparecia.
-      setBannerPendienteDeGuardar(true);
+      const ruta=await subirImagenDePerfil(archivo);
+      fijarPreviaLocal("banner",archivo);
+      editar({banner:ruta});
     }catch(err){
       setBannerError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir la imagen del banner.");
     }finally{
@@ -6180,40 +6655,23 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
     }
   }
 
-  async function save(){
-    setSaveError("");
-    setSaving(true);
+  async function handleUploadLogo(archivo:File){
+    setLogoUploadError("");
+    setLogoUploading(true);
     try{
-      await onSave({
-        nombre_empresa:form.razonSocial,
-        logo_url:form.logoUrl.trim() || undefined,
-        especialidad_producto:form.categories,
-        paises_origen:form.countries,
-        shipping_mark_prefijo:form.shippingMarkPrefijo.trim(),
-        tiempo_respuesta_promedio:form.avgResponse,
-        capacidad_volumen:form.capacityVolume.trim() ? Number.parseInt(form.capacityVolume, 10) : undefined,
-        perfil_publico: {
-          description: form.description.trim(),
-          year: form.year.trim(),
-          website: form.website.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          address: form.address.trim(),
-          industries: form.industries,
-          certs: form.certs,
-          banner: form.banner.trim(),
-        },
-        solo_cotizaciones_directas:form.soloCotizacionesDirectas,
-      });
-      setSaved(true);
-      setBannerPendienteDeGuardar(false);
-      setTimeout(()=>setSaved(false),3000);
+      const ruta=await subirImagenDePerfil(archivo);
+      fijarPreviaLocal("logo",archivo);
+      editar({logoUrl:ruta});
     }catch(err){
-      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
+      setLogoUploadError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir el logo.");
     }finally{
-      setSaving(false);
+      setLogoUploading(false);
     }
   }
+
+  const guardando=estadoGuardado==="guardando";
+  const logoPreview=previaLocal.logo||(form.logoUrl?resolveApiUrl(form.logoUrl):"");
+  const bannerPreview=previaLocal.banner||(form.banner?resolveApiUrl(form.banner):"");
 
   if(!company){
     return (
@@ -6242,7 +6700,12 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
               <h1 className="text-xl font-semibold mt-3">Perfil de la empresa</h1>
               <p className="text-sm text-muted-foreground mt-0.5">Esta información es visible para los solicitantes.</p>
             </div>
-            <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
+            <div className="flex items-center gap-3">
+              {/* El formulario se guarda solo; el indicador es lo que le dice al
+                  usuario que no tiene que pulsar nada para no perder lo escrito. */}
+              <IndicadorAutoguardado estado={estadoGuardado}/>
+              <Button variant="primary" loading={guardando} icon={<Save className="w-4 h-4"/>} onClick={()=>{void persistir();}}>Guardar ahora</Button>
+            </div>
           </div>
           {saveError&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{saveError}</p></Card>}
           <div className="grid lg:grid-cols-3 gap-6">
@@ -6254,21 +6717,10 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Input label="Año de fundación" type="number" value={form.year} onChange={e=>f("year",e.target.value)}/>
                   <Input label="Sitio web" value={form.website} onChange={e=>f("website",e.target.value)} prefix={<Globe className="w-4 h-4"/>}/>
                   <div>
-                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>f("logoUrl",e.target.value)} prefix={<ImageIcon className="w-4 h-4"/>}/>
+                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>{fijarPreviaLocal("logo",null);f("logoUrl",e.target.value);}} prefix={<ImageIcon className="w-4 h-4"/>} hint="Súbelo desde aquí o pega la URL de tu logo."/>
                     <div className="mt-2 flex gap-2">
-                      <DocumentUploadButton
-                        label="Subir logo"
-                        accept={BANNER_UPLOAD_ACCEPT}
-                        origen="perfil-empresa"
-                        onUploaded={(fileItem)=>{
-                          setLogoUploadError("");
-                          const path = toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
-                          setForm((prev)=>({...prev,logoUrl:path}));
-                          setSaved(false);
-                        }}
-                        onError={(message)=>setLogoUploadError(message)}
-                      />
-                      {form.logoUrl&&<Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.logoUrl);}}>Ver logo</Button>}
+                      <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Reemplazar logo":"Subir logo"}</Button>
+                      {form.logoUrl&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("logo",null);editar({logoUrl:""});}}>Quitar</Button>}
                     </div>
                     {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
                   </div>
@@ -6281,7 +6733,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
                 </div>
                 <div className="mt-4 flex items-center gap-2">
-                  <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>setForm(p=>({...p,soloCotizacionesDirectas:e.target.checked}))} className="h-4 w-4 rounded border-border"/>
+                  <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>editar({soloCotizacionesDirectas:e.target.checked})} className="h-4 w-4 rounded border-border"/>
                   <label htmlFor="solo-cotizaciones-directas" className="text-sm text-foreground">Solo cotizaciones dirigidas</label>
                 </div>
               </Card>
@@ -6291,17 +6743,20 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Select label="Tiempo promedio de respuesta" value={form.avgResponse} onChange={e=>f("avgResponse",e.target.value)}>
                     {["~12h","~24h","~36h","~48h","~72h"].map(v=><option key={v}>{v}</option>)}
                   </Select>
+                  <Select label="Tier mínimo requerido para cotizar" value={form.tierMinimoRequerido} onChange={e=>f("tierMinimoRequerido",e.target.value)}>
+                    {["Bronze", "Silver", "Gold", "Élite"].map((tier)=><option key={tier}>{tier}</option>)}
+                  </Select>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
-                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>{const arr=form.categories.includes(c)?form.categories.filter(x=>x!==c):[...form.categories,c];setForm(p=>({...p,categories:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Países atendidos</p>
-                    <div className="flex flex-wrap gap-1.5">{COUNTRIES.slice(0,8).map(c=><button key={c} onClick={()=>{const arr=form.countries.includes(c)?form.countries.filter(x=>x!==c):[...form.countries,c];setForm(p=>({...p,countries:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.countries.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{COUNTRIES.slice(0,8).map(c=><button key={c} onClick={()=>alternar("countries",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.countries.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Certificaciones</p>
-                    <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>{const arr=form.certs.includes(c)?form.certs.filter(x=>x!==c):[...form.certs,c];setForm(p=>({...p,certs:arr}));}} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>alternar("certs",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
                   </div>
                 </div>
               </Card>
@@ -6356,11 +6811,11 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 {form.banner?(
                   <div className="space-y-3">
                     <div className="rounded-xl overflow-hidden border border-border bg-muted/40">
-                      <img src={resolveApiUrl(form.banner)} alt="Banner de la empresa" className="w-full h-32 object-cover"/>
+                      <img src={bannerPreview} alt="Banner de la empresa" className="w-full h-32 object-cover"/>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="secondary" size="sm" loading={bannerUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>bannerInputRef.current?.click()}>Reemplazar</Button>
-                      <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{setForm(p=>({...p,banner:""}));setSaved(false);}}>Quitar</Button>
+                      <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("banner",null);editar({banner:""});}}>Quitar</Button>
                     </div>
                   </div>
                 ):(
@@ -6373,35 +6828,41 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 )}
 
                 {bannerError&&<p className="text-xs text-destructive mt-3">{bannerError}</p>}
-                {bannerPendienteDeGuardar&&!bannerError&&(
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
-                    Imagen cargada. Pulsa <strong>Guardar cambios</strong> para que aparezca en tu perfil público.
-                  </p>
-                )}
-                {form.banner&&!saved&&<p className="text-xs text-muted-foreground mt-3">Recuerda pulsar «Guardar cambios» para publicar el banner.</p>}
               </Card>
             </div>
             <div>
               <Card padding="md">
                 <p className="font-semibold text-sm mb-4">Vista previa del logo</p>
+                {/* Input oculto compartido por los dos botones de "subir logo". */}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept={BANNER_UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={e=>{
+                    const archivo=e.target.files?.[0];
+                    e.target.value="";
+                    if(archivo)void handleUploadLogo(archivo);
+                  }}
+                />
                 <div className="flex flex-col items-center gap-3">
-                  <div className={clsx("w-20 h-20 rounded-xl flex items-center justify-center text-white text-2xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
-                  <DocumentUploadButton
-                    label="Cambiar logo"
-                    accept={BANNER_UPLOAD_ACCEPT}
-                    origen="perfil-empresa"
-                    onUploaded={(fileItem)=>{
-                      setLogoUploadError("");
-                      const path = toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
-                      setForm((prev)=>({...prev,logoUrl:path}));
-                      setSaved(false);
-                    }}
-                    onError={(message)=>setLogoUploadError(message)}
-                  />
+                  {/* Antes esta vista previa pintaba siempre las iniciales, así
+                      que tras subir el logo no cambiaba nada en pantalla y la
+                      subida parecía no haber funcionado. */}
+                  {logoPreview?(
+                    <img src={logoPreview} alt="Logo de la empresa" className="w-32 h-32 rounded-2xl border border-border bg-white object-contain p-2"/>
+                  ):(
+                    <div className={clsx("w-32 h-32 rounded-2xl flex items-center justify-center text-white text-3xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Cambiar logo":"Subir logo"}</Button>
+                    {form.logoUrl&&<Button variant="ghost" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.logoUrl);}}>Ver</Button>}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">PNG, JPG o WebP hasta 5 MB. Se recomienda un cuadrado de 512×512 px.</p>
                 </div>
                 <div className="mt-5 pt-5 border-t border-border space-y-2">
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Certificaciones</span><span className="font-semibold flex items-center gap-1 text-emerald-700"><Shield className="w-3 h-3"/>{form.certs.length}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos</span><span className="font-semibold">N/D</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos completados</span><span className="font-semibold">{company.proyectos_completados ?? 0}</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Miembro desde</span><span className="font-semibold">{formatShortDate(company.fecha_registro)}</span></div>
                   <div className="flex justify-between text-xs"><span className="text-muted-foreground">Verificada</span><span className="font-semibold flex items-center gap-1 text-emerald-600"><BadgeCheck className="w-3 h-3"/>{company.verificado?"Sí":"No"}</span></div>
                 </div>
@@ -6783,7 +7244,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
   );
 }
 
-function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boolean;onClose:()=>void}) {
+function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean}) {
   if (!quote) {
     return null;
   }
@@ -6801,8 +7262,13 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
       <div className="space-y-5">
         <div className="grid sm:grid-cols-2 gap-4">
           <Card padding="sm">
-            <p className="text-xs text-muted-foreground">Producto</p>
-            <p className="text-sm font-semibold mt-1">{quote.product}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Producto</p>
+                <p className="mt-1 truncate text-sm font-semibold">{quote.product}</p>
+              </div>
+              <TierBadge tier={quote.solicitanteTier} />
+            </div>
           </Card>
           <Card padding="sm">
             <p className="text-xs text-muted-foreground">Modalidad</p>
@@ -6840,6 +7306,22 @@ function AdvisorQuoteDetailModal({quote,open,onClose}:{quote:Quote|null;open:boo
             </div>
           </div>
         </Card>
+
+        <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
+
+        {onAccept && (
+          <div className="flex justify-end border-t border-border pt-4">
+            <Button
+              variant="primary"
+              loading={accepting}
+              icon={<CheckCircle2 className="w-4 h-4" />}
+              onClick={() => { void onAccept(); }}
+              className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+            >
+              Aceptar y abrir chat
+            </Button>
+          </div>
+        )}
 
         <Card padding="md">
           <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
@@ -6900,10 +7382,12 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {metrics.map((m,i)=>(
-              <Card key={i} padding="md" className="flex flex-col gap-2">
-                <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center",m.bg,m.color)}>{m.icon}</div>
-                <p className="text-2xl font-bold">{m.value}</p>
-                <p className="text-xs text-muted-foreground">{m.label}</p>
+              <Card key={i} padding="md" className="metric-card flex items-start gap-3">
+                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
+                </div>
               </Card>
             ))}
           </div>
@@ -6978,6 +7462,12 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
     }
   }
 
+  async function handleAcceptFromDetail() {
+    if (!selectedQuote) return;
+    await handleClaim(selectedQuote.id);
+    setSelectedQuote(null);
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="adv-available"/>
@@ -7013,9 +7503,8 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{q.updatedAt}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2">
-                  <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Ver Detalle Completo</Button>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5"/>} loading={claimingId===q.id} onClick={()=>{void handleClaim(q.id);}}>Asignarme</Button>
+                  <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Revisar y aceptar</Button>
+                  <div className="grid grid-cols-1 gap-2">
                     <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>{void handleDiscard(q);}}>{q.mode==="Abierta"?"Descartar":"Rechazar"}</Button>
                   </div>
                 </div>
@@ -7024,7 +7513,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
           </div>
         </main>
       </div>
-      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
+      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)} onAccept={handleAcceptFromDetail} accepting={Boolean(selectedQuote && claimingId===selectedQuote.id)}/>
     </div>
   );
 }
@@ -7313,6 +7802,8 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:items-start">
+          <section className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
           </div>
@@ -7332,75 +7823,112 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
             </div>
           )}
           {/* Stepper */}
-          <div className="flex items-center gap-2 mb-8">
-            {steps.map((s,i)=>(
+          <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-1">
+            {steps.map((s, i) => (
               <div key={i} className="flex items-center gap-2">
-                <div className={clsx("flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                  step===i+1?"bg-primary text-white":step>i+1?"bg-emerald-50 text-emerald-700 border border-emerald-200":"bg-muted text-muted-foreground")}>
-                  {step>i+1?<CheckCircle2 className="w-3.5 h-3.5"/>:<span className="w-4 h-4 rounded-full flex items-center justify-center bg-white/20 text-[10px]">{i+1}</span>}
+                <div
+                  className={clsx(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 whitespace-nowrap",
+                    step === i + 1
+                      ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground shadow-sm"
+                      : step > i + 1
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60"
+                      : "bg-muted/60 text-muted-foreground border border-transparent"
+                  )}
+                >
+                  {step > i + 1 ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <span className="w-4 h-4 rounded-full flex items-center justify-center bg-foreground/10 text-[10px] font-semibold">
+                      {i + 1}
+                    </span>
+                  )}
                   {s.label}
                 </div>
-                {i<steps.length-1&&<ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0"/>}
+                {i < steps.length - 1 && (
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
+                )}
               </div>
             ))}
           </div>
+
           <div className="flex gap-6">
-            <div className="flex-1 min-w-0 max-w-2xl">
-              {step===1&&(
-                <Card padding="lg">
-                  <p className="font-semibold mb-5 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información económica</p>
+            <div className="flex-1 min-w-0 max-w-2xl space-y-6">
+              {step === 1 && (
+                <Card padding="lg" className="border-border bg-card">
+                  <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
+                    <Receipt className="w-4 h-4 text-primary dark:text-accent" />
+                    Información económica
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Input label="Precio unitario" placeholder="9.20 USD/kg" value={form.unitPrice} onChange={e=>f("unitPrice",e.target.value)}/>
-                    <Input label="MOQ (cantidad mínima)" placeholder="300 kg" value={form.moq} onChange={e=>f("moq",e.target.value)}/>
-                    <Input label="Precio total estimado" placeholder="2,760 USD" value={form.totalPrice} onChange={e=>f("totalPrice",e.target.value)} className="sm:col-span-2"/>
+                    <Input label="Precio unitario" placeholder="9.20 USD/kg" value={form.unitPrice} onChange={e => f("unitPrice", e.target.value)} />
+                    <Input label="MOQ (cantidad mínima)" placeholder="300 kg" value={form.moq} onChange={e => f("moq", e.target.value)} />
+                    <Input label="Precio total estimado" placeholder="2,760 USD" value={form.totalPrice} onChange={e => f("totalPrice", e.target.value)} className="sm:col-span-2" />
                   </div>
                 </Card>
               )}
-              {step===2&&(
-                <Card padding="lg">
-                  <p className="font-semibold mb-5 flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Información logística</p>
+
+              {step === 2 && (
+                <Card padding="lg" className="border-border bg-card">
+                  <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
+                    <Truck className="w-4 h-4 text-primary dark:text-accent" />
+                    Información logística
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Select label="Incoterm" value={form.incoterm} onChange={e=>f("incoterm",e.target.value)}>{INCOTERMS.map(v=><option key={v}>{v}</option>)}</Select>
-                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e=>f("port",e.target.value)}/>
-                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e=>f("productionTime",e.target.value)}/>
-                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e=>f("shippingTime",e.target.value)}/>
-                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e=>f("totalTime",e.target.value)} className="sm:col-span-2"/>
+                    <Select label="Incoterm" value={form.incoterm} onChange={e => f("incoterm", e.target.value)}>
+                      {INCOTERMS.map(v => <option key={v}>{v}</option>)}
+                    </Select>
+                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e => f("port", e.target.value)} />
+                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e => f("productionTime", e.target.value)} />
+                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e => f("shippingTime", e.target.value)} />
+                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e => f("totalTime", e.target.value)} className="sm:col-span-2" />
                   </div>
                 </Card>
               )}
-              {step===3&&(
+
+              {step === 3 && (
                 <div className="space-y-4">
-                  <Card padding="lg">
-                    <p className="font-semibold mb-4 flex items-center gap-2"><FileText className="w-4 h-4 text-primary"/>Observaciones</p>
+                  <Card padding="lg" className="border-border bg-card">
+                    <p className="font-semibold mb-4 flex items-center gap-2 text-foreground">
+                      <FileText className="w-4 h-4 text-primary dark:text-accent" />
+                      Observaciones
+                    </p>
                     <div className="space-y-4">
-                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
-                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e=>f("advantages",e.target.value)}/>
-                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e=>f("recommendations",e.target.value)}/>
+                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e => f("description", e.target.value)} />
+                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e => f("advantages", e.target.value)} />
+                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e => f("recommendations", e.target.value)} />
                     </div>
                   </Card>
-                  <Card padding="lg">
-                    <p className="font-semibold mb-4 flex items-center gap-2"><Paperclip className="w-4 h-4 text-primary"/>Archivos adjuntos</p>
-                    <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-center">
-                      <Upload className="w-7 h-7 text-muted-foreground/40"/>
+
+                  <Card padding="lg" className="border-border bg-card">
+                    <p className="font-semibold mb-4 flex items-center gap-2 text-foreground">
+                      <Paperclip className="w-4 h-4 text-primary dark:text-accent" />
+                      Archivos adjuntos
+                    </p>
+                    <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-center bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <Upload className="w-7 h-7 text-muted-foreground/60" />
                       <p className="text-sm text-muted-foreground">PDF, imágenes, fichas técnicas, cotización oficial</p>
                       <DocumentUploadButton
                         label="Seleccionar archivos"
                         multiple
                         origen="propuesta"
-                        onUploaded={(fileItem)=>setAttachedFiles((prev)=>{
-                          if(prev.some((row)=>row.id===fileItem.id)){
-                            return prev;
-                          }
-                          return [...prev,{id:fileItem.id,nombre:fileItem.nombre}];
+                        onUploaded={(fileItem) => setAttachedFiles((prev) => {
+                          if (prev.some((row) => row.id === fileItem.id)) return prev;
+                          return [...prev, { id: fileItem.id, nombre: fileItem.nombre }];
                         })}
-                        onError={(message)=>setError(message)}
+                        onError={(message) => setError(message)}
                       />
-                      {attachedFiles.length>0&&(
-                        <div className="w-full mt-2 space-y-1 text-left">
-                          {attachedFiles.map((file)=>(
-                            <div key={file.id} className="rounded-md border border-border px-2 py-1.5 flex items-center justify-between gap-2">
-                              <p className="text-xs truncate">{file.nombre}</p>
-                              <button className="text-[11px] text-muted-foreground hover:text-destructive" onClick={()=>setAttachedFiles((prev)=>prev.filter((row)=>row.id!==file.id))}>Quitar</button>
+                      {attachedFiles.length > 0 && (
+                        <div className="w-full mt-3 space-y-1.5 text-left">
+                          {attachedFiles.map((file) => (
+                            <div key={file.id} className="rounded-md border border-border bg-muted/40 px-3 py-2 flex items-center justify-between gap-2 transition-colors hover:bg-muted/60">
+                              <p className="text-xs font-medium text-foreground truncate">{file.nombre}</p>
+                              <button 
+                                className="text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors" 
+                                onClick={() => setAttachedFiles((prev) => prev.filter((row) => row.id !== file.id))}
+                              >
+                                Quitar
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -7409,41 +7937,81 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                   </Card>
                 </div>
               )}
+
+             {/* Acciones del Stepper */}
               <div className="flex items-center justify-between mt-6 pt-5 border-t border-border">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>
-                  {step>1&&<Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>setStep(s=>s-1)}>Anterior</Button>}
+                  <Button variant="ghost" size="sm" onClick={onBack}>
+                    Cancelar
+                  </Button>
+                  {step > 1 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ChevronLeft className="w-3.5 h-3.5" />}
+                      onClick={() => setStep(s => s - 1)}
+                      className="hover:!border-primary hover:text-primary hover:bg-primary/10 dark:hover:!border-accent dark:hover:text-accent dark:hover:bg-accent/15 transition-colors"
+                    >
+                      Anterior
+                    </Button>
+                  )}
                 </div>
                 <div className="flex gap-2">
-                  {step<3
-                    ?<Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={()=>setStep(s=>s+1)}>Continuar</Button>
-                    :<Button
-                       variant="primary"
-                       size="md"
-                       icon={userRole==="asesor"?<Save className="w-4 h-4"/>:<Send className="w-4 h-4"/>}
-                       loading={saving}
-                       onClick={submit}
-                     >
-                       {userRole==="asesor"?"Guardar borrador":"Enviar propuesta"}
-                     </Button>
-                  }
+                  {step < 3 ? (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      iconRight={<ChevronRight className="w-4 h-4" />}
+                      onClick={() => setStep(s => s + 1)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
+                    >
+                      Continuar
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={userRole === "asesor" ? <Save className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                      loading={saving}
+                      onClick={submit}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
+                    >
+                      {userRole === "asesor" ? "Guardar borrador" : "Enviar propuesta"}
+                    </Button>
+                  )}
                 </div>
               </div>
-              {error&&<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-destructive">{error}</div>}
+
+              {/* Banner de error adaptable */}
+              {error && (
+                <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive dark:bg-destructive/20 dark:border-destructive/30">
+                  {error}
+                </div>
+              )}
             </div>
-            <div className="w-64 hidden lg:block">
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-3">Resumen de la cotización</p>
-                <div className="space-y-2 text-xs">
-                  <div><span className="text-muted-foreground">Producto:</span><p className="font-medium">{quote?.product||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Código:</span><p className="font-medium">{quote?.code||"—"}</p></div>
-                  <div><span className="text-muted-foreground">País origen:</span><p className="font-medium">{quote?.country||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Incoterm deseado:</span><p className="font-medium">{quote?.incoterm||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Precio objetivo:</span><p className="font-medium">{quote?.targetPrice||"—"}</p></div>
-                  <div><span className="text-muted-foreground">Cant. mínima:</span><p className="font-medium">{quote?.minQuantity?`${quote.minQuantity} u.`:"—"}</p></div>
+          </div>
+          </section>
+          <aside className="min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
+            <div className="space-y-4">
+              <Card padding="md" className="border-border bg-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary dark:text-accent">Cotizante</p>
+                    <h2 className="mt-1 truncate text-base font-semibold">Perfil de referencia</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">Información disponible mientras preparas la propuesta.</p>
+                  </div>
+                  <TierBadge tier={quote.solicitanteTier} />
+                </div>
+                <div className="mt-4 space-y-2 border-t border-border pt-4 text-xs">
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Producto</span><span className="text-right font-medium">{quote.product || "—"}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Código</span><span className="font-mono font-medium">{quote.code || "—"}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">País de origen</span><span className="text-right font-medium">{quote.country || "—"}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Tier actual</span><TierBadge tier={quote.solicitanteTier} /></div>
                 </div>
               </Card>
+              <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
             </div>
+          </aside>
           </div>
         </main>
       </div>
@@ -7755,13 +8323,32 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             <h2 className="text-2xl font-bold tracking-tight">Preguntas frecuentes</h2>
           </div>
           <div className="space-y-3">
-            {faqs.map((f,i)=>(
-              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card/70 backdrop-blur-sm">
-                <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors">
+            {faqs.map((f, i) => (
+              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card backdrop-blur-sm">
+                <button 
+                  onClick={() => setFaqOpen(faqOpen === i ? null : i)} 
+                  className="group w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors"
+                >
                   <span className="font-medium text-sm">{f.q}</span>
-                  <ChevronDown className={clsx("w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200",faqOpen===i&&"rotate-180")}/>
+                  
+                  {/* Contenedor circular con bordes y hover por tema */}
+                  <div className={clsx(
+                    "w-7 h-7 rounded-full border border-border flex items-center justify-center flex-shrink-0 transition-colors duration-200",
+                    "group-hover:bg-primary group-hover:border-primary",
+                    "dark:group-hover:bg-accent dark:group-hover:border-accent"
+                  )}>
+                    <ChevronDown className={clsx(
+                      "w-4 h-4 text-muted-foreground transition-all duration-200",
+                      "group-hover:text-white dark:group-hover:text-accent-foreground",
+                      faqOpen === i && "rotate-180"
+                    )}/>
+                  </div>
                 </button>
-                {faqOpen===i&&<div className="px-5 pb-4"><p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p></div>}
+                {faqOpen === i && (
+                  <div className="px-5 pb-4">
+                    <p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -7860,7 +8447,7 @@ function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open
       <div className="space-y-4">
         {bannerUrl&&<img src={bannerUrl} alt="" className="h-32 w-full rounded-xl object-cover"/>}
         <div className="flex items-center gap-3">
-          <Avatar initials={imp.initials} size="xl" color={imp.color} src={logoUrl||undefined}/>
+          <Avatar initials={imp.initials} size="2xl" color={imp.color} src={logoUrl||undefined} variant="logo"/>
           <div className="min-w-0">
             <p className="font-semibold text-base truncate">{imp.name}</p>
             <p className="text-xs text-muted-foreground truncate">{imp.specialty} · {imp.country}</p>
@@ -7999,7 +8586,7 @@ function LandingHowItWorksSection() {
         <div className="grid sm:grid-cols-2 gap-4 mb-14">
           {pasos.map((paso,i)=>(
             <Card key={i} padding="md" className="flex items-start gap-3">
-              <span className="w-7 h-7 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
+              <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
               <p className="text-sm text-muted-foreground leading-relaxed">{paso}</p>
             </Card>
           ))}
@@ -8736,9 +9323,11 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-dashboard": "metricas",
   "admin-empresas": "empresas",
   "admin-usuarios": "usuarios",
+  "admin-cotizantes": "cotizantes",
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
   "admin-landing": "landing",
+  "admin-correos": "correos",
 } as const;
 
 type AdminScreen = keyof typeof ADMIN_SECTION_BY_SCREEN;
@@ -8833,7 +9422,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 <div>
                   <p className="text-sm font-semibold">¿No encuentras la respuesta aquí?</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Abre un ticket y te atiende una persona del equipo de ImportacionesQ8. Se prioriza por urgencia.
+                    Abre un ticket y te atiende una persona del equipo de Zarpi. Se prioriza por urgencia.
                   </p>
                 </div>
               </div>
@@ -9054,7 +9643,7 @@ export default function App() {
   const storedRole = normalizeStoredRole(getStoredRole());
   const hasStoredSession = Boolean(getStoredToken() && storedRole);
 
-  const { isAuthenticated, isInitializing, appRole, signOut, token } = useAuth();
+  const { isAuthenticated, isInitializing, appRole, signOut, token, refreshUser } = useAuth();
 
   // La dirección manda al entrar: es lo que hace que un enlace a una cotización
   // abra esa cotización, y que recargar no devuelva al inicio. Solo la raíz se
@@ -9310,6 +9899,7 @@ export default function App() {
       businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
     ]);
     const importerByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.importador_id]));
+    const cotizanteTierByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.solicitante_tier || "Bronze"]));
     const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
     const mappedConversations: ChatConv[] = rows.map((row) => {
       // Ni el hilo interno ni el ticket de soporte cuelgan de una cotización.
@@ -9333,7 +9923,12 @@ export default function App() {
               : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
         refId: row.orden_id ?? row.cotizacion_id ?? "",
         quoteId: row.cotizacion_id ?? "",
+        cotizanteTier: row.cotizacion_id ? cotizanteTierByQuoteId.get(row.cotizacion_id) : undefined,
         counterpartName: row.contraparte_nombre ?? undefined,
+        counterpartId: row.contraparte_id ?? undefined,
+        counterpartRole: row.contraparte_rol ?? undefined,
+        counterpartCompany: row.contraparte_empresa ?? undefined,
+        counterpartPhotoUrl: row.contraparte_foto_url ?? undefined,
         subject: row.asunto ?? undefined,
         urgency: row.urgencia ?? undefined,
         requesterRole: row.solicitante_rol ?? undefined,
@@ -9569,11 +10164,15 @@ export default function App() {
   const reloadNotifications = useCallback(async () => {
     try {
       const response = await businessService.listNotifications();
-      setNotifications(response.items.map(mapBackendNotificationToUi));
+      const companies = new Map(marketplaceImporters.map((company) => [company.id, company.name]));
+      setNotifications(response.items.map((notification) => {
+        const importadorId = typeof notification.data?.importador_id === "string" ? notification.data.importador_id : "";
+        return mapBackendNotificationToUi(notification, companies.get(importadorId));
+      }));
     } catch {
       setNotifications([]);
     }
-  }, []);
+  }, [marketplaceImporters]);
 
   useEffect(() => {
     if (window.location.pathname !== RESET_PASSWORD_PATH) {
@@ -9987,9 +10586,32 @@ export default function App() {
     setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
     void businessService.markNotificationAsRead(id).catch(() => undefined);
   }
+  async function openNotification(notification: AppNotification){
+    if (!notification.cotizacionId && !notification.conversationId) return;
+    const conversations = await businessService.listChatConversations().catch(() => []);
+    const conversation = notification.conversationId
+      ? conversations.find((item) => item.id === notification.conversationId)
+      : conversations.find((item) => item.cotizacion_id === notification.cotizacionId);
+    if (conversation) {
+      openChat(conversation.id);
+      return;
+    }
+    goTo("chats");
+  }
   async function claimQuote(id:string){
     await businessService.claimAdvisorQuote(id);
-    await Promise.all([reloadAdvisorAvailableQuotes(), reloadAdvisorAssignedQuotes()]);
+    const [, , conversations] = await Promise.all([
+      reloadAdvisorAvailableQuotes(),
+      reloadAdvisorAssignedQuotes(),
+      businessService.listChatConversations(),
+    ]);
+    await reloadChatData();
+    const conversation = conversations.find((item) => item.cotizacion_id === id);
+    if (conversation) {
+      openChat(conversation.id);
+      return;
+    }
+    goTo("chats");
   }
 
   async function discardAdvisorQuote(quote: Quote){
@@ -10026,10 +10648,19 @@ export default function App() {
     setScreen("login");
   }
 
-  async function handleCreateQuote(payload: CreateCotizacionPayload){
+  async function handleCreateQuote(payload: CreateCotizacionPayload, desbloquear = false){
     // La cotizacion se crea primero y sola: si esto falla, el error es real y el
     // formulario tiene que mostrarlo.
-    await businessService.createQuote(payload);
+    const creditosActuales = Number(currentUserProfile?.puntos_cotizacion ?? 0);
+    if (desbloquear && creditosActuales < 1) {
+      throw new Error("No tienes créditos suficientes para desbloquear esta cotización.");
+    }
+    const created = await businessService.createQuote(payload);
+    if (desbloquear) {
+      // El servidor ya descontó el punto al crearla; esto solo cubre cotizaciones
+      // que sigan bloqueadas y no vuelve a cobrar.
+      await businessService.unlockQuoteByPoint(created.id);
+    }
 
     // El refresco posterior es cortesia, no parte de la operacion. Encadenado con
     // `await`, el 403 de una lista ajena al rol (las del asesor, p. ej.) subia
@@ -10041,7 +10672,14 @@ export default function App() {
       reloadRequesterOrders(),
       reloadImporterQuotes(),
       reloadAdvisorAssignedQuotes(),
+      refrescarSaldoYTier(),
     ]);
+  }
+
+  /** El servidor decide el saldo de puntos (desbloqueos) y el tier (recálculo
+   * por umbrales): tras crear o desbloquear se relee en vez de restar a mano. */
+  async function refrescarSaldoYTier(){
+    await Promise.allSettled([reloadCurrentUserProfile(), refreshUser()]);
   }
 
   async function handleCreateAdvisor(payload: CreateAsesorPayload): Promise<CompanyAdvisor>{
@@ -10269,10 +10907,12 @@ export default function App() {
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
+    "admin-cotizantes": ["admin"],
     // Única área del panel que comparte el equipo de atención al cliente.
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
     "admin-landing": ["admin"],
+    "admin-correos": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -10369,7 +11009,7 @@ export default function App() {
 
     // ── Shared ────────────────────────────────────────────────────────────────
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
-    if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onBack={()=>goTo(prevScreen)} sb={sb}/>;
+    if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onOpen={openNotification} onBack={()=>goTo(prevScreen)} sb={sb}/>;
     if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole} onPedirSoporte={()=>setSoporteAbierto(true)}/>;
     if(screen==="courses")return (
       <CoursesPortalScreen
@@ -10384,8 +11024,8 @@ export default function App() {
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
+    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;

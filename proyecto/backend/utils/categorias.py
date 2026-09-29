@@ -46,6 +46,7 @@ CATEGORIAS_CANONICAS = (
     "Farmacéutico",
     "Consumo masivo",
     "Seguridad",
+    "Televenta",
 )
 
 # Variantes léxicas que no se resuelven quitando tildes ni el plural. La clave y
@@ -72,6 +73,15 @@ _SINONIMOS = {
     "maquina": "maquinaria",
     "automotor": "automotriz",
     "automocion": "automotriz",
+    # "Televenta" llega escrita de muchas formas desde los perfiles ya cargados
+    # (plural, separada, o con el nombre del canal). Todas apuntan a la misma
+    # categoría para que la congruencia de categoría no bloquee la respuesta.
+    "televentas": "televenta",
+    "tele venta": "televenta",
+    "tele ventas": "televenta",
+    "venta telefonica": "televenta",
+    "ventas telefonicas": "televenta",
+    "call center": "televenta",
 }
 
 

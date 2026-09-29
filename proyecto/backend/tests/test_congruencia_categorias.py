@@ -20,7 +20,7 @@ from fastapi import status
 
 from models.cotizacion import Cotizacion
 from models.usuario import Usuario
-from utils.categorias import categoria_en, clave_categoria, texto_en
+from utils.categorias import CATEGORIAS_CANONICAS, categoria_en, clave_categoria, texto_en
 from utils.security import hash_password
 from conftest import auth_headers_for, crear_empresa_importadora, crear_usuario_con_token
 
@@ -329,3 +329,20 @@ class TestMensajeDeBorradorExistente:
         )
         assert respuesta.status_code == status.HTTP_400_BAD_REQUEST
         assert "borrador" in respuesta.json()["detail"].lower()
+
+
+class TestTeleventa:
+    """«Televenta» se añadió al vocabulario a petición del negocio."""
+
+    def test_esta_en_el_vocabulario(self):
+        assert "Televenta" in CATEGORIAS_CANONICAS
+
+    @pytest.mark.parametrize(
+        "escrito",
+        ["Televenta", "televentas", "Tele Venta", "VENTAS TELEFÓNICAS", "Call Center"],
+    )
+    def test_variantes_encajan_con_la_especialidad(self, escrito):
+        assert categoria_en(escrito, ["Televenta"]) is True
+
+    def test_no_encaja_con_otra_especialidad(self):
+        assert categoria_en("Televenta", ["Textil"]) is False

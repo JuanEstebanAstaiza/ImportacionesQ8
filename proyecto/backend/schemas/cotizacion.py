@@ -16,6 +16,13 @@ class ContactoAsignadoResponse(BaseModel):
 
 class CotizacionCreate(BaseModel):
     modalidad: str = Field(..., description="Modalidad de cotización: 'dirigida' o 'abierta'")
+    # Se ignora: el servidor toma el tier de la empresa destino. Se conserva
+    # para no romper a los clientes que todavía lo envían.
+    tier_minimo_requerido: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"deprecated": True},
+        description="Ignorado. El tier exigido lo define la empresa (Importador.tier_minimo_requerido)",
+    )
 
     @field_validator("incoterm")
     @classmethod
@@ -103,6 +110,11 @@ class CotizacionResponse(BaseModel):
     solicitante_id: str
     importador_id: Optional[str]
     modalidad: str
+    tier_minimo_requerido: str = "Bronze"
+    desbloqueada_por_puntos: bool = False
+    solicitante_tier: str = "Bronze"
+    solicitante_puntos_cotizacion: int = 0
+    bloqueada: bool = False
     foto_producto: Optional[str]
     pais_importacion: str
     nivel_personalizacion: Optional[str]

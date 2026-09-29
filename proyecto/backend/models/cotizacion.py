@@ -1,9 +1,10 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, DateTime, Text, JSON, ForeignKey, Boolean
 from sqlalchemy.orm import relationship, object_session
 from uuid import uuid4
 from datetime import datetime
 import enum
 from database import Base
+from models.usuario import ORDEN_TIERS_COTIZANTE, TierCotizante, Usuario
 
 class ModalidadCotizacion(str, enum.Enum):
     dirigida = "dirigida"
@@ -40,6 +41,12 @@ class Cotizacion(Base):
     solicitante_id = Column(String(36), nullable=False)
     importador_id = Column(String(36), nullable=True)  # Solo para modalidad dirigida
     modalidad = Column(String(20), nullable=False)  # "dirigida" o "abierta"
+    tier_minimo_requerido = Column(String(10), default=TierCotizante.bronze.value, server_default=TierCotizante.bronze.value, nullable=False)
+    desbloqueada_por_puntos = Column(Boolean, default=False, server_default="0", nullable=False)
+    # Tier del cotizante cuando creó la cotización. El acceso se decide en ese
+    # momento: si luego el recálculo lo baja de nivel, lo ya enviado no puede
+    # volver a quedar bloqueado. NULL en cotizaciones anteriores a esta columna.
+    tier_solicitante_creacion = Column(String(10), nullable=True)
     foto_producto = Column(String(500), nullable=True)
     pais_importacion = Column(String(100), nullable=False)
     nivel_personalizacion = Column(String(50), nullable=True)
@@ -96,6 +103,29 @@ class Cotizacion(Base):
     @precio_objetivo_moneda.setter
     def precio_objetivo_moneda(self, value):
         self.moneda_precio_objetivo = value or "USD"
+
+    @property
+    def solicitante_tier(self):
+        session = object_session(self)
+        if session is None:
+            return TierCotizante.bronze.value
+        solicitante = session.query(Usuario).filter(Usuario.id == self.solicitante_id).first()
+        return solicitante.tier if solicitante else TierCotizante.bronze.value
+
+    @property
+    def solicitante_puntos_cotizacion(self):
+        session = object_session(self)
+        if session is None:
+            return 0
+        solicitante = session.query(Usuario).filter(Usuario.id == self.solicitante_id).first()
+        return int(solicitante.puntos_cotizacion or 0) if solicitante else 0
+
+    @property
+    def bloqueada(self):
+        if self.desbloqueada_por_puntos:
+            return False
+        tier = self.tier_solicitante_creacion or self.solicitante_tier
+        return ORDEN_TIERS_COTIZANTE.get(tier, 0) < ORDEN_TIERS_COTIZANTE.get(self.tier_minimo_requerido, 0)
 
     @property
     def conversacion_id(self):

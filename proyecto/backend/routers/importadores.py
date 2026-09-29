@@ -8,7 +8,7 @@ from uuid import UUID
 import json
 
 import config
-from schemas.importador import ImportadorResponse, ImportadorUpdate
+from schemas.importador import TIERS_EMPRESA, ImportadorResponse, ImportadorUpdate
 from schemas.usuario import (
     AsesorCreate,
     AsesorResponse,
@@ -28,7 +28,7 @@ from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.campo_personalizado import CampoPersonalizado
-from models.orden import Orden
+from models.orden import EstadoOrden, Orden
 from services.certificacion_service import (
     adjuntar_certificaciones,
     subconsulta_puntaje_publicidad,
@@ -536,10 +536,13 @@ async def metricas_importador(
     ordenes_totales = db.query(func.count(Orden.id)).filter(
         Orden.importador_id == importador_id
     ).scalar() or 0
-    estados_cerrados = ("entregada", "cancelada", "completada")
+    # `EstadoOrden.entregado` es el único estado final del modelo. La lista que
+    # había aquí ("entregada", "cancelada", "completada") no existe en el enum,
+    # así que ninguna orden casaba y las ya entregadas seguían contando como
+    # activas en el panel de la empresa.
     ordenes_activas = db.query(func.count(Orden.id)).filter(
         Orden.importador_id == importador_id,
-        Orden.estado.notin_(list(estados_cerrados)),
+        Orden.estado != EstadoOrden.entregado.value,
     ).scalar() or 0
 
     asesores_activos = db.query(func.count(Usuario.id)).filter(
@@ -1022,7 +1025,6 @@ async def listar_ordenes_activas_importador(
             detail="No autorizado - Solo puede ver sus propias órdenes"
         )
     
-    from models.orden import Orden, EstadoOrden
     
     # Listar órdenes activas (estado diferente a "entregado")
     estados_activos = [e.value for e in EstadoOrden if e != EstadoOrden.entregado]
@@ -1076,8 +1078,27 @@ async def actualizar_perfil_importador(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
 
     datos_actualizados = datos.model_dump(exclude_unset=True)
+
+    # El frontend guarda el tier dentro de `perfil_publico`; la columna es la
+    # fuente de verdad. El campo de primer nivel manda si llegan los dos.
+    tier = datos_actualizados.pop("tier_minimo_requerido", None)
+    perfil = datos_actualizados.get("perfil_publico")
+    if tier is None and isinstance(perfil, dict) and "tier_minimo_requerido" in perfil:
+        tier = perfil["tier_minimo_requerido"]
+        if tier not in TIERS_EMPRESA:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Tier inválido. Usa Bronze, Silver, Gold o Élite",
+            )
+
     for campo, valor in datos_actualizados.items():
         setattr(importador, campo, valor)
+
+    if tier is not None:
+        importador.tier_minimo_requerido = tier
+        if isinstance(importador.perfil_publico, dict):
+            # Copia nueva: mutar el dict en sitio no marca la columna JSON como sucia.
+            importador.perfil_publico = {**importador.perfil_publico, "tier_minimo_requerido": tier}
 
     db.commit()
     db.refresh(importador)

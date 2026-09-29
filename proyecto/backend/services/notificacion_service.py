@@ -10,8 +10,28 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from models.notificacion import Notificacion
+from services.notificaciones_tiempo_real import encolar_para_commit
 
 logger = logging.getLogger("importacionesq8")
+
+
+def _payload_tiempo_real(notif: Notificacion) -> Dict[str, Any]:
+    """Misma forma que `NotificacionResponse`, armada antes del commit (después
+    los atributos expiran y ya no se pueden leer sin volver a la BD)."""
+    return {
+        "id": notif.id,
+        "usuario_id": notif.usuario_id,
+        "tipo": notif.tipo,
+        "titulo": notif.titulo,
+        "mensaje": notif.mensaje,
+        "cuerpo": notif.mensaje,
+        "data": notif.data,
+        "cotizacion_id": notif.cotizacion_id,
+        "conversacion_id": notif.conversacion_id,
+        "leida": False,
+        "fecha_creacion": notif.fecha_creacion.isoformat(),
+        "fecha_lectura": None,
+    }
 
 
 def crear_notificacion(
@@ -22,12 +42,18 @@ def crear_notificacion(
     titulo: str,
     mensaje: str = "",
     data: Optional[Dict[str, Any]] = None,
+    cotizacion_id: Optional[str] = None,
+    conversacion_id: Optional[str] = None,
     commit: bool = False,
 ) -> Notificacion:
     """
     Persiste una notificación para el usuario.
-    Por defecto no hace commit (el caller decide la transacción).
+    Por defecto no hace commit (el caller decide la transacción). Tras el commit
+    se emite en tiempo real al usuario (SSE).
+
+    `cotizacion_id` / `conversacion_id` se toman de `data` si no se pasan.
     """
+    datos = data or {}
     notif = Notificacion(
         id=str(uuid4()),
         usuario_id=str(usuario_id),
@@ -35,10 +61,13 @@ def crear_notificacion(
         titulo=titulo,
         mensaje=mensaje or "",
         data=data,
+        cotizacion_id=cotizacion_id or datos.get("cotizacion_id"),
+        conversacion_id=conversacion_id or datos.get("conversacion_id"),
         leida=False,
         fecha_creacion=datetime.utcnow(),
     )
     db.add(notif)
+    encolar_para_commit(db, notif.usuario_id, _payload_tiempo_real(notif))
     if commit:
         try:
             db.commit()

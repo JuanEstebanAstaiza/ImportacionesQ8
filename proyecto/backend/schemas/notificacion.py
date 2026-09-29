@@ -11,7 +11,10 @@ class NotificacionResponse(BaseModel):
     tipo: str
     titulo: str
     mensaje: str
+    cuerpo: str = ""
     data: Optional[Dict[str, Any]] = None
+    cotizacion_id: Optional[str] = None
+    conversacion_id: Optional[str] = None
     leida: bool
     fecha_creacion: datetime
     fecha_lectura: Optional[datetime] = None

@@ -18,10 +18,12 @@ import {
 import { businessService } from "@/services/business.service";
 import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
+import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
+import { AdminEmailCampaign } from "@/features/admin/AdminEmailCampaign";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "metricas" | "empresas" | "usuarios" | "soporte" | "certificaciones" | "landing";
+type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "landing" | "correos";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
 
 type CompanyUiDetails = {
@@ -45,6 +47,8 @@ type CompanyFormState = {
   telefono: string;
   direccion: string;
   email_contacto: string;
+  logo_url: string;
+  sitio_web: string;
 };
 
 type UserFormState = {
@@ -75,9 +79,11 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   metricas: { label: "Resumen", hint: "Cómo va la plataforma" },
   empresas: { label: "Empresas", hint: "Alta y estado de importadoras" },
   usuarios: { label: "Usuarios", hint: "Cuentas, roles y acceso" },
+  cotizantes: { label: "Cotizantes", hint: "Tiers, umbrales y puntos" },
   soporte: { label: "Soporte", hint: "Incidentes y dudas" },
   certificaciones: { label: "Certificaciones", hint: "Sellos y respaldo" },
   landing: { label: "Landing", hint: "Contenido publico por bloques" },
+  correos: { label: "Correos", hint: "Campañas y avisos a usuarios" },
 };
 
 const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "admin"] as const;
@@ -103,6 +109,8 @@ const EMPTY_IMPORTER_FORM: CompanyFormState = {
   telefono: "",
   direccion: "",
   email_contacto: "",
+  logo_url: "",
+  sitio_web: "",
 };
 
 const EMPTY_USER_FORM: UserFormState = {
@@ -167,6 +175,28 @@ function normalizeRole(value: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * Lee una clave de `perfil_publico` (JSON libre) de una empresa.
+ *
+ * Los datos de contacto que el panel enseñaba salían del `localStorage` de este
+ * navegador: otro administrador veía la columna vacía. Ahora se prefiere lo que
+ * guarda el backend y el almacenamiento local queda solo como respaldo de las
+ * empresas dadas de alta antes de este cambio.
+ */
+function leerPerfilPublico(company: BackendImporter, ...claves: string[]): string {
+  const perfil = company.perfil_publico;
+  if (!perfil || typeof perfil !== "object") {
+    return "";
+  }
+  for (const clave of claves) {
+    const valor = (perfil as Record<string, unknown>)[clave];
+    if (typeof valor === "string" && valor.trim()) {
+      return valor.trim();
+    }
+  }
+  return "";
+}
+
 function loadCompanyUiDetails(): Record<string, CompanyUiDetails> {
   try {
     const raw = localStorage.getItem(ADMIN_COMPANY_DETAILS_STORAGE_KEY);
@@ -178,10 +208,6 @@ function loadCompanyUiDetails(): Record<string, CompanyUiDetails> {
   } catch {
     return {};
   }
-}
-
-function saveCompanyUiDetails(next: Record<string, CompanyUiDetails>): void {
-  localStorage.setItem(ADMIN_COMPANY_DETAILS_STORAGE_KEY, JSON.stringify(next));
 }
 
 export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps) {
@@ -207,7 +233,9 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
 
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [companyUiDetails, setCompanyUiDetails] = useState<Record<string, CompanyUiDetails>>(() => loadCompanyUiDetails());
+  // Solo lectura: respaldo de las empresas dadas de alta cuando estos datos
+  // vivían únicamente en el navegador del administrador.
+  const companyUiDetails = useMemo(() => loadCompanyUiDetails(), []);
   const [companyForm, setCompanyForm] = useState(EMPTY_IMPORTER_FORM);
   const [userForm, setUserForm] = useState<UserFormState>(EMPTY_USER_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -247,6 +275,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   const [certificationForm, setCertificationForm] = useState(EMPTY_CERTIFICATION_FORM);
   const [editingCertificationId, setEditingCertificationId] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingCompanyLogo, setIsUploadingCompanyLogo] = useState(false);
   const [grantCompanyId, setGrantCompanyId] = useState("");
   const [grantCertificationId, setGrantCertificationId] = useState("");
   const [backupSummary, setBackupSummary] = useState<BackupResumen | null>(null);
@@ -357,6 +386,35 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
    * plataforma para que el backend lo reconozca y lo sirva sin sesión en el
    * catálogo público.
    */
+  /**
+   * Logo de la empresa en el alta. Se sube a gestión documental igual que el
+   * resto de imágenes públicas: el modal no tenía forma de adjuntarlo, así que
+   * toda empresa nacía sin logo y había que entrar con su cuenta para ponerlo.
+   */
+  async function handleUploadCompanyLogo(archivo: File) {
+    setError("");
+    const extension = (archivo.name.split(".").pop() || "").toLowerCase();
+    if (!LOGO_EXTENSIONS.includes(extension)) {
+      setError(`Formato de logo no soportado (.${extension}). Usa PNG, JPG o WebP.`);
+      return;
+    }
+    if (archivo.size > LOGO_MAX_BYTES) {
+      setError("El logo supera 2 MB. Usa una imagen más liviana.");
+      return;
+    }
+
+    setIsUploadingCompanyLogo(true);
+    try {
+      const subido = await businessService.uploadDocumentFile(archivo, null, "perfil-empresa");
+      const url = toApiPath(subido.storage_url || `/documentos/archivos/${subido.id}/descargar`);
+      setCompanyForm((prev) => ({ ...prev, logo_url: url }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo subir el logo.");
+    } finally {
+      setIsUploadingCompanyLogo(false);
+    }
+  }
+
   async function handleUploadCertificationLogo(archivo: File) {
     setError("");
     const extension = (archivo.name.split(".").pop() || "").toLowerCase();
@@ -592,7 +650,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         throw new Error("Nombre de empresa, email dueno y password del dueno son obligatorios.");
       }
 
-      const created = await adminService.createImporterWithOwner({
+      await adminService.createImporterWithOwner({
         nombre_empresa: companyForm.nombre_empresa,
         email_dueño: companyForm.email_dueño,
         password_dueño: companyForm.password_dueño,
@@ -602,20 +660,21 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         tiempo_respuesta_promedio: companyForm.tiempo_respuesta_promedio || "~48h",
         capacidad_volumen: companyForm.capacidad_volumen ? Number(companyForm.capacidad_volumen) : undefined,
         solo_cotizaciones_directas: companyForm.solo_cotizaciones_directas,
+        logo_url: companyForm.logo_url.trim() || undefined,
+        // Mismas claves que usa el autoservicio del perfil de empresa, para que
+        // la empresa vea ya rellenos los datos que cargó el administrador.
+        perfil_publico: {
+          website: companyForm.sitio_web.trim(),
+          email: companyForm.email_contacto.trim() || companyForm.email_dueño.trim(),
+          phone: companyForm.telefono.trim(),
+          address: companyForm.direccion.trim(),
+          nit: companyForm.nit.trim(),
+        },
       });
 
-      const nextDetails = {
-        ...companyUiDetails,
-        [created.importador.id]: {
-          nit: companyForm.nit,
-          telefono: companyForm.telefono,
-          direccion: companyForm.direccion,
-          email_contacto: companyForm.email_contacto || companyForm.email_dueño,
-        },
-      };
-      setCompanyUiDetails(nextDetails);
-      saveCompanyUiDetails(nextDetails);
-
+      // Ya no se duplica nada en `localStorage`: estos datos viajan en
+      // `perfil_publico` y los ve cualquier administrador, no solo este
+      // navegador. Lo guardado antes sigue leyéndose como respaldo.
       setCompanyForm(EMPTY_IMPORTER_FORM);
       setShowCompanyModal(false);
       setStatusMessage("Empresa creada correctamente.");
@@ -906,10 +965,10 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                       <div className="text-xs text-muted-foreground">{company.especialidad_producto.join(", ") || "General"}</div>
                       <div className="text-xs text-muted-foreground">Cuenta dueña: {ownerEmailByCompanyId[company.id] || "No disponible"}</div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{companyUiDetails[company.id]?.nit || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{companyUiDetails[company.id]?.email_contacto || ownerEmailByCompanyId[company.id] || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{companyUiDetails[company.id]?.telefono || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{companyUiDetails[company.id]?.direccion || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{leerPerfilPublico(company, "nit") || companyUiDetails[company.id]?.nit || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{leerPerfilPublico(company, "email", "email_contacto") || companyUiDetails[company.id]?.email_contacto || ownerEmailByCompanyId[company.id] || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{leerPerfilPublico(company, "phone", "telefono") || companyUiDetails[company.id]?.telefono || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{leerPerfilPublico(company, "address", "direccion") || companyUiDetails[company.id]?.direccion || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{company.paises_origen[0] || "N/A"}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-1 text-xs font-medium ${company.estado === "activo" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
@@ -1074,6 +1133,14 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           </div>
         </section>
       ) : null}
+
+      {tab === "cotizantes" ? (
+        <section className="space-y-4">
+          <GestionCotizantes />
+        </section>
+      ) : null}
+
+      {tab === "correos" ? <AdminEmailCampaign /> : null}
 
       {tab === "landing" ? (
         <section className="space-y-4 scroll-mt-6">
@@ -1755,7 +1822,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
 
             <div className="space-y-2 border-t border-border p-3">
               <p className="text-[11px] text-muted-foreground">
-                Lo que escribas aquí entra en el hilo como <strong>equipo de ImportacionesQ8</strong> y avisa a las dos
+                Lo que escribas aquí entra en el hilo como <strong>equipo de Zarpi</strong> y avisa a las dos
                 partes. Consultar el hilo sin escribir no deja rastro.
               </p>
               <div className="flex items-end gap-2">
@@ -2073,11 +2140,49 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                 className="h-9 rounded-lg border border-border px-3 text-sm"
               />
               <input
+                value={companyForm.sitio_web}
+                onChange={(event) => setCompanyForm((prev) => ({ ...prev, sitio_web: event.target.value }))}
+                placeholder="Sitio web (ej. miempresa.com)"
+                className="h-9 rounded-lg border border-border px-3 text-sm"
+              />
+              <input
                 value={companyForm.direccion}
                 onChange={(event) => setCompanyForm((prev) => ({ ...prev, direccion: event.target.value }))}
                 placeholder="Direccion"
                 className="h-9 rounded-lg border border-border px-3 text-sm md:col-span-2"
               />
+              <div className="col-span-full flex items-center gap-3">
+                {companyForm.logo_url ? (
+                  <img
+                    src={resolveApiUrl(companyForm.logo_url)}
+                    alt="Logo de la empresa"
+                    className="h-16 w-16 rounded-xl border border-border bg-white object-contain p-1"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
+                    <Building2 className="h-6 w-6" />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium hover:bg-muted">
+                    <Upload className="h-3.5 w-3.5" />
+                    {isUploadingCompanyLogo ? "Subiendo..." : companyForm.logo_url ? "Cambiar logo" : "Subir logo"}
+                    <input
+                      type="file"
+                      accept={LOGO_UPLOAD_ACCEPT}
+                      className="hidden"
+                      onChange={(event) => {
+                        const archivo = event.target.files?.[0];
+                        event.target.value = "";
+                        if (archivo) {
+                          void handleUploadCompanyLogo(archivo);
+                        }
+                      }}
+                    />
+                  </label>
+                  <span className="text-xs text-muted-foreground">PNG, JPG o WebP hasta 2 MB.</span>
+                </div>
+              </div>
               <label className="col-span-full flex items-center gap-2 text-sm text-foreground">
                 <input
                   type="checkbox"

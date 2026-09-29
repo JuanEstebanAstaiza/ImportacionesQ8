@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import and_, func, or_
+from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 import config
@@ -72,7 +73,7 @@ async def emitir_ticket_ws(
 
 
 def _es_equipo_plataforma(rol: str) -> bool:
-    """¿Es una cuenta interna de ImportacionesQ8 (administración o soporte)?
+    """¿Es una cuenta interna de Zarpi (administración o soporte)?
 
     Los agentes de soporte atienden los mismos hilos que un administrador; lo
     que no pueden es administrar la plataforma. Esa distinción vive en los
@@ -174,37 +175,74 @@ def _contar_no_leidos(db: Session, conversacion_id: str, usuario_id: str) -> int
     return int(consulta.scalar() or 0)
 
 
-def _nombre_contraparte(db: Session, conversacion: ConversacionChat, current_user: dict) -> Optional[str]:
+@dataclass
+class _Contraparte:
+    """Quién está al otro lado de la conversación, para quien la consulta."""
+    nombre: Optional[str] = None
+    usuario_id: Optional[str] = None
+    rol: Optional[str] = None
+    empresa: Optional[str] = None
+    foto_url: Optional[str] = None
+
+
+def _nombre_empresa(db: Session, importador_id: Optional[str]) -> Optional[str]:
+    if not importador_id:
+        return None
+    from models.importador import Importador
+
+    empresa = db.query(Importador).filter(Importador.id == str(importador_id)).first()
+    return empresa.nombre_empresa if empresa else None
+
+
+def _persona(db: Session, usuario_id: Optional[str]) -> _Contraparte:
+    """Ficha mínima de un usuario: nombre, rol, empresa y foto."""
+    if not usuario_id:
+        return _Contraparte()
+    usuario = db.query(Usuario).filter(Usuario.id == str(usuario_id)).first()
+    if not usuario:
+        return _Contraparte()
+    return _Contraparte(
+        nombre=usuario.nombre or usuario.email,
+        usuario_id=str(usuario.id),
+        rol=usuario.rol,
+        empresa=_nombre_empresa(db, usuario.importador_id),
+        foto_url=usuario.foto_url,
+    )
+
+
+def _contraparte(db: Session, conversacion: ConversacionChat, current_user: dict) -> _Contraparte:
     """Con quién habla quien consulta.
 
     Se resuelve en el backend porque el frontend solo tiene ids de usuario, y
     pedir el directorio de la empresa entera para poner un nombre en la lista de
     chats sería exponer más de lo necesario.
+
+    Devuelve además el rol y la empresa de esa persona: sin ellos la interfaz
+    rotulaba todas las conversaciones igual y no había forma de distinguir a un
+    cliente de un asesor, ni un cliente de otro.
     """
     user_id = current_user.get("user_id")
 
     if _es_soporte(conversacion):
         # Para el equipo de soporte la contraparte es quien pidió ayuda; para el
-        # usuario, la plataforma.
+        # usuario, la plataforma (que no es una persona con ficha).
         if conversacion.solicitante_id == user_id:
-            return "Soporte ImportacionesQ8"
-        return _nombre_de_usuario(db, conversacion.solicitante_id)
+            return _Contraparte(nombre="Soporte Zarpi", rol="plataforma")
+        return _persona(db, conversacion.solicitante_id)
 
     if _es_interna(conversacion):
+        # El asesor ve el canal como "su empresa"; la empresa ve al asesor.
         if conversacion.importador_usuario_id == user_id:
-            from models.importador import Importador
-
-            empresa = (
-                db.query(Importador).filter(Importador.id == conversacion.importador_id).first()
-                if conversacion.importador_id
-                else None
+            return _Contraparte(
+                nombre=_nombre_empresa(db, conversacion.importador_id) or "Mi empresa",
+                rol="importador",
+                empresa=_nombre_empresa(db, conversacion.importador_id),
             )
-            return empresa.nombre_empresa if empresa else "Mi empresa"
-        return _nombre_de_usuario(db, conversacion.importador_usuario_id)
+        return _persona(db, conversacion.importador_usuario_id)
 
     if conversacion.solicitante_id == user_id:
-        return _nombre_de_usuario(db, conversacion.importador_usuario_id)
-    return _nombre_de_usuario(db, conversacion.solicitante_id)
+        return _persona(db, conversacion.importador_usuario_id)
+    return _persona(db, conversacion.solicitante_id)
 
 
 def _respuesta_conversacion(
@@ -217,6 +255,8 @@ def _respuesta_conversacion(
     if _es_soporte(conversacion) and conversacion.solicitante_id:
         autor = db.query(Usuario).filter(Usuario.id == conversacion.solicitante_id).first()
         rol_solicitante = autor.rol if autor else None
+
+    contraparte = _contraparte(db, conversacion, current_user)
 
     return ConversacionChatResponse(
         id=str(conversacion.id),
@@ -242,7 +282,11 @@ def _respuesta_conversacion(
         solicitante_id=conversacion.solicitante_id,
         importador_usuario_id=conversacion.importador_usuario_id,
         importador_id=conversacion.importador_id,
-        contraparte_nombre=_nombre_contraparte(db, conversacion, current_user),
+        contraparte_nombre=contraparte.nombre,
+        contraparte_id=contraparte.usuario_id,
+        contraparte_rol=contraparte.rol,
+        contraparte_empresa=contraparte.empresa,
+        contraparte_foto_url=contraparte.foto_url,
         asunto=conversacion.asunto,
         urgencia=conversacion.urgencia,
         solicitante_rol=rol_solicitante,

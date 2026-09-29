@@ -78,19 +78,26 @@ def puntaje_de(certificaciones: List[CertificacionOtorgadaResponse]) -> float:
 
 
 def adjuntar_certificaciones(db: Session, importadores: List) -> List:
-    """Convierte filas `Importador` en `ImportadorResponse` con sus sellos.
+    """Convierte filas `Importador` en `ImportadorResponse` ya enriquecidas.
 
     Vive aquí y no en el router para que el panel de administración devuelva
-    exactamente la misma forma que el catálogo público.
+    exactamente la misma forma que el catálogo público. Además de los sellos
+    adjunta `proyectos_completados`, que la ficha pública muestra como
+    trayectoria de la empresa: ambos datos se resuelven por lotes para que
+    serializar el catálogo entero siga siendo tres consultas y no 2·N.
     """
     from schemas.importador import ImportadorResponse
+    from services.proyectos_empresa import proyectos_completados_por_importador
 
-    por_empresa = certificaciones_por_importador(db, [imp.id for imp in importadores])
+    ids = [imp.id for imp in importadores]
+    por_empresa = certificaciones_por_importador(db, ids)
+    proyectos = proyectos_completados_por_importador(db, ids)
     respuestas = []
     for imp in importadores:
         certificaciones = por_empresa.get(str(imp.id), [])
         respuesta = ImportadorResponse.model_validate(imp)
         respuesta.certificaciones = certificaciones
         respuesta.puntaje_publicidad = puntaje_de(certificaciones)
+        respuesta.proyectos_completados = proyectos.get(str(imp.id), 0)
         respuestas.append(respuesta)
     return respuestas

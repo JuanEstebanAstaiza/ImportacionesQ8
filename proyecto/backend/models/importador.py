@@ -36,6 +36,10 @@ class Importador(Base):
     # rotular las cajas: "ctl" + "prendas control" → "ctl-prendascontrol".
     # Ver `utils/shipping_mark.py`.
     shipping_mark_prefijo = Column(String(12), nullable=True)
+    # Nivel mínimo del cotizante para enviarle una cotización dirigida. Quien
+    # esté por debajo gasta 1 punto de cotización para desbloquearla; lo hace
+    # cumplir `POST /cotizaciones`, nunca el cliente.
+    tier_minimo_requerido = Column(String(10), default="Bronze", server_default="Bronze", nullable=False)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

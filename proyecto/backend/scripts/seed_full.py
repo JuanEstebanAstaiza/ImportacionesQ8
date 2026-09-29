@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Seed completo de la base de datos local de ImportacionesQ8.
+Seed completo de la base de datos local de Zarpi.
 
 Crea empresas importadoras, asesores, cursos LMS, cotizaciones, propuestas,
 conversaciones de chat y notificaciones vinculadas al usuario principal
@@ -464,7 +464,7 @@ def _ensure_dummy_pdf(path: Path) -> None:
         b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
         b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n"
         b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
-        b"5 0 obj << /Length 68 >> stream\nBT /F1 18 Tf 60 760 Td (Dummy PDF ImportacionesQ8) Tj ET\nendstream endobj\n"
+        b"5 0 obj << /Length 68 >> stream\nBT /F1 18 Tf 60 760 Td (Dummy PDF Zarpi) Tj ET\nendstream endobj\n"
         b"xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000241 00000 n \n0000000311 00000 n \n"
         b"trailer << /Size 6 /Root 1 0 R >>\nstartxref\n431\n%%EOF"
     )
@@ -1118,7 +1118,7 @@ def crear_notificaciones(db, main_user_id: str, cotizaciones_info: list[dict], c
         },
         {
             "tipo": "sistema",
-            "titulo": "Bienvenido a ImportacionesQ8",
+            "titulo": "Bienvenido a Zarpi",
             "mensaje": "Completa tu perfil para recibir mejores propuestas. Agrega tu documento de identidad y teléfono de contacto.",
             "data": None,
             "hace_dias": 7,
@@ -1154,7 +1154,7 @@ def crear_notificaciones(db, main_user_id: str, cotizaciones_info: list[dict], c
 
 def main():
     print("=" * 60)
-    print("  SEED COMPLETO - ImportacionesQ8")
+    print("  SEED COMPLETO - Zarpi")
     print("=" * 60)
 
     db = SessionLocal()

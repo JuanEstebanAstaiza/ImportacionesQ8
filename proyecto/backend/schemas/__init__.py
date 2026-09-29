@@ -37,6 +37,12 @@ from .pago import (
     SaldoCreditosResponse, MovimientoCreditoResponse, WompiWebhookEvent
 )
 from .credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse, ResolverRecreacionRequest
+from .cotizante import (
+    ActividadPlataformaResponse,
+    CantidadImportacionesResponse,
+    CotizantePerfilPublicoResponse,
+    VolumenImportacionesResponse,
+)
 from .documental import (
     CarpetaCreate,
     CarpetaUpdate,
