@@ -1,0 +1,62 @@
+# Producción: se aplica ENCIMA de docker-compose.yml.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Cambios respecto a desarrollo:
+# - El frontend deja de ser el servidor de Vite: se compila y lo sirve Caddy,
+#   que es también el único servicio con puertos públicos (80/443, HTTPS).
+# - Backend, MySQL y Redis no publican puertos: solo se alcanzan por la red
+#   interna de Docker (Docker se salta ufw en los puertos que publica).
+# - APP_ENV=production y uvicorn confía en X-Forwarded-For de Caddy.
+# `!reset` necesita Docker Compose >= 2.24 (el que instala get.docker.com lo es).
+
+services:
+  mysql:
+    restart: always
+    ports: !reset []
+
+  redis:
+    restart: always
+    ports: !reset []
+
+  backend:
+    restart: always
+    ports: !reset []
+    environment:
+      APP_ENV: production
+      # 2 workers por cada 2 GB de RAM es un buen punto de partida.
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      # Sin esto todas las peticiones llegan con la IP de Caddy y el rate
+      # limiting (login, registro, OTP) se aplicaría a todos los usuarios a la
+      # vez. Es seguro porque el backend no está expuesto a internet.
+      FORWARDED_ALLOW_IPS: "*"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.prod
+    restart: always
+    environment:
+      DOMINIO: ${DOMINIO:?DOMINIO must be set in .env (ej. zarpi.co)}
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes: !override
+      # Certificados de Let's Encrypt: si se pierden, Caddy los vuelve a pedir
+      # y Let's Encrypt limita cuántos emite por semana.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_started
+
+  # La suite de tests no debe arrancar con `up` en el servidor.
+  tests:
+    profiles: ["tests"]
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
