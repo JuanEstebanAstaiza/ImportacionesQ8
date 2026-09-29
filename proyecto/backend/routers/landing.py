@@ -4,6 +4,7 @@ La vista pública (sin sesión) solo ve bloques/aliados/noticias `activo`. La
 administración de todo esto es exclusiva del rol admin.
 """
 import logging
+from html import escape
 from typing import List
 from uuid import uuid4
 
@@ -26,7 +27,7 @@ from schemas.landing import (
     LandingNewsUpdate,
 )
 from utils.dependencies import get_db, require_rol_in
-from utils.email import enviar_correo
+from utils.email import construir_html_zarpi, enviar_correo
 from utils.limiter import limiter
 
 logger = logging.getLogger("importacionesq8")
@@ -88,13 +89,14 @@ async def enviar_contacto(request: Request, datos: ContactoRequest):
         f"Teléfono: {(datos.telefono or '').strip() or 'No indicado'}\n\n"
         f"Mensaje:\n{datos.mensaje.strip()}\n"
     )
-    cuerpo_html = (
+    cuerpo_html = construir_html_zarpi(
+        asunto,
         f"<p><strong>Nuevo mensaje desde el formulario de contacto de la Landing.</strong></p>"
-        f"<p><strong>Perfil:</strong> {perfil_label}<br/>"
-        f"<strong>Nombre:</strong> {datos.nombre.strip()}<br/>"
-        f"<strong>Email:</strong> {datos.email.strip()}<br/>"
-        f"<strong>Teléfono:</strong> {(datos.telefono or '').strip() or 'No indicado'}</p>"
-        f"<p><strong>Mensaje:</strong><br/>{datos.mensaje.strip()}</p>"
+        f"<p><strong>Perfil:</strong> {escape(perfil_label)}<br/>"
+        f"<strong>Nombre:</strong> {escape(datos.nombre.strip())}<br/>"
+        f"<strong>Email:</strong> {escape(datos.email.strip())}<br/>"
+        f"<strong>Teléfono:</strong> {escape((datos.telefono or '').strip() or 'No indicado')}</p>"
+        f"<p><strong>Mensaje:</strong><br/>{escape(datos.mensaje.strip())}</p>",
     )
 
     try:

@@ -65,7 +65,7 @@ from utils.dependencies import get_db, require_rol, require_rol_in
 # este router sigue siendo exclusivo de `admin`.
 require_equipo = require_rol_in("admin", "soporte")
 from utils.security import hash_password
-from utils.email import enviar_correo
+from utils.email import construir_html_zarpi, enviar_correo
 
 logger = logging.getLogger("importacionesq8")
 
@@ -639,7 +639,10 @@ async def enviar_correo_masivo_admin(
 
     asunto = datos.asunto.strip()
     cuerpo = datos.cuerpo.strip()
-    cuerpo_html = f"<div style=\"white-space:pre-wrap;font-family:Arial,sans-serif\">{escape(cuerpo)}</div>"
+    cuerpo_html = construir_html_zarpi(
+        asunto,
+        f'<div style="white-space:pre-wrap;font-family:Arial,sans-serif">{escape(cuerpo)}</div>',
+    )
     fallos = []
     enviados = 0
     for destinatario in sorted(destinatarios):

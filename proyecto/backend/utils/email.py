@@ -1,11 +1,34 @@
 import logging
 import smtplib
+from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import config
 
 logger = logging.getLogger("importacionesq8")
+
+
+def construir_html_zarpi(titulo: str, contenido_html: str) -> str:
+    """Envuelve cualquier contenido en la plantilla HTML común de Zarpi."""
+    logo_url = f"{config.FRONTEND_URL.rstrip('/')}/brand/zarpi-wordmark.svg"
+    return (
+        '<!doctype html><html lang="es"><head><meta charset="utf-8"></head>'
+        '<body style="margin:0;background:#f4f4f5;padding:32px 16px;'
+        'font-family:Arial,sans-serif;color:#18181b;">'
+        '<div style="max-width:640px;margin:0 auto;background:#ffffff;'
+        'border:1px solid #e4e4e7;border-radius:12px;overflow:hidden;">'
+        '<div style="padding:24px 28px;border-bottom:1px solid #e4e4e7;">'
+        f'<img src="{escape(logo_url, quote=True)}" alt="Zarpi" width="132" '
+        'style="display:block;height:auto;max-width:132px;">'
+        '</div><div style="padding:28px;">'
+        f'<h1 style="margin:0 0 18px;font-size:21px;line-height:1.3;'
+        f'color:#18181b;">{escape(titulo)}</h1>'
+        f'{contenido_html}'
+        '</div><div style="padding:18px 28px;border-top:1px solid #e4e4e7;'
+        'color:#71717a;font-size:12px;line-height:1.5;">'
+        'Este correo fue enviado por Zarpi.</div></div></body></html>'
+    )
 
 
 def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
@@ -62,7 +85,15 @@ def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str)
         f"Enlace para restablecer tu contraseña: {enlace}\n\n"
         f"Si no solicitaste este cambio, puedes ignorar este correo."
     )
-    return enviar_correo(destinatario, asunto, cuerpo_texto)
+    cuerpo_html = construir_html_zarpi(
+        asunto,
+        f"<p>Recibimos una solicitud para restablecer tu contraseña.</p>"
+        f"<p>Tu código de verificación es:</p>"
+        f'<p style="font-size:30px;font-weight:700;letter-spacing:6px;color:#4f46e5;">{escape(otp)}</p>'
+        f"<p>Este código y el enlace vencen en {config.PASSWORD_RESET_EXPIRE_MINUTES} minutos.</p>"
+        f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Restablecer contraseña</a></p>',
+    )
+    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
 
 
 def enviar_correo_notificacion(
@@ -83,11 +114,10 @@ def enviar_correo_notificacion(
         f"Entra a la plataforma: {enlace}\n\n"
         f"— Zarpi"
     )
-    cuerpo_html = (
-        f"<p><strong>{titulo}</strong></p>"
-        f"<p>{mensaje}</p>"
-        f'<p><a href="{enlace}">Entrar a la plataforma</a></p>'
-        f"<p>— Zarpi</p>"
+    cuerpo_html = construir_html_zarpi(
+        titulo,
+        f"<p>{escape(mensaje)}</p>"
+        f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Entrar a la plataforma</a></p>',
     )
     return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html)
 
@@ -110,5 +140,10 @@ def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
             f"Caduca en {config.OTP_EXPIRE_MINUTES} minutos.\n\n"
             f"Si no fuiste tú, cambia tu contraseña de inmediato."
         )
-    return enviar_correo(destinatario, asunto, cuerpo_texto)
+    cuerpo_html = construir_html_zarpi(
+        asunto,
+        f'<p style="font-size:30px;font-weight:700;letter-spacing:6px;color:#4f46e5;">{escape(otp)}</p>'
+        f"<p>Caduca en {config.OTP_EXPIRE_MINUTES} minutos.</p>",
+    )
+    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
 
