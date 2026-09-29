@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, MetaData, text
+from sqlalchemy import create_engine, inspect, MetaData, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config import DATABASE_URL, APP_ENV
 import re
@@ -68,17 +68,60 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     print("Tablas creadas exitosamente")
 
-def run_migrations():
-    """Aplica migraciones Alembic hasta head (MySQL/producción)."""
+def _alembic_config():
     from pathlib import Path
     from alembic.config import Config
-    from alembic import command
 
     root = Path(__file__).resolve().parent
     cfg = Config(str(root / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
-    command.upgrade(cfg, "head")
+    return cfg
+
+def run_migrations():
+    """Aplica migraciones Alembic hasta head (MySQL/producción)."""
+    from alembic import command
+
+    command.upgrade(_alembic_config(), "head")
     print("Migraciones Alembic aplicadas (head)")
+
+def _sembrar_datos_de_migraciones():
+    """Filas que insertan las migraciones y `create_all` no crea: al hacer
+    `stamp` esas migraciones no corren. Hoy solo los umbrales de tier (0022)."""
+    from models.tier import UmbralTierCotizante
+    from services.tier_service import UMBRALES_POR_DEFECTO
+
+    db = SessionLocal()
+    try:
+        for tier, (cotizaciones, ordenes, valor) in UMBRALES_POR_DEFECTO.items():
+            db.add(UmbralTierCotizante(
+                tier=tier,
+                minimo_cotizaciones=cotizaciones,
+                minimo_ordenes=ordenes,
+                minimo_valor_operaciones_usd=valor,
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+def bootstrap_si_vacia() -> bool:
+    """BD sin tablas: crea el esquema actual desde los modelos y la marca en head.
+
+    La cadena de migraciones no sirve para partir de cero: la 0001 hace
+    `create_all` con los modelos *actuales* y las siguientes intentan volver a
+    crear tablas que ya existen. Solo se usa con la BD vacía; una BD con datos
+    sigue siempre el camino normal de `upgrade`. Devuelve True si hizo bootstrap.
+    """
+    from alembic import command
+    import models  # noqa: F401 — registra metadata
+
+    tablas = set(inspect(engine).get_table_names()) - {"alembic_version"}
+    if tablas:
+        return False
+    create_tables()
+    _sembrar_datos_de_migraciones()
+    command.stamp(_alembic_config(), "head")
+    print("BD vacía: esquema creado desde los modelos y marcado en head")
+    return True
 
 def init_db():
     """
@@ -121,22 +164,10 @@ def init_db():
 
     if got_lock:
         try:
-            try:
+            # Nada de "create_all + stamp" ante cualquier error: sobre una BD a
+            # medio migrar marcaría como aplicadas migraciones que no corrieron.
+            if not bootstrap_si_vacia():
                 run_migrations()
-            except Exception as e:
-                # Primera vez / imagen sin historial: fallback create_all + stamp
-                logger.warning("Alembic upgrade falló (%s); usando create_all + stamp", e)
-                create_tables()
-                try:
-                    from pathlib import Path
-                    from alembic.config import Config
-                    from alembic import command
-                    root = Path(__file__).resolve().parent
-                    cfg = Config(str(root / "alembic.ini"))
-                    cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
-                    command.stamp(cfg, "head")
-                except Exception as stamp_err:
-                    logger.warning("No se pudo hacer alembic stamp: %s", stamp_err)
         finally:
             try:
                 from config import redis_client

@@ -36,6 +36,8 @@ interface AuthContextValue {
   verifyLoginOtp: (payload: LoginOtpRequest, email: string) => Promise<LoginResponse>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
+  /** Vuelve a pedir `/usuarios/me`: saldo de puntos y tier cambian en el servidor. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -165,6 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.forgotPassword({ email });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+  }, [queryClient]);
+
   const user = meQuery.data ?? null;
   const normalizedUserRole = String(user?.rol ?? "")
     .toLowerCase()
@@ -185,8 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyLoginOtp,
       signOut,
       requestPasswordReset,
+      refreshUser,
     }),
-    [token, user, appRole, signIn, verifyLoginOtp, signOut, requestPasswordReset, meQuery.isLoading],
+    [token, user, appRole, signIn, verifyLoginOtp, signOut, requestPasswordReset, refreshUser, meQuery.isLoading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

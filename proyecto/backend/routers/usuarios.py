@@ -17,6 +17,9 @@ logger = logging.getLogger("importacionesq8")
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 # Router separado para el panel del asesor ("cuántas cotizaciones tengo asignadas")
 asesores_router = APIRouter(prefix="/asesores", tags=["Asesores"])
+# Vista pública del cotizante bajo su propio recurso (misma respuesta que
+# `/usuarios/{id}/perfil-publico`, que se mantiene por compatibilidad).
+cotizantes_router = APIRouter(prefix="/cotizantes", tags=["Cotizantes"])
 
 
 @router.get("/me", response_model=UsuarioMeResponse)
@@ -34,19 +37,38 @@ async def obtener_mi_perfil(
     return usuario
 
 
-@router.get("/{solicitante_id}/perfil-publico", response_model=CotizantePerfilPublicoResponse)
-async def obtener_perfil_publico_cotizante(
-    solicitante_id: str,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol_in("importador", "asesor")),
-):
-    """Métricas operativas de un cotizante visibles para cuentas de empresa."""
+def _perfil_publico(db: Session, solicitante_id: str, current_user: dict) -> CotizantePerfilPublicoResponse:
     from services.cotizante_service import obtener_perfil_publico_cotizante as obtener_metricas
+
+    # El cotizante puede ver cómo lo ven las empresas, pero solo el suyo.
+    if current_user["rol"] == "solicitante" and current_user["user_id"] != solicitante_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
 
     perfil = obtener_metricas(db, solicitante_id)
     if not perfil:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
     return perfil
+
+
+@router.get("/{solicitante_id}/perfil-publico", response_model=CotizantePerfilPublicoResponse)
+async def obtener_perfil_publico_cotizante(
+    solicitante_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor", "admin", "solicitante")),
+):
+    """Métricas operativas de un cotizante visibles para cuentas de empresa."""
+    return _perfil_publico(db, solicitante_id, current_user)
+
+
+@cotizantes_router.get("/{solicitante_id}/perfil-publico", response_model=CotizantePerfilPublicoResponse)
+async def obtener_perfil_publico(
+    solicitante_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor", "admin", "solicitante")),
+):
+    """Métricas del cotizante calculadas en vivo: volumen de órdenes finalizadas,
+    importaciones dentro/fuera de la plataforma y promedios en USD."""
+    return _perfil_publico(db, solicitante_id, current_user)
 
 
 @router.put("/me", response_model=UsuarioMeResponse)
@@ -67,6 +89,9 @@ async def actualizar_mi_perfil(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     datos_actualizados = datos.model_dump(exclude_unset=True)
+    # Columna NOT NULL: un null explícito equivale a "no lo cambies".
+    if datos_actualizados.get("importaciones_fuera_plataforma") is None:
+        datos_actualizados.pop("importaciones_fuera_plataforma", None)
     for campo, valor in datos_actualizados.items():
         setattr(usuario, campo, valor)
 

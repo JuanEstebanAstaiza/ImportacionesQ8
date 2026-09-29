@@ -8,7 +8,7 @@ from uuid import UUID
 import json
 
 import config
-from schemas.importador import ImportadorResponse, ImportadorUpdate
+from schemas.importador import TIERS_EMPRESA, ImportadorResponse, ImportadorUpdate
 from schemas.usuario import (
     AsesorCreate,
     AsesorResponse,
@@ -1078,8 +1078,27 @@ async def actualizar_perfil_importador(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
 
     datos_actualizados = datos.model_dump(exclude_unset=True)
+
+    # El frontend guarda el tier dentro de `perfil_publico`; la columna es la
+    # fuente de verdad. El campo de primer nivel manda si llegan los dos.
+    tier = datos_actualizados.pop("tier_minimo_requerido", None)
+    perfil = datos_actualizados.get("perfil_publico")
+    if tier is None and isinstance(perfil, dict) and "tier_minimo_requerido" in perfil:
+        tier = perfil["tier_minimo_requerido"]
+        if tier not in TIERS_EMPRESA:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Tier inválido. Usa Bronze, Silver, Gold o Élite",
+            )
+
     for campo, valor in datos_actualizados.items():
         setattr(importador, campo, valor)
+
+    if tier is not None:
+        importador.tier_minimo_requerido = tier
+        if isinstance(importador.perfil_publico, dict):
+            # Copia nueva: mutar el dict en sitio no marca la columna JSON como sucia.
+            importador.perfil_publico = {**importador.perfil_publico, "tier_minimo_requerido": tier}
 
     db.commit()
     db.refresh(importador)

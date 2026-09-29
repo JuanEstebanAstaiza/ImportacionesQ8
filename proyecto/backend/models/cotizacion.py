@@ -43,6 +43,10 @@ class Cotizacion(Base):
     modalidad = Column(String(20), nullable=False)  # "dirigida" o "abierta"
     tier_minimo_requerido = Column(String(10), default=TierCotizante.bronze.value, server_default=TierCotizante.bronze.value, nullable=False)
     desbloqueada_por_puntos = Column(Boolean, default=False, server_default="0", nullable=False)
+    # Tier del cotizante cuando creó la cotización. El acceso se decide en ese
+    # momento: si luego el recálculo lo baja de nivel, lo ya enviado no puede
+    # volver a quedar bloqueado. NULL en cotizaciones anteriores a esta columna.
+    tier_solicitante_creacion = Column(String(10), nullable=True)
     foto_producto = Column(String(500), nullable=True)
     pais_importacion = Column(String(100), nullable=False)
     nivel_personalizacion = Column(String(50), nullable=True)
@@ -120,7 +124,8 @@ class Cotizacion(Base):
     def bloqueada(self):
         if self.desbloqueada_por_puntos:
             return False
-        return ORDEN_TIERS_COTIZANTE.get(self.solicitante_tier, 0) < ORDEN_TIERS_COTIZANTE.get(self.tier_minimo_requerido, 0)
+        tier = self.tier_solicitante_creacion or self.solicitante_tier
+        return ORDEN_TIERS_COTIZANTE.get(tier, 0) < ORDEN_TIERS_COTIZANTE.get(self.tier_minimo_requerido, 0)
 
     @property
     def conversacion_id(self):

@@ -182,6 +182,11 @@ class TierUpdateRequest(BaseModel):
     tier: str
 
 
+class RecalculoTiersResponse(BaseModel):
+    evaluados: int
+    actualizados: int
+
+
 class UmbralTierResponse(BaseModel):
     tier: str
     minimo_cotizaciones: int

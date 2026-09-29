@@ -14,7 +14,7 @@ from schemas.cotizacion import (
 )
 from schemas.credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse
 from models.cotizacion import Cotizacion, EstadoCotizacion
-from models.usuario import ORDEN_TIERS_COTIZANTE, Usuario
+from models.usuario import Usuario
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.importador import Importador
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
@@ -35,13 +35,7 @@ router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
 propuestas_router = APIRouter(prefix="/propuestas", tags=["Propuestas"])
 
 
-def _validar_tier(tier: str) -> str:
-    if tier not in ORDEN_TIERS_COTIZANTE:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Tier inválido. Usa Bronze, Silver, Gold o Élite",
-        )
-    return tier
+MENSAJE_SIN_PUNTOS = "Nivel insuficiente y sin créditos"
 
 
 def _empresa_puede_responder_abierta(empresa: Optional[Importador], cotizacion: Cotizacion) -> bool:
@@ -269,7 +263,7 @@ async def reclamar_cotizacion(
     nombre_quien = (quien.nombre or quien.email) if quien else "Un asesor"
     nombre_empresa = empresa.nombre_empresa if empresa else "la empresa importadora"
 
-    _asegurar_chat_negociacion(
+    conversacion = _asegurar_chat_negociacion(
         db,
         cotizacion=cotizacion,
         importador_usuario_id=user_id_str,
@@ -290,7 +284,13 @@ async def reclamar_cotizacion(
             f"{nombre_quien} ({nombre_empresa}) atenderá «{cotizacion.nombre_producto}». "
             f"Ya puedes escribirle por el chat."
         ),
-        data={"cotizacion_id": cotizacion_id_str, "importador_id": importador_id_str},
+        # `conversacion_id` permite abrir el chat directo desde la notificación
+        # (y queda como columna en la tabla). Se emite en tiempo real tras el commit.
+        data={
+            "cotizacion_id": cotizacion_id_str,
+            "importador_id": importador_id_str,
+            "conversacion_id": str(conversacion.id),
+        },
         enlace_relativo="/chats",
     )
 
@@ -376,7 +376,10 @@ async def crear_cotizacion(
     if not solicitante:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
-    _validar_tier(cotizacion_data.tier_minimo_requerido)
+    # El tier exigido sale de la empresa destino, nunca del payload: si lo
+    # decidiera el cliente bastaría con mandar "Bronze" para saltarse el bloqueo.
+    tier_requerido = "Bronze"
+    requiere_desbloqueo = False
 
     # Modelo actual: no se cobra al solicitante (natural/jurídica).
     # Si COBRO_A_SOLICITANTES=true, se restaura el débito de créditos al crear.
@@ -460,7 +463,14 @@ async def crear_cotizacion(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Faltan campos obligatorios del formulario de la empresa: {', '.join(faltantes)}"
                 )
-    
+
+        from services.tier_service import tier_insuficiente
+
+        tier_requerido = importador.tier_minimo_requerido or "Bronze"
+        requiere_desbloqueo = tier_insuficiente(solicitante.tier, tier_requerido)
+        if requiere_desbloqueo and int(solicitante.puntos_cotizacion or 0) < 1:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_SIN_PUNTOS)
+
     # Crear nueva cotización - usar el importador_id como string directamente
     nuevo_cotizacion = Cotizacion(
         id=str(uuid4()),  # Convertir a string para SQLite
@@ -468,7 +478,9 @@ async def crear_cotizacion(
         importador_id=cotizacion_data.importador_id if cotizacion_data.importador_id else None,
         campos_personalizados_valores=cotizacion_data.campos_personalizados_valores,
         modalidad=cotizacion_data.modalidad,
-        tier_minimo_requerido=cotizacion_data.tier_minimo_requerido,
+        tier_minimo_requerido=tier_requerido,
+        tier_solicitante_creacion=solicitante.tier,
+        desbloqueada_por_puntos=requiere_desbloqueo,
         foto_producto=cotizacion_data.foto_producto,
         pais_importacion=cotizacion_data.pais_importacion,
         nivel_personalizacion=cotizacion_data.nivel_personalizacion,
@@ -500,6 +512,23 @@ async def crear_cotizacion(
             cotizacion_id=nuevo_cotizacion.id,
             descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
         )
+
+    if requiere_desbloqueo:
+        from services.tier_service import SinPuntosParaDesbloquear, consumir_punto_desbloqueo
+
+        # Se gasta en la misma transacción que crea la cotización: o quedan las
+        # dos cosas, o ninguna. La comprobación previa de saldo solo ahorra el
+        # trabajo; la garantía real es el UPDATE condicional.
+        db.flush()
+        try:
+            consumir_punto_desbloqueo(db, usuario_id=user_id_str, cotizacion_id=nuevo_cotizacion.id)
+        except SinPuntosParaDesbloquear:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_SIN_PUNTOS)
+
+    from services.tier_service import recalcular_tier_best_effort
+
+    recalcular_tier_best_effort(db, user_id_str)
 
     db.commit()
     db.refresh(nuevo_cotizacion)
@@ -1326,33 +1355,18 @@ async def desbloquear_cotizacion_por_punto(
     if not cotizacion.bloqueada:
         return cotizacion
 
-    resultado = db.query(Usuario).filter(
-        Usuario.id == user_id_str,
-        Usuario.puntos_cotizacion >= 1,
-    ).update(
-        {Usuario.puntos_cotizacion: Usuario.puntos_cotizacion - 1},
-        synchronize_session=False,
-    )
-    if resultado != 1:
+    from services.tier_service import SinPuntosParaDesbloquear, consumir_punto_desbloqueo
+
+    try:
+        consumir_punto_desbloqueo(db, usuario_id=user_id_str, cotizacion_id=cotizacion_id_str)
+    except SinPuntosParaDesbloquear:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="No tienes puntos de cotización disponibles para desbloquear esta oportunidad",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_SIN_PUNTOS)
 
     db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).update(
         {Cotizacion.desbloqueada_por_puntos: True},
         synchronize_session=False,
     )
-    from models.tier import MovimientoPuntoCotizacion
-    db.add(MovimientoPuntoCotizacion(
-        usuario_id=user_id_str,
-        cotizacion_id=cotizacion_id_str,
-        tipo="consumo",
-        delta=-1,
-        saldo_resultante=int(db.query(Usuario.puntos_cotizacion).filter(Usuario.id == user_id_str).scalar() or 0),
-        descripcion="Desbloqueo de cotización por puntos",
-    ))
     db.commit()
     db.refresh(cotizacion)
     return cotizacion
@@ -1589,6 +1603,11 @@ async def pre_aceptar_propuesta(
                 )
             except Exception:
                 logger.warning("No se pudo publicar notificación de doble aceptación para %s", cotizacion.id)
+
+        # Una orden nueva suma al desempeño del cotizante (órdenes y valor USD).
+        from services.tier_service import recalcular_tier_best_effort
+
+        recalcular_tier_best_effort(db, cotizacion.solicitante_id)
 
     db.commit()
     db.refresh(propuesta)

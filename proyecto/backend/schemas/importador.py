@@ -6,6 +6,16 @@ from schemas.certificacion import CertificacionOtorgadaResponse
 from utils.shipping_mark import LONGITUD_MAX_PREFIJO, normalizar_segmento
 from utils.urls import canonicalize_resource_url
 
+TIERS_EMPRESA = ("Bronze", "Silver", "Gold", "Élite")
+
+
+def _tier_valido(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    if v not in TIERS_EMPRESA:
+        raise ValueError("Tier inválido. Usa Bronze, Silver, Gold o Élite")
+    return v
+
 # Claves de `perfil_publico` que guardan imágenes y se normalizan igual que
 # `logo_url`: si quedaran como URL absoluta al host donde se editó el perfil,
 # dejarían de resolver desde otro entorno (Dev Tunnel, producción).
@@ -39,6 +49,8 @@ class ImportadorResponse(BaseModel):
     # propósito: el solicitante lo ve al elegir empresa y así entiende cómo
     # quedará rotulada su carga antes de pedir la cotización.
     shipping_mark_prefijo: Optional[str] = None
+    # Nivel mínimo que la empresa exige al cotizante (ver `POST /cotizaciones`).
+    tier_minimo_requerido: str = "Bronze"
     fecha_registro: datetime
 
     model_config = {"from_attributes": True}
@@ -58,6 +70,16 @@ class ImportadorUpdate(BaseModel):
         max_length=LONGITUD_MAX_PREFIJO,
         description="Prefijo de la empresa en el shipping mark (ej. 'ctl'). Cadena vacía para quitarlo.",
     )
+    tier_minimo_requerido: Optional[str] = Field(
+        None,
+        description="Tier mínimo del cotizante: Bronze, Silver, Gold o Élite. "
+        "También se acepta dentro de `perfil_publico` por compatibilidad.",
+    )
+
+    @field_validator("tier_minimo_requerido")
+    @classmethod
+    def tier_permitido(cls, v: Optional[str]) -> Optional[str]:
+        return _tier_valido(v)
 
     @field_validator("shipping_mark_prefijo")
     @classmethod
@@ -108,9 +130,15 @@ class AdminCrearImportadorRequest(BaseModel):
         max_length=LONGITUD_MAX_PREFIJO,
         description="Prefijo de la empresa en el shipping mark (ej. 'ctl'). La empresa puede cambiarlo después.",
     )
+    tier_minimo_requerido: str = Field("Bronze", description="Tier mínimo del cotizante")
     email_dueño: EmailStr = Field(..., description="Email de la cuenta dueña de la empresa")
     password_dueño: str = Field(..., min_length=9, description="Contraseña inicial de la cuenta dueña")
     nombre_dueño: Optional[str] = None
+
+    @field_validator("tier_minimo_requerido")
+    @classmethod
+    def tier_permitido(cls, v: str) -> str:
+        return _tier_valido(v)
 
     @field_validator("shipping_mark_prefijo")
     @classmethod

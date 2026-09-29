@@ -97,7 +97,9 @@ export function GestionCotizantes() {
     try {
       const updated = await adminService.updateTierThresholds(thresholds);
       setThresholds(sortThresholds(updated));
-      setMessage("Umbrales automáticos guardados.");
+      // Al guardar, el backend recalcula el tier de los cotizantes automáticos.
+      setCotizantes(await adminService.listCotizantes(search));
+      setMessage("Umbrales guardados y tiers recalculados.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "No se pudieron guardar los umbrales.");
     } finally {

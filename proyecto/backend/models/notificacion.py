@@ -30,9 +30,18 @@ class Notificacion(Base):
     mensaje = Column(Text, nullable=False, default="")
     # Payload opcional para deep-link en frontend: {orden_id, cotizacion_id, curso_id, ...}
     data = Column(JSON, nullable=True)
+    # Referencias de primer nivel para el deep-link (también viajan en `data`,
+    # pero como columnas se pueden filtrar e indexar).
+    cotizacion_id = Column(String(36), nullable=True, index=True)
+    conversacion_id = Column(String(36), nullable=True, index=True)
     leida = Column(Boolean, nullable=False, default=False)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_lectura = Column(DateTime, nullable=True)
+
+    @property
+    def cuerpo(self) -> str:
+        """Nombre con el que el frontend lee el texto; en BD sigue siendo `mensaje`."""
+        return self.mensaje
 
     def __repr__(self):
         return f"<Notificacion(id={self.id}, usuario_id={self.usuario_id}, tipo={self.tipo})>"

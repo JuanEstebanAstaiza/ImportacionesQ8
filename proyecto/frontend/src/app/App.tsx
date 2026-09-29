@@ -9643,7 +9643,7 @@ export default function App() {
   const storedRole = normalizeStoredRole(getStoredRole());
   const hasStoredSession = Boolean(getStoredToken() && storedRole);
 
-  const { isAuthenticated, isInitializing, appRole, signOut, token } = useAuth();
+  const { isAuthenticated, isInitializing, appRole, signOut, token, refreshUser } = useAuth();
 
   // La dirección manda al entrar: es lo que hace que un enlace a una cotización
   // abra esa cotización, y que recargar no devuelva al inicio. Solo la raíz se
@@ -10657,8 +10657,9 @@ export default function App() {
     }
     const created = await businessService.createQuote(payload);
     if (desbloquear) {
+      // El servidor ya descontó el punto al crearla; esto solo cubre cotizaciones
+      // que sigan bloqueadas y no vuelve a cobrar.
       await businessService.unlockQuoteByPoint(created.id);
-      setCurrentUserProfile((profile) => profile ? { ...profile, puntos_cotizacion: creditosActuales - 1 } : profile);
     }
 
     // El refresco posterior es cortesia, no parte de la operacion. Encadenado con
@@ -10671,7 +10672,14 @@ export default function App() {
       reloadRequesterOrders(),
       reloadImporterQuotes(),
       reloadAdvisorAssignedQuotes(),
+      refrescarSaldoYTier(),
     ]);
+  }
+
+  /** El servidor decide el saldo de puntos (desbloqueos) y el tier (recálculo
+   * por umbrales): tras crear o desbloquear se relee en vez de restar a mano. */
+  async function refrescarSaldoYTier(){
+    await Promise.allSettled([reloadCurrentUserProfile(), refreshUser()]);
   }
 
   async function handleCreateAdvisor(payload: CreateAsesorPayload): Promise<CompanyAdvisor>{
@@ -11016,7 +11024,7 @@ export default function App() {
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
-    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={refreshQuoteLists} sb={sb}/>;
+    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;

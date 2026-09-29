@@ -33,6 +33,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[15-Cursos-LMS]] | Catálogo, compra, progreso (reemplaza localStorage FE) |
 | [[16-Notificaciones]] | Bandeja real en BD + marcar leídas |
 | [[17-Documentos-y-Multimedia]] | Drive documental, adjuntos chat, reglas LMS y PDFs automáticos |
+| [[18-Tiers-y-Perfil-Cotizante]] | Tier mínimo de empresa, desbloqueo con puntos, recálculo de tiers y perfil público |
 | `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---
@@ -126,7 +127,7 @@ Detalle en [[08-Chat-y-WebSocket]].
 | Órdenes | `GET /ordenes`, actualizar estado, documentos |
 | Chat | `GET /chat/conversaciones`, `POST /chat/iniciar`, WS ticket |
 | Cursos / LMS | [[15-Cursos-LMS]] — `GET/POST /cursos`, `/mis-cursos`, progreso |
-| Notificaciones | [[16-Notificaciones]] — `GET /notificaciones`, marcar leídas |
+| Notificaciones | [[16-Notificaciones]] — `GET /notificaciones`, marcar leídas, stream SSE |
 | Métricas importadora | `GET /importadores/metricas` |
 | Dashboard asesor | `GET /asesores/dashboard/stats` |
 | Admin panel | [[12-Admin]] |

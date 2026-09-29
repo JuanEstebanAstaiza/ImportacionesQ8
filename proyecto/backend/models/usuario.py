@@ -89,6 +89,9 @@ class Usuario(Base):
     tier = Column(String(10), default=TierCotizante.bronze.value, server_default=TierCotizante.bronze.value, nullable=False)
     tier_manual = Column(Boolean, default=False, server_default="0", nullable=False)
     puntos_cotizacion = Column(Integer, default=0, server_default="0", nullable=False)
+    # Importaciones que el cotizante declara haber hecho por fuera de la
+    # plataforma. Alimenta el desglose "dentro vs. fuera" de su perfil público.
+    importaciones_fuera_plataforma = Column(Integer, default=0, server_default="0", nullable=False)
 
     # Nivel de la mesa de soporte al que pertenece esta cuenta (solo rol
     # "soporte"). Determina qué tickets se le pueden asignar. NULL en el resto.

@@ -80,6 +80,10 @@ RATE_LIMIT_OTP = os.getenv("RATE_LIMIT_OTP", "10/minute")
 # Cobro a quien cotiza (solicitante natural/jurídica). Por defecto OFF:
 # el modelo actual cobra solo a empresas importadoras (contrato/suscripción),
 # no al usuario que crea cotizaciones. Poner true solo si se reactiva el wallet.
+# Cada cuántos minutos se recalculan los tiers de los cotizantes por umbrales.
+# 0 lo desactiva (los eventos de negocio siguen recalculando a cada uno).
+TIER_RECALCULO_MINUTOS = int(os.getenv("TIER_RECALCULO_MINUTOS", "0" if APP_ENV == "test" else "60"))
+
 COBRO_A_SOLICITANTES = os.getenv("COBRO_A_SOLICITANTES", "false").lower() == "true"
 
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))

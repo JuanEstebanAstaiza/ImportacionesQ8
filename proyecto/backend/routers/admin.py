@@ -36,6 +36,7 @@ from schemas.admin import (
     RetirarVerificacionRequest,
     CotizanteAdminResponse,
     TierUpdateRequest,
+    RecalculoTiersResponse,
     UmbralTierResponse,
     UmbralesTierUpdateRequest,
     PuntosCotizacionUpdateRequest,
@@ -123,6 +124,36 @@ async def actualizar_tier_cotizante(
     return _cotizante_response(usuario)
 
 
+@router.delete("/cotizantes/{usuario_id}/tier", response_model=CotizanteAdminResponse)
+async def liberar_tier_manual_cotizante(
+    usuario_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Quita el tier fijado a mano: el cotizante vuelve a subir/bajar por umbrales."""
+    from services.tier_service import recalcular_tier_cotizante
+
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.rol == "solicitante").first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    usuario.tier_manual = False
+    recalcular_tier_cotizante(db, usuario_id)
+    db.commit()
+    db.refresh(usuario)
+    return _cotizante_response(usuario)
+
+
+@router.post("/cotizantes/recalcular-tiers", response_model=RecalculoTiersResponse)
+async def recalcular_tiers_cotizantes(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Ejecuta ya el recálculo que la tarea periódica hace cada cierto tiempo."""
+    from services.tier_service import recalcular_tiers_todos
+
+    return recalcular_tiers_todos(db)
+
+
 @router.get("/cotizantes/tier-umbrales", response_model=List[UmbralTierResponse])
 async def listar_umbrales_tier(
     db: Session = Depends(get_db),
@@ -152,6 +183,12 @@ async def actualizar_umbrales_tier(
         umbral.minimo_valor_operaciones_usd = item.minimo_valor_operaciones_usd
         umbral.actualizado_por_admin_id = current_user["user_id"]
     db.commit()
+
+    # Umbrales nuevos cambian a quién le corresponde cada nivel: aplicarlos ya
+    # en vez de esperar a la siguiente pasada periódica.
+    from services.tier_service import recalcular_tiers_todos
+
+    recalcular_tiers_todos(db)
     filas = db.query(UmbralTierCotizante).order_by(UmbralTierCotizante.tier).all()
     return [UmbralTierResponse.model_validate(fila) for fila in filas]
 
@@ -230,6 +267,8 @@ async def crear_importador_con_dueño(
         capacidad_volumen=datos.capacidad_volumen,
         solo_cotizaciones_directas=datos.solo_cotizaciones_directas,
         shipping_mark_prefijo=datos.shipping_mark_prefijo,
+        perfil_publico=datos.perfil_publico,
+        tier_minimo_requerido=datos.tier_minimo_requerido,
         estado="activo"
     )
     db.add(nuevo_importador)

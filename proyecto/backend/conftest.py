@@ -3,7 +3,9 @@ import os
 
 # Crear directorio de base de datos si no existe (compatible con Windows y Linux/Docker)
 if os.name == 'nt':  # Windows
-    DB_DIR = r"C:\Users\akali\AppData\Local\Temp"
+    # Temp del usuario actual: una ruta fija de otro equipo rompe la suite.
+    import tempfile
+    DB_DIR = tempfile.gettempdir()
 else:  # Linux/Mac/Docker
     DB_DIR = "/tmp"
 
