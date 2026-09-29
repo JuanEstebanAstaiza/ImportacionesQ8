@@ -1,0 +1,39 @@
+# Producción: HTTPS automático (Let's Encrypt), frontend estático y proxy a la API.
+# DOMINIO llega por variable de entorno (docker-compose.prod.yml). Para probar
+# en local basta con DOMINIO=localhost: Caddy usa entonces un certificado propio.
+{$DOMINIO} {
+	encode zstd gzip
+
+	# API y WebSocket del chat. handle_path quita el prefijo /api, igual que el
+	# proxy de Vite en desarrollo: FastAPI no monta sus rutas bajo /api.
+	# Caddy reenvía X-Forwarded-For y no bufferiza el stream SSE de notificaciones.
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		# SPA: las rutas del cliente (/cotizaciones/..., /admin/...) devuelven index.html.
+		try_files {path} /index.html
+		file_server
+
+		# Los bundles llevan hash en el nombre: se pueden cachear para siempre.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@index path / /index.html
+		header @index Cache-Control "no-cache"
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# www.dominio → dominio. Requiere su propio registro DNS; si no lo creas, borra
+# este bloque o Caddy reintentará sin éxito el certificado de www.
+www.{$DOMINIO} {
+	redir https://{$DOMINIO}{uri} permanent
+}

@@ -1,0 +1,22 @@
+# Imagen de producción: compila el frontend y lo sirve con Caddy, que además
+# hace de proxy HTTPS hacia el backend (ver Caddyfile). El Dockerfile a secas
+# sigue siendo el de desarrollo (servidor de Vite con recarga en caliente).
+
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+# Vite incrusta las VITE_* en el bundle al compilar, no al arrancar. "/api" =
+# mismo origen: el browser llama a https://dominio/api/... y Caddy lo reenvía.
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+RUN npm run build
+
+
+FROM caddy:2-alpine
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv
