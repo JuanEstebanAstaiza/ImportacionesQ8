@@ -241,6 +241,21 @@ export interface InviteSolicitantePayload {
   indicativo_pais_telefono: string;
 }
 
+export interface EnvioCorreoMasivoPayload {
+  asunto: string;
+  cuerpo: string;
+  roles?: string[];
+  usuarios_ids?: string[];
+  correos?: string[];
+}
+
+export interface EnvioCorreoMasivoResponse {
+  destinatarios: number;
+  enviados: number;
+  fallidos: number;
+  fallos: string[];
+}
+
 export const adminService = {
   /**
    * `/importadores` pagina con un tope por defecto de 50: sin pedir el máximo,
@@ -295,6 +310,13 @@ export const adminService = {
     const suffix = query.toString();
     return apiRequest<AdminUser[]>(`/admin/usuarios${suffix ? `?${suffix}` : ""}`, {
       method: "GET",
+    });
+  },
+
+  sendBulkEmail(payload: EnvioCorreoMasivoPayload): Promise<EnvioCorreoMasivoResponse> {
+    return apiRequest<EnvioCorreoMasivoResponse>("/admin/correos/masivo", {
+      method: "POST",
+      body: payload,
     });
   },
 

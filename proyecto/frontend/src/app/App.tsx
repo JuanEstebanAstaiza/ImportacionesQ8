@@ -644,6 +644,7 @@ const NAV_ADMIN=[
   {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
   {icon:WalletCards,   label:"Cotizantes",      key:"admin-cotizantes"},
+  {icon:Mail,          label:"Correos",         key:"admin-correos"},
   {icon:LifeBuoy,      label:"Soporte",         key:"admin-soporte"},
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
@@ -9326,6 +9327,7 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
   "admin-landing": "landing",
+  "admin-correos": "correos",
 } as const;
 
 type AdminScreen = keyof typeof ADMIN_SECTION_BY_SCREEN;
@@ -10902,6 +10904,7 @@ export default function App() {
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
     "admin-landing": ["admin"],
+    "admin-correos": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];

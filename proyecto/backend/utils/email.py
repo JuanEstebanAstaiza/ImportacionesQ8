@@ -11,8 +11,8 @@ logger = logging.getLogger("importacionesq8")
 def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
     """
     Envía un correo real vía SMTP usando las credenciales configuradas en
-    variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
-    `SMTP_FROM`, `SMTP_USE_TLS`).
+    variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_API_KEY`,
+    `SMTP_FROM`, `SMTP_USE_TLS`). `SMTP_PASSWORD` se conserva como alias antiguo.
 
     Si no hay `SMTP_HOST` configurado (ej. entorno de desarrollo/tests sin
     credenciales reales), se registra el correo en el log en vez de fallar, para
@@ -42,8 +42,8 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as servidor:
             if config.SMTP_USE_TLS:
                 servidor.starttls()
-            if config.SMTP_USER and config.SMTP_PASSWORD:
-                servidor.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            if config.SMTP_USER and config.SMTP_API_KEY:
+                servidor.login(config.SMTP_USER, config.SMTP_API_KEY)
             servidor.sendmail(config.SMTP_FROM, [destinatario], mensaje.as_string())
         return True
     except Exception:

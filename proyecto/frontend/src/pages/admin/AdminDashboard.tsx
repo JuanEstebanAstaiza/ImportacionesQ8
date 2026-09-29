@@ -19,10 +19,11 @@ import { businessService } from "@/services/business.service";
 import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
 import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
+import { AdminEmailCampaign } from "@/features/admin/AdminEmailCampaign";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "landing";
+type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "landing" | "correos";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
 
 type CompanyUiDetails = {
@@ -82,6 +83,7 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   soporte: { label: "Soporte", hint: "Incidentes y dudas" },
   certificaciones: { label: "Certificaciones", hint: "Sellos y respaldo" },
   landing: { label: "Landing", hint: "Contenido publico por bloques" },
+  correos: { label: "Correos", hint: "Campañas y avisos a usuarios" },
 };
 
 const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "admin"] as const;
@@ -1137,6 +1139,8 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           <GestionCotizantes />
         </section>
       ) : null}
+
+      {tab === "correos" ? <AdminEmailCampaign /> : null}
 
       {tab === "landing" ? (
         <section className="space-y-4 scroll-mt-6">

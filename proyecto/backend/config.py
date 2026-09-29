@@ -65,11 +65,12 @@ RATE_LIMIT_NOTIFICACIONES = os.getenv("RATE_LIMIT_NOTIFICACIONES", "90/minute")
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM = os.getenv("SMTP_FROM", "no-reply@zarpi.co")
+SMTP_API_KEY = os.getenv("SMTP_API_KEY") or os.getenv("SMTP_PASSWORD")
+SMTP_PASSWORD = SMTP_API_KEY
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@zarpi.co")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
-CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "administracion@importacionesq8.com")
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
 OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))

@@ -20,6 +20,23 @@ class UsuarioAdminResponse(BaseModel):
 class UsuarioEstadoUpdate(BaseModel):
     activo: bool
 
+
+class EnvioCorreoMasivoRequest(BaseModel):
+    """Contenido y destinatarios de una campaña iniciada por administración."""
+
+    asunto: str = Field(..., min_length=3, max_length=180)
+    cuerpo: str = Field(..., min_length=1, max_length=20_000)
+    roles: List[str] = Field(default_factory=list, max_length=5)
+    usuarios_ids: List[str] = Field(default_factory=list, max_length=500)
+    correos: List[EmailStr] = Field(default_factory=list, max_length=500)
+
+
+class EnvioCorreoMasivoResponse(BaseModel):
+    destinatarios: int
+    enviados: int
+    fallidos: int
+    fallos: List[str] = Field(default_factory=list)
+
 class DisputaOrdenResponse(BaseModel):
     id: str
     cotizacion_id: str

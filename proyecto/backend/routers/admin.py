@@ -1,4 +1,5 @@
 import logging
+from html import escape
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID as PyUUID, uuid4
@@ -39,6 +40,8 @@ from schemas.admin import (
     UmbralesTierUpdateRequest,
     PuntosCotizacionUpdateRequest,
     MovimientoPuntoCotizacionResponse,
+    EnvioCorreoMasivoRequest,
+    EnvioCorreoMasivoResponse,
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
@@ -62,10 +65,13 @@ from utils.dependencies import get_db, require_rol, require_rol_in
 # este router sigue siendo exclusivo de `admin`.
 require_equipo = require_rol_in("admin", "soporte")
 from utils.security import hash_password
+from utils.email import enviar_correo
 
 logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/admin", tags=["Administración"])
+
+ROLES_CORREO_ADMIN = {"solicitante", "importador", "asesor", "soporte", "admin"}
 
 
 def _validar_tier_admin(tier: str) -> str:
@@ -575,6 +581,83 @@ async def actualizar_estado_usuario(
     db.refresh(usuario)
 
     return usuario
+
+
+@router.post("/correos/masivo", response_model=EnvioCorreoMasivoResponse)
+async def enviar_correo_masivo_admin(
+    datos: EnvioCorreoMasivoRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Envía un correo a segmentos o destinatarios concretos de la plataforma.
+
+    Los destinatarios de usuarios siempre salen de la base de datos para evitar
+    que una cuenta desactivada o un correo inventado entre por un filtro de rol.
+    Los correos escritos manualmente se permiten para contactos específicos.
+    """
+    roles = {str(rol).strip().lower() for rol in datos.roles if str(rol).strip()}
+    roles_invalidos = roles - ROLES_CORREO_ADMIN
+    if roles_invalidos:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Segmento(s) no válido(s): {', '.join(sorted(roles_invalidos))}",
+        )
+
+    usuarios_ids = {str(usuario_id).strip() for usuario_id in datos.usuarios_ids if str(usuario_id).strip()}
+    correos = {str(correo).strip().lower() for correo in datos.correos if str(correo).strip()}
+    if not roles and not usuarios_ids and not correos:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selecciona al menos un segmento, usuario o correo específico.",
+        )
+
+    destinatarios = set(correos)
+    if roles or usuarios_ids:
+        query = db.query(Usuario.email).filter(Usuario.activo.is_(True))
+        filtros = []
+        if roles:
+            filtros.append(Usuario.rol.in_(roles))
+        if usuarios_ids:
+            filtros.append(Usuario.id.in_(usuarios_ids))
+        query = query.filter(or_(*filtros))
+        destinatarios.update(
+            str(fila[0]).strip().lower()
+            for fila in query.all()
+            if fila[0]
+        )
+
+    if not destinatarios:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontraron destinatarios activos para la selección.",
+        )
+    if len(destinatarios) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Una campaña no puede superar 500 destinatarios.",
+        )
+
+    asunto = datos.asunto.strip()
+    cuerpo = datos.cuerpo.strip()
+    cuerpo_html = f"<div style=\"white-space:pre-wrap;font-family:Arial,sans-serif\">{escape(cuerpo)}</div>"
+    fallos = []
+    enviados = 0
+    for destinatario in sorted(destinatarios):
+        if enviar_correo(destinatario, asunto, cuerpo, cuerpo_html):
+            enviados += 1
+        else:
+            fallos.append(destinatario)
+
+    logger.info(
+        "Campaña de correo enviada por admin %s: %s destinatarios, %s enviados, %s fallidos",
+        current_user["user_id"], len(destinatarios), enviados, len(fallos),
+    )
+    return EnvioCorreoMasivoResponse(
+        destinatarios=len(destinatarios),
+        enviados=enviados,
+        fallidos=len(fallos),
+        fallos=fallos[:50],
+    )
 
 
 # ==================== Cotizaciones abiertas y disputas ====================
