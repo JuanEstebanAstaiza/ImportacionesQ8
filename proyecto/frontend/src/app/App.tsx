@@ -64,7 +64,7 @@ import {
   type EstimacionEnMensaje,
   type EstimacionPrecioEntrada,
 } from "@/services/business.service";
-import { CalculadoraPreciosChat, TarjetaEstimacion } from "@/features/chat/CalculadoraPrecios";
+import { CalculadoraPreciosChat, TarjetaEstimacion, propuestaDesdeEstimacion, type PropuestaDesdeEstimacion } from "@/features/chat/CalculadoraPrecios";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { landingService, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
 import { safeHttpUrl } from "@/utils/safe-url";
@@ -3106,7 +3106,7 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
   return Boolean(tier) && esCotizante && esRolAutorizado;
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
@@ -3368,6 +3368,17 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // cliente (cotización u orden), no en el interno ni en soporte.
   const puedeEstimarPrecio = canManageOrder && (conv?.type==="cotizacion" || conv?.type==="orden");
   const cotizacionDelHilo = conv?.quoteId ? quotes.find((quote)=>quote.id===conv.quoteId) || null : null;
+  // Pasar una estimación a propuesta formal: solo mientras se negocia la
+  // cotización (en una orden ya hay propuesta aceptada) y si la propuesta de la
+  // empresa sigue editable. El backend vuelve a validarlo al guardar.
+  const estadoPropuestaEmpresa = conv?.quoteId ? proposalStateByQuoteId[conv.quoteId] : undefined;
+  const accionEstimacion = puedeEstimarPrecio && conv?.type==="cotizacion" && conv.quoteId
+    && (!estadoPropuestaEmpresa || estadoPropuestaEmpresa==="borrador" || estadoPropuestaEmpresa==="pendiente")
+    ? (estimate:EstimacionEnMensaje)=>({
+        etiqueta: estadoPropuestaEmpresa ? "Actualizar propuesta con esta estimación" : "Convertir en propuesta",
+        onClick: ()=>onConvertEstimateToProposal(conv.quoteId,estimate),
+      })
+    : null;
   // Administración y atención al cliente comparten la bandeja de tickets.
   const esEquipoPlataforma = currentUserRole === "admin" || currentUserRole === "soporte";
   // El backend solo admite avanzar un paso en la cadena, así que ofrecer la
@@ -4076,7 +4087,7 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                               })}
                             </div>
                           )}
-                          {msg.estimate&&<TarjetaEstimacion estimacion={msg.estimate} propia={isClient}/>}
+                          {msg.estimate&&<TarjetaEstimacion estimacion={msg.estimate} propia={isClient} accion={accionEstimacion?accionEstimacion(msg.estimate):undefined}/>}
                           {!msg.estimate&&shouldRenderMessageText(msg, messageAttachments.length) && (
                             <div className={clsx("px-3 py-2 rounded-2xl text-sm leading-relaxed",
                               isClient
@@ -7687,7 +7698,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATE RESPONSE SCREEN — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
-function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,chatConversationId,onOpenChat}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};chatConversationId?:string;onOpenChat?:(conversationId:string)=>void}) {
+function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,chatConversationId,onOpenChat,prefill}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};chatConversationId?:string;onOpenChat?:(conversationId:string)=>void;prefill?:PropuestaDesdeEstimacion|null}) {
   type ProposalAttachmentRef = {id:string;nombre:string};
   type ProposalDraftDetails = {
     moq: string;
@@ -7761,31 +7772,59 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   // Solo la cuenta dueña envía; el asesor guarda y deja el borrador listo.
   const esBorradorPendienteDeEnvio = userRole==="importadora" && existingProposal?.estado==="borrador";
 
+  // El formulario se hidrata una sola vez por propuesta: el refresco automático
+  // trae un objeto nuevo cada pocos segundos y volver a copiarlo pisaba lo que
+  // el usuario estuviera escribiendo. La estimación del chat (`prefill`) se
+  // aplica una vez y siempre encima de la propuesta guardada, aunque esta
+  // llegue después.
+  const propuestaHidratadaRef=useRef<string|null>(null);
+  const prefillAplicadoRef=useRef<PropuestaDesdeEstimacion|null>(null);
   useEffect(()=>{
-    if(!existingProposal){
+    const hidratarPropuesta=Boolean(existingProposal)&&propuestaHidratadaRef.current!==existingProposal?.id;
+    const aplicarPrefill=Boolean(prefill)&&prefillAplicadoRef.current!==prefill;
+    if(!hidratarPropuesta&&!aplicarPrefill){
       return;
     }
 
-    const draftDetails=parseDraftDetails(existingProposal.condiciones_adicionales);
-    const plainTextConditions=draftDetails?"":(existingProposal.condiciones_adicionales || "");
+    if(existingProposal&&hidratarPropuesta){
+      propuestaHidratadaRef.current=existingProposal.id;
+      const draftDetails=parseDraftDetails(existingProposal.condiciones_adicionales);
+      const plainTextConditions=draftDetails?"":(existingProposal.condiciones_adicionales || "");
 
-    setForm((prev)=>({
-      ...prev,
-      totalPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
-      unitPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
-      incoterm: existingProposal.incoterm || "FOB",
-      totalTime: existingProposal.tiempo_estimado_entrega || "",
-      moq: draftDetails?.moq || "",
-      port: draftDetails?.port || "",
-      productionTime: draftDetails?.productionTime || "",
-      shippingTime: draftDetails?.shippingTime || "",
-      description: draftDetails?.description || plainTextConditions,
-      advantages: draftDetails?.advantages || "",
-      recommendations: draftDetails?.recommendations || "",
-    }));
+      setForm((prev)=>({
+        ...prev,
+        totalPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
+        unitPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
+        incoterm: existingProposal.incoterm || "FOB",
+        totalTime: existingProposal.tiempo_estimado_entrega || "",
+        moq: draftDetails?.moq || "",
+        port: draftDetails?.port || "",
+        productionTime: draftDetails?.productionTime || "",
+        shippingTime: draftDetails?.shippingTime || "",
+        description: draftDetails?.description || plainTextConditions,
+        advantages: draftDetails?.advantages || "",
+        recommendations: draftDetails?.recommendations || "",
+      }));
 
-    setAttachedFiles(draftDetails?.attachedFiles || []);
-  },[existingProposal]);
+      setAttachedFiles(draftDetails?.attachedFiles || []);
+    }
+
+    if(prefill){
+      prefillAplicadoRef.current=prefill;
+      setForm((prev)=>({
+        ...prev,
+        totalPrice: prefill.precioTotalUsd,
+        unitPrice: prefill.precioUnitarioUsd,
+        moq: prefill.cantidad,
+        incoterm: prefill.incoterm || prev.incoterm,
+        totalTime: prefill.tiempoEntrega || prev.totalTime,
+        description: prefill.descripcion,
+      }));
+      if(aplicarPrefill){
+        setStep(1);
+      }
+    }
+  },[existingProposal,prefill]);
 
   async function submit(){
     if(!quote){
@@ -7915,6 +7954,15 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
             <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
               <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el solicitante no la ve.</span>
+            </div>
+          )}
+          {prefill&&(
+            <div className="mb-6 p-3 rounded-lg border border-primary/30 bg-primary/5 text-sm text-foreground flex items-start gap-2">
+              <Calculator className="w-4 h-4 mt-0.5 flex-shrink-0 text-primary"/>
+              <span>
+                Datos tomados de la estimación que enviaste por el chat; el desglose quedó en la descripción de la oferta. Revísalos antes de guardar.
+                {prefill.monedaOrigen!=="USD"&&<> <strong>La estimación estaba en {prefill.monedaOrigen} y la propuesta se expresa en USD: escribe el precio convertido.</strong></>}
+              </span>
             </div>
           )}
           {userRole==="asesor"&&(
@@ -9788,6 +9836,8 @@ export default function App() {
   const [companyAdvisors,setCompanyAdvisors]=useState<CompanyAdvisor[]>([]);
   const [advisorAssignedQuotes,setAdvisorAssignedQuotes]=useState<Quote[]>([]);
   const [advisorProposalsByQuoteId,setAdvisorProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
+  // Estimación del chat que se está pasando a propuesta formal.
+  const [proposalPrefill,setProposalPrefill]=useState<{quoteId:string;datos:PropuestaDesdeEstimacion}|null>(null);
   // Propuestas de la empresa vistas desde la cuenta dueña: de aquí sale la
   // bandeja de "esperan tu confirmación".
   const [companyProposalsByQuoteId,setCompanyProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
@@ -10524,6 +10574,18 @@ export default function App() {
 
   function goTo(s:Screen){setPrevScreen(screen);setScreen(s);}
 
+  // La estimación solo prellena la propuesta a la que se llegó desde el chat;
+  // abrir después "Responder" por otro camino debe partir de cero.
+  useEffect(()=>{
+    if(screen!=="create-response")setProposalPrefill(null);
+  },[screen]);
+
+  function handleConvertEstimateToProposal(quoteId:string,estimate:EstimacionEnMensaje){
+    setProposalPrefill({quoteId,datos:propuestaDesdeEstimacion(estimate)});
+    setSelectedQuoteId(quoteId);
+    goTo("create-response");
+  }
+
   function handleNav(key:string){
     // La clave de cada entrada del menú ES el nombre de la pantalla, así que se
     // valida contra la tabla de rutas. Antes había aquí una segunda lista
@@ -11103,7 +11165,7 @@ export default function App() {
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
     // ── Shared ────────────────────────────────────────────────────────────────
-    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
+    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} prefill={proposalPrefill?.quoteId===selectedQuoteId?proposalPrefill.datos:null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onOpen={openNotification} onBack={()=>goTo(prevScreen)} sb={sb}/>;
     if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole} onPedirSoporte={()=>setSoporteAbierto(true)}/>;
     if(screen==="courses")return (
@@ -11124,7 +11186,7 @@ export default function App() {
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;

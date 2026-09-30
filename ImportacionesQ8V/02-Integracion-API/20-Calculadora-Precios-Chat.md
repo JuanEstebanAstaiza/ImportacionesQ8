@@ -61,3 +61,21 @@ Se reparte en vivo por el WebSocket de la conversación y notifica al cliente co
 | Entrada inválida | `422` |
 
 El desglose **siempre** lo calcula el servidor. Los canales genéricos (`POST …/mensajes` y el WebSocket) solo aceptan `texto` y `archivo`, así que nadie puede colar un mensaje `estimacion` (ni `sistema`) con cifras inventadas.
+
+---
+
+## Convertir la estimación en propuesta formal (frontend)
+
+En un chat de **cotización**, cada tarjeta de estimación muestra a la empresa (dueño o asesor) el botón **Convertir en propuesta** (o **Actualizar propuesta con esta estimación** si la empresa ya tiene una propuesta en `borrador` o `pendiente`). No aparece al cliente, en chats de orden ni si la propuesta ya fue aceptada o rechazada.
+
+El botón abre la pantalla **Responder cotización** prellenada; no crea nada por sí solo. Se usan los endpoints de siempre (`POST /propuestas`, `POST /propuestas/borrador`, `PUT /propuestas/{id}`), con sus validaciones:
+
+| Campo de la propuesta | Origen en la estimación |
+|-----------------------|-------------------------|
+| `precio_ofrecido_usd` | `desglose.total` (solo si la moneda es USD; si no, queda vacío para escribirlo convertido) |
+| `incoterm` | `entrada.incoterm` |
+| `tiempo_estimado_entrega` | `entrada.tiempo_entrega` |
+| Descripción de la oferta | Desglose completo + validez + notas |
+| MOQ | `entrada.cantidad` |
+
+El dueño la envía directamente; el asesor la deja como borrador para que el dueño la envíe.

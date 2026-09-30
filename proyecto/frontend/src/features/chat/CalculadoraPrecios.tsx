@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from "react";
-import { Calculator, Loader2, Send, X } from "lucide-react";
+import { Calculator, FileSignature, Loader2, Send, X } from "lucide-react";
 
 import {
   businessService,
@@ -202,8 +202,68 @@ function Totales({ desglose, entrada }: { desglose: DesgloseEstimacion; entrada:
   );
 }
 
+/** Valores con los que la estimación prellena la propuesta formal. */
+export interface PropuestaDesdeEstimacion {
+  /** Vacío si la estimación no está en USD: la propuesta solo admite USD. */
+  precioTotalUsd: string;
+  precioUnitarioUsd: string;
+  monedaOrigen: MonedaEstimacion;
+  cantidad: string;
+  incoterm: string;
+  tiempoEntrega: string;
+  descripcion: string;
+}
+
+/**
+ * Traduce una estimación del chat a los campos de la propuesta formal. El
+ * desglose va a la descripción para que el cliente vea en la propuesta lo
+ * mismo que se le explicó en el chat.
+ */
+export function propuestaDesdeEstimacion(estimacion: EstimacionEnMensaje): PropuestaDesdeEstimacion {
+  const { entrada, desglose } = estimacion;
+  const m = entrada.moneda;
+  const lineas = [
+    `Precio basado en la estimación enviada por el chat (${m}):`,
+    `- Mercancía (${entrada.cantidad} u. × ${formatoMoneda(entrada.precio_unitario, m)}): ${formatoMoneda(desglose.valor_mercancia, m)}`,
+    desglose.flete_internacional > 0 ? `- Flete internacional: ${formatoMoneda(desglose.flete_internacional, m)}` : null,
+    desglose.seguro > 0 ? `- Seguro (${entrada.seguro_pct} %): ${formatoMoneda(desglose.seguro, m)}` : null,
+    `- Valor CIF: ${formatoMoneda(desglose.valor_cif, m)}`,
+    desglose.arancel > 0 ? `- Arancel (${entrada.arancel_pct} %): ${formatoMoneda(desglose.arancel, m)}` : null,
+    desglose.iva > 0 ? `- IVA (${entrada.iva_pct} %): ${formatoMoneda(desglose.iva, m)}` : null,
+    desglose.gastos_destino > 0 ? `- Gastos en destino: ${formatoMoneda(desglose.gastos_destino, m)}` : null,
+    desglose.margen > 0 ? `- Gestión de la empresa (${entrada.margen_pct} %): ${formatoMoneda(desglose.margen, m)}` : null,
+    `- Total: ${formatoMoneda(desglose.total, m)} (${formatoMoneda(desglose.costo_unitario, m)} por unidad)`,
+    entrada.validez_dias ? `Válida por ${entrada.validez_dias} días.` : null,
+    entrada.notas ? `\n${entrada.notas}` : null,
+  ].filter(Boolean);
+  const enUsd = m === "USD";
+  return {
+    precioTotalUsd: enUsd ? desglose.total.toFixed(2) : "",
+    precioUnitarioUsd: enUsd ? desglose.costo_unitario.toFixed(2) : "",
+    monedaOrigen: m,
+    cantidad: String(entrada.cantidad),
+    incoterm: entrada.incoterm || "",
+    tiempoEntrega: entrada.tiempo_entrega || "",
+    descripcion: lineas.join("\n"),
+  };
+}
+
+export interface AccionEstimacion {
+  etiqueta: string;
+  onClick: () => void;
+}
+
 /** Tarjeta de la estimación dentro del hilo, para el cliente y para la empresa. */
-export function TarjetaEstimacion({ estimacion, propia }: { estimacion: EstimacionEnMensaje; propia: boolean }) {
+export function TarjetaEstimacion({
+  estimacion,
+  propia,
+  accion,
+}: {
+  estimacion: EstimacionEnMensaje;
+  propia: boolean;
+  /** Solo la empresa: pasar la estimación a la propuesta formal. */
+  accion?: AccionEstimacion;
+}) {
   const { entrada, desglose } = estimacion;
   const detalles = [
     entrada.incoterm ? `Incoterm ${entrada.incoterm}` : null,
@@ -227,6 +287,14 @@ export function TarjetaEstimacion({ estimacion, propia }: { estimacion: Estimaci
       <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
         Precio estimado. El valor definitivo queda en la propuesta formal de la empresa.
       </p>
+      {accion && (
+        <button
+          onClick={accion.onClick}
+          className="mt-3 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 text-xs font-medium text-primary hover:bg-primary/5"
+        >
+          <FileSignature className="h-3.5 w-3.5" />{accion.etiqueta}
+        </button>
+      )}
     </div>
   );
 }
