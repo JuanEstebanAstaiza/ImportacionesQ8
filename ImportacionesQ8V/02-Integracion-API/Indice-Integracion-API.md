@@ -35,6 +35,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[17-Documentos-y-Multimedia]] | Drive documental, adjuntos chat, reglas LMS y PDFs automáticos |
 | [[18-Tiers-y-Perfil-Cotizante]] | Tier mínimo de empresa, desbloqueo con puntos, recálculo de tiers y perfil público |
 | [[19-Limite-Diario-Cotizaciones]] | Límite diario de cotizaciones que recibe cada empresa importadora |
+| [[20-Calculadora-Precios-Chat]] | Calculadora de precios estimados que la empresa envía al cliente por el chat |
 | `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---
