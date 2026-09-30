@@ -88,7 +88,13 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
     A diferencia de la validación al responder, aquí una empresa **sin**
     especialidad declarada no entra en el reparto: hay que decidir a quién se
     avisa, y sin especialidad no hay criterio.
+
+    Tampoco entran las que ya agotaron su cupo diario
+    (`limite_cotizaciones_diarias`); quedan registradas como omitidas para que
+    no les aparezca después en la bandeja. Ver `services/cupo_cotizaciones.py`.
     """
+    from services.cupo_cotizaciones import cupo_agotado, recibidas_hoy, registrar_reparto_abierta
+
     candidatos = db.query(Importador).filter(
         Importador.estado == "activo",
         Importador.solo_cotizaciones_directas == False,
@@ -100,6 +106,20 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
         and claves_categorias(importador.especialidad_producto)
         and categoria_en(linea_producto, importador.especialidad_producto)
     ]
+
+    con_limite = [imp for imp in importadores if imp.limite_cotizaciones_diarias is not None]
+    conteo = recibidas_hoy(db, [imp.id for imp in con_limite])
+    omitidos = [
+        imp for imp in con_limite
+        if cupo_agotado(imp.limite_cotizaciones_diarias, conteo.get(str(imp.id), 0))
+    ]
+    importadores = [imp for imp in importadores if imp not in omitidos]
+    registrar_reparto_abierta(
+        db,
+        cotizacion_id=cotizacion_id,
+        entregadas=[str(imp.id) for imp in importadores],
+        omitidas=[str(imp.id) for imp in omitidos],
+    )
 
     if _redis_available() and importadores:
         client = _get_redis_client()

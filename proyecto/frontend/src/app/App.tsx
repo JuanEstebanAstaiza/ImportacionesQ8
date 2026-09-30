@@ -52,6 +52,7 @@ import {
   type BackendChatAttachmentItem,
   type BackendChatConversation,
   type BackendCotizacion,
+  type BackendCupoDiario,
   type BackendExplorerResponse,
   type BackendImporter,
   type BackendOrder,
@@ -6426,7 +6427,22 @@ type FormularioEmpresa = {
   avgResponse:string;capacityVolume:string;soloCotizacionesDirectas:boolean;
   shippingMarkPrefijo:string;certs:string[];banner:string;
   tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
+  /** Vacío = sin límite. Texto para poder dejar el campo en blanco al editar. */
+  limiteCotizacionesDiarias:string;
 };
+
+/**
+ * Convierte lo escrito en el campo de límite diario al valor del PUT: null
+ * (sin límite) si está vacío, el entero si es válido y undefined si no lo es,
+ * para no pisar el límite guardado con un valor a medio escribir.
+ */
+function leerLimiteDiario(texto:string):number|null|undefined{
+  const limpio=texto.trim();
+  if(!limpio)return null;
+  if(!/^\d+$/.test(limpio))return undefined;
+  const valor=Number.parseInt(limpio,10);
+  return valor>=1&&valor<=10000?valor:undefined;
+}
 
 // Formulario vacío de verdad. Antes venía sembrado con una dirección de Bogotá,
 // un teléfono y las certificaciones "ISO 9001"/"CE" de ejemplo: cualquier
@@ -6438,9 +6454,10 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
   shippingMarkPrefijo:"",certs:[],banner:"",
   tierMinimoRequerido:"Bronze",
+  limiteCotizacionesDiarias:"",
 };
 
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;})=>Promise<void>}) {
   const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
   const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
@@ -6480,11 +6497,18 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
   // servidor) y es lo que dispara el autoguardado con retardo.
   const [revision,setRevision]=useState(0);
   const formRef=useRef(form);
+  const [cupo,setCupo]=useState<BackendCupoDiario|null>(null);
   const empresaHidratadaRef=useRef<string|null>(null);
   const guardadoEnCursoRef=useRef(false);
   const cambiosSinGuardarRef=useRef(false);
 
   useEffect(()=>{formRef.current=form;},[form]);
+
+  // Uso del cupo diario. Es informativo: si falla, el campo sigue funcionando.
+  const cargarCupo=useCallback(async()=>{
+    try{setCupo(await businessService.getDailyQuoteQuota());}catch{setCupo(null);}
+  },[]);
+  useEffect(()=>{if(company?.id)void cargarCupo();},[company?.id,cargarCupo]);
 
   useEffect(()=>{
     if(!company)return;
@@ -6526,6 +6550,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
       shippingMarkPrefijo:company.shipping_mark_prefijo || "",
       tierMinimoRequerido: (["Bronze", "Silver", "Gold", "Élite"].includes(getString("tier_minimo_requerido")) ? getString("tier_minimo_requerido") : "Bronze") as FormularioEmpresa["tierMinimoRequerido"],
+      limiteCotizacionesDiarias:typeof company.limite_cotizaciones_diarias==="number"?String(company.limite_cotizaciones_diarias):"",
     });
     cambiosSinGuardarRef.current=false;
     setRevision(0);
@@ -6585,8 +6610,10 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
           tier_minimo_requerido: actual.tierMinimoRequerido,
         },
         solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
+        limite_cotizaciones_diarias:leerLimiteDiario(actual.limiteCotizacionesDiarias),
       });
       setEstadoGuardado(prev=>prev==="guardando"?"guardado":prev);
+      void cargarCupo();
     }catch(err){
       // Lo escrito sigue en pantalla y vuelve a marcarse como pendiente: el
       // siguiente intento (automático o manual) lo reenvía entero.
@@ -6596,7 +6623,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
     }finally{
       guardadoEnCursoRef.current=false;
     }
-  },[onSave]);
+  },[onSave,cargarCupo]);
 
   // El envío se invoca siempre por referencia. `onSave` se redefine en cada
   // render de la aplicación, así que depender de `persistir` en el efecto
@@ -6746,6 +6773,21 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Select label="Tier mínimo requerido para cotizar" value={form.tierMinimoRequerido} onChange={e=>f("tierMinimoRequerido",e.target.value)}>
                     {["Bronze", "Silver", "Gold", "Élite"].map((tier)=><option key={tier}>{tier}</option>)}
                   </Select>
+                  <Input
+                    label="Límite de cotizaciones por día"
+                    type="number"
+                    min={1}
+                    max={10000}
+                    placeholder="Sin límite"
+                    value={form.limiteCotizacionesDiarias}
+                    onChange={e=>f("limiteCotizacionesDiarias",e.target.value)}
+                    error={leerLimiteDiario(form.limiteCotizacionesDiarias)===undefined?"Escribe un número entero entre 1 y 10000, o déjalo vacío.":undefined}
+                    hint={
+                      cupo
+                        ? `Hoy llevas ${cupo.recibidas_hoy}${cupo.limite_cotizaciones_diarias!=null?` de ${cupo.limite_cotizaciones_diarias}`:""} cotizaciones recibidas.${cupo.cupo_agotado?" Cupo agotado: no recibirás más hasta mañana.":""} Vacío = sin límite.`
+                        : "Dirigidas y abiertas. Al llegar al tope dejas de recibir hasta mañana. Vacío = sin límite."
+                    }
+                  />
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
                     <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
@@ -10701,7 +10743,7 @@ export default function App() {
     return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }
