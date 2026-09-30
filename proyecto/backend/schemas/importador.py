@@ -7,6 +7,7 @@ from utils.shipping_mark import LONGITUD_MAX_PREFIJO, normalizar_segmento
 from utils.urls import canonicalize_resource_url
 
 TIERS_EMPRESA = ("Bronze", "Silver", "Gold", "Élite")
+LIMITE_COTIZACIONES_DIARIAS_MAX = 10000
 
 
 def _tier_valido(v: Optional[str]) -> Optional[str]:
@@ -51,6 +52,8 @@ class ImportadorResponse(BaseModel):
     shipping_mark_prefijo: Optional[str] = None
     # Nivel mínimo que la empresa exige al cotizante (ver `POST /cotizaciones`).
     tier_minimo_requerido: str = "Bronze"
+    # Tope de cotizaciones que la empresa acepta recibir por día (None = sin límite).
+    limite_cotizaciones_diarias: Optional[int] = None
     fecha_registro: datetime
 
     model_config = {"from_attributes": True}
@@ -74,6 +77,14 @@ class ImportadorUpdate(BaseModel):
         None,
         description="Tier mínimo del cotizante: Bronze, Silver, Gold o Élite. "
         "También se acepta dentro de `perfil_publico` por compatibilidad.",
+    )
+
+    limite_cotizaciones_diarias: Optional[int] = Field(
+        None,
+        ge=1,
+        le=LIMITE_COTIZACIONES_DIARIAS_MAX,
+        description="Máximo de cotizaciones (dirigidas + abiertas) a recibir por día. "
+        "Enviar null para quitar el límite.",
     )
 
     @field_validator("tier_minimo_requerido")
@@ -174,3 +185,13 @@ class AdminCrearImportadorResponse(BaseModel):
     importador: ImportadorResponse
     usuario_dueño_id: str
     email_dueño: str
+
+
+class CupoDiarioResponse(BaseModel):
+    """Uso del cupo diario de cotizaciones de la empresa (`GET /importadores/cupo-diario`)."""
+    importador_id: str
+    limite_cotizaciones_diarias: Optional[int] = None
+    recibidas_hoy: int
+    disponibles_hoy: Optional[int] = None
+    cupo_agotado: bool
+    reinicia_en: datetime = Field(..., description="Momento (UTC) en que el contador vuelve a cero")

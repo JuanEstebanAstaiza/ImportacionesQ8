@@ -40,6 +40,11 @@ class Importador(Base):
     # esté por debajo gasta 1 punto de cotización para desbloquearla; lo hace
     # cumplir `POST /cotizaciones`, nunca el cliente.
     tier_minimo_requerido = Column(String(10), default="Bronze", server_default="Bronze", nullable=False)
+    # Máximo de cotizaciones (dirigidas + abiertas) que la empresa quiere recibir
+    # por día. NULL = sin límite. Al llegar al tope, `POST /cotizaciones` rechaza
+    # las dirigidas y el matching deja de repartirle abiertas hasta el día
+    # siguiente. Ver `services/cupo_cotizaciones.py`.
+    limite_cotizaciones_diarias = Column(Integer, nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

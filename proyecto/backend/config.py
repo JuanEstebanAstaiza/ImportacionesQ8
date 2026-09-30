@@ -88,6 +88,11 @@ COBRO_A_SOLICITANTES = os.getenv("COBRO_A_SOLICITANTES", "false").lower() == "tr
 
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))
 CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DIRIGIDA", "5"))
+
+# El cupo diario de cotizaciones de cada empresa se reinicia a medianoche de
+# esta zona (Colombia, UTC-5 sin horario de verano). Es un desfase fijo y no un
+# nombre IANA para no depender de que la imagen traiga tzdata.
+CUPO_COTIZACIONES_UTC_OFFSET_HORAS = int(os.getenv("CUPO_COTIZACIONES_UTC_OFFSET_HORAS", "-5"))
 CREDITO_USD_POR_UNIDAD = float(os.getenv("CREDITO_USD_POR_UNIDAD", "0.1"))
 CREDITO_BONO_REGISTRO = float(os.getenv("CREDITO_BONO_REGISTRO", "20"))
 CREDITO_BONO_REFERIDO = float(os.getenv("CREDITO_BONO_REFERIDO", "10"))

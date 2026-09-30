@@ -36,6 +36,14 @@ propuestas_router = APIRouter(prefix="/propuestas", tags=["Propuestas"])
 
 
 MENSAJE_SIN_PUNTOS = "Nivel insuficiente y sin créditos"
+MENSAJE_CUPO_AGOTADO = (
+    "{empresa} alcanzó hoy su límite de cotizaciones recibidas. Elige otra empresa, "
+    "publica la cotización en modalidad abierta o inténtalo de nuevo mañana."
+)
+MENSAJE_OMITIDA_POR_CUPO = (
+    "Esta cotización abierta no se le entregó a tu empresa porque ese día ya había "
+    "alcanzado su límite de cotizaciones diarias."
+)
 
 
 def _empresa_puede_responder_abierta(empresa: Optional[Importador], cotizacion: Cotizacion) -> bool:
@@ -94,11 +102,16 @@ async def listar_cotizaciones(
         # Antes se devolvían todas: la bandeja se llenaba de cotizaciones de otras
         # categorías y el botón "Responder" terminaba en un 400 de congruencia que
         # el usuario leía como un fallo de permisos.
+        # Tampoco las abiertas que el matching le saltó por tener el cupo diario
+        # agotado: si no, el límite solo quitaría el aviso, no la cotización.
+        from services.cupo_cotizaciones import cotizaciones_omitidas
+
         empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
+        omitidas = cotizaciones_omitidas(db, importador_id_str)
         cotizaciones = [
             c for c in cotizaciones
             if c.importador_id == importador_id_str
-            or _empresa_puede_responder_abierta(empresa, c)
+            or (str(c.id) not in omitidas and _empresa_puede_responder_abierta(empresa, c))
         ]
     else:
         # Admin ve todas las cotizaciones
@@ -236,6 +249,7 @@ async def reclamar_cotizacion(
     # en ambos casos debe seguir sin reclamar.
     if cotizacion.importador_id and cotizacion.importador_id != importador_id_str:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado - Cotización de otra empresa")
+    _validar_no_omitida_por_cupo(cotizacion, importador_id_str, db)
 
     user_id_str = str(UUID(current_user["user_id"]))
 
@@ -464,6 +478,20 @@ async def crear_cotizacion(
                     detail=f"Faltan campos obligatorios del formulario de la empresa: {', '.join(faltantes)}"
                 )
 
+        # Cupo diario de la empresa. Se bloquea su fila para que dos cotizaciones
+        # simultáneas no pasen las dos con el último hueco libre; la recepción se
+        # registra en esta misma transacción.
+        if importador.limite_cotizaciones_diarias is not None:
+            from services.cupo_cotizaciones import cupo_agotado, recibidas_hoy
+
+            db.query(Importador).filter(Importador.id == importador_id_str).with_for_update().first()
+            recibidas = recibidas_hoy(db, [importador_id_str]).get(importador_id_str, 0)
+            if cupo_agotado(importador.limite_cotizaciones_diarias, recibidas):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=MENSAJE_CUPO_AGOTADO.format(empresa=importador.nombre_empresa),
+                )
+
         from services.tier_service import tier_insuficiente
 
         tier_requerido = importador.tier_minimo_requerido or "Bronze"
@@ -501,6 +529,17 @@ async def crear_cotizacion(
     )
     
     db.add(nuevo_cotizacion)
+
+    if nuevo_cotizacion.modalidad == "dirigida" and nuevo_cotizacion.importador_id:
+        from services.cupo_cotizaciones import registrar_recepcion
+
+        db.flush()
+        registrar_recepcion(
+            db,
+            importador_id=str(UUID(nuevo_cotizacion.importador_id)),
+            cotizacion_id=nuevo_cotizacion.id,
+            modalidad="dirigida",
+        )
 
     if config.COBRO_A_SOLICITANTES and wallet is not None and costo_creditos > 0:
         from services.credito_wallet import debitar_atomico
@@ -556,6 +595,14 @@ async def crear_cotizacion(
     return nuevo_cotizacion
 
 # ==================== Endpoints de Propuestas (Tarea 2.1) ====================
+
+def _validar_no_omitida_por_cupo(cotizacion: Cotizacion, importador_id_str: str, db: Session):
+    """Una abierta que no se le entregó a la empresa por cupo no se puede responder."""
+    from services.cupo_cotizaciones import fue_omitida
+
+    if cotizacion.modalidad == "abierta" and fue_omitida(db, importador_id_str, str(cotizacion.id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_OMITIDA_POR_CUPO)
+
 
 def _validar_congruencia_categoria(cotizacion: Cotizacion, importador_id_str: str, db: Session):
     """
@@ -773,6 +820,7 @@ async def enviar_propuesta(
             )
 
     # 2.5. Congruencia de categoría: la especialidad de la empresa debe incluir la línea de producto solicitada
+    _validar_no_omitida_por_cupo(cotizacion, importador_id_str, db)
     _validar_congruencia_categoria(cotizacion, importador_id_str, db)
 
     # 3. Verificar que el importador no ha enviado ya una propuesta a esta cotización
@@ -924,6 +972,8 @@ async def crear_borrador_propuesta(
         if not cotizacion.asesor_asignado_id:
             cotizacion.asesor_asignado_id = user_id_str
 
+    _validar_no_omitida_por_cupo(cotizacion, importador_id_str, db)
+
     propuesta_existente = db.query(Propuesta).filter(
         Propuesta.cotizacion_id == cotizacion_id_str,
         Propuesta.importador_id == importador_id_str
@@ -1029,6 +1079,7 @@ async def enviar_borrador_propuesta(
     if not cotizacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
 
+    _validar_no_omitida_por_cupo(cotizacion, propuesta_db.importador_id, db)
     _validar_congruencia_categoria(cotizacion, propuesta_db.importador_id, db)
 
     propuesta_db.estado = EstadoPropuesta.pendiente

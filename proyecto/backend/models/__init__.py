@@ -38,6 +38,7 @@ from .documental import (
 )
 from .landing import LandingBlock, LandingAlly, LandingNews
 from .tier import UmbralTierCotizante, MovimientoPuntoCotizacion
+from .recepcion_cotizacion import RecepcionCotizacion
 
 __all__ = [
     "Usuario",
@@ -46,6 +47,7 @@ __all__ = [
     "EstadoCotizacion",
     "UmbralTierCotizante",
     "MovimientoPuntoCotizacion",
+    "RecepcionCotizacion",
     "Propuesta",
     "EstadoPropuesta",
     "Orden",

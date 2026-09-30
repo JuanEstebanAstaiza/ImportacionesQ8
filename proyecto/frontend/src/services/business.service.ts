@@ -33,6 +33,19 @@ export interface BackendImporter {
   shipping_mark_prefijo?: string | null;
   fecha_registro: string;
   tier_minimo_requerido?: string;
+  /** Máximo de cotizaciones que la empresa acepta recibir por día; null = sin límite. */
+  limite_cotizaciones_diarias?: number | null;
+}
+
+/** Uso del cupo diario de cotizaciones de la empresa (`GET /importadores/cupo-diario`). */
+export interface BackendCupoDiario {
+  importador_id: string;
+  limite_cotizaciones_diarias: number | null;
+  recibidas_hoy: number;
+  disponibles_hoy: number | null;
+  cupo_agotado: boolean;
+  /** Momento (UTC) en que el contador vuelve a cero. */
+  reinicia_en: string;
 }
 
 export interface BackendCotizacion {
@@ -230,6 +243,8 @@ export interface UpdateImporterPayload {
   perfil_publico?: Record<string, unknown>;
   solo_cotizaciones_directas?: boolean;
   shipping_mark_prefijo?: string;
+  /** null quita el límite; omitirlo lo deja como está. */
+  limite_cotizaciones_diarias?: number | null;
 }
 
 /**
@@ -627,6 +642,10 @@ export const businessService = {
     return apiRequest<BackendImporter>(`/importadores/${importadorId}`, {
       method: "GET",
     });
+  },
+
+  getDailyQuoteQuota(): Promise<BackendCupoDiario> {
+    return apiRequest<BackendCupoDiario>("/importadores/cupo-diario", { method: "GET" });
   },
 
   updateImporterById(importadorId: string, payload: UpdateImporterPayload): Promise<BackendImporter> {
