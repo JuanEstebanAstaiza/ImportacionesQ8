@@ -20,3 +20,7 @@ RUN npm run build
 FROM caddy:2-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
+
+# Sin DOMINIO el Caddyfile queda con la dirección vacía y Caddy falla con un
+# críptico "unrecognized global option". Mejor decir qué falta.
+CMD ["sh", "-c", "if [ -z \"$DOMINIO\" ]; then echo 'ERROR: falta la variable DOMINIO. Levanta con docker-compose.prod.yml (COMPOSE_FILE en .env).' >&2; exit 1; fi; exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
