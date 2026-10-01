@@ -17,7 +17,7 @@ import {
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
-  LockKeyhole, LifeBuoy, WalletCards, Calculator,
+  LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -672,6 +672,7 @@ const NAV_ADMIN=[
   {icon:Mail,          label:"Correos",         key:"admin-correos"},
   {icon:LifeBuoy,      label:"Soporte",         key:"admin-soporte"},
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
+  {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
@@ -9475,6 +9476,7 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-cotizantes": "cotizantes",
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
+  "admin-respaldos": "respaldos",
   "admin-landing": "landing",
   "admin-correos": "correos",
 } as const;
@@ -11068,6 +11070,7 @@ export default function App() {
     // Única área del panel que comparte el equipo de atención al cliente.
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
+    "admin-respaldos": ["admin"],
     "admin-landing": ["admin"],
     "admin-correos": ["admin"],
   };

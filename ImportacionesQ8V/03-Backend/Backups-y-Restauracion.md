@@ -5,7 +5,7 @@
 
 ## Desde el panel de administración (lo habitual)
 
-**Admin → Certificaciones (Sellos y respaldo) → Copia de seguridad.**
+**Admin → Respaldos** (menú lateral, `/admin/respaldos`).
 
 1. **Descargar copia de seguridad.** Baja un ZIP con toda la base de datos y, si se marca, los archivos subidos. Guárdalo fuera del servidor: en tu equipo, en una nube o en un disco externo.
 2. **Restaurar una copia.** Arrastra ese ZIP a la zona de carga, o haz clic para elegirlo. El servidor lo verifica y muestra, **sin cambiar nada**:
