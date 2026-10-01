@@ -207,6 +207,74 @@ export interface BackupResumen {
   bytes_archivos: number;
 }
 
+export interface TablaBackupComparada {
+  tabla: string;
+  en_backup: number;
+  /** null: la tabla no existe en esta versión de la plataforma. */
+  actual: number | null;
+}
+
+/** Vista previa de un ZIP subido, antes de restaurarlo. */
+export interface BackupSubido {
+  subida_id: string;
+  nombre_original: string;
+  tamano_bytes: number;
+  generado_en: string | null;
+  revision_alembic: string | null;
+  revision_actual: string | null;
+  incluye_archivos: boolean;
+  archivos: number;
+  total_filas_backup: number;
+  total_filas_actual: number;
+  tablas: TablaBackupComparada[];
+  advertencias: string[];
+}
+
+export interface ResultadoRestauracion {
+  tablas_restauradas: number;
+  filas_restauradas: number;
+  archivos_restaurados: number;
+  tablas_desconocidas: string[];
+  cotizaciones_abiertas_reindexadas: number;
+  backup_previo: string | null;
+  /** false: la cuenta que restauró no existe en la copia; hay que volver a entrar. */
+  sesion_vigente: boolean;
+}
+
+export interface BackupPrevio {
+  nombre: string;
+  tamano_bytes: number;
+}
+
+function detalleDeError(cuerpo: unknown, porDefecto: string): string {
+  if (cuerpo && typeof cuerpo === "object" && "detail" in cuerpo) {
+    const detalle = (cuerpo as { detail: unknown }).detail;
+    if (typeof detalle === "string" && detalle.trim()) return detalle;
+  }
+  return porDefecto;
+}
+
+async function descargarBlob(ruta: string, nombrePorDefecto: string): Promise<string> {
+  const token = getStoredToken();
+  const response = await fetch(resolveApiUrl(ruta), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error(detalleDeError(await response.json().catch(() => null), "No se pudo descargar la copia."));
+  }
+  const disposition = response.headers.get("content-disposition") || "";
+  const nombre = /filename="?([^";]+)"?/i.exec(disposition)?.[1] || nombrePorDefecto;
+  const objectUrl = window.URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = objectUrl;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  window.URL.revokeObjectURL(objectUrl);
+  return nombre;
+}
+
 export interface CreateImporterWithOwnerPayload {
   nombre_empresa: string;
   logo_url?: string;
@@ -498,6 +566,64 @@ export const adminService = {
     window.URL.revokeObjectURL(objectUrl);
 
     return nombre;
+  },
+
+  /**
+   * Sube un ZIP de copia para restaurarlo y devuelve la vista previa (no cambia
+   * nada todavía). Usa XMLHttpRequest y no fetch porque fetch no informa del
+   * progreso de subida, y un ZIP con archivos puede pesar cientos de MB.
+   */
+  validateBackupUpload(archivo: File, onProgress?: (porcentaje: number) => void): Promise<BackupSubido> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", resolveApiUrl("/admin/backup/restaurar/validar"));
+      const token = getStoredToken();
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.upload.onprogress = (evento) => {
+        if (evento.lengthComputable && onProgress) onProgress(Math.round((evento.loaded / evento.total) * 100));
+      };
+      xhr.onload = () => {
+        let cuerpo: unknown = null;
+        try {
+          cuerpo = JSON.parse(xhr.responseText);
+        } catch {
+          /* respuesta no JSON */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(cuerpo as BackupSubido);
+        } else {
+          reject(new Error(detalleDeError(cuerpo, `No se pudo subir la copia (HTTP ${xhr.status}).`)));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Se perdió la conexión mientras se subía la copia."));
+      const formulario = new FormData();
+      formulario.append("archivo", archivo);
+      xhr.send(formulario);
+    });
+  },
+
+  applyBackupRestore(subidaId: string, incluirArchivos: boolean): Promise<ResultadoRestauracion> {
+    return apiRequest<ResultadoRestauracion>(`/admin/backup/restaurar/${subidaId}`, {
+      method: "POST",
+      body: { confirmacion: "RESTAURAR", incluir_archivos: incluirArchivos },
+    });
+  },
+
+  discardBackupUpload(subidaId: string): Promise<void> {
+    return apiRequest<void>(`/admin/backup/restaurar/${subidaId}`, { method: "DELETE" });
+  },
+
+  listPreviousBackups(): Promise<BackupPrevio[]> {
+    return apiRequest<BackupPrevio[]>("/admin/backup/previos", { method: "GET" });
+  },
+
+  downloadPreviousBackup(nombre: string): Promise<string> {
+    return descargarBlob(`/admin/backup/previos/${encodeURIComponent(nombre)}`, nombre);
+  },
+
+  /** Deja una copia previa lista para restaurar (deshacer) sin volver a subirla. */
+  preparePreviousBackup(nombre: string): Promise<BackupSubido> {
+    return apiRequest<BackupSubido>(`/admin/backup/previos/${encodeURIComponent(nombre)}/preparar`, { method: "POST" });
   },
 
   inviteSolicitante(payload: InviteSolicitantePayload): Promise<RegisterResponse> {

@@ -20,6 +20,7 @@ import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
 import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
 import { AdminEmailCampaign } from "@/features/admin/AdminEmailCampaign";
+import { RestaurarBackup } from "@/features/admin/RestaurarBackup";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
@@ -214,7 +215,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   const tab = section;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const { user, appRole } = useAuth();
+  const { user, appRole, signOut } = useAuth();
   const normalizedRole = normalizeRole(user?.rol);
   const isAdmin = Boolean(user?.rol && ["ADMIN", "SUPERADMIN", "ADMINISTRADOR", "ADMIN_ROLE"].includes(String(user.rol).toUpperCase())) || normalizedRole.includes("admin") || appRole === "admin";
   // El equipo de atención al cliente entra solo a la sección de soporte. Pedir
@@ -1705,8 +1706,8 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             Copia de seguridad
           </p>
           <p className="text-sm text-muted-foreground">
-            Descarga un ZIP con la base de datos y los archivos subidos. Tómala antes de cada actualización:
-            si algo sale mal, se restaura con <code className="rounded bg-muted px-1">python scripts/restaurar_backup.py copia.zip --aplicar</code>.
+            Descarga un ZIP con la base de datos y los archivos subidos y guárdalo fuera del servidor. Tómala antes de
+            cada actualización: si algo sale mal, se vuelve a cargar desde aquí mismo, más abajo.
           </p>
 
           {backupSummary ? (
@@ -1755,6 +1756,19 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               Revisión de esquema actual: <code className="rounded bg-muted px-1">{backupSummary.revision_alembic}</code>
             </p>
           ) : null}
+
+          <RestaurarBackup
+            onDescargarActual={() => {
+              void handleDownloadBackup();
+            }}
+            descargandoActual={isDownloadingBackup}
+            onRestaurado={() => {
+              void reloadAdminData();
+            }}
+            onSesionCaducada={() => {
+              void signOut();
+            }}
+          />
         </div>
       </section>
       ) : null}

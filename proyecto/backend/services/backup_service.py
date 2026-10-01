@@ -12,13 +12,15 @@ contenedor traiga binarios del motor de base de datos.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import os
 import zipfile
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterator, List, Optional
+from typing import Any, Callable, Iterator, List, Optional
 from uuid import UUID
 
 from sqlalchemy import inspect as sa_inspect
@@ -35,6 +37,10 @@ DIRECTORIOS_DE_ARCHIVOS = ("uploads", "generated_docs")
 
 # Formato del volcado. Subir este número solo si cambia la estructura del ZIP.
 FORMATO_BACKUP = 1
+
+# Carpeta (montada desde el host en Docker) donde viven las copias del servidor,
+# las subidas pendientes de restaurar y la copia automática previa a restaurar.
+BACKUPS_DIR = Path(os.getenv("BACKUP_DIR", str(BACKEND_DIR / "backups")))
 
 
 def _serializar(valor: Any) -> Any:
@@ -144,3 +150,237 @@ def construir_backup(db: Session, destino: Path, *, incluir_archivos: bool = Tru
 def nombre_de_archivo(momento: Optional[datetime] = None) -> str:
     marca = (momento or datetime.utcnow()).strftime("%Y%m%d-%H%M%S")
     return f"importacionesq8-backup-{marca}.zip"
+
+
+# ==================== Verificación ====================
+
+def sha256_de(ruta: Path) -> str:
+    h = hashlib.sha256()
+    with ruta.open("rb") as f:
+        for bloque in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def verificar_backup(ruta: Path) -> dict:
+    """Comprueba que el ZIP esté entero y sea coherente con su manifiesto.
+
+    Suma SHA-256 (si hay `<zip>.sha256` al lado), CRC de cada entrada, formato y
+    conteo de filas de cada tabla contra el manifiesto. Devuelve el manifiesto;
+    lanza `ValueError` con el motivo si algo no cuadra.
+    """
+    suma = ruta.with_name(ruta.name + ".sha256")
+    if suma.is_file():
+        esperada = suma.read_text(encoding="utf-8").split()[0]
+        if esperada != sha256_de(ruta):
+            raise ValueError(f"La suma SHA-256 de {ruta.name} no coincide: el archivo está dañado o fue modificado.")
+
+    try:
+        with zipfile.ZipFile(ruta) as zf:
+            dañado = zf.testzip()
+            if dañado:
+                raise ValueError(f"Entrada corrupta dentro del ZIP: {dañado}")
+            try:
+                manifiesto = json.loads(zf.read("manifest.json").decode("utf-8"))
+            except KeyError:
+                raise ValueError("El ZIP no tiene manifest.json: no parece una copia de seguridad de la plataforma.")
+            except ValueError:
+                raise ValueError("El manifest.json del ZIP no es JSON válido.")
+            if manifiesto.get("formato") != FORMATO_BACKUP:
+                raise ValueError(
+                    f"Formato de copia {manifiesto.get('formato')} no soportado (se esperaba {FORMATO_BACKUP})."
+                )
+            nombres = set(zf.namelist())
+            for tabla, filas in (manifiesto.get("tablas") or {}).items():
+                entrada = f"datos/{tabla}.ndjson"
+                if entrada not in nombres:
+                    raise ValueError(f"Falta {entrada} aunque el manifiesto la declara")
+                crudo = zf.read(entrada).decode("utf-8")
+                contadas = sum(1 for linea in crudo.splitlines() if linea.strip())
+                if contadas != filas:
+                    raise ValueError(f"{tabla}: el manifiesto dice {filas} filas y el ZIP trae {contadas}")
+            archivos = sum(1 for n in nombres if n.startswith("archivos/") and not n.endswith("/"))
+            if archivos != manifiesto.get("archivos_copiados", archivos):
+                raise ValueError(
+                    f"El manifiesto declara {manifiesto.get('archivos_copiados')} archivos y el ZIP trae {archivos}"
+                )
+            for nombre in nombres:
+                if nombre.startswith("archivos/") and not nombre.endswith("/") and _destino_de_archivo(nombre) is None:
+                    raise ValueError(f"Ruta no permitida dentro del ZIP: {nombre}")
+    except zipfile.BadZipFile as e:
+        raise ValueError(f"{ruta.name} no es un ZIP válido: {e}")
+    return manifiesto
+
+
+# ==================== Restauración ====================
+
+def convertir_valor(valor, columna):
+    """Devuelve el valor con el tipo Python que espera la columna.
+
+    En el ZIP todo viaja como JSON, así que las fechas llegan como texto ISO y
+    los binarios como hex. SQLAlchemy rechaza un `str` en una columna DateTime,
+    de modo que hay que rehidratarlos antes de insertar.
+    """
+    if valor is None:
+        return None
+
+    if isinstance(valor, dict) and "__bytes_hex__" in valor:
+        return bytes.fromhex(valor["__bytes_hex__"])
+
+    tipo = getattr(columna, "type", None)
+    nombre_tipo = type(tipo).__name__.upper() if tipo is not None else ""
+
+    if isinstance(valor, str) and nombre_tipo in ("DATETIME", "TIMESTAMP", "DATE", "TIME"):
+        texto = valor.rstrip("Z")
+        try:
+            if nombre_tipo == "DATE":
+                return date.fromisoformat(texto)
+            if nombre_tipo == "TIME":
+                return time.fromisoformat(texto)
+            return datetime.fromisoformat(texto)
+        except ValueError:
+            # Formato inesperado: se deja tal cual y que falle de forma visible
+            # en vez de insertar una fecha inventada.
+            return valor
+
+    return valor
+
+
+def _destino_de_archivo(nombre_en_zip: str) -> Optional[Path]:
+    """Ruta donde restaurar `archivos/<dir>/<ruta>`, o None si sale de su carpeta.
+
+    El ZIP puede llegar subido desde el panel: sin esta comprobación, una entrada
+    como `archivos/uploads/../../main.py` escribiría fuera de los directorios de
+    archivos (zip slip).
+    """
+    partes = nombre_en_zip.split("/", 2)
+    if len(partes) != 3 or partes[0] != "archivos" or partes[1] not in DIRECTORIOS_DE_ARCHIVOS or not partes[2]:
+        return None
+    base = (BACKEND_DIR / partes[1]).resolve()
+    destino = (base / partes[2]).resolve()
+    if destino == base or base not in destino.parents:
+        return None
+    return destino
+
+
+def _restaurar_datos(db: Session, zf: zipfile.ZipFile, aplicar: bool, informar: Callable[[str], None]) -> dict:
+    """Vacía y recarga las tablas del ZIP en UNA transacción. Devuelve filas por tabla."""
+    disponibles = {
+        nombre.split("/", 1)[1].removesuffix(".ndjson")
+        for nombre in zf.namelist()
+        if nombre.startswith("datos/") and nombre.endswith(".ndjson")
+    }
+    tablas = [t for t in Base.metadata.sorted_tables if t.name in disponibles]
+    cargadas: dict = {}
+    if not tablas:
+        informar("El backup no contiene tablas conocidas.")
+        return cargadas
+
+    try:
+        # El borrado va en orden inverso (hijos primero) por las claves foráneas.
+        for tabla in reversed(tablas):
+            if aplicar:
+                db.execute(tabla.delete())
+            informar(f"  - vaciar {tabla.name}")
+
+        for tabla in tablas:
+            crudo = zf.read(f"datos/{tabla.name}.ndjson").decode("utf-8")
+            filas = [json.loads(linea) for linea in crudo.splitlines() if linea.strip()]
+            informar(f"  - cargar {tabla.name}: {len(filas)} fila(s)")
+            cargadas[tabla.name] = len(filas)
+            if aplicar and filas:
+                columnas = {c.name: c for c in tabla.columns}
+                # Ignorar columnas que ya no existen en el esquema actual:
+                # permite restaurar un backup anterior a una migración.
+                limpias = [
+                    {clave: convertir_valor(valor, columnas[clave]) for clave, valor in fila.items() if clave in columnas}
+                    for fila in filas
+                ]
+                # Insertar por lotes evita paquetes gigantes en MySQL.
+                for inicio in range(0, len(limpias), 500):
+                    db.execute(tabla.insert(), limpias[inicio:inicio + 500])
+
+        if aplicar:
+            db.commit()
+        else:
+            db.rollback()
+    except Exception:
+        db.rollback()
+        raise
+    return cargadas
+
+
+def _restaurar_archivos(zf: zipfile.ZipFile, aplicar: bool) -> int:
+    """Escribe uploads/ y generated_docs/ sin borrar lo que ya exista."""
+    total = 0
+    for nombre in zf.namelist():
+        if not nombre.startswith("archivos/") or nombre.endswith("/"):
+            continue
+        destino = _destino_de_archivo(nombre)
+        if destino is None:
+            raise ValueError(f"Ruta no permitida dentro del ZIP: {nombre}")
+        total += 1
+        if aplicar:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(nombre) as origen, destino.open("wb") as salida:
+                for bloque in iter(lambda: origen.read(1024 * 1024), b""):
+                    salida.write(bloque)
+    return total
+
+
+def verificar_conteos(db: Session, manifiesto: dict) -> list:
+    """Filas por tabla en la base frente a las del manifiesto, tras restaurar.
+
+    Devuelve las discrepancias como (tabla, esperadas, encontradas). Solo compara
+    tablas que existen en el esquema actual.
+    """
+    from sqlalchemy import func, select
+
+    conocidas = {t.name: t for t in Base.metadata.sorted_tables}
+    discrepancias = []
+    for tabla, esperadas in (manifiesto.get("tablas") or {}).items():
+        if tabla not in conocidas:
+            continue
+        encontradas = db.execute(select(func.count()).select_from(conocidas[tabla])).scalar()
+        if encontradas != esperadas:
+            discrepancias.append((tabla, esperadas, encontradas))
+    return discrepancias
+
+
+def tablas_desconocidas(manifiesto: dict) -> List[str]:
+    """Tablas del backup que el código actual ya no tiene (no se restauran)."""
+    return sorted(set(manifiesto.get("tablas") or {}) - {t.name for t in Base.metadata.sorted_tables})
+
+
+def restaurar_desde_zip(
+    db: Session,
+    ruta: Path,
+    *,
+    aplicar: bool = True,
+    incluir_archivos: bool = True,
+    informar: Optional[Callable[[str], None]] = None,
+) -> dict:
+    """Restaura base de datos (y archivos) desde un ZIP ya verificado.
+
+    Reemplaza el contenido de cada tabla incluida en el ZIP. Al terminar compara
+    los conteos con el manifiesto y lanza `RuntimeError` si no coinciden.
+    """
+    informar = informar or (lambda _mensaje: None)
+    manifiesto = verificar_backup(ruta)
+    with zipfile.ZipFile(ruta) as zf:
+        informar("Datos:")
+        cargadas = _restaurar_datos(db, zf, aplicar, informar)
+        archivos = _restaurar_archivos(zf, aplicar) if incluir_archivos else 0
+
+    discrepancias = verificar_conteos(db, manifiesto) if aplicar else []
+    if discrepancias:
+        detalle = ", ".join(f"{t}: esperadas {e}, encontradas {n}" for t, e, n in discrepancias)
+        raise RuntimeError(f"La base restaurada no coincide con el backup ({detalle})")
+
+    return {
+        "manifiesto": manifiesto,
+        "tablas_restauradas": len(cargadas),
+        "filas_restauradas": sum(cargadas.values()),
+        "archivos_restaurados": archivos,
+        "tablas_desconocidas": tablas_desconocidas(manifiesto),
+    }

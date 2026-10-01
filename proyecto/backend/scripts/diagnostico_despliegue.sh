@@ -9,7 +9,7 @@
 # alcanzan por la red interna de Docker. Por eso "el backend corre perfecto"
 # no basta: si Caddy no está arriba con 80/443, nadie atiende al dominio.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 ok()    { printf '  \033[32m✔\033[0m %s\n' "$*"; }
 falla() { printf '  \033[31m✘\033[0m %s\n' "$*"; PROBLEMAS=$((PROBLEMAS + 1)); }

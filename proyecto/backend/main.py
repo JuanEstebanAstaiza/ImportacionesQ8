@@ -32,6 +32,7 @@ from routers.landing import router as landing_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
+    MantenimientoMiddleware,
     RequestSizeLimitMiddleware,
     TrailingSlashNormalizationMiddleware,
 )
@@ -120,7 +121,7 @@ allow_origin_regex = r"^https?://((localhost|127\.0\.0\.1)(:\d+)?|192\.168\.\d{1
 # externo y por tanto el primero que ve la petición y el último que toca la
 # respuesta. De abajo hacia arriba, la cadena resultante es:
 #
-#   CORS → normalización de slash → headers de seguridad → tope de body → gzip → router
+#   CORS → normalización de slash → headers de seguridad → tope de body → mantenimiento → gzip → router
 #
 # CORS queda de lo más externo a propósito. Antes estaba por dentro del tope de
 # body, así que su 413 salía SIN `Access-Control-Allow-Origin`: el navegador no
@@ -131,6 +132,10 @@ allow_origin_regex = r"^https?://((localhost|127\.0\.0\.1)(:\d+)?|192\.168\.\d{1
 # Comprime respuestas JSON grandes (catálogos, temarios, listas) → menos ancho de banda
 # bajo 100–1000 clientes concurrentes. Umbral 500 bytes.
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# 503 mientras se restaura una copia de seguridad desde el panel (ver
+# services/mantenimiento.py): nadie escribe sobre tablas que se están recargando.
+app.add_middleware(MantenimientoMiddleware)
 
 # Blindaje HTTP (orden: size limit antes de handlers pesados; headers al final de la cadena de salida)
 app.add_middleware(RequestSizeLimitMiddleware)

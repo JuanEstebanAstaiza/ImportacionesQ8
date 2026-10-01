@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+from typing import Optional
 
 from config import (
     COTIZACION_ABIERTA_TTL,
@@ -73,6 +74,20 @@ def listar_cotizaciones_matching_importador(importador_id: str) -> set:
         return set()
 
 
+def _candidatos_por_criterio(db: Session, pais_importacion: str, linea_producto: str) -> list:
+    """Empresas activas del circuito abierto que trabajan ese país y esa línea."""
+    candidatos = db.query(Importador).filter(
+        Importador.estado == "activo",
+        Importador.solo_cotizaciones_directas == False,  # noqa: E712
+    ).all()
+    return [
+        importador for importador in candidatos
+        if texto_en(pais_importacion, importador.paises_origen)
+        and claves_categorias(importador.especialidad_producto)
+        and categoria_en(linea_producto, importador.especialidad_producto)
+    ]
+
+
 def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea_producto: str, db: Session) -> list:
     """
     Encuentra importadores activos que aplican a una cotización abierta
@@ -95,17 +110,7 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
     """
     from services.cupo_cotizaciones import cupo_agotado, recibidas_hoy, registrar_reparto_abierta
 
-    candidatos = db.query(Importador).filter(
-        Importador.estado == "activo",
-        Importador.solo_cotizaciones_directas == False,
-    ).all()
-
-    importadores = [
-        importador for importador in candidatos
-        if texto_en(pais_importacion, importador.paises_origen)
-        and claves_categorias(importador.especialidad_producto)
-        and categoria_en(linea_producto, importador.especialidad_producto)
-    ]
+    importadores = _candidatos_por_criterio(db, pais_importacion, linea_producto)
 
     con_limite = [imp for imp in importadores if imp.limite_cotizaciones_diarias is not None]
     conteo = recibidas_hoy(db, [imp.id for imp in con_limite])
@@ -248,3 +253,80 @@ def obtener_propuestas_recibidas(cotizacion_id: str) -> int:
 
     client = _get_redis_client()
     return int(client.get(f"cotizacion_abierta:{cotizacion_id}:respuestas") or 0)
+
+
+def reconstruir_matching_abiertas(db: Session, ahora: Optional[datetime] = None) -> int:
+    """Rehace en Redis el reparto de las cotizaciones abiertas vigentes, desde la base.
+
+    Tras restaurar una copia desde el panel, Redis guarda el reparto de los
+    datos ANTERIORES: las abiertas restauradas no estarían en el pool de nadie
+    y, con el matching estricto de producción, ninguna empresa podría
+    responderlas. Aquí se borra ese estado y se reconstruye:
+
+    - a quién se entregó cada abierta sale de `recepciones_cotizacion`; si no
+      hay recepciones (copias anteriores a esa tabla), del mismo criterio de
+      país y línea que usa el matching, sin aplicar cupos;
+    - "respondido" para las empresas que ya enviaron propuesta;
+    - el TTL es lo que le quedaba a cada una de sus 72 h.
+
+    Devuelve cuántas cotizaciones reindexó (0 si Redis no está disponible).
+    """
+    from models.cotizacion import Cotizacion, EstadoCotizacion
+    from models.propuesta import EstadoPropuesta, Propuesta
+    from models.recepcion_cotizacion import RecepcionCotizacion
+
+    if not _redis_available():
+        return 0
+    client = _get_redis_client()
+    ahora = ahora or datetime.utcnow()
+    ventana = timedelta(seconds=COTIZACION_ABIERTA_TTL)
+
+    for patron in ("cotizacion_abierta:*", indice_importador_abiertas("*")):
+        for clave in list(client.scan_iter(match=patron, count=500)):
+            client.delete(clave)
+    client.delete(INDICE_COTIZACIONES_ABIERTAS)
+
+    abiertas = db.query(Cotizacion).filter(
+        Cotizacion.modalidad == "abierta",
+        Cotizacion.estado.in_([EstadoCotizacion.abierta.value, EstadoCotizacion.propuestas_recibidas.value]),
+        Cotizacion.fecha_creacion >= ahora - ventana,
+    ).all()
+
+    reindexadas = 0
+    for cotizacion in abiertas:
+        ttl = int((cotizacion.fecha_creacion + ventana - ahora).total_seconds())
+        if ttl <= 0:
+            continue
+        cotizacion_id = str(cotizacion.id)
+        destinatarios = [
+            importador_id for (importador_id,) in db.query(RecepcionCotizacion.importador_id).filter(
+                RecepcionCotizacion.cotizacion_id == cotizacion_id,
+                RecepcionCotizacion.entregada.is_(True),
+            )
+        ]
+        if not destinatarios:
+            destinatarios = [
+                str(imp.id) for imp in _candidatos_por_criterio(db, cotizacion.pais_importacion, cotizacion.linea_producto)
+            ]
+        if not destinatarios:
+            continue
+        respondieron = {
+            importador_id for (importador_id,) in db.query(Propuesta.importador_id).filter(
+                Propuesta.cotizacion_id == cotizacion_id,
+                Propuesta.estado != EstadoPropuesta.borrador.value,
+            )
+        }
+
+        clave = f"cotizacion_abierta:{cotizacion_id}"
+        pipe = client.pipeline()
+        pipe.hset(clave, mapping={
+            importador_id: ("respondido" if importador_id in respondieron else "pendiente")
+            for importador_id in destinatarios
+        })
+        pipe.expire(clave, ttl)
+        pipe.setex(f"{clave}:expiracion", ttl, str(cotizacion.fecha_creacion + ventana))
+        pipe.setex(f"{clave}:respuestas", ttl, len(respondieron & set(destinatarios)))
+        pipe.execute()
+        _indexar_matching(client, cotizacion_id, destinatarios)
+        reindexadas += 1
+    return reindexadas
