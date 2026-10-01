@@ -22,6 +22,7 @@ from schemas.chat import (
     MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
     IniciarChatInternoRequest, AbrirSoporteRequest, CerrarTicketRequest,
     EscalarTicketRequest, CalificarSoporteRequest,
+    EstimacionPrecioRequest, EstimacionPrecioResponse,
 )
 from services.mesa_soporte import acotar_nivel, elegir_agente, nivel_inicial
 from schemas.features import TraducirRequest, TraducirResponse
@@ -43,6 +44,9 @@ from utils.limiter import limiter, RATE_LIMIT_CHAT_MESSAGE
 logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+# Tipos que un cliente puede enviar por los canales genéricos (REST y WS).
+TIPOS_MENSAJE_CLIENTE = (TipoMensajeChat.texto.value, TipoMensajeChat.archivo.value)
 ws_router = APIRouter(tags=["Chat"])
 
 
@@ -1183,6 +1187,28 @@ def _notificar_mensaje_chat(
     )
 
 
+def _mensaje_json(mensaje: MensajeChat) -> str:
+    return json.dumps({
+        "id": str(mensaje.id),
+        "conversacion_id": mensaje.conversacion_id,
+        "remitente_id": mensaje.remitente_id,
+        "contenido": mensaje.contenido,
+        "tipo": mensaje.tipo,
+        "metadata": mensaje.metadata_json,
+        "fecha_envio": mensaje.fecha_envio.isoformat(),
+    })
+
+
+def _publicar_mensaje(mensaje: MensajeChat) -> None:
+    """Reparte el mensaje a quien tenga el hilo abierto por WebSocket."""
+    if not config.redis_client:
+        return
+    try:
+        config.redis_client.publish(f"chat:{mensaje.conversacion_id}", _mensaje_json(mensaje))
+    except Exception:
+        logger.warning("No se pudo publicar mensaje de chat en Redis para conversación %s", mensaje.conversacion_id)
+
+
 @router.post("/conversaciones/{conversacion_id}/mensajes", response_model=MensajeChatResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(RATE_LIMIT_CHAT_MESSAGE)
 async def enviar_mensaje(
@@ -1229,23 +1255,104 @@ async def enviar_mensaje(
     db.commit()
     db.refresh(nuevo_mensaje)
 
-    if config.redis_client:
-        try:
-            config.redis_client.publish(
-                f"chat:{conversacion_id}",
-                json.dumps({
-                    "id": str(nuevo_mensaje.id),
-                    "conversacion_id": conversacion_id,
-                    "remitente_id": user_id_str,
-                    "contenido": nuevo_mensaje.contenido,
-                    "tipo": nuevo_mensaje.tipo,
-                    "metadata": nuevo_mensaje.metadata_json,
-                    "fecha_envio": nuevo_mensaje.fecha_envio.isoformat()
-                })
-            )
-        except Exception:
-            logger.warning("No se pudo publicar mensaje de chat en Redis para conversación %s", conversacion_id)
+    _publicar_mensaje(nuevo_mensaje)
 
+    return nuevo_mensaje
+
+
+# ==================== Calculadora de precios ====================
+
+def _estimar(datos: EstimacionPrecioRequest) -> EstimacionPrecioResponse:
+    from services.calculadora_precios import calcular_estimacion, resumen_texto
+
+    desglose = calcular_estimacion(
+        cantidad=datos.cantidad,
+        precio_unitario=datos.precio_unitario,
+        flete_internacional=datos.flete_internacional,
+        seguro_pct=datos.seguro_pct,
+        arancel_pct=datos.arancel_pct,
+        iva_pct=datos.iva_pct,
+        gastos_destino=datos.gastos_destino,
+        margen_pct=datos.margen_pct,
+        rango_pct=datos.rango_pct,
+        tasa_cambio_cop=datos.tasa_cambio_cop,
+        moneda=datos.moneda,
+    )
+    return EstimacionPrecioResponse(
+        entrada=datos,
+        desglose=desglose,
+        resumen=resumen_texto(datos.moneda, desglose, datos.rango_pct),
+    )
+
+
+@router.post("/calculadora/calcular", response_model=EstimacionPrecioResponse)
+async def calcular_estimacion_precio(
+    datos: EstimacionPrecioRequest,
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """Vista previa de la calculadora: no guarda ni envía nada."""
+    return _estimar(datos)
+
+
+@router.post(
+    "/conversaciones/{conversacion_id}/estimaciones",
+    response_model=MensajeChatResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(RATE_LIMIT_CHAT_MESSAGE)
+async def enviar_estimacion_precio(
+    request: Request,
+    conversacion_id: str,
+    datos: EstimacionPrecioRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """
+    Envía al cliente, dentro del chat de negociación, un precio estimado de su
+    cotización u orden. El desglose se recalcula aquí (no se acepta el del
+    frontend) y viaja en `metadata.estimacion`; `contenido` lleva el resumen
+    en texto para la lista de chats y los avisos.
+    """
+    conversacion = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
+    if not conversacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
+    if not _verificar_acceso_conversacion(conversacion, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para escribir en esta conversación")
+    if _tipo_de(conversacion) != TipoConversacion.negociacion.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La calculadora de precios solo se usa en el chat con el cliente",
+        )
+
+    estimacion = _estimar(datos)
+    user_id_str = str(PyUUID(current_user["user_id"]))
+    nuevo_mensaje = MensajeChat(
+        id=str(uuid4()),
+        conversacion_id=conversacion_id,
+        remitente_id=user_id_str,
+        contenido=estimacion.resumen,
+        tipo=TipoMensajeChat.estimacion.value,
+        metadata_json={
+            "estimacion": {
+                "entrada": estimacion.entrada.model_dump(),
+                "desglose": estimacion.desglose.model_dump(),
+                "cotizacion_id": conversacion.cotizacion_id,
+                "orden_id": conversacion.orden_id,
+            },
+        },
+    )
+    db.add(nuevo_mensaje)
+    db.flush()
+    _notificar_mensaje_chat(
+        db,
+        conversacion=conversacion,
+        remitente_id=user_id_str,
+        contenido=nuevo_mensaje.contenido,
+        tipo=nuevo_mensaje.tipo,
+    )
+    db.commit()
+    db.refresh(nuevo_mensaje)
+    _publicar_mensaje(nuevo_mensaje)
     return nuevo_mensaje
 
 
@@ -1415,6 +1522,11 @@ async def websocket_chat(
                 metadata = None
 
             if not contenido:
+                continue
+            # Mismos tipos que admite `MensajeChatCreate` por REST: "sistema" y
+            # "estimacion" solo los genera el backend, y sin este filtro bastaba
+            # un frame WS para colar una estimación con cifras inventadas.
+            if tipo not in TIPOS_MENSAJE_CLIENTE:
                 continue
 
             user_id_str = str(PyUUID(current_user["user_id"]))

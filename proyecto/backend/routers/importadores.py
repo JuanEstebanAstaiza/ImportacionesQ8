@@ -8,7 +8,7 @@ from uuid import UUID
 import json
 
 import config
-from schemas.importador import TIERS_EMPRESA, ImportadorResponse, ImportadorUpdate
+from schemas.importador import TIERS_EMPRESA, CupoDiarioResponse, ImportadorResponse, ImportadorUpdate
 from schemas.usuario import (
     AsesorCreate,
     AsesorResponse,
@@ -484,6 +484,28 @@ async def eliminar_asesor(
             ),
         )
     return None
+
+
+@router.get("/cupo-diario", response_model=CupoDiarioResponse)
+async def cupo_diario_importador(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """
+    Cuántas cotizaciones lleva recibidas hoy la empresa frente a su
+    `limite_cotizaciones_diarias`. El límite lo fija la cuenta dueña con
+    `PUT /importadores/{id}`.
+    """
+    from services.cupo_cotizaciones import estado_cupo
+
+    importador_id_str = current_user.get("importador_id")
+    importador = db.query(Importador).filter(Importador.id == importador_id_str).first() if importador_id_str else None
+    if not importador:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no está asociada a ninguna empresa importadora",
+        )
+    return estado_cupo(db, importador)
 
 
 @router.get("/metricas", response_model=MetricasImportadorResponse)

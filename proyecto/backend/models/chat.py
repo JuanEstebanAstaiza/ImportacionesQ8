@@ -18,6 +18,10 @@ class TipoMensajeChat(str, enum.Enum):
     texto = "texto"
     archivo = "archivo"
     sistema = "sistema"  # Mensajes automáticos (ej: traspaso de chat al supervisor)
+    # Precio estimado con la calculadora de la empresa. Solo lo crea
+    # `POST /chat/conversaciones/{id}/estimaciones`, que recalcula el desglose
+    # en el servidor: el cliente no puede forjarlo por los canales genéricos.
+    estimacion = "estimacion"
 
 
 class TipoConversacion(str, enum.Enum):

@@ -144,3 +144,47 @@ class IniciarChatRequest(BaseModel):
         if not self.cotizacion_id and not self.propuesta_id:
             raise ValueError("Debes indicar cotizacion_id o propuesta_id")
         return self
+
+
+# ==================== Calculadora de precios (chat de negociación) ====================
+
+class EstimacionPrecioRequest(BaseModel):
+    """Datos que la empresa mete en la calculadora. Importes en `moneda`."""
+    moneda: Literal["USD", "COP", "EUR", "CNY"] = "USD"
+    cantidad: int = Field(..., ge=1, le=10_000_000)
+    precio_unitario: float = Field(..., ge=0, le=1_000_000_000)
+    flete_internacional: float = Field(0, ge=0, le=1_000_000_000)
+    seguro_pct: float = Field(0, ge=0, le=100, description="Sobre mercancía + flete")
+    arancel_pct: float = Field(0, ge=0, le=100, description="Sobre el valor CIF")
+    iva_pct: float = Field(19, ge=0, le=100, description="Sobre CIF + arancel")
+    gastos_destino: float = Field(0, ge=0, le=1_000_000_000, description="Agenciamiento, bodegaje, transporte local")
+    margen_pct: float = Field(0, ge=0, le=100, description="Sobre CIF + arancel + gastos en destino")
+    rango_pct: float = Field(0, ge=0, le=50, description="± % para dar un rango de precios posibles")
+    tasa_cambio_cop: Optional[float] = Field(None, gt=0, le=100_000, description="Para mostrar el total en COP")
+    incoterm: Optional[Literal["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"]] = None
+    tiempo_entrega: Optional[str] = Field(None, max_length=100)
+    validez_dias: Optional[int] = Field(None, ge=1, le=90)
+    notas: Optional[str] = Field(None, max_length=1000)
+
+
+class DesgloseEstimacion(BaseModel):
+    valor_mercancia: float
+    flete_internacional: float
+    seguro: float
+    valor_cif: float
+    arancel: float
+    iva: float
+    gastos_destino: float
+    margen: float
+    total: float
+    costo_unitario: float
+    total_minimo: float
+    total_maximo: float
+    total_cop: Optional[float] = None
+
+
+class EstimacionPrecioResponse(BaseModel):
+    """Vista previa: lo mismo que llevará el mensaje si la empresa lo envía."""
+    entrada: EstimacionPrecioRequest
+    desglose: DesgloseEstimacion
+    resumen: str

@@ -33,6 +33,19 @@ export interface BackendImporter {
   shipping_mark_prefijo?: string | null;
   fecha_registro: string;
   tier_minimo_requerido?: string;
+  /** Máximo de cotizaciones que la empresa acepta recibir por día; null = sin límite. */
+  limite_cotizaciones_diarias?: number | null;
+}
+
+/** Uso del cupo diario de cotizaciones de la empresa (`GET /importadores/cupo-diario`). */
+export interface BackendCupoDiario {
+  importador_id: string;
+  limite_cotizaciones_diarias: number | null;
+  recibidas_hoy: number;
+  disponibles_hoy: number | null;
+  cupo_agotado: boolean;
+  /** Momento (UTC) en que el contador vuelve a cero. */
+  reinicia_en: string;
 }
 
 export interface BackendCotizacion {
@@ -230,6 +243,8 @@ export interface UpdateImporterPayload {
   perfil_publico?: Record<string, unknown>;
   solo_cotizaciones_directas?: boolean;
   shipping_mark_prefijo?: string;
+  /** null quita el límite; omitirlo lo deja como está. */
+  limite_cotizaciones_diarias?: number | null;
 }
 
 /**
@@ -388,6 +403,58 @@ export interface BackendChatMessage {
   tipo: string;
   fecha_envio: string;
   metadata: Record<string, unknown> | null;
+}
+
+export type MonedaEstimacion = "USD" | "COP" | "EUR" | "CNY";
+
+/** Lo que la empresa escribe en la calculadora de precios del chat. */
+export interface EstimacionPrecioEntrada {
+  moneda: MonedaEstimacion;
+  cantidad: number;
+  precio_unitario: number;
+  flete_internacional: number;
+  seguro_pct: number;
+  arancel_pct: number;
+  iva_pct: number;
+  gastos_destino: number;
+  margen_pct: number;
+  rango_pct: number;
+  tasa_cambio_cop?: number | null;
+  incoterm?: string | null;
+  tiempo_entrega?: string | null;
+  validez_dias?: number | null;
+  notas?: string | null;
+}
+
+/** Desglose calculado por el backend (`services/calculadora_precios.py`). */
+export interface DesgloseEstimacion {
+  valor_mercancia: number;
+  flete_internacional: number;
+  seguro: number;
+  valor_cif: number;
+  arancel: number;
+  iva: number;
+  gastos_destino: number;
+  margen: number;
+  total: number;
+  costo_unitario: number;
+  total_minimo: number;
+  total_maximo: number;
+  total_cop: number | null;
+}
+
+export interface EstimacionPrecioResponse {
+  entrada: EstimacionPrecioEntrada;
+  desglose: DesgloseEstimacion;
+  resumen: string;
+}
+
+/** `metadata.estimacion` de un mensaje de chat con `tipo: "estimacion"`. */
+export interface EstimacionEnMensaje {
+  entrada: EstimacionPrecioEntrada;
+  desglose: DesgloseEstimacion;
+  cotizacion_id?: string | null;
+  orden_id?: string | null;
 }
 
 export interface BackendChatConversation {
@@ -629,6 +696,10 @@ export const businessService = {
     });
   },
 
+  getDailyQuoteQuota(): Promise<BackendCupoDiario> {
+    return apiRequest<BackendCupoDiario>("/importadores/cupo-diario", { method: "GET" });
+  },
+
   updateImporterById(importadorId: string, payload: UpdateImporterPayload): Promise<BackendImporter> {
     return apiRequest<BackendImporter>(`/importadores/${importadorId}`, {
       method: "PUT",
@@ -724,6 +795,20 @@ export const businessService = {
   /** Marca el hilo como leído hasta ahora para el usuario en sesión. */
   markConversationRead(conversationId: string): Promise<void> {
     return apiRequest<void>(`/chat/conversaciones/${conversationId}/leida`, { method: "POST" });
+  },
+
+  previewPriceEstimate(payload: EstimacionPrecioEntrada): Promise<EstimacionPrecioResponse> {
+    return apiRequest<EstimacionPrecioResponse>("/chat/calculadora/calcular", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  sendPriceEstimate(conversationId: string, payload: EstimacionPrecioEntrada): Promise<BackendChatMessage> {
+    return apiRequest<BackendChatMessage>(`/chat/conversaciones/${conversationId}/estimaciones`, {
+      method: "POST",
+      body: payload,
+    });
   },
 
   listChatMessages(conversationId: string): Promise<BackendChatMessage[]> {
