@@ -24,7 +24,7 @@ import { RestaurarBackup } from "@/features/admin/RestaurarBackup";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "landing" | "correos";
+type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "respaldos" | "landing" | "correos";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
 
 type CompanyUiDetails = {
@@ -82,7 +82,8 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   usuarios: { label: "Usuarios", hint: "Cuentas, roles y acceso" },
   cotizantes: { label: "Cotizantes", hint: "Tiers, umbrales y puntos" },
   soporte: { label: "Soporte", hint: "Incidentes y dudas" },
-  certificaciones: { label: "Certificaciones", hint: "Sellos y respaldo" },
+  certificaciones: { label: "Certificaciones", hint: "Sellos de la plataforma" },
+  respaldos: { label: "Respaldos", hint: "Copias de seguridad y restauración" },
   landing: { label: "Landing", hint: "Contenido publico por bloques" },
   correos: { label: "Correos", hint: "Campañas y avisos a usuarios" },
 };
@@ -1698,8 +1699,11 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             </div>
           </div>
         </div>
+      </section>
+      ) : null}
 
-        {/* Copia de seguridad */}
+      {tab === "respaldos" ? (
+      <section className="space-y-4">
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
           <p className="flex items-center gap-2 text-base font-semibold">
             <Download className="h-4 w-4 text-primary" />
