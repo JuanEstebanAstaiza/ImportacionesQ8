@@ -70,6 +70,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -80,8 +85,10 @@ Array de `CotizacionResponse`:
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
 | `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -110,6 +117,7 @@ Array de `CotizacionResponse`:
 | Campo | Tipo | Req | Descripción |
 |-------|------|-----|-------------|
 | `modalidad` | `string` | sí | Modalidad de cotización: 'dirigida' o 'abierta' |
+| `tier_minimo_requerido` | `Optional[string]` | no | Ignorado. El tier exigido lo define la empresa (Importador.tier_minimo_requerido) |
 | `importador_id` | `Optional[string]` | no |  |
 | `foto_producto` | `Optional[string]` | no |  |
 | `pais_importacion` | `string` | sí | País desde donde se importa |
@@ -121,8 +129,9 @@ Array de `CotizacionResponse`:
 | `tipo_calidad` | `string` | sí | Tipo de calidad: 'economica', 'estandar' o 'premium' |
 | `modalidad_importacion` | `Optional[string]` | no |  |
 | `cantidad_minima` | `integer` | sí | Cantidad mínima a importar |
-| `precio_objetivo_usd` | `Optional[number]` | no |  |
-| `incoterm` | `string` | sí | Incoterm acordado (FOB, CIF, etc.) |
+| `precio_objetivo_usd` | `Optional[number]` | no | Precio objetivo en USD, mayor o igual a cero |
+| `precio_objetivo_moneda` | `string` | no | Moneda del precio objetivo (USD, EUR, COP, etc.) |
+| `incoterm` | `string` | no | Incoterm acordado (FOB, CIF, etc.) |
 | `notas_adicionales` | `Optional[string]` | no |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no | Tu parte de la marca de embarque (ej. 'prendas control'). Se une al prefijo de la empresa importadora para rotular tus cajas: 'ctl-prenda... |
 | `campos_personalizados_valores` | `Optional[object]` | no | Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor} |
@@ -150,6 +159,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -160,8 +174,10 @@ Array de `CotizacionResponse`:
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
 | `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -195,6 +211,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -205,8 +226,10 @@ Array de `CotizacionResponse`:
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
 | `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -239,6 +262,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -249,8 +277,61 @@ Array de `CotizacionResponse`:
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
 | `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
+| `notas_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark_sufijo` | `Optional[string]` | no |  |
+| `shipping_mark` | `Optional[string]` | no |  |
+| `campos_personalizados_valores` | `Optional[object]` | no |  |
+| `asesor_asignado_id` | `Optional[string]` | no |  |
+| `estado` | `string` | sí |  |
+| `costo_creditos` | `Optional[number]` | no |  |
+| `cotizacion_origen_id` | `Optional[string]` | no |  |
+| `cancelada_por_error` | `Optional[string]` | no |  |
+| `motivo_cancelacion` | `Optional[string]` | no |  |
+| `conversacion_id` | `Optional[string]` | no |  |
+| `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `fecha_actualizacion` | `string` | sí |  |
+
+---
+
+### `POST /cotizaciones/{cotizacion_id}/desbloquear`
+
+- **Resumen:** Desbloquear Cotizacion Por Punto
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `cotizacion_id`
+
+**Respuesta (`CotizacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `solicitante_id` | `string` | sí |  |
+| `importador_id` | `Optional[string]` | sí |  |
+| `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
+| `foto_producto` | `Optional[string]` | sí |  |
+| `pais_importacion` | `string` | sí |  |
+| `nivel_personalizacion` | `Optional[string]` | sí |  |
+| `nombre_producto` | `string` | sí |  |
+| `descripcion_cliente` | `string` | sí |  |
+| `link_referencia` | `Optional[string]` | sí |  |
+| `linea_producto` | `string` | sí |  |
+| `tipo_calidad` | `string` | sí |  |
+| `modalidad_importacion` | `Optional[string]` | sí |  |
+| `cantidad_minima` | `integer` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -341,6 +422,11 @@ Array de `PropuestaResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -351,8 +437,10 @@ Array de `PropuestaResponse`:
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
 | `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -385,6 +473,11 @@ Array de `PropuestaResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -395,8 +488,10 @@ Array de `PropuestaResponse`:
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
 | `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |

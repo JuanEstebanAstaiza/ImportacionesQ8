@@ -1,7 +1,8 @@
 # Arquitectura tecnológica
 
-Resumen del stack y dónde está documentado cada pieza.  
-(Antes se enlazaba como nota maestra sin archivo propio; este es el índice.)
+> **Última actualización:** 2026-10-01
+
+Resumen del stack de Zarpi y dónde está documentada cada pieza.
 
 ## Stack
 
@@ -9,11 +10,14 @@ Resumen del stack y dónde está documentado cada pieza.
 |------|------------|
 | API | FastAPI (Python 3.11), Uvicorn |
 | Datos | MySQL 8 + SQLAlchemy 2 + Alembic |
-| Cache / realtime | Redis 7 (matching, pub/sub chat, rate limits) |
+| Cache / realtime | Redis 7 (matching y cupo de abiertas, pub/sub de chat y notificaciones, rate limits, modo mantenimiento) |
 | Auth | JWT (PyJWT) + OTP email + blacklist `jti` |
-| Pagos | Wompi (compra de créditos; simulación en dev) |
-| Frontend | Vite + React (`proyecto/frontend/`) |
-| Ops | Docker Compose, `/health` + `/health/ready` |
+| Pagos | Wompi (simulado mientras no haya llaves reales; el solicitante no paga por cotizar) |
+| Correo | SMTP de Resend con plantilla HTML de Zarpi; WhatsApp opcional (open-wa) |
+| Tiempo real | WebSocket para el chat (ticket de un solo uso) y SSE para notificaciones (ticket) |
+| Frontend | Vite + React + Tailwind (`proyecto/frontend/`), marca Zarpi, modo claro/oscuro |
+| Producción | Docker Compose + **Caddy** (HTTPS automático con Let's Encrypt, `/api` hacia el backend) en un droplet de DigitalOcean |
+| Operación | `/health` y `/health/ready`, scripts de diagnóstico, backups (ZIP portable, `mysqldump`, Redis) y restauración desde el panel |
 
 ## Dónde profundizar
 
@@ -27,13 +31,16 @@ Resumen del stack y dónde está documentado cada pieza.
 | Contrato HTTP para clientes | [[Indice-Integracion-API]] |
 | Arranque local | [[00-Env-y-Arranque]] |
 | Capacidad y auditorías | [[Indice-Calidad]] |
+| Producción y operación | [[Despliegue-y-Operacion]] |
+| Copias de seguridad | [[Backups-y-Restauracion]] |
 
 ## Diagrama lógico
 
 ```mermaid
 flowchart LR
-  FE[Frontend Vite] -->|REST JWT| API[FastAPI]
-  FE -->|WS ticket| API
+  U[Navegador] -->|HTTPS| C[Caddy]
+  C -->|estáticos| FE[Frontend Vite compilado]
+  C -->|/api REST JWT · WS · SSE| API[FastAPI]
   API --> DB[(MySQL)]
   API --> R[(Redis)]
   API -->|webhook| W[Wompi]

@@ -21,6 +21,7 @@ Array de `ImportadorResponse`:
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -31,6 +32,8 @@ Array de `ImportadorResponse`:
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -261,6 +264,7 @@ Array de `ImportadorResponse`:
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -271,6 +275,8 @@ Array de `ImportadorResponse`:
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -304,6 +310,25 @@ Array de `ImportadorResponse`:
 
 ---
 
+### `GET /importadores/cupo-diario`
+
+- **Resumen:** Cupo Diario Importador
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`CupoDiarioResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `recibidas_hoy` | `integer` | sí |  |
+| `disponibles_hoy` | `Optional[integer]` | no |  |
+| `cupo_agotado` | `boolean` | sí |  |
+| `reinicia_en` | `string` | sí | Momento (UTC) en que el contador vuelve a cero |
+
+---
+
 ### `GET /importadores/destacados`
 
 - **Resumen:** Listar Importadores Destacados
@@ -322,6 +347,7 @@ Array de `ImportadorResponse`:
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -332,6 +358,8 @@ Array de `ImportadorResponse`:
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -461,6 +489,7 @@ _Sin campos detallados en OpenAPI._
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -471,6 +500,8 @@ _Sin campos detallados en OpenAPI._
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -495,6 +526,8 @@ _Sin campos detallados en OpenAPI._
 | `perfil_publico` | `Optional[object]` | no |  |
 | `solo_cotizaciones_directas` | `Optional[boolean]` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no | Prefijo de la empresa en el shipping mark (ej. 'ctl'). Cadena vacía para quitarlo. |
+| `tier_minimo_requerido` | `Optional[string]` | no | Tier mínimo del cotizante: Bronze, Silver, Gold o Élite. También se acepta dentro de `perfil_publico` por compatibilidad. |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no | Máximo de cotizaciones (dirigidas + abiertas) a recibir por día. Enviar null para quitar el límite. |
 
 ```json
 {
@@ -516,6 +549,7 @@ _Sin campos detallados en OpenAPI._
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -526,6 +560,8 @@ _Sin campos detallados en OpenAPI._
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -659,7 +695,7 @@ _Sin campos detallados en OpenAPI._
 ### `GET /resenas/importador/{importador_id}`
 
 - **Resumen:** Listar Resenas De Importador
-- **Auth:** Bearer JWT
+- **Auth:** Público
 - **Códigos:** 200, 422
 - **Path params:** `importador_id`
 - **Query:** `limit`, `offset`
@@ -689,7 +725,7 @@ Array de `ResenaResponse`:
 ### `GET /resenas/importador/{importador_id}/resumen`
 
 - **Resumen:** Resumen De Importador
-- **Auth:** Bearer JWT
+- **Auth:** Público
 - **Códigos:** 200, 422
 - **Path params:** `importador_id`
 

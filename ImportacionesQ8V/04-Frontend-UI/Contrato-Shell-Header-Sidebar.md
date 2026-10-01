@@ -63,8 +63,8 @@ El panel admin fue alineado al mismo patron de layout que el resto de roles para
 
 ## Referencias
 
-- [[08-Arquitectura-Frontend]]
-- [[09-Routing-y-Roles-Frontend]]
-- [[12-Chat-y-Ayuda-UX]]
+- [[Arquitectura-Frontend]]
+- [[Routing-y-Roles-Frontend]]
+- [[Chat-y-Ayuda-UX]]
 
 ← Volver a [[Indice-Frontend]]

@@ -1,5 +1,10 @@
 # Chat con WebSocket — ImportacionesQ8
 
+
+> **Actualización 2026-10-01** (detalle en [[#Tipos de conversación y de mensaje (estado 2026-10-01)|Tipos de conversación y de mensaje]]):
+> - además del chat de negociación hay **chat interno** empresa–asesor y **tickets de soporte**;
+> - existe un tipo de mensaje `estimacion` (calculadora de precios).
+
 ## Descripción general
 
 Chat en tiempo real dentro de la plataforma, construido sobre **WebSockets** con **Redis Pub/Sub** como canal de mensajería. Redis maneja los canales de mensajería en tiempo real sin sobrecargar MySQL con escrituras de alta frecuencia. Historial de chat ligado a la cotización/orden, no solo al usuario, para que el contexto no se pierda si cambia el trabajador asignado.
@@ -8,7 +13,7 @@ Chat en tiempo real dentro de la plataforma, construido sobre **WebSockets** con
 > - La conversación se crea al **aceptar/rechazar la propuesta** (`routers/cotizaciones.py::aceptar_propuesta`), no solo al confirmar el pago — para permitir negociar por chat antes de que exista una orden. `orden_id` queda `NULL` hasta que se genera la orden.
 > - El campo antes llamado `importador_id` en `conversaciones_chat` es en realidad `importador_usuario_id` (FK a `usuarios.id`, no a `importadores.id`): apunta al **trabajador que reclamó la cotización**, o a la cuenta dueña si nadie la reclamó (ver `Fases-Desarrollo/Semana-3-Chat-y-Pulido/Tareas-Semana-3.md`, Tarea 3.14).
 > - Sin Redis disponible, el WebSocket degrada a **eco directo** de la confirmación al propio emisor (en vez de fallar), y el fallback REST sigue funcionando siempre.
-> - No se implementaron aún las restricciones `UNIQUE` de "una sola conversación por orden/por par solicitante-empresa" ni el campo `archivo_url` — quedan como trabajo futuro.
+> - *(Actualizado 2026-10-01)* Ya existen las restricciones únicas: `cotizacion_id` y `orden_id` únicos en `conversaciones_chat`, y `unique_conversacion_interna`. Los adjuntos no usan `archivo_url`: van por `mensajes_adjuntos` y el módulo documental.
 
 ---
 
@@ -43,7 +48,7 @@ graph TD
 
 | Endpoint | Descripción |
 |----------|-------------|
-| `ws://api.importacionesq8.com/ws/chat/{conversacion_id}` | Conexión WebSocket para chat en tiempo real |
+| `wss://<dominio>/api/ws/chat/{conversacion_id}?ticket=<ticket>` | Conexión WebSocket (en producción pasa por Caddy en el mismo dominio; el ticket sale de `POST /chat/ws-ticket`) |
 
 ---
 
@@ -51,13 +56,13 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant F as Frontend React/Next.js
+    participant F as Frontend (Vite + React)
     participant W as FastAPI WebSocket
     participant R as Redis Pub/Sub
     participant D as MySQL
 
     Note over F,D: === CONEXIÓN ===
-    F->>W: ws://api.importacionesq8.com/ws/chat/{conversacion_id}
+    F->>W: wss://<dominio>/api/ws/chat/{conversacion_id}?ticket=...
     Note over W: Validar JWT token del header
     alt Token válido y usuario autorizado en la conversación
         W->>R: SUBSCRIBE chat:{conversacion_id}
@@ -205,3 +210,24 @@ async def websocket_chat_endpoint(
 - **Historial de chat:** Los mensajes se guardan en MySQL y se cargan paginados (últimos 50 mensajes) al abrir una conversación.
 - **Indicador "en línea":** Se puede implementar con Redis para rastrear conexiones WebSocket activas por usuario.
 - **Archivos adjuntos:** Los archivos se suben a un servicio de almacenamiento (S3, Cloudinary) y la URL se envía como parte del mensaje.
+
+---
+
+## Tipos de conversación y de mensaje (estado 2026-10-01)
+
+Una sola tabla, `conversaciones_chat`, con columna `tipo`. Así mensajes, adjuntos, lecturas y WebSocket no se duplican.
+
+| `tipo` | Entre quiénes | Desde | Notas |
+|--------|---------------|-------|-------|
+| `negociacion` | Solicitante ↔ empresa (asesor o dueño) | jul 2026 | Nace al reclamar la cotización; con la orden pasa a ser el hilo del embarque |
+| `interna` | Cuenta dueña ↔ un asesor | 2026-08-09 | Un hilo por asesor; el cliente nunca lo ve |
+| `soporte` | Cualquier usuario ↔ equipo de soporte | 2026-08-09 | Asunto, urgencia, nivel, agente, cierre, calificación |
+
+| `tipo` de mensaje | Quién lo crea | Notas |
+|-------------------|---------------|-------|
+| `texto`, `archivo` | Cualquier participante (REST o WebSocket) | Únicos tipos aceptados por los canales genéricos |
+| `sistema` | Solo el backend | Avisos automáticos (traspaso, reclamo…) |
+| `estimacion` | Solo `POST /chat/conversaciones/{id}/estimaciones` (empresa) | Precio estimado con desglose recalculado en el servidor. Ver [[20-Calculadora-Precios-Chat]] |
+
+No leídos: `lecturas_conversacion` guarda hasta dónde leyó cada participante. Las marcas de tiempo tienen microsegundos (migración `0014`).
+

@@ -2,7 +2,7 @@
 
 ## Descripción general
 
-Guía de diseño transversal que define las convenciones visuales, componentes reutilizables y principios de diseño para todo el equipo de desarrollo frontend. Construida con **React/Next.js** con TypeScript.
+Guía de diseño transversal que define las convenciones visuales, componentes reutilizables y principios de diseño para todo el equipo de desarrollo frontend. Construida con **Vite + React** (TypeScript, Tailwind).
 
 ---
 

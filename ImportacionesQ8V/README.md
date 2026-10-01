@@ -1,4 +1,6 @@
-# ImportacionesQ8 — Vault de documentación
+# Zarpi (ImportacionesQ8) — Vault de documentación
+
+> **Última actualización:** 2026-10-01 · En producción desde el 2026-10-01.
 
 Abre en Obsidian la carpeta `ImportacionesQ8V` como vault.
 
@@ -16,6 +18,6 @@ Abre en Obsidian la carpeta `ImportacionesQ8V` como vault.
 | `03-Backend` | Diseño e implementación del servidor |
 | `04-Frontend-UI` | Pantallas, wireframes, UX |
 | `05-Calidad-y-Seguridad` | Auditorías, OWASP, carga |
-| `06-Historial` | Tareas por semana (archivo) |
+| `06-Historial` | Cronología con fechas, semanas y fases |
 
 Guía de lectura: [[Como-navegar]].

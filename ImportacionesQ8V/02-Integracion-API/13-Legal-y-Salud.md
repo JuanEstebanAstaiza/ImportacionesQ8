@@ -14,7 +14,7 @@
 ### `GET /configuracion-publica`
 
 - **Resumen:** Configuracion Publica
-- **Auth:** Bearer JWT
+- **Auth:** Público
 - **Códigos:** 200
 
 ---

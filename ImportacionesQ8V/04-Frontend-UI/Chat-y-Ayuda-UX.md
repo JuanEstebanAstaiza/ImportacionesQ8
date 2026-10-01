@@ -54,7 +54,7 @@ Usuario escribe mensaje
 
 ## Referencias
 
-- [[10-Contrato-Shell-Header-Sidebar]]
-- [[09-Routing-y-Roles-Frontend]]
+- [[Contrato-Shell-Header-Sidebar]]
+- [[Routing-y-Roles-Frontend]]
 
 ← Volver a [[Indice-Frontend]]

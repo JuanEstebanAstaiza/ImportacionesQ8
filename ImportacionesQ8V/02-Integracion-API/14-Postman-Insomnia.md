@@ -5,7 +5,7 @@
 ## Archivo
 
 ```text
-ImportacionesQ8V/02-Integracion-API/ImportacionesQ8.postman_collection.json
+ImportacionesQ8V/02-Integracion-API/Zarpi.postman_collection.json
 ```
 
 - **94 requests** agrupados por tag OpenAPI (Auth, Cotizaciones, Chat, Admin, …).
@@ -27,7 +27,7 @@ ImportacionesQ8V/02-Integracion-API/ImportacionesQ8.postman_collection.json
 ## Importar en Insomnia
 
 1. Insomnia → **Import/Export** → **Import Data** → **From File**
-2. Selecciona el mismo `ImportacionesQ8.postman_collection.json`
+2. Selecciona el mismo `Zarpi.postman_collection.json`
 3. Environment:
    - `base_url` → `http://localhost:8000`
    - `access_token` → pégalo tras login

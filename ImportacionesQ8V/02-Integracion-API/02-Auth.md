@@ -41,6 +41,7 @@
 |-------|------|-----|-------------|
 | `email` | `string` | sí |  |
 | `password` | `string` | sí |  |
+| `rol` | `Optional[string]` | no |  |
 
 ```json
 {

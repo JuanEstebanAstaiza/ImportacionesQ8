@@ -12,6 +12,117 @@
 
 ---
 
+### `GET /admin/backup/previos`
+
+- **Resumen:** Listar Backups Previos
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+---
+
+### `GET /admin/backup/previos/{nombre}`
+
+- **Resumen:** Descargar Backup Previo
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `nombre`
+
+---
+
+### `POST /admin/backup/previos/{nombre}/preparar`
+
+- **Resumen:** Preparar Backup Previo
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `nombre`
+
+**Respuesta (`BackupSubidoResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `subida_id` | `string` | sí |  |
+| `nombre_original` | `string` | sí |  |
+| `tamano_bytes` | `integer` | sí |  |
+| `generado_en` | `Optional[string]` | no |  |
+| `revision_alembic` | `Optional[string]` | no |  |
+| `revision_actual` | `Optional[string]` | no |  |
+| `incluye_archivos` | `boolean` | sí |  |
+| `archivos` | `integer` | sí |  |
+| `total_filas_backup` | `integer` | sí |  |
+| `total_filas_actual` | `integer` | sí |  |
+| `tablas` | `array[TablaBackupComparada]` | sí |  |
+| `advertencias` | `array[string]` | no |  |
+
+---
+
+### `POST /admin/backup/restaurar/validar`
+
+- **Resumen:** Validar Backup Subido
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+
+**Respuesta (`BackupSubidoResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `subida_id` | `string` | sí |  |
+| `nombre_original` | `string` | sí |  |
+| `tamano_bytes` | `integer` | sí |  |
+| `generado_en` | `Optional[string]` | no |  |
+| `revision_alembic` | `Optional[string]` | no |  |
+| `revision_actual` | `Optional[string]` | no |  |
+| `incluye_archivos` | `boolean` | sí |  |
+| `archivos` | `integer` | sí |  |
+| `total_filas_backup` | `integer` | sí |  |
+| `total_filas_actual` | `integer` | sí |  |
+| `tablas` | `array[TablaBackupComparada]` | sí |  |
+| `advertencias` | `array[string]` | no |  |
+
+---
+
+### `DELETE /admin/backup/restaurar/{subida_id}`
+
+- **Resumen:** Descartar Backup Subido
+- **Auth:** Bearer JWT
+- **Códigos:** 204, 422
+- **Path params:** `subida_id`
+
+---
+
+### `POST /admin/backup/restaurar/{subida_id}`
+
+- **Resumen:** Aplicar Backup Subido
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `subida_id`
+
+**Body (`RestaurarBackupRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `confirmacion` | `string` | sí | Debe ser exactamente "RESTAURAR" |
+| `incluir_archivos` | `boolean` | no |  |
+
+```json
+{
+  "confirmacion": "<confirmacion>"
+}
+```
+
+**Respuesta (`RestaurarBackupResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `tablas_restauradas` | `integer` | sí |  |
+| `filas_restauradas` | `integer` | sí |  |
+| `archivos_restaurados` | `integer` | sí |  |
+| `tablas_desconocidas` | `array[string]` | no |  |
+| `cotizaciones_abiertas_reindexadas` | `integer` | sí |  |
+| `backup_previo` | `Optional[string]` | no |  |
+| `sesion_vigente` | `boolean` | sí |  |
+
+---
+
 ### `GET /admin/backup/resumen`
 
 - **Resumen:** Resumen Backup
@@ -189,6 +300,75 @@ Array de `MensajeAdminItem`:
 
 ---
 
+### `POST /admin/conversaciones/{conversacion_id}/mensajes`
+
+- **Resumen:** Responder Conversacion Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+- **Path params:** `conversacion_id`
+
+**Body (`MensajeSoporteRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `contenido` | `string` | sí |  |
+
+```json
+{
+  "contenido": "<contenido>"
+}
+```
+
+**Respuesta (`MensajeAdminItem`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `conversacion_id` | `string` | sí |  |
+| `remitente_id` | `string` | sí |  |
+| `remitente_nombre` | `Optional[string]` | no |  |
+| `remitente_email` | `Optional[string]` | no |  |
+| `remitente_rol` | `Optional[string]` | no |  |
+| `contenido` | `string` | sí |  |
+| `tipo` | `string` | sí |  |
+| `fecha_envio` | `string` | sí |  |
+
+---
+
+### `POST /admin/correos/masivo`
+
+- **Resumen:** Enviar Correo Masivo Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+
+**Body (`EnvioCorreoMasivoRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `asunto` | `string` | sí |  |
+| `cuerpo` | `string` | sí |  |
+| `roles` | `array[string]` | no |  |
+| `usuarios_ids` | `array[string]` | no |  |
+| `correos` | `array[string]` | no |  |
+
+```json
+{
+  "asunto": "<asunto>",
+  "cuerpo": "<cuerpo>"
+}
+```
+
+**Respuesta (`EnvioCorreoMasivoResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `destinatarios` | `integer` | sí |  |
+| `enviados` | `integer` | sí |  |
+| `fallidos` | `integer` | sí |  |
+| `fallos` | `array[string]` | no |  |
+
+---
+
 ### `GET /admin/cotizaciones-abiertas`
 
 - **Resumen:** Listar Cotizaciones Abiertas
@@ -198,6 +378,208 @@ Array de `MensajeAdminItem`:
 **Respuesta (`array`)**
 
 _Sin campos detallados en OpenAPI._
+
+---
+
+### `GET /admin/cotizantes`
+
+- **Resumen:** Listar Cotizantes Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Query:** `buscar`
+
+**Respuesta (`array[CotizanteAdminResponse]`)**
+
+Array de `CotizanteAdminResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `nombre` | `Optional[string]` | no |  |
+| `tier` | `string` | sí |  |
+| `tier_manual` | `boolean` | sí |  |
+| `puntos_cotizacion` | `integer` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `POST /admin/cotizantes/recalcular-tiers`
+
+- **Resumen:** Recalcular Tiers Cotizantes
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`RecalculoTiersResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `evaluados` | `integer` | sí |  |
+| `actualizados` | `integer` | sí |  |
+
+---
+
+### `GET /admin/cotizantes/tier-umbrales`
+
+- **Resumen:** Listar Umbrales Tier
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`array[UmbralTierResponse]`)**
+
+Array de `UmbralTierResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `tier` | `string` | sí |  |
+| `minimo_cotizaciones` | `integer` | sí |  |
+| `minimo_ordenes` | `integer` | sí |  |
+| `minimo_valor_operaciones_usd` | `number` | sí |  |
+
+---
+
+### `PUT /admin/cotizantes/tier-umbrales`
+
+- **Resumen:** Actualizar Umbrales Tier
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+
+**Body (`UmbralesTierUpdateRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `umbrales` | `array[UmbralTierResponse]` | sí |  |
+
+```json
+{
+  "umbrales": null
+}
+```
+
+**Respuesta (`array[UmbralTierResponse]`)**
+
+Array de `UmbralTierResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `tier` | `string` | sí |  |
+| `minimo_cotizaciones` | `integer` | sí |  |
+| `minimo_ordenes` | `integer` | sí |  |
+| `minimo_valor_operaciones_usd` | `number` | sí |  |
+
+---
+
+### `POST /admin/cotizantes/{usuario_id}/puntos`
+
+- **Resumen:** Ajustar Puntos Cotizante
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `usuario_id`
+
+**Body (`PuntosCotizacionUpdateRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `delta` | `integer` | sí |  |
+| `tipo` | `string` | no |  |
+| `descripcion` | `Optional[string]` | no |  |
+
+```json
+{
+  "delta": 0
+}
+```
+
+**Respuesta (`CotizanteAdminResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `nombre` | `Optional[string]` | no |  |
+| `tier` | `string` | sí |  |
+| `tier_manual` | `boolean` | sí |  |
+| `puntos_cotizacion` | `integer` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `GET /admin/cotizantes/{usuario_id}/puntos/movimientos`
+
+- **Resumen:** Listar Movimientos Puntos Cotizante
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `usuario_id`
+
+**Respuesta (`array[MovimientoPuntoCotizacionResponse]`)**
+
+Array de `MovimientoPuntoCotizacionResponse`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `usuario_id` | `string` | sí |  |
+| `admin_id` | `Optional[string]` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `tipo` | `string` | sí |  |
+| `delta` | `integer` | sí |  |
+| `saldo_resultante` | `integer` | sí |  |
+| `descripcion` | `Optional[string]` | no |  |
+| `fecha` | `string` | sí |  |
+
+---
+
+### `DELETE /admin/cotizantes/{usuario_id}/tier`
+
+- **Resumen:** Liberar Tier Manual Cotizante
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `usuario_id`
+
+**Respuesta (`CotizanteAdminResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `nombre` | `Optional[string]` | no |  |
+| `tier` | `string` | sí |  |
+| `tier_manual` | `boolean` | sí |  |
+| `puntos_cotizacion` | `integer` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `PUT /admin/cotizantes/{usuario_id}/tier`
+
+- **Resumen:** Actualizar Tier Cotizante
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `usuario_id`
+
+**Body (`TierUpdateRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `tier` | `string` | sí |  |
+
+```json
+{
+  "tier": "<tier>"
+}
+```
+
+**Respuesta (`CotizanteAdminResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `nombre` | `Optional[string]` | no |  |
+| `tier` | `string` | sí |  |
+| `tier_manual` | `boolean` | sí |  |
+| `puntos_cotizacion` | `integer` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
 
 ---
 
@@ -290,6 +672,107 @@ _Sin campos detallados en OpenAPI._
 
 ---
 
+### `GET /admin/equipo-soporte`
+
+- **Resumen:** Listar Equipo Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`array[AgenteSoporteItem]`)**
+
+Array de `AgenteSoporteItem`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `nombre` | `Optional[string]` | no |  |
+| `activo` | `boolean` | sí |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `tickets_asignados` | `integer` | no |  |
+| `tickets_cerrados` | `integer` | no |  |
+| `calificaciones_recibidas` | `integer` | no |  |
+| `calificacion_promedio` | `Optional[number]` | no |  |
+
+---
+
+### `POST /admin/equipo-soporte`
+
+- **Resumen:** Crear Agente Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+
+**Body (`CrearAgenteSoporteRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `email` | `string` | sí |  |
+| `password` | `string` | sí |  |
+| `nombre` | `string` | sí |  |
+| `telefono` | `Optional[string]` | no |  |
+| `nivel` | `integer` | no |  |
+
+```json
+{
+  "email": "user@ejemplo.com",
+  "password": "<password>",
+  "nombre": "<nombre>"
+}
+```
+
+**Respuesta (`UsuarioAdminResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `rol` | `string` | sí |  |
+| `tier` | `string` | no |  |
+| `tier_manual` | `boolean` | no |  |
+| `puntos_cotizacion` | `integer` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `nombre` | `Optional[string]` | no |  |
+| `activo` | `boolean` | sí |  |
+| `perfil_completo` | `boolean` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `PUT /admin/equipo-soporte/{usuario_id}/nivel`
+
+- **Resumen:** Cambiar Nivel Agente
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `usuario_id`
+
+**Body (`NivelAgenteRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nivel` | `integer` | sí |  |
+
+```json
+{
+  "nivel": 0
+}
+```
+
+**Respuesta (`AgenteSoporteItem`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `email` | `string` | sí |  |
+| `nombre` | `Optional[string]` | no |  |
+| `activo` | `boolean` | sí |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `tickets_asignados` | `integer` | no |  |
+| `tickets_cerrados` | `integer` | no |  |
+| `calificaciones_recibidas` | `integer` | no |  |
+| `calificacion_promedio` | `Optional[number]` | no |  |
+
+---
+
 ### `PUT /admin/evidencias/{evidencia_id}/revisar`
 
 - **Resumen:** Revisar Evidencia Importador
@@ -336,6 +819,7 @@ _Sin campos detallados en OpenAPI._
 | `perfil_publico` | `Optional[object]` | no |  |
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no | Prefijo de la empresa en el shipping mark (ej. 'ctl'). La empresa puede cambiarlo después. |
+| `tier_minimo_requerido` | `string` | no | Tier mínimo del cotizante |
 | `email_dueño` | `string` | sí | Email de la cuenta dueña de la empresa |
 | `password_dueño` | `string` | sí | Contraseña inicial de la cuenta dueña |
 | `nombre_dueño` | `Optional[string]` | no |  |
@@ -442,6 +926,7 @@ _Sin campos detallados en OpenAPI._
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -452,6 +937,79 @@ _Sin campos detallados en OpenAPI._
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `fecha_registro` | `string` | sí |  |
+
+---
+
+### `GET /admin/importadores/{importador_id}/expediente`
+
+- **Resumen:** Expediente Verificacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `importador_id`
+
+**Respuesta (`ExpedienteVerificacion`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `nombre_empresa` | `string` | sí |  |
+| `verificado` | `boolean` | sí |  |
+| `estado` | `string` | sí |  |
+| `obligatorios` | `array[RequisitoVerificacion]` | sí |  |
+| `recomendables` | `array[RequisitoVerificacion]` | sí |  |
+| `obligatorios_cumplidos` | `integer` | sí |  |
+| `obligatorios_totales` | `integer` | sí |  |
+| `recomendables_cumplidos` | `integer` | sí |  |
+| `recomendables_totales` | `integer` | sí |  |
+| `listo_para_verificar` | `boolean` | sí |  |
+| `pendientes` | `array[string]` | sí |  |
+
+---
+
+### `POST /admin/importadores/{importador_id}/retirar-verificacion`
+
+- **Resumen:** Retirar Verificacion Importador
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `importador_id`
+
+**Body (`RetirarVerificacionRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `motivo` | `string` | sí |  |
+
+```json
+{
+  "motivo": "<motivo>"
+}
+```
+
+**Respuesta (`ImportadorResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `nombre_empresa` | `string` | sí |  |
+| `logo_url` | `Optional[string]` | sí |  |
+| `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
+| `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
+| `especialidad_producto` | `array[string]` | sí |  |
+| `paises_origen` | `array[string]` | sí |  |
+| `calificacion_promedio` | `number` | sí |  |
+| `tiempo_respuesta_promedio` | `string` | sí |  |
+| `capacidad_volumen` | `Optional[integer]` | sí |  |
+| `perfil_publico` | `Optional[object]` | no |  |
+| `estado` | `string` | sí |  |
+| `solo_cotizaciones_directas` | `boolean` | no |  |
+| `verificado` | `boolean` | no |  |
+| `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -472,6 +1030,7 @@ _Sin campos detallados en OpenAPI._
 | `logo_url` | `Optional[string]` | sí |  |
 | `certificaciones` | `array[CertificacionOtorgadaResponse]` | no |  |
 | `puntaje_publicidad` | `number` | no |  |
+| `proyectos_completados` | `integer` | no |  |
 | `especialidad_producto` | `array[string]` | sí |  |
 | `paises_origen` | `array[string]` | sí |  |
 | `calificacion_promedio` | `number` | sí |  |
@@ -482,6 +1041,8 @@ _Sin campos detallados en OpenAPI._
 | `solo_cotizaciones_directas` | `boolean` | no |  |
 | `verificado` | `boolean` | no |  |
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -586,6 +1147,9 @@ Array de `UsuarioAdminResponse`:
 | `id` | `string` | sí |  |
 | `email` | `string` | sí |  |
 | `rol` | `string` | sí |  |
+| `tier` | `string` | no |  |
+| `tier_manual` | `boolean` | no |  |
+| `puntos_cotizacion` | `integer` | no |  |
 | `importador_id` | `Optional[string]` | no |  |
 | `nombre` | `Optional[string]` | no |  |
 | `activo` | `boolean` | sí |  |
@@ -620,6 +1184,9 @@ Array de `UsuarioAdminResponse`:
 | `id` | `string` | sí |  |
 | `email` | `string` | sí |  |
 | `rol` | `string` | sí |  |
+| `tier` | `string` | no |  |
+| `tier_manual` | `boolean` | no |  |
+| `puntos_cotizacion` | `integer` | no |  |
 | `importador_id` | `Optional[string]` | no |  |
 | `nombre` | `Optional[string]` | no |  |
 | `activo` | `boolean` | sí |  |
