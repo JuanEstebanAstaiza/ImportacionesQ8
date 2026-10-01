@@ -15,6 +15,7 @@ Si solo necesitas **llamar la API desde el cliente**, usa [[Indice-Integracion-A
 | [[Matching-Cotizaciones]] | Pool abierto, matching, Redis |
 | [[Seguridad]] | Blindaje consolidado (IDOR, rate limits, ACID, etc.) |
 | [[Features-Valor-Jul-2026]] | Evidencias, orgs, disputas, referidos, traducción |
+| [[Backups-y-Restauracion]] | Backups automáticos, restauración, actualizaciones con `down -v` y migración a nativo |
 
 ## Orden recomendado (backend dev)
 

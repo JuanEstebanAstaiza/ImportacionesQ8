@@ -183,6 +183,30 @@ def _restaurar_archivos(zf: zipfile.ZipFile, aplicar: bool) -> int:
     return total
 
 
+def verificar_conteos(manifiesto: dict) -> list:
+    """Filas por tabla en la base frente a las del manifiesto, tras restaurar.
+
+    Devuelve la lista de discrepancias como (tabla, esperadas, encontradas).
+    Solo compara tablas que existen en el esquema actual: las que el backup trae
+    y el código ya no conoce no se restauran, y eso se avisa aparte.
+    """
+    from sqlalchemy import func, select
+
+    conocidas = {t.name: t for t in Base.metadata.sorted_tables}
+    discrepancias = []
+    session = SessionLocal()
+    try:
+        for tabla, esperadas in (manifiesto.get("tablas") or {}).items():
+            if tabla not in conocidas:
+                continue
+            encontradas = session.execute(select(func.count()).select_from(conocidas[tabla])).scalar()
+            if encontradas != esperadas:
+                discrepancias.append((tabla, esperadas, encontradas))
+    finally:
+        session.close()
+    return discrepancias
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Restaura una copia de seguridad de Zarpi.")
     parser.add_argument("zip", type=Path, help="Ruta del archivo .zip generado por GET /admin/backup")
@@ -201,6 +225,15 @@ def main() -> None:
 
     if not args.zip.is_file():
         raise SystemExit(f"No existe el archivo {args.zip}")
+
+    # Antes de borrar nada: el ZIP tiene que estar entero (suma SHA-256 si
+    # existe, CRC de cada entrada y conteos del manifiesto).
+    from scripts.backup import verificar_backup
+
+    try:
+        verificar_backup(args.zip)
+    except ValueError as e:
+        raise SystemExit(f"El backup no es fiable, no se restaura nada: {e}")
 
     with zipfile.ZipFile(args.zip) as zf:
         manifiesto = _leer_manifiesto(zf)
@@ -240,6 +273,16 @@ def main() -> None:
             print(f"\nArchivos: {copiados} archivo(s) de uploads/ y generated_docs/")
 
     if args.aplicar:
+        desconocidas = sorted(set(manifiesto.get("tablas") or {}) - {t.name for t in Base.metadata.sorted_tables})
+        if desconocidas:
+            print(f"\nAviso: el backup trae tablas que este código ya no tiene y no se restauraron: {', '.join(desconocidas)}")
+        discrepancias = verificar_conteos(manifiesto)
+        if discrepancias:
+            print("\nERROR: la base restaurada no coincide con el backup:", file=sys.stderr)
+            for tabla, esperadas, encontradas in discrepancias:
+                print(f"  - {tabla}: esperadas {esperadas}, encontradas {encontradas}", file=sys.stderr)
+            raise SystemExit(1)
+        print("\nVerificación: todas las tablas tienen las mismas filas que el backup.")
         print("\nRestauración completada.")
         if manifiesto.get("revision_alembic") and not args.crear_esquema:
             print(

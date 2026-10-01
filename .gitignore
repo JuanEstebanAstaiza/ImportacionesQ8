@@ -26,6 +26,8 @@ test_data/
 # Almacenamiento local de gestión documental (binarios subidos por usuarios)
 proyecto/backend/uploads/
 proyecto/backend/generated_docs/
+# Copias de seguridad (contienen datos personales y, la del .env, secretos)
+proyecto/backend/backups/
 
 # Node / frontend
 node_modules/

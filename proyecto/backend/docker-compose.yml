@@ -76,6 +76,10 @@ services:
     volumes:
       - backend_uploads:/app/uploads
       - backend_generated_docs:/app/generated_docs
+      # Carpeta del HOST, no un volumen: los backups tienen que sobrevivir a
+      # `docker compose down -v`, que es justo cuando hacen falta. Ver
+      # scripts/backup_servidor.sh y scripts/restaurar_servidor.sh.
+      - ./backups:/app/backups
     depends_on:
       mysql:
         condition: service_healthy
