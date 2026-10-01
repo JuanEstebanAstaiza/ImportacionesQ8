@@ -19,11 +19,8 @@ verificación, para que el cron o la CI puedan abortar el despliegue si falla.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
 import sys
-import zipfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -32,13 +29,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 PATRON_BACKUP = "importacionesq8-backup-*.zip"
 
-
-def sha256_de(ruta: Path) -> str:
-    h = hashlib.sha256()
-    with ruta.open("rb") as f:
-        for bloque in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(bloque)
-    return h.hexdigest()
+from services.backup_service import sha256_de, verificar_backup  # noqa: E402,F401 — reexportadas
 
 
 def escribir_suma(ruta: Path) -> Path:
@@ -46,45 +37,6 @@ def escribir_suma(ruta: Path) -> Path:
     suma = ruta.with_name(ruta.name + ".sha256")
     suma.write_text(f"{sha256_de(ruta)}  {ruta.name}\n", encoding="utf-8")
     return suma
-
-
-def verificar_backup(ruta: Path) -> dict:
-    """Comprueba que el ZIP esté entero y sea coherente con su manifiesto.
-
-    Devuelve el manifiesto; lanza `ValueError` con el motivo si algo no cuadra.
-    """
-    suma = ruta.with_name(ruta.name + ".sha256")
-    if suma.is_file():
-        esperada = suma.read_text(encoding="utf-8").split()[0]
-        if esperada != sha256_de(ruta):
-            raise ValueError(f"La suma SHA-256 de {ruta.name} no coincide: el archivo está dañado o fue modificado.")
-
-    try:
-        with zipfile.ZipFile(ruta) as zf:
-            dañado = zf.testzip()
-            if dañado:
-                raise ValueError(f"Entrada corrupta dentro del ZIP: {dañado}")
-            try:
-                manifiesto = json.loads(zf.read("manifest.json").decode("utf-8"))
-            except KeyError:
-                raise ValueError("El ZIP no tiene manifest.json")
-            nombres = set(zf.namelist())
-            for tabla, filas in (manifiesto.get("tablas") or {}).items():
-                entrada = f"datos/{tabla}.ndjson"
-                if entrada not in nombres:
-                    raise ValueError(f"Falta {entrada} aunque el manifiesto la declara")
-                crudo = zf.read(entrada).decode("utf-8")
-                contadas = sum(1 for linea in crudo.splitlines() if linea.strip())
-                if contadas != filas:
-                    raise ValueError(f"{tabla}: el manifiesto dice {filas} filas y el ZIP trae {contadas}")
-            archivos = sum(1 for n in nombres if n.startswith("archivos/") and not n.endswith("/"))
-            if archivos != manifiesto.get("archivos_copiados", archivos):
-                raise ValueError(
-                    f"El manifiesto declara {manifiesto.get('archivos_copiados')} archivos y el ZIP trae {archivos}"
-                )
-    except zipfile.BadZipFile as e:
-        raise ValueError(f"{ruta.name} no es un ZIP válido: {e}")
-    return manifiesto
 
 
 def aplicar_retencion(carpeta: Path, conservar: int) -> List[Path]:

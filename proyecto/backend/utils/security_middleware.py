@@ -21,6 +21,15 @@ MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(300 * 1024 * 1024)))
 
 PREFIJOS_DE_SUBIDA = ("/documentos/archivos/upload",)
 
+# Restaurar una copia desde el panel sube el ZIP entero (base de datos +
+# archivos), que puede superar con creces el tope de un vídeo.
+MAX_BACKUP_UPLOAD_BYTES = int(os.getenv("MAX_BACKUP_UPLOAD_BYTES", str(2 * 1024 * 1024 * 1024)))
+PREFIJO_RESTAURAR_BACKUP = "/admin/backup/restaurar"
+
+# Lo único que sigue atendiendo durante una restauración: la salud (para el
+# balanceador y el propio script de restauración) y la restauración misma.
+RUTAS_DURANTE_MANTENIMIENTO = ("/health", "/admin/backup")
+
 
 class SecurityHeadersMiddleware:
     """Añade headers defensivos (OWASP A05)."""
@@ -123,6 +132,8 @@ class RequestSizeLimitMiddleware:
         self.max_upload_bytes = max_upload_bytes
 
     def _limite_para(self, path: str) -> int:
+        if path.startswith(PREFIJO_RESTAURAR_BACKUP):
+            return MAX_BACKUP_UPLOAD_BYTES
         if any(path.startswith(prefijo) for prefijo in PREFIJOS_DE_SUBIDA):
             return self.max_upload_bytes
         return self.max_bytes
@@ -156,5 +167,45 @@ class RequestSizeLimitMiddleware:
                     return
             except ValueError:
                 pass
+
+        await self.app(scope, receive, send)
+
+
+class MantenimientoMiddleware:
+    """Responde 503 mientras se restaura una copia de seguridad.
+
+    Ver `services/mantenimiento.py`. Va por dentro de CORS, como el límite de
+    tamaño, para que el navegador vea el 503 con su motivo y no un error de CORS.
+    """
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if not path.startswith(RUTAS_DURANTE_MANTENIMIENTO):
+            from services.mantenimiento import motivo_activo
+
+            motivo = motivo_activo()
+            if motivo:
+                if scope["type"] == "websocket":
+                    # 1013 = "Try Again Later": el cliente reintenta solo.
+                    await send({"type": "websocket.close", "code": 1013})
+                    return
+                response = JSONResponse(
+                    status_code=503,
+                    content={
+                        "success": False,
+                        "error": "Mantenimiento",
+                        "detail": f"La plataforma está en mantenimiento: {motivo}. Vuelve a intentarlo en unos minutos.",
+                    },
+                    headers={"Retry-After": "60"},
+                )
+                await response(scope, receive, send)
+                return
 
         await self.app(scope, receive, send)

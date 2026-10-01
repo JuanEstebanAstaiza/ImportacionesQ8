@@ -218,3 +218,46 @@ class MovimientoPuntoCotizacionResponse(BaseModel):
     fecha: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ==================== Restaurar copia de seguridad desde el panel ====================
+
+class TablaBackupComparada(BaseModel):
+    tabla: str
+    en_backup: int
+    actual: Optional[int] = None  # None: la tabla no existe en el esquema actual
+
+
+class BackupSubidoResponse(BaseModel):
+    """Vista previa de un ZIP subido, antes de restaurarlo."""
+    subida_id: str
+    nombre_original: str
+    tamano_bytes: int
+    generado_en: Optional[str] = None
+    revision_alembic: Optional[str] = None
+    revision_actual: Optional[str] = None
+    incluye_archivos: bool
+    archivos: int
+    total_filas_backup: int
+    total_filas_actual: int
+    tablas: List[TablaBackupComparada]
+    advertencias: List[str] = []
+
+
+class RestaurarBackupRequest(BaseModel):
+    # Hay que escribirlo a mano: es la única barrera ante un clic accidental
+    # sobre una acción que reemplaza todos los datos de la plataforma.
+    confirmacion: str = Field(..., description='Debe ser exactamente "RESTAURAR"')
+    incluir_archivos: bool = True
+
+
+class RestaurarBackupResponse(BaseModel):
+    tablas_restauradas: int
+    filas_restauradas: int
+    archivos_restaurados: int
+    tablas_desconocidas: List[str] = []
+    cotizaciones_abiertas_reindexadas: int
+    backup_previo: Optional[str] = None
+    # False si la cuenta que restauró ya no existe (o no es admin) en los datos
+    # restaurados: el panel debe mandar a iniciar sesión de nuevo.
+    sesion_vigente: bool

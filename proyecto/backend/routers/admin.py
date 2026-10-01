@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
 
@@ -43,6 +43,9 @@ from schemas.admin import (
     MovimientoPuntoCotizacionResponse,
     EnvioCorreoMasivoRequest,
     EnvioCorreoMasivoResponse,
+    BackupSubidoResponse,
+    RestaurarBackupRequest,
+    RestaurarBackupResponse,
 )
 from schemas.orden import ResolverDisputaRequest, OrdenResponse
 from schemas.credito import SolicitudRecreacionResponse, ResolverRecreacionRequest
@@ -1047,6 +1050,311 @@ async def resumen_backup(
         "archivos": archivos,
         "bytes_archivos": bytes_archivos,
     }
+
+
+# ---- Restaurar una copia desde el panel ----
+#
+# Dos pasos: el admin sube el ZIP y recibe una vista previa (qué tablas cambian
+# y cuánto, de qué fecha y versión es, avisos); luego confirma escribiendo
+# RESTAURAR. Así un ZIP de cientos de MB se sube una sola vez y nadie reemplaza
+# los datos de la plataforma sin ver antes qué va a pasar.
+
+def _carpeta_subidas() -> Path:
+    from services.backup_service import BACKUPS_DIR
+
+    carpeta = BACKUPS_DIR / "subidas"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    return carpeta
+
+
+def _ruta_subida(subida_id: str) -> Path:
+    # El id viaja en la URL: solo se acepta el formato que genera el servidor,
+    # así no se puede apuntar a otro archivo del disco.
+    if len(subida_id) != 32 or any(c not in "0123456789abcdef" for c in subida_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Copia subida no encontrada")
+    ruta = _carpeta_subidas() / f"{subida_id}.zip"
+    if not ruta.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Copia subida no encontrada (caducó o ya se usó). Vuelve a subir el ZIP.",
+        )
+    return ruta
+
+
+def _limpiar_subidas_viejas(horas: int = 24) -> None:
+    import time as _time
+
+    limite = _time.time() - horas * 3600
+    for viejo in _carpeta_subidas().glob("*.zip*"):
+        try:
+            if viejo.stat().st_mtime < limite:
+                viejo.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+@router.post("/backup/restaurar/validar", response_model=BackupSubidoResponse)
+def validar_backup_subido(
+    archivo: UploadFile = File(..., description="ZIP descargado con GET /admin/backup"),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Sube un ZIP de copia de seguridad y devuelve qué pasaría al restaurarlo.
+
+    No modifica nada. El ZIP queda guardado 24 h en el servidor a la espera de
+    `POST /admin/backup/restaurar/{subida_id}`.
+    """
+    from services.backup_service import verificar_backup
+    from utils.security_middleware import MAX_BACKUP_UPLOAD_BYTES
+
+    _limpiar_subidas_viejas()
+    subida_id = uuid4().hex
+    destino = _carpeta_subidas() / f"{subida_id}.zip"
+
+    # Copia por bloques con tope: el middleware solo puede comprobar el tamaño
+    # si el cliente manda Content-Length.
+    escritos = 0
+    try:
+        with destino.open("wb") as salida:
+            for bloque in iter(lambda: archivo.file.read(1024 * 1024), b""):
+                escritos += len(bloque)
+                if escritos > MAX_BACKUP_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"El ZIP supera el máximo de {MAX_BACKUP_UPLOAD_BYTES // (1024 * 1024)} MB.",
+                    )
+                salida.write(bloque)
+        manifiesto = verificar_backup(destino)
+    except HTTPException:
+        destino.unlink(missing_ok=True)
+        raise
+    except ValueError as e:
+        destino.unlink(missing_ok=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"El archivo no es una copia válida: {e}")
+    except OSError as e:
+        destino.unlink(missing_ok=True)
+        if e.errno == 28:  # ENOSPC
+            raise HTTPException(status_code=status.HTTP_507_INSUFFICIENT_STORAGE, detail="No hay espacio en el servidor para el ZIP.")
+        raise
+
+    return _vista_previa(destino, subida_id, archivo.filename or "backup.zip", escritos, manifiesto, current_user)
+
+
+def _vista_previa(destino: Path, subida_id: str, nombre_original: str, tamano: int, manifiesto: dict, current_user: dict) -> dict:
+    """Qué pasaría al restaurar `destino`: tablas comparadas con hoy y avisos."""
+    import json as _json
+    import zipfile
+
+    from database import SessionLocal
+    from services.backup_service import _revision_alembic, _tablas_existentes
+
+    db = SessionLocal()
+    try:
+        presentes = set(_tablas_existentes())
+        conocidas = {t.name: t for t in Base.metadata.sorted_tables}
+        tablas = []
+        total_actual = 0
+        for nombre, en_backup in sorted((manifiesto.get("tablas") or {}).items()):
+            actual = None
+            if nombre in conocidas and nombre in presentes:
+                actual = int(db.query(func.count()).select_from(conocidas[nombre]).scalar() or 0)
+                total_actual += actual
+            tablas.append({"tabla": nombre, "en_backup": int(en_backup), "actual": actual})
+        revision_actual = _revision_alembic(db)
+    finally:
+        db.close()
+
+    advertencias = []
+    if manifiesto.get("revision_alembic") and manifiesto.get("revision_alembic") != revision_actual:
+        advertencias.append(
+            f"La copia es de otra versión del esquema ({manifiesto.get('revision_alembic')}; la actual es "
+            f"{revision_actual}). Se adapta al esquema actual: las columnas que ya no existan se descartan "
+            "y las nuevas toman su valor por defecto."
+        )
+    desconocidas = [t["tabla"] for t in tablas if t["actual"] is None and t["tabla"] not in conocidas]
+    if desconocidas:
+        advertencias.append(f"Tablas de la copia que esta versión ya no tiene (no se restauran): {', '.join(desconocidas)}.")
+    if not manifiesto.get("incluye_archivos"):
+        advertencias.append("La copia no incluye archivos subidos: solo se restaura la base de datos.")
+    with zipfile.ZipFile(destino) as zf:
+        try:
+            ids_usuarios = {
+                _json.loads(linea).get("id")
+                for linea in zf.read("datos/usuarios.ndjson").decode("utf-8").splitlines()
+                if linea.strip()
+            }
+        except KeyError:
+            ids_usuarios = set()
+    if current_user["user_id"] not in ids_usuarios:
+        advertencias.append(
+            "Tu cuenta no existe en la copia: al terminar tendrás que iniciar sesión con un admin que sí esté en ella."
+        )
+
+    return {
+        "subida_id": subida_id,
+        "nombre_original": nombre_original,
+        "tamano_bytes": tamano,
+        "generado_en": manifiesto.get("generado_en"),
+        "revision_alembic": manifiesto.get("revision_alembic"),
+        "revision_actual": revision_actual,
+        "incluye_archivos": bool(manifiesto.get("incluye_archivos")),
+        "archivos": int(manifiesto.get("archivos_copiados") or 0),
+        "total_filas_backup": sum(t["en_backup"] for t in tablas),
+        "total_filas_actual": total_actual,
+        "tablas": tablas,
+        "advertencias": advertencias,
+    }
+
+
+@router.post("/backup/restaurar/{subida_id}", response_model=RestaurarBackupResponse)
+def aplicar_backup_subido(
+    subida_id: str,
+    datos: RestaurarBackupRequest,
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Reemplaza los datos de la plataforma por los de un ZIP ya validado.
+
+    1. Pone la plataforma en mantenimiento (la API responde 503 al resto).
+    2. Guarda una copia del estado actual en `backups/antes-de-restaurar/`.
+    3. Restaura base de datos (y archivos, si se pide) y verifica los conteos.
+    4. Reconstruye en Redis el reparto de las cotizaciones abiertas vigentes.
+    5. Sale de mantenimiento, también si algo falla.
+    """
+    import time as _time
+
+    from database import SessionLocal
+    from services import mantenimiento
+    from services.backup_service import BACKUPS_DIR, construir_backup, nombre_de_archivo, restaurar_desde_zip, sha256_de
+    from services.matching_service import reconstruir_matching_abiertas
+
+    ruta = _ruta_subida(subida_id)
+    if datos.confirmacion.strip() != "RESTAURAR":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Escribe RESTAURAR para confirmar.')
+
+    if not mantenimiento.activar("restaurando una copia de seguridad"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya hay una restauración en curso.")
+
+    backup_previo = None
+    db = SessionLocal()
+    try:
+        # Que los demás workers vean el mantenimiento antes de tocar la base.
+        _time.sleep(mantenimiento.PAUSA_ANTES_DE_RESTAURAR)
+
+        previo = BACKUPS_DIR / "antes-de-restaurar" / nombre_de_archivo()
+        construir_backup(db, previo, incluir_archivos=datos.incluir_archivos)
+        previo.with_name(previo.name + ".sha256").write_text(f"{sha256_de(previo)}  {previo.name}\n", encoding="utf-8")
+        backup_previo = previo.name
+        db.rollback()  # cierra la transacción de lectura del volcado
+
+        resultado = restaurar_desde_zip(db, ruta, incluir_archivos=datos.incluir_archivos)
+        try:
+            reindexadas = reconstruir_matching_abiertas(db)
+        except Exception:
+            logger.exception("No se pudo reconstruir el matching de cotizaciones abiertas tras restaurar")
+            reindexadas = 0
+
+        sesion_vigente = db.query(Usuario.id).filter(
+            Usuario.id == current_user["user_id"], Usuario.rol == "admin", Usuario.activo.is_(True),
+        ).first() is not None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"El archivo no es una copia válida: {e}")
+    except RuntimeError as e:
+        # La verificación de conteos corre DESPUÉS del commit: los datos ya se
+        # cargaron, no se revirtieron. Se dice tal cual y cómo volver atrás.
+        logger.exception("Restauración %s con discrepancias", subida_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                f"La copia se cargó pero la verificación encontró diferencias: {e}. "
+                f"Revisa los datos o vuelve al estado anterior con la copia previa {backup_previo}."
+            ),
+        )
+    except Exception as e:
+        logger.exception("Falló la restauración de la copia %s", subida_id)
+        detalle = "La restauración falló y la base de datos no se modificó."
+        if backup_previo is None:
+            detalle = "No se pudo guardar la copia del estado actual, así que no se restauró nada."
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{detalle} Motivo: {e}")
+    finally:
+        db.close()
+        mantenimiento.desactivar()
+
+    ruta.unlink(missing_ok=True)
+    logger.warning(
+        "Copia de seguridad restaurada por admin %s: %s tablas, %s filas, %s archivos (previo: %s)",
+        current_user["user_id"], resultado["tablas_restauradas"], resultado["filas_restauradas"],
+        resultado["archivos_restaurados"], backup_previo,
+    )
+    return {
+        "tablas_restauradas": resultado["tablas_restauradas"],
+        "filas_restauradas": resultado["filas_restauradas"],
+        "archivos_restaurados": resultado["archivos_restaurados"],
+        "tablas_desconocidas": resultado["tablas_desconocidas"],
+        "cotizaciones_abiertas_reindexadas": reindexadas,
+        "backup_previo": backup_previo,
+        "sesion_vigente": sesion_vigente,
+    }
+
+
+def _carpeta_previos() -> Path:
+    from services.backup_service import BACKUPS_DIR
+
+    return BACKUPS_DIR / "antes-de-restaurar"
+
+
+def _ruta_previo(nombre: str) -> Path:
+    import re
+
+    if not re.fullmatch(r"importacionesq8-backup-\d{8}-\d{6}\.zip", nombre or ""):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Copia previa no encontrada")
+    ruta = _carpeta_previos() / nombre
+    if not ruta.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Copia previa no encontrada")
+    return ruta
+
+
+@router.get("/backup/previos")
+def listar_backups_previos(current_user: dict = Depends(require_rol("admin"))):
+    """Copias automáticas del estado anterior a cada restauración (la más reciente primero)."""
+    carpeta = _carpeta_previos()
+    if not carpeta.is_dir():
+        return []
+    return [
+        {"nombre": zip_.name, "tamano_bytes": zip_.stat().st_size}
+        for zip_ in sorted(carpeta.glob("importacionesq8-backup-*.zip"), reverse=True)
+    ]
+
+
+@router.get("/backup/previos/{nombre}")
+def descargar_backup_previo(nombre: str, current_user: dict = Depends(require_rol("admin"))):
+    from fastapi.responses import FileResponse
+
+    return FileResponse(path=str(_ruta_previo(nombre)), media_type="application/zip", filename=nombre)
+
+
+@router.post("/backup/previos/{nombre}/preparar", response_model=BackupSubidoResponse)
+def preparar_backup_previo(nombre: str, current_user: dict = Depends(require_rol("admin"))):
+    """Deja una copia previa lista para restaurar (deshacer), sin tener que subirla."""
+    import shutil
+
+    from services.backup_service import verificar_backup
+
+    origen = _ruta_previo(nombre)
+    subida_id = uuid4().hex
+    destino = _carpeta_subidas() / f"{subida_id}.zip"
+    shutil.copyfile(origen, destino)
+    try:
+        manifiesto = verificar_backup(destino)
+    except ValueError as e:
+        destino.unlink(missing_ok=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"La copia previa está dañada: {e}")
+    return _vista_previa(destino, subida_id, nombre, destino.stat().st_size, manifiesto, current_user)
+
+
+@router.delete("/backup/restaurar/{subida_id}", status_code=status.HTTP_204_NO_CONTENT)
+def descartar_backup_subido(subida_id: str, current_user: dict = Depends(require_rol("admin"))):
+    """Borra del servidor un ZIP subido que al final no se va a restaurar."""
+    _ruta_subida(subida_id).unlink(missing_ok=True)
+    return None
 
 
 # ==================== Certificaciones de plataforma ====================

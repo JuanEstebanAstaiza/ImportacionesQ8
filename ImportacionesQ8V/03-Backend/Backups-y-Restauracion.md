@@ -3,7 +3,37 @@
 > Scripts (en `proyecto/backend/scripts/`): `backup.py`, `restaurar_backup.py`, `backup_servidor.sh`, `restaurar_servidor.sh`.
 > Servicio: `services/backup_service.py`. Panel admin: `GET /admin/backup`.
 
-## Qué se respalda
+## Desde el panel de administración (lo habitual)
+
+**Admin → Certificaciones (Sellos y respaldo) → Copia de seguridad.**
+
+1. **Descargar copia de seguridad.** Baja un ZIP con toda la base de datos y, si se marca, los archivos subidos. Guárdalo fuera del servidor: en tu equipo, en una nube o en un disco externo.
+2. **Restaurar una copia.** Arrastra ese ZIP a la zona de carga, o haz clic para elegirlo. El servidor lo verifica y muestra, **sin cambiar nada**:
+   - fecha y versión del esquema de la copia;
+   - filas por tabla, ahora y después de restaurar (solo las que cambian, o todas);
+   - avisos: copia de otra versión, tablas que ya no existen, que la copia no traiga archivos, o que tu cuenta no esté en la copia.
+3. Escribe **RESTAURAR** y confirma. Pasos:
+   1. La plataforma entra en **mantenimiento**: la API responde 503 a todo lo demás, incluidos los demás workers.
+   2. Guarda sola el estado actual en `backups/antes-de-restaurar/`.
+   3. Reemplaza los datos y verifica que cada tabla tenga las filas de la copia.
+   4. Rehace en Redis el reparto de las cotizaciones abiertas que siguen vigentes.
+   5. Sale de mantenimiento, también si algo falla.
+4. **Deshacer.** La lista "Estados anteriores a cada restauración" permite descargar cada estado guardado o **volver a él** con el mismo flujo de vista previa y confirmación.
+
+Detalles:
+
+- El ZIP subido queda en `backups/subidas/` hasta restaurarlo, descartarlo o 24 h como máximo.
+- Tamaño máximo de subida: `MAX_BACKUP_UPLOAD_BYTES`, 2 GB por defecto.
+- Solo se aceptan ZIPs de la plataforma: formato, CRC, conteos del manifiesto y rutas dentro de `uploads/` y `generated_docs/`. Un ZIP con rutas como `../../` se rechaza.
+- Si tu cuenta no existe en la copia, al terminar el panel te manda a iniciar sesión con un admin que sí esté en ella.
+
+API: `POST /admin/backup/restaurar/validar` (multipart, campo `archivo`) → `POST /admin/backup/restaurar/{subida_id}` con `{"confirmacion": "RESTAURAR", "incluir_archivos": true}`. También: `DELETE /admin/backup/restaurar/{subida_id}`, `GET /admin/backup/previos`, `GET /admin/backup/previos/{nombre}` y `POST /admin/backup/previos/{nombre}/preparar`.
+
+> El ZIP del panel no incluye Redis ni el `.env`; por eso la restauración rehace el reparto de cotizaciones abiertas desde la base. Para recuperar el servidor completo (otro droplet, `down -v`) están los scripts de abajo.
+
+---
+
+## Qué se respalda en el servidor (scripts)
 
 `backup_servidor.sh` deja todo en `proyecto/backend/backups/`, una carpeta **del host** montada en el backend como `/app/backups`. No es un volumen de Docker, así que sobrevive a `docker compose down -v`.
 
