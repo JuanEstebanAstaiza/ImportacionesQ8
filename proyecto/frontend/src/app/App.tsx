@@ -17,7 +17,7 @@ import {
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
-  LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup,
+  LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -4155,10 +4155,11 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                     {puedeEstimarPrecio&&(
                       <button
                         onClick={()=>setShowCalculadora(true)}
-                        className="h-9 px-2.5 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 text-primary text-xs font-medium hover:bg-primary/5 transition-colors"
                         title="Calculadora de precios: envía al cliente un precio estimado"
                       >
                         <Calculator className="w-4 h-4"/>
+                        <span className="hidden md:inline">Calcular precio</span>
                       </button>
                     )}
                     <div className="relative">
@@ -6097,6 +6098,12 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   // y el usuario solo ajusta lo que cambie.
   const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
   const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
+  // El error se pinta al final de la columna con scroll, y quien lo provoca
+  // está abajo, junto al botón de enviar: sin desplazarlo a la vista, un
+  // rechazo del servidor (p. ej. la empresa agotó su cupo diario) parecía un
+  // clic que no hacía nada.
+  const stepErrorRef=useRef<HTMLDivElement|null>(null);
+  useEffect(()=>{if(stepError)stepErrorRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[stepError]);
   const [desbloquearPorCredito,setDesbloquearPorCredito]=useState(false);
   const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
   const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
@@ -6236,7 +6243,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                     {step===3 && modalidad==="abierta" && <Step3Abierta/>}
                   </div>
                   {stepError && (
-                    <div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div ref={stepErrorRef} role="alert" className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                       <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/>
                       <p className="text-sm text-destructive">{stepError}</p>
                     </div>
@@ -6844,21 +6851,6 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Select label="Tier mínimo requerido para cotizar" value={form.tierMinimoRequerido} onChange={e=>f("tierMinimoRequerido",e.target.value)}>
                     {["Bronze", "Silver", "Gold", "Élite"].map((tier)=><option key={tier}>{tier}</option>)}
                   </Select>
-                  <Input
-                    label="Límite de cotizaciones por día"
-                    type="number"
-                    min={1}
-                    max={10000}
-                    placeholder="Sin límite"
-                    value={form.limiteCotizacionesDiarias}
-                    onChange={e=>f("limiteCotizacionesDiarias",e.target.value)}
-                    error={leerLimiteDiario(form.limiteCotizacionesDiarias)===undefined?"Escribe un número entero entre 1 y 10000, o déjalo vacío.":undefined}
-                    hint={
-                      cupo
-                        ? `Hoy llevas ${cupo.recibidas_hoy}${cupo.limite_cotizaciones_diarias!=null?` de ${cupo.limite_cotizaciones_diarias}`:""} cotizaciones recibidas.${cupo.cupo_agotado?" Cupo agotado: no recibirás más hasta mañana.":""} Vacío = sin límite.`
-                        : "Dirigidas y abiertas. Al llegar al tope dejas de recibir hasta mañana. Vacío = sin límite."
-                    }
-                  />
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
                     <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
@@ -6872,6 +6864,63 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>alternar("certs",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
                   </div>
                 </div>
+              </Card>
+              <Card padding="md">
+                {/* Cupo diario: tarjeta propia con interruptor. Como campo suelto
+                    dentro de "Información comercial" pasaba desapercibido. */}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary"/>Límite de cotizaciones por día</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cuántas cotizaciones (dirigidas y abiertas) quiere recibir tu equipo cada día. Al llegar al tope,
+                      los clientes no pueden enviarte más dirigidas y las abiertas se reparten a otras empresas hasta la medianoche.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.limiteCotizacionesDiarias.trim()!==""}
+                    aria-label="Limitar cotizaciones por día"
+                    onClick={()=>editar({limiteCotizacionesDiarias:form.limiteCotizacionesDiarias.trim()?"":String(cupo?.limite_cotizaciones_diarias||20)})}
+                    className={clsx("relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors",form.limiteCotizacionesDiarias.trim()?"bg-primary":"bg-muted-foreground/30")}
+                  >
+                    <span className={clsx("inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",form.limiteCotizacionesDiarias.trim()?"translate-x-5":"translate-x-0.5")}/>
+                  </button>
+                </div>
+                {form.limiteCotizacionesDiarias.trim()!==""?(
+                  <div className="mt-4 grid sm:grid-cols-2 gap-4 items-start">
+                    <Input
+                      label="Máximo por día"
+                      type="number"
+                      min={1}
+                      max={10000}
+                      value={form.limiteCotizacionesDiarias}
+                      onChange={e=>f("limiteCotizacionesDiarias",e.target.value)}
+                      error={leerLimiteDiario(form.limiteCotizacionesDiarias)===undefined?"Escribe un número entero entre 1 y 10000.":undefined}
+                    />
+                    {cupo&&cupo.limite_cotizaciones_diarias!=null?(
+                      <div>
+                        <p className="text-sm font-medium mb-1.5">Uso de hoy</p>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={clsx("h-full transition-all",cupo.cupo_agotado?"bg-destructive":"bg-primary")}
+                            style={{width:`${Math.min(100,Math.round((cupo.recibidas_hoy/Math.max(1,cupo.limite_cotizaciones_diarias))*100))}%`}}
+                          />
+                        </div>
+                        <p className={clsx("text-xs mt-1.5",cupo.cupo_agotado?"text-destructive font-medium":"text-muted-foreground")}>
+                          {cupo.recibidas_hoy} de {cupo.limite_cotizaciones_diarias} recibidas hoy.
+                          {cupo.cupo_agotado?" Cupo agotado: no recibirás más hasta mañana.":` Te quedan ${cupo.disponibles_hoy}.`}
+                        </p>
+                      </div>
+                    ):(
+                      <p className="text-xs text-muted-foreground sm:mt-7">El uso de hoy aparece en cuanto se guarde el límite.</p>
+                    )}
+                  </div>
+                ):(
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Sin límite{cupo?`: hoy llevas ${cupo.recibidas_hoy} cotización(es) recibida(s).`:"."}
+                  </p>
+                )}
               </Card>
               <Card padding="md">
                 <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</p>
