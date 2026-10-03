@@ -77,7 +77,7 @@ class CotizacionPoolItem(BaseModel):
     modalidad: str
     nombre_producto: str
     descripcion_cliente: str
-    cantidad_minima: int
+    cantidad_minima: float
     precio_objetivo_usd: Optional[float] = None
     incoterm: str
     estado: str

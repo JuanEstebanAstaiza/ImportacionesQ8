@@ -56,7 +56,10 @@ class Cotizacion(Base):
     linea_producto = Column(String(100), nullable=False)
     tipo_calidad = Column(String(20), nullable=False)
     modalidad_importacion = Column(String(20), nullable=True)
-    cantidad_minima = Column(Integer, nullable=False)
+    # Float: en metros cúbicos se piden fracciones (2,5 m³). En unidades el
+    # esquema de entrada exige un entero.
+    cantidad_minima = Column(Float, nullable=False)
+    unidad_cantidad = Column(String(10), nullable=False, default="unidades", server_default="unidades")  # "unidades" o "m3"
     precio_objetivo_usd = Column(Float, nullable=True)
     moneda_precio_objetivo = Column(String(10), nullable=False, default="USD", server_default="USD")
     incoterm = Column(String(50), nullable=False, default="DDP", server_default="DDP")
@@ -81,6 +84,13 @@ class Cotizacion(Base):
     cotizacion_origen_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=True)
     cancelada_por_error = Column(String(20), nullable=True)  # NULL, o quien fue responsable: "solicitante"/"importador"
     motivo_cancelacion = Column(Text, nullable=True)
+
+    # --- Por qué el cliente eligió una propuesta sobre las demás ---
+    # Lo indica al aceptar ("precio", "tiempo", "condiciones" u "otro"). Al
+    # cerrarse la orden se copia como motivo de descarte a las propuestas que
+    # perdieron y queda en sus eventos `propuesta_descartada`.
+    motivo_eleccion = Column(String(20), nullable=True)
+    motivo_eleccion_detalle = Column(Text, nullable=True)
 
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

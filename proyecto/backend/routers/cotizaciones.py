@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -359,7 +360,16 @@ async def obtener_cotizacion(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a esta cotización"
         )
-    
+
+    # Primera vez que la empresa abre la solicitud: es el "vista" de la
+    # bitácora, y de ahí sale el tiempo que tarda en mirarla.
+    if rol in ("importador", "asesor"):
+        from services.eventos import registrar_vista
+
+        if registrar_vista(db, cotizacion, importador_id=current_user.get("importador_id"), usuario=current_user):
+            db.commit()
+            db.refresh(cotizacion)
+
     return cotizacion
 
 @router.post("", response_model=CotizacionResponse, status_code=status.HTTP_201_CREATED)
@@ -519,6 +529,7 @@ async def crear_cotizacion(
         tipo_calidad=cotizacion_data.tipo_calidad,
         modalidad_importacion=cotizacion_data.modalidad_importacion,
         cantidad_minima=cotizacion_data.cantidad_minima,
+        unidad_cantidad=cotizacion_data.unidad_cantidad,
         precio_objetivo_usd=cotizacion_data.precio_objetivo_usd,
         moneda_precio_objetivo=(cotizacion_data.precio_objetivo_moneda or "USD").upper(),
         incoterm=(cotizacion_data.incoterm or "DDP").upper(),
@@ -529,11 +540,18 @@ async def crear_cotizacion(
     )
     
     db.add(nuevo_cotizacion)
+    db.flush()
+
+    from services.eventos import TiposEvento, evento_solicitud
+
+    evento_solicitud(
+        db, TiposEvento.SOLICITUD_CREADA, nuevo_cotizacion, usuario=current_user,
+        estado_nuevo=nuevo_cotizacion.estado,
+    )
 
     if nuevo_cotizacion.modalidad == "dirigida" and nuevo_cotizacion.importador_id:
         from services.cupo_cotizaciones import registrar_recepcion
 
-        db.flush()
         registrar_recepcion(
             db,
             importador_id=str(UUID(nuevo_cotizacion.importador_id)),
@@ -863,10 +881,18 @@ async def enviar_propuesta(
         tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
         incoterm=propuesta.incoterm,
         condiciones_adicionales=propuesta.condiciones_adicionales,
+        cantidad=propuesta.cantidad,
         estado=EstadoPropuesta.pendiente,
         creado_por_usuario_id=user_id_str
     )
     db.add(nueva_propuesta)
+
+    from services.eventos import TiposEvento, evento_propuesta
+
+    evento_propuesta(
+        db, TiposEvento.PROPUESTA_ENVIADA, nueva_propuesta, cotizacion, usuario=current_user,
+        estado_nuevo=EstadoPropuesta.pendiente.value,
+    )
 
     # 5. Actualizar estado de la cotización a "propuestas_recibidas" al recibir la primera propuesta
     # (aplica a abierta Y dirigida; sin esto, negociar/aceptar falla en dirigidas).
@@ -914,6 +940,8 @@ async def enviar_propuesta(
         condiciones_adicionales=nueva_propuesta.condiciones_adicionales,
         estado=nueva_propuesta.estado.value if isinstance(nueva_propuesta.estado, EstadoPropuesta) else nueva_propuesta.estado,
         creado_por_usuario_id=nueva_propuesta.creado_por_usuario_id,
+        cantidad=nueva_propuesta.cantidad,
+        fecha_envio=nueva_propuesta.fecha_envio,
         contacto_asesor=nueva_propuesta.contacto_asesor
     )
 
@@ -989,6 +1017,7 @@ async def crear_borrador_propuesta(
         tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
         incoterm=propuesta.incoterm,
         condiciones_adicionales=propuesta.condiciones_adicionales,
+        cantidad=propuesta.cantidad,
         estado=EstadoPropuesta.borrador,
         creado_por_usuario_id=user_id_str
     )
@@ -1036,10 +1065,24 @@ async def editar_propuesta(
     propuesta_db.tiempo_estimado_entrega = propuesta.tiempo_estimado_entrega
     propuesta_db.incoterm = propuesta.incoterm
     propuesta_db.condiciones_adicionales = propuesta.condiciones_adicionales
+    if propuesta.cantidad is not None:
+        propuesta_db.cantidad = propuesta.cantidad
     propuesta_db.creado_por_usuario_id = str(PyUUID(current_user["user_id"]))
     # Una edición reinicia la pre-aceptación mutua: cualquier cambio debe volver a confirmarse
     propuesta_db.preaceptada_por_solicitante = False
     propuesta_db.preaceptada_por_empresa = False
+
+    # Solo cuenta para la bitácora lo que ve el cliente: retocar un borrador no
+    # cambia nada del negocio todavía.
+    if propuesta_db.estado == EstadoPropuesta.pendiente.value:
+        from services.eventos import TiposEvento, evento_propuesta
+
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == propuesta_db.cotizacion_id).first()
+        if cotizacion is not None:
+            evento_propuesta(
+                db, TiposEvento.PROPUESTA_EDITADA, propuesta_db, cotizacion, usuario=current_user,
+                estado_nuevo=EstadoPropuesta.pendiente.value,
+            )
 
     db.commit()
     db.refresh(propuesta_db)
@@ -1083,8 +1126,18 @@ async def enviar_borrador_propuesta(
     _validar_congruencia_categoria(cotizacion, propuesta_db.importador_id, db)
 
     propuesta_db.estado = EstadoPropuesta.pendiente
+    # La fecha que cuenta es la del envío al cliente, no la del borrador.
+    propuesta_db.fecha_envio = datetime.utcnow()
     if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
+
+    from services.eventos import TiposEvento, evento_propuesta
+
+    evento_propuesta(
+        db, TiposEvento.PROPUESTA_ENVIADA, propuesta_db, cotizacion, usuario=current_user,
+        estado_anterior=EstadoPropuesta.borrador.value, estado_nuevo=EstadoPropuesta.pendiente.value,
+        datos={"desde_borrador": True},
+    )
 
     _notificar_propuesta_enviada(db, cotizacion=cotizacion, importador_id=propuesta_db.importador_id)
 
@@ -1183,6 +1236,10 @@ async def listar_propuestas(
             creado_por_usuario_id=p.creado_por_usuario_id,
             preaceptada_por_solicitante=p.preaceptada_por_solicitante,
             preaceptada_por_empresa=p.preaceptada_por_empresa,
+            cantidad=p.cantidad,
+            fecha_envio=p.fecha_envio,
+            motivo_descarte=p.motivo_descarte,
+            motivo_descarte_detalle=p.motivo_descarte_detalle,
             contacto_asesor=p.contacto_asesor
         )
         for p in propuestas
@@ -1378,7 +1435,17 @@ async def aceptar_propuesta(
             cotizacion=cotizacion,
             importador_usuario_id=importador_usuario_id,
         )
-        db.commit()
+
+    from services.eventos import Evento, TiposEvento, evento_propuesta
+
+    # Una vez por propuesta: el cliente puede volver a pulsar "Negociar".
+    ya_en_negociacion = db.query(Evento.id).filter(
+        Evento.tipo == TiposEvento.PROPUESTA_EN_NEGOCIACION,
+        Evento.propuesta_id == str(propuesta.id),
+    ).first()
+    if not ya_en_negociacion:
+        evento_propuesta(db, TiposEvento.PROPUESTA_EN_NEGOCIACION, propuesta, cotizacion, usuario=current_user)
+    db.commit()
 
     db.refresh(cotizacion)
     return cotizacion
@@ -1506,8 +1573,26 @@ async def pre_aceptar_propuesta(
             detail="No autorizado para pre-aceptar esta propuesta"
         )
 
+    if lado == "empresa" and (solicitud.motivo_eleccion or solicitud.motivo_detalle):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El motivo de la elección solo lo indica el solicitante"
+        )
+
+    from services.eventos import TiposEvento, evento_propuesta
+
     if lado == "solicitante":
         propuesta.preaceptada_por_solicitante = solicitud.aceptar
+        # Por qué eligió esta propuesta: se convierte en el motivo de descarte
+        # de las demás cuando la orden se cierre. Si retira la aceptación, el
+        # motivo deja de valer.
+        if solicitud.aceptar:
+            if solicitud.motivo_eleccion:
+                cotizacion.motivo_eleccion = solicitud.motivo_eleccion
+                cotizacion.motivo_eleccion_detalle = (solicitud.motivo_detalle or "").strip() or None
+        else:
+            cotizacion.motivo_eleccion = None
+            cotizacion.motivo_eleccion_detalle = None
         # La empresa se entera de que el cliente movió ficha, aunque todavía
         # falte su propia confirmación.
         # Aquí la pelota pasa a la cuenta dueña, que es la única que puede
@@ -1543,6 +1628,13 @@ async def pre_aceptar_propuesta(
             enlace_relativo="/cotizaciones",
         )
 
+    evento_propuesta(
+        db, TiposEvento.PROPUESTA_PREACEPTADA, propuesta, cotizacion, usuario=current_user,
+        datos={"lado": lado, "aceptar": solicitud.aceptar},
+        motivo=solicitud.motivo_eleccion if lado == "solicitante" and solicitud.aceptar else None,
+        motivo_detalle=(solicitud.motivo_detalle or None) if lado == "solicitante" and solicitud.aceptar else None,
+    )
+
     if propuesta.preaceptada_por_solicitante and propuesta.preaceptada_por_empresa:
         # --- Finalización: doble aceptación mutua confirmada ---
         propuesta.estado = EstadoPropuesta.aceptada
@@ -1552,8 +1644,23 @@ async def pre_aceptar_propuesta(
             Propuesta.id != propuesta.id,
             Propuesta.estado.in_([EstadoPropuesta.pendiente.value, EstadoPropuesta.borrador.value])
         ).all()
+        ahora = datetime.utcnow()
         for p in otras:
+            estado_previo = p.estado.value if isinstance(p.estado, EstadoPropuesta) else p.estado
             p.estado = EstadoPropuesta.rechazada
+            # Un borrador nunca llegó al cliente: no "perdió", solo se cierra.
+            if estado_previo != EstadoPropuesta.pendiente.value:
+                continue
+            p.motivo_descarte = cotizacion.motivo_eleccion
+            p.motivo_descarte_detalle = cotizacion.motivo_eleccion_detalle
+            p.fecha_descarte = ahora
+            evento_propuesta(
+                db, TiposEvento.PROPUESTA_DESCARTADA, p, cotizacion, usuario=current_user,
+                estado_anterior=estado_previo, estado_nuevo=EstadoPropuesta.rechazada.value,
+                motivo=cotizacion.motivo_eleccion or "sin_motivo",
+                motivo_detalle=cotizacion.motivo_eleccion_detalle,
+                datos={"propuesta_ganadora_id": str(propuesta.id)},
+            )
 
         # Orden creada en la misma transacción → estado operativo de la cotización.
         cotizacion.estado = EstadoCotizacion.orden_activa
@@ -1594,6 +1701,20 @@ async def pre_aceptar_propuesta(
                 estado_anterior=None,
                 estado_nuevo=EstadoOrden.cotizacion_aceptada.value
             ))
+            from services.eventos import evento_pedido
+
+            evento_pedido(
+                db, nueva_orden, estado_anterior=None, estado_nuevo=EstadoOrden.cotizacion_aceptada.value,
+                usuario=current_user, cotizacion=cotizacion,
+            )
+
+        evento_propuesta(
+            db, TiposEvento.PROPUESTA_ACEPTADA, propuesta, cotizacion, usuario=current_user,
+            estado_anterior=EstadoPropuesta.pendiente.value, estado_nuevo=EstadoPropuesta.aceptada.value,
+            orden_id=nueva_orden.id,
+            motivo=cotizacion.motivo_eleccion,
+            motivo_detalle=cotizacion.motivo_eleccion_detalle,
+        )
 
         try:
             generate_order_documents(

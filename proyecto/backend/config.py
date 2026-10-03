@@ -93,6 +93,25 @@ CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DI
 # esta zona (Colombia, UTC-5 sin horario de verano). Es un desfase fijo y no un
 # nombre IANA para no depender de que la imagen traiga tzdata.
 CUPO_COTIZACIONES_UTC_OFFSET_HORAS = int(os.getenv("CUPO_COTIZACIONES_UTC_OFFSET_HORAS", "-5"))
+
+# --- Asignación de cotizaciones abiertas ---
+# "manual": el admin decide a qué empresas llega cada abierta (piloto).
+# "automatica": el sistema las reparte por encaje. El admin puede cambiarlo
+# desde el panel; esto solo es el valor inicial (ver services/configuracion.py).
+ASIGNACION_COTIZACIONES = os.getenv("ASIGNACION_COTIZACIONES", "manual").strip().lower()
+# Máximo de empresas que reciben una misma solicitud.
+ASIGNACION_CUPO_POR_SOLICITUD = int(os.getenv("ASIGNACION_CUPO_POR_SOLICITUD", "3"))
+
+# --- TRM (pesos por dólar) para guardar los montos en COP ---
+# La oficial se consulta una vez al día en datos.gov.co (Superfinanciera). Si la
+# consulta falla se usa el valor de respaldo que fije el admin, luego la última
+# oficial conocida y, como último recurso, TRM_RESPALDO_COP.
+TRM_CONSULTA_AUTOMATICA = os.getenv(
+    "TRM_CONSULTA_AUTOMATICA", "false" if APP_ENV == "test" else "true"
+).lower() == "true"
+TRM_URL = os.getenv("TRM_URL", "https://www.datos.gov.co/resource/32sa-8pi3.json")
+TRM_TIMEOUT_SEGUNDOS = float(os.getenv("TRM_TIMEOUT_SEGUNDOS", "4"))
+TRM_RESPALDO_COP = float(os.getenv("TRM_RESPALDO_COP", "4000"))
 CREDITO_USD_POR_UNIDAD = float(os.getenv("CREDITO_USD_POR_UNIDAD", "0.1"))
 CREDITO_BONO_REGISTRO = float(os.getenv("CREDITO_BONO_REGISTRO", "20"))
 CREDITO_BONO_REFERIDO = float(os.getenv("CREDITO_BONO_REFERIDO", "10"))

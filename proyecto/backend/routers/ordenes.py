@@ -383,6 +383,12 @@ async def actualizar_estado_orden(
     )
     db.add(nuevo_historial)
 
+    from services.eventos import evento_pedido
+
+    evento_pedido(
+        db, orden, estado_anterior=estado_actual, estado_nuevo=nuevo_estado_valor, usuario=current_user,
+    )
+
     # El hilo de la cotización pasó a ser el del seguimiento al crearse la orden:
     # dejar ahí el cambio de estado evita que el cliente tenga que ir a otra
     # pantalla a enterarse, y da pie a preguntar por el mismo canal.

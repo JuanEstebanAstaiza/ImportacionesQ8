@@ -926,9 +926,19 @@ async def resolver_recreacion(
     solicitud.resuelto_por_admin_id = current_user["user_id"]
     solicitud.fecha_resolucion = datetime.utcnow()
 
+    estado_previo = cotizacion.estado.value if hasattr(cotizacion.estado, "value") else cotizacion.estado
     cotizacion.estado = EstadoCotizacion.cancelada.value
     cotizacion.cancelada_por_error = datos.parte_atribuida_final
     cotizacion.motivo_cancelacion = solicitud.motivo
+
+    from services.eventos import TiposEvento, evento_solicitud
+
+    evento_solicitud(
+        db, TiposEvento.SOLICITUD_CANCELADA, cotizacion, usuario=current_user,
+        estado_anterior=estado_previo, estado_nuevo=EstadoCotizacion.cancelada.value,
+        motivo_detalle=solicitud.motivo,
+        datos={"parte_atribuida": datos.parte_atribuida_final},
+    )
 
     # Si la responsable fue la empresa importadora, se exime al solicitante:
     # se le reembolsa el costo equivalente a la cotización cancelada.

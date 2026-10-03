@@ -158,7 +158,7 @@ def generate_order_documents(
         f"Producto: {cotizacion.nombre_producto}",
         f"Pais importacion: {cotizacion.pais_importacion}",
         f"Incoterm: {cotizacion.incoterm}",
-        f"Cantidad minima: {cotizacion.cantidad_minima}",
+        f"Cantidad minima: {cotizacion.cantidad_minima:g} {getattr(cotizacion, 'unidad_cantidad', None) or 'unidades'}",
         f"Precio objetivo USD: {cotizacion.precio_objetivo_usd}",
     ]
     prop_lines = [

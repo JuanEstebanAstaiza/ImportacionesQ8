@@ -76,14 +76,35 @@ def registrar_recepcion(
     cotizacion_id: str,
     modalidad: str,
     entregada: bool = True,
+    origen: Optional[str] = None,
+    asignado_por: Optional[dict] = None,
 ) -> None:
-    """Añade la recepción a la sesión; el commit lo hace quien llama."""
+    """Añade la recepción (y su evento `solicitud_asignada`) a la sesión; el
+    commit lo hace quien llama.
+
+    `origen`: "dirigida", "automatica" o "manual". `asignado_por` es el usuario
+    (dict del token) cuando la asignó el admin.
+    """
+    origen = origen or ("dirigida" if modalidad == "dirigida" else "automatica")
     db.add(RecepcionCotizacion(
         importador_id=str(importador_id),
         cotizacion_id=str(cotizacion_id),
         modalidad=modalidad,
         entregada=entregada,
+        origen=origen,
+        asignado_por=str(asignado_por["user_id"]) if asignado_por else None,
     ))
+    if entregada:
+        from models.cotizacion import Cotizacion
+        from services.eventos import TiposEvento, evento_solicitud
+
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == str(cotizacion_id)).first()
+        if cotizacion is not None:
+            evento_solicitud(
+                db, TiposEvento.SOLICITUD_ASIGNADA, cotizacion,
+                importador_id=str(importador_id), usuario=asignado_por,
+                datos={"origen_asignacion": origen},
+            )
 
 
 def registrar_reparto_abierta(db: Session, *, cotizacion_id: str, entregadas: Iterable[str], omitidas: Iterable[str]) -> None:
@@ -98,7 +119,7 @@ def registrar_reparto_abierta(db: Session, *, cotizacion_id: str, entregadas: It
         db.commit()
     except IntegrityError:
         # El matching ya se había ejecutado para esta cotización: lo registrado
-        # la primera vez es lo que vale.
+        # la primera vez es lo que vale (eventos incluidos).
         db.rollback()
 
 

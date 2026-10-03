@@ -27,3 +27,7 @@ class RecepcionCotizacion(Base):
     modalidad = Column(String(20), nullable=False)  # "dirigida" o "abierta"
     entregada = Column(Boolean, default=True, server_default=true(), nullable=False)
     fecha_recepcion = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Cómo llegó: "dirigida" (la eligió el cliente), "automatica" (reparto por
+    # encaje) o "manual" (la asignó el admin). Y quién la asignó, si fue a mano.
+    origen = Column(String(20), nullable=True)
+    asignado_por = Column(String(36), nullable=True)

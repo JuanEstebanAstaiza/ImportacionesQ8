@@ -25,6 +25,10 @@ os.environ.setdefault("RATE_LIMIT_FORGOT_PASSWORD", "1000/minute")
 os.environ.setdefault("RATE_LIMIT_OTP", "1000/minute")
 os.environ.setdefault("LOGIN_TARDIO_HORAS", "72")
 os.environ.setdefault("OTP_EXPIRE_MINUTES", "15")
+# Los tests anteriores a la asignación manual esperan el reparto automático a
+# todas las empresas que encajan; los de asignación fijan el modo y el cupo.
+os.environ.setdefault("ASIGNACION_COTIZACIONES", "automatica")
+os.environ.setdefault("ASIGNACION_CUPO_POR_SOLICITUD", "1000")
 
 import pytest
 from uuid import uuid4
@@ -88,6 +92,8 @@ from models.documental import (  # noqa: F401 — registra metadata de gestión 
 from models.certificacion import Certificacion, CertificacionImportador  # noqa: F401
 from models.notificacion import Notificacion  # noqa: F401
 from models.recepcion_cotizacion import RecepcionCotizacion  # noqa: F401
+from models.evento import Evento  # noqa: F401
+from models.configuracion import ConfiguracionPlataforma  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)

@@ -1,5 +1,5 @@
-from pydantic import AliasChoices, BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
 from utils.shipping_mark import LONGITUD_MAX_SUFIJO, normalizar_segmento
@@ -56,7 +56,10 @@ class CotizacionCreate(BaseModel):
     linea_producto: str = Field(..., min_length=1, max_length=100, description="Categoría/línea del producto")
     tipo_calidad: str = Field(..., description="Tipo de calidad: 'economica', 'estandar' o 'premium'")
     modalidad_importacion: Optional[str] = None
-    cantidad_minima: int = Field(..., ge=1, description="Cantidad mínima a importar")
+    cantidad_minima: float = Field(..., gt=0, description="Cantidad mínima a importar, en `unidad_cantidad`")
+    unidad_cantidad: Literal["unidades", "m3"] = Field(
+        default="unidades", description="Unidad de la cantidad: 'unidades' o 'm3' (metros cúbicos)"
+    )
     precio_objetivo_usd: Optional[float] = Field(default=None, ge=0, description="Precio objetivo en USD, mayor o igual a cero")
     precio_objetivo_moneda: str = Field(
         default="USD",
@@ -78,6 +81,13 @@ class CotizacionCreate(BaseModel):
     campos_personalizados_valores: Optional[Dict[str, Any]] = Field(
         None, description="Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor}"
     )
+
+    @model_validator(mode="after")
+    def cantidad_entera_en_unidades(self):
+        # Fracciones solo en m³: "2,5 unidades" no se puede despachar.
+        if self.unidad_cantidad == "unidades" and float(self.cantidad_minima) != int(self.cantidad_minima):
+            raise ValueError("La cantidad en unidades debe ser un número entero")
+        return self
 
     @field_validator("precio_objetivo_moneda")
     @classmethod
@@ -124,7 +134,8 @@ class CotizacionResponse(BaseModel):
     linea_producto: str
     tipo_calidad: str
     modalidad_importacion: Optional[str]
-    cantidad_minima: int
+    cantidad_minima: float
+    unidad_cantidad: str = "unidades"
     precio_objetivo_usd: Optional[float] = Field(default=None, ge=0)
     precio_objetivo_moneda: str = "USD"
     moneda_precio_objetivo: Optional[str] = None
@@ -143,6 +154,8 @@ class CotizacionResponse(BaseModel):
     cotizacion_origen_id: Optional[str] = None
     cancelada_por_error: Optional[str] = None
     motivo_cancelacion: Optional[str] = None
+    motivo_eleccion: Optional[str] = None
+    motivo_eleccion_detalle: Optional[str] = None
     # --- Navegación cruzada (Fase 7): saltar de la cotización al chat/contacto ---
     conversacion_id: Optional[str] = None
     contacto_asignado: Optional[ContactoAsignadoResponse] = None
@@ -159,6 +172,9 @@ class PropuestaCreate(BaseModel):
     tiempo_estimado_entrega: str = Field(..., min_length=1, max_length=100, description="Tiempo estimado (ej: '45 días')")
     incoterm: str = Field(..., min_length=1, max_length=50, description="Incoterm propuesto (FOB, CIF, EXW, DDP, etc.)")
     condiciones_adicionales: Optional[str] = None  # Condiciones adicionales
+    cantidad: Optional[float] = Field(
+        None, gt=0, description="Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida)"
+    )
 
 class PropuestaResponse(BaseModel):
     id: str
@@ -172,6 +188,10 @@ class PropuestaResponse(BaseModel):
     creado_por_usuario_id: Optional[str] = None
     preaceptada_por_solicitante: bool = False
     preaceptada_por_empresa: bool = False
+    cantidad: Optional[float] = None
+    fecha_envio: Optional[datetime] = None
+    motivo_descarte: Optional[str] = None
+    motivo_descarte_detalle: Optional[str] = None
     # --- Navegación cruzada (Fase 7): contacto de quien redactó/envió la propuesta ---
     contacto_asesor: Optional[ContactoAsignadoResponse] = None
 
@@ -188,6 +208,10 @@ class PreaceptarPropuestaRequest(BaseModel):
     traspasa al dueño de la empresa (ver `pre_aceptar_propuesta`).
     """
     aceptar: bool = True
+    # Solo el solicitante, al aceptar habiendo otras propuestas: qué lo decidió.
+    # Al cerrarse la orden queda como motivo de descarte de las demás.
+    motivo_eleccion: Optional[Literal["precio", "tiempo", "condiciones", "otro"]] = None
+    motivo_detalle: Optional[str] = Field(None, max_length=500)
 
 # ==================== Estado de matching de cotizaciones abiertas ====================
 

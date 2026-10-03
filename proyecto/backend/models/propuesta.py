@@ -24,6 +24,14 @@ class Propuesta(Base):
     condiciones_adicionales = Column(Text, nullable=True)
     estado = Column(String(20), default=EstadoPropuesta.pendiente)  # "borrador", "pendiente", "aceptada", "rechazada"
     fecha_envio = Column(DateTime, default=datetime.utcnow)
+    # Cantidad que cubre el precio (en la unidad de la cotización). NULL = la
+    # cantidad pedida por el cliente.
+    cantidad = Column(Float, nullable=True)
+
+    # --- Descarte: el cliente eligió otra propuesta ---
+    motivo_descarte = Column(String(20), nullable=True)  # precio, tiempo, condiciones, otro
+    motivo_descarte_detalle = Column(Text, nullable=True)
+    fecha_descarte = Column(DateTime, nullable=True)
 
     # --- Redacción por asesor / envío por dueño (Semana 4) ---
     # Cuenta (asesor o dueño) que redactó/editó por última vez esta propuesta.
