@@ -348,10 +348,42 @@ async def reclamar_cotizacion(
         enlace_relativo="/chats",
     )
 
+    # Quien reclama ya la vio, aunque haya sido desde la lista.
+    from services.eventos import registrar_vista
+
+    registrar_vista(db, cotizacion, importador_id=importador_id_str, usuario=current_user)
+
     db.commit()
     db.refresh(cotizacion)
 
-    return cotizacion
+    return _vista_para_empresa(cotizacion, importador_id_str)
+
+@router.post("/{cotizacion_id}/vista", status_code=status.HTTP_204_NO_CONTENT)
+async def marcar_cotizacion_vista(
+    cotizacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """La empresa abrió la solicitud. Solo cuenta la primera vez (evento
+    `solicitud_vista`); de ahí sale cuánto tarda en mirarla."""
+    from services.asignacion import esta_asignada
+    from services.eventos import registrar_vista
+
+    try:
+        cotizacion_id_str = str(UUID(cotizacion_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de cotización inválido")
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).first()
+    importador_id = current_user.get("importador_id")
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    if cotizacion.importador_id != importador_id and not (
+        cotizacion.modalidad == "abierta" and esta_asignada(db, importador_id, cotizacion.id)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes acceso a esta cotización")
+    if registrar_vista(db, cotizacion, importador_id=importador_id, usuario=current_user):
+        db.commit()
+
 
 @router.get("/{cotizacion_id}", response_model=CotizacionResponse)
 async def obtener_cotizacion(

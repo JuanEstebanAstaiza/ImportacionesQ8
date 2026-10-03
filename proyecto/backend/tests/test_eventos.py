@@ -387,3 +387,25 @@ class TestTrm:
     def test_error_de_red(self):
         with patch("httpx.get", side_effect=OSError("sin red")):
             assert trm.consultar_trm_oficial() is None
+
+
+class TestVistaExplicita:
+    def test_post_vista_y_reclamar(self, client, db_session):
+        importador, dueño = _empresa(db_session, "China")
+        _, headers = crear_usuario_con_token(db_session, rol="solicitante")
+        cotizacion_id = client.post("/cotizaciones", json=_payload(importador.id), headers=headers).json()["id"]
+
+        assert client.post(f"/cotizaciones/{cotizacion_id}/vista", headers=auth_headers_for(dueño)).status_code == 204
+        assert client.post(f"/cotizaciones/{cotizacion_id}/vista", headers=auth_headers_for(dueño)).status_code == 204
+        assert len(_eventos(db_session, cotizacion_id, "solicitud_vista")) == 1
+
+        otra, otro_dueño = _empresa(db_session, "China")
+        assert client.post(f"/cotizaciones/{cotizacion_id}/vista", headers=auth_headers_for(otro_dueño)).status_code == 403
+        assert client.post(f"/cotizaciones/{cotizacion_id}/vista", headers=headers).status_code == 403
+
+    def test_reclamar_cuenta_como_vista(self, client, db_session):
+        importador, dueño = _empresa(db_session, "China")
+        _, headers = crear_usuario_con_token(db_session, rol="solicitante")
+        cotizacion_id = client.post("/cotizaciones", json=_payload(importador.id), headers=headers).json()["id"]
+        assert client.post(f"/cotizaciones/{cotizacion_id}/reclamar", headers=auth_headers_for(dueño)).status_code == 200
+        assert len(_eventos(db_session, cotizacion_id, "solicitud_vista")) == 1

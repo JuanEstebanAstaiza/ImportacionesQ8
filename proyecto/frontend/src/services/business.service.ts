@@ -202,6 +202,50 @@ export interface BackendEmpresaPropuesta {
 
 export type MotivoEleccion = "precio" | "tiempo" | "condiciones" | "otro";
 
+/** Una solicitud que la empresa todavía no responde, con su tiempo de espera. */
+export interface BackendPendienteResponder {
+  cotizacion_id: string;
+  nombre_producto: string;
+  linea_producto: string;
+  modalidad: string;
+  cantidad: number;
+  unidad: UnidadCantidad;
+  recibida: string;
+  horas_esperando: number;
+  /** a_tiempo (< 24 h) · atencion (24–48 h) · urgente (> 48 h) */
+  nivel: "a_tiempo" | "atencion" | "urgente";
+  con_borrador: boolean;
+}
+
+export type EtapaPedido = "compra" | "embarque" | "transito" | "nacionalizacion" | "entrega";
+export type MotivoPerdida = MotivoEleccion | "sin_motivo";
+
+/** Panel comercial de la empresa (`GET /importadores/panel`), montos en COP. */
+export interface BackendPanelEmpresa {
+  importador_id: string;
+  desde: string | null;
+  moneda: "COP";
+  trm: number;
+  trm_fuente: string;
+  solicitudes_recibidas: number;
+  propuestas_enviadas: number;
+  propuestas_aceptadas: number;
+  propuestas_descartadas: number;
+  propuestas_esperando: number;
+  conversion_pct: number | null;
+  cierre_uno_de_cada: number | null;
+  tasa_respuesta_pct: number | null;
+  tiempo_promedio_respuesta_horas: number | null;
+  valor_cerrado_cop: number;
+  valor_promedio_cerrado_cop: number | null;
+  valor_esperando_cop: number;
+  pedidos_por_etapa: Record<EtapaPedido, number>;
+  pedidos_entregados: number;
+  motivos_perdida: Record<MotivoPerdida, number>;
+  pendientes_responder: BackendPendienteResponder[];
+  total_pendientes_responder: number;
+}
+
 /** TRM que usa la plataforma hoy (`GET /trm`). */
 export interface BackendTrm {
   valor: number;
@@ -666,6 +710,11 @@ export const businessService = {
     return apiRequest<BackendCotizacion[]>("/cotizaciones", { method: "GET" });
   },
 
+  /** La empresa abrió la solicitud (evento `solicitud_vista`; solo cuenta la primera vez). */
+  markQuoteViewed(cotizacionId: string): Promise<void> {
+    return apiRequest<void>(`/cotizaciones/${cotizacionId}/vista`, { method: "POST" });
+  },
+
   getQuoteById(cotizacionId: string): Promise<BackendCotizacion> {
     return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}`, {
       method: "GET",
@@ -1006,6 +1055,10 @@ export const businessService = {
       method: "POST",
       body: { aceptar, ...(motivo ?? {}) } satisfies PreAceptarPropuestaPayload,
     });
+  },
+
+  getCompanyPanel(dias = 90): Promise<BackendPanelEmpresa> {
+    return apiRequest<BackendPanelEmpresa>(`/importadores/panel?dias=${dias}`, { method: "GET" });
   },
 
   getTrm(): Promise<BackendTrm> {

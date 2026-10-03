@@ -22,7 +22,7 @@ from schemas.campo_personalizado import (
     FormularioImportadorResponse
 )
 from schemas.features import EvidenciaImportadorCreate, EvidenciaImportadorResponse
-from schemas.metricas_empresa import MetricasImportadorResponse
+from schemas.metricas_empresa import MetricasImportadorResponse, PanelEmpresaResponse
 from models.importador import Importador
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
@@ -506,6 +506,33 @@ async def cupo_diario_importador(
             detail="La cuenta no está asociada a ninguna empresa importadora",
         )
     return estado_cupo(db, importador)
+
+
+@router.get("/panel", response_model=PanelEmpresaResponse)
+async def panel_de_la_empresa(
+    dias: int = Query(90, ge=0, le=3650, description="Periodo en días hacia atrás; 0 = todo"),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+    db: Session = Depends(get_db),
+):
+    """Panel comercial de la empresa en pesos colombianos (dashboard de la empresa).
+
+    - Solicitudes recibidas, propuestas enviadas, aceptadas y descartadas.
+    - Propuesta a pedido (aceptadas ÷ enviadas) y "cierras 1 de cada X".
+    - Tasa de respuesta (propuestas enviadas ÷ solicitudes recibidas).
+    - Valor promedio de lo cerrado y valor de lo que espera respuesta del comprador.
+    - Pedidos en proceso por etapa y motivos por los que se perdieron propuestas.
+    - Pendientes de responder con su tiempo de espera.
+
+    Sale de la bitácora de eventos (`services/panel_empresa.py`).
+    """
+    from services.panel_empresa import panel_empresa
+
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cuenta no está asociada a ninguna empresa importadora")
+    datos = panel_empresa(db, str(importador_id), dias=dias)
+    db.commit()  # por si la TRM se acaba de consultar
+    return datos
 
 
 @router.get("/metricas", response_model=MetricasImportadorResponse)

@@ -160,7 +160,7 @@ def _rellenar_historico(eventos: sa.Table) -> None:
 
     cotizaciones = {}
     for c in conexion.execute(sa.text(
-        "SELECT id, solicitante_id, modalidad, linea_producto, cantidad_minima, unidad_cantidad, "
+        "SELECT id, solicitante_id, importador_id, modalidad, linea_producto, cantidad_minima, unidad_cantidad, "
         "precio_objetivo_usd, moneda_precio_objetivo, fecha_creacion FROM cotizaciones"
     )).mappings():
         cotizaciones[c["id"]] = c
@@ -180,10 +180,25 @@ def _rellenar_historico(eventos: sa.Table) -> None:
         c = cotizaciones.get(cotizacion_id)
         return (c["cantidad_minima"], c["unidad_cantidad"] or "unidades") if c else (None, None)
 
+    asignadas = set()
+
+    def asignada(importador_id, cotizacion_id, fecha, modalidad, origen):
+        if not importador_id or (importador_id, cotizacion_id) in asignadas:
+            return
+        asignadas.add((importador_id, cotizacion_id))
+        cantidad, unidad = cantidad_de(cotizacion_id)
+        evento(
+            "solicitud_asignada", fecha,
+            cotizacion_id=cotizacion_id, importador_id=importador_id,
+            cantidad=cantidad, unidad=unidad,
+            datos={"modalidad": modalidad, "origen_asignacion": origen},
+        )
+
     for r in conexion.execute(sa.text(
         "SELECT importador_id, cotizacion_id, modalidad, origen, fecha_recepcion "
         "FROM recepciones_cotizacion WHERE entregada = :si"
     ), {"si": True}).mappings():
+        asignadas.add((r["importador_id"], r["cotizacion_id"]))
         cantidad, unidad = cantidad_de(r["cotizacion_id"])
         evento(
             "solicitud_asignada", r["fecha_recepcion"],
@@ -191,6 +206,20 @@ def _rellenar_historico(eventos: sa.Table) -> None:
             cantidad=cantidad, unidad=unidad,
             datos={"modalidad": r["modalidad"], "origen_asignacion": r["origen"]},
         )
+
+    # Antes de `recepciones_cotizacion` (migración 0024) no quedaba constancia
+    # del reparto: la dirigida llegó a su empresa al crearse, y una empresa que
+    # respondió una abierta la había recibido en el matching de su creación.
+    for c in cotizaciones.values():
+        if c["modalidad"] == "dirigida":
+            asignada(c["importador_id"], c["id"], c["fecha_creacion"], "dirigida", "dirigida")
+    for p in conexion.execute(sa.text(
+        "SELECT cotizacion_id, importador_id FROM propuestas WHERE estado <> 'borrador'"
+    )).mappings():
+        c = cotizaciones.get(p["cotizacion_id"])
+        if c is not None:
+            origen = "dirigida" if c["modalidad"] == "dirigida" else "automatica"
+            asignada(p["importador_id"], c["id"], c["fecha_creacion"], c["modalidad"], origen)
 
     ordenes = {o["cotizacion_id"]: o for o in conexion.execute(sa.text(
         "SELECT id, cotizacion_id, importador_id, precio_acordado_usd, fecha_creacion FROM ordenes"

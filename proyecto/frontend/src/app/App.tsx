@@ -78,6 +78,7 @@ import { PresentacionPublica, EditorPresentacion } from "@/features/importador/P
 import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
 import { TierBadge } from "@/features/cotizante/TierBadge";
 import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
+import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
 import {
   componerShippingMark,
   LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
@@ -641,7 +642,7 @@ const NAV_ITEMS=[
 
 const NAV_IMPORTADORA=[
   {icon:LayoutGrid,    label:"Dashboard",    key:"imp-dashboard"},
-  {icon:FileText,      label:"Cotizaciones", key:"imp-quotes"},
+  {icon:FileText,      label:"Solicitudes",  key:"imp-quotes"},
   {icon:Users,         label:"Asesores",     key:"imp-advisors"},
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
   {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
@@ -2604,7 +2605,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                                 <tr key={`cmp-${proposal.id}`}>
                                   <td className="py-2.5 pr-3">
                                     <p className="font-medium flex items-center gap-1">{nombreEmpresa(proposal)}{empresa?.verificado&&<BadgeCheck className="w-3.5 h-3.5 text-primary" aria-label="Verificada"/>}</p>
-                                    <p className="text-[11px] text-muted-foreground">{proposal.estado==="pendiente"?"Esperando tu respuesta":proposal.estado}</p>
+                                    <p className="text-[11px] text-muted-foreground">{proposal.estado==="pendiente"?(proposal.preaceptada_por_solicitante?"Aceptaste; falta que la empresa confirme":"Esperando tu respuesta"):proposal.estado==="aceptada"?"Elegida":proposal.estado==="rechazada"?"No elegida":proposal.estado}</p>
                                   </td>
                                   <td className="py-2.5 pr-3">
                                     <p className="font-medium">US${proposal.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
@@ -6551,26 +6552,9 @@ function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notificati
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,averageResponseHours}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];orders:Order[];chats:ChatConv[];companyName:string;averageResponseHours:number}) {
-  const activeQuotesCount = quotes.filter(q=>q.status!=="active-order").length;
-  const assignedQuotesCount = quotes.filter(q=>q.mode==="Dirigida").length;
-  const sentResponsesCount = quotes.filter(q=>q.status==="accepted"||q.status==="active-order").length;
-  const activeOrdersCount = orders.filter((order)=>{
-    const normalizedStatus = String(order.status ?? "").trim().toLowerCase();
-    return !["entregada","completada","cancelada","cerrada","finalizada"].includes(normalizedStatus);
-  }).length;
+function ImporterDashboardScreen({sb,quotes,advisors,chats,companyName}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];companyName:string}) {
   const activeChatsCount = chats.filter(c=>c.status==="activa").length;
   const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
-  const metrics=[
-    {label:"Cotizaciones pendientes",value:String(activeQuotesCount),icon:<FileText className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Cotizaciones asignadas",value:String(assignedQuotesCount),icon:<Users className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Respuestas enviadas",value:String(sentResponsesCount),icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Órdenes activas",value:String(activeOrdersCount),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
-    {label:"Chats activos",value:String(activeChatsCount),icon:<MessageSquare className="w-5 h-5"/>,color:"text-rose-600",bg:"bg-rose-50"},
-    {label:"Tiempo prom. respuesta (h)",value:String(averageResponseHours),icon:<Clock className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
-    {label:"Asesores conectados",value:String(activeAdvisors),icon:<Zap className="w-5 h-5"/>,color:"text-lime-600",bg:"bg-lime-50"},
-  ];
-  const recentActivity: {text:string;time:string;icon:React.ReactNode}[] = [];
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="imp-dashboard"/>
@@ -6582,22 +6566,17 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
             <h1 className="text-xl font-semibold mt-3">Panel de la empresa</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{companyName ? `${companyName} - Resumen de actividad` : "Resumen de actividad"}</p>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {metrics.map((m,i)=>(
-              <Card key={i} padding="md" className="metric-card flex items-start gap-3">
-                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
-                <div className="min-w-0">
-                  <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <PanelEmpresa
+            asesoresConectados={activeAdvisors}
+            chatsActivos={activeChatsCount}
+            onAbrirSolicitudes={()=>sb.onNav("imp-quotes")}
+            onAbrirPedidos={()=>sb.onNav("orders")}
+          />
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <Card padding="none">
                 <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                  <h2 className="font-semibold text-sm">Cotizaciones recientes</h2>
+                  <h2 className="font-semibold text-sm">Solicitudes recientes</h2>
                   <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver todas</Button>
                 </div>
                 <div className="divide-y divide-border">
@@ -6610,31 +6589,16 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
                       <Badge variant={q.status as BadgeVariant}/>
                     </div>
                   ))}
-                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin cotizaciones disponibles.</div>}
+                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin solicitudes todavía.</div>}
                 </div>
               </Card>
             </div>
             <div className="space-y-4">
-              <Card padding="none">
-                <div className="px-5 py-4 border-b border-border"><h2 className="font-semibold text-sm">Actividad reciente</h2></div>
-                <div className="px-5 py-3 space-y-3">
-                  {recentActivity.map((a,i)=>(
-                    <div key={i} className="flex items-start gap-2.5">
-                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">{a.icon}</div>
-                      <div>
-                        <p className="text-xs text-foreground leading-relaxed">{a.text}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{a.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {recentActivity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente.</p>}
-                </div>
-              </Card>
               <Card padding="md">
                 <p className="text-sm font-semibold mb-3">Accesos rápidos</p>
                 <div className="space-y-2">
                   <Button variant="secondary" size="sm" fullWidth icon={<Users className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-advisors")}>Gestionar asesores</Button>
-                  <Button variant="secondary" size="sm" fullWidth icon={<FileText className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver cotizaciones</Button>
+                  <Button variant="secondary" size="sm" fullWidth icon={<FileText className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver solicitudes</Button>
                   <Button variant="secondary" size="sm" fullWidth icon={<Building2 className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-profile")}>Editar perfil</Button>
                 </div>
               </Card>
@@ -8012,6 +7976,12 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   }
 
   const quote=quotes.find(q=>q.id===quoteId)??null;
+
+  // Abrir la solicitud es el "vista" de la bitácora; el backend solo cuenta la primera.
+  useEffect(()=>{
+    if(!quoteId)return;
+    void businessService.markQuoteViewed(quoteId).catch(()=>undefined);
+  },[quoteId]);
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
   const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
@@ -10823,7 +10793,6 @@ export default function App() {
     chatConversations.reduce((acc,conversation)=>acc+(conversation.unread||0),0),
   );
   const activeChatCount = chatConversations.filter((conversation)=>conversation.status==="activa").length;
-  const importerAverageResponseHours = extractFirstNumber(companyProfile?.tiempo_respuesta_promedio);
   const headerSubtitle = resolveHeaderSubtitle({
     role: userRole,
     importerCompanyName: companyProfile?.nombre_empresa,
@@ -11414,7 +11383,7 @@ export default function App() {
 
   const renderPrivateScreen = () => {
     // ── Importer portal ───────────────────────────────────────────────────────
-    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} orders={importerOrders} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""} averageResponseHours={importerAverageResponseHours}/>;
+    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
     if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany}/>;
