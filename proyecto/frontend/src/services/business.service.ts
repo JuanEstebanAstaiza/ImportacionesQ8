@@ -35,7 +35,13 @@ export interface BackendImporter {
   tier_minimo_requerido?: string;
   /** Máximo de cotizaciones que la empresa acepta recibir por día; null = sin límite. */
   limite_cotizaciones_diarias?: number | null;
+  /** Pedido mínimo que acepta la empresa y su unidad (criterio de asignación). */
+  pedido_minimo?: number | null;
+  pedido_minimo_unidad?: UnidadCantidad | null;
 }
+
+/** "unidades" o "m3" (metros cúbicos). */
+export type UnidadCantidad = "unidades" | "m3";
 
 /** Uso del cupo diario de cotizaciones de la empresa (`GET /importadores/cupo-diario`). */
 export interface BackendCupoDiario {
@@ -68,6 +74,7 @@ export interface BackendCotizacion {
   tipo_calidad: string;
   modalidad_importacion?: string | null;
   cantidad_minima: number;
+  unidad_cantidad?: UnidadCantidad;
   precio_objetivo_usd: number | null;
   precio_objetivo_moneda?: string | null;
   moneda_precio_objetivo?: string | null;
@@ -98,6 +105,7 @@ export interface CreateCotizacionPayload {
   nivel_personalizacion?: string;
   modalidad_importacion?: string;
   cantidad_minima: number;
+  unidad_cantidad?: UnidadCantidad;
   precio_objetivo_usd?: number;
   precio_objetivo_moneda?: string;
   moneda_precio_objetivo?: string;
@@ -170,7 +178,36 @@ export interface BackendPropuesta {
   creado_por_usuario_id: string | null;
   preaceptada_por_solicitante: boolean;
   preaceptada_por_empresa: boolean;
+  /** Cantidad que cubre el precio (null = la pedida en la cotización). */
+  cantidad?: number | null;
+  fecha_envio?: string | null;
+  /** Si el cliente eligió otra propuesta: por qué (precio, tiempo, condiciones, otro). */
+  motivo_descarte?: string | null;
+  motivo_descarte_detalle?: string | null;
+  /** Solo para el comprador: la empresa y cómo cumple. */
+  empresa?: BackendEmpresaPropuesta | null;
   contacto_asesor: BackendContactoAsesor | null;
+}
+
+export interface BackendEmpresaPropuesta {
+  importador_id: string;
+  nombre_empresa: string;
+  logo_url: string | null;
+  verificado: boolean;
+  calificacion_promedio: number;
+  total_resenas: number;
+  pedidos_entregados: number;
+  pedidos_en_curso: number;
+}
+
+export type MotivoEleccion = "precio" | "tiempo" | "condiciones" | "otro";
+
+/** TRM que usa la plataforma hoy (`GET /trm`). */
+export interface BackendTrm {
+  valor: number;
+  fuente: string;
+  vigencia: string | null;
+  fecha_consulta: string | null;
 }
 
 export interface CreatePropuestaPayload {
@@ -179,10 +216,13 @@ export interface CreatePropuestaPayload {
   tiempo_estimado_entrega: string;
   incoterm: string;
   condiciones_adicionales?: string;
+  cantidad?: number;
 }
 
 export interface PreAceptarPropuestaPayload {
   aceptar: boolean;
+  motivo_eleccion?: MotivoEleccion;
+  motivo_detalle?: string;
 }
 
 export interface StartNegotiationPayload {
@@ -245,6 +285,9 @@ export interface UpdateImporterPayload {
   shipping_mark_prefijo?: string;
   /** null quita el límite; omitirlo lo deja como está. */
   limite_cotizaciones_diarias?: number | null;
+  /** null quita el pedido mínimo; omitirlo lo deja como está. */
+  pedido_minimo?: number | null;
+  pedido_minimo_unidad?: UnidadCantidad | null;
 }
 
 /**
@@ -954,11 +997,19 @@ export const businessService = {
     });
   },
 
-  preAcceptProposal(propuestaId: string, aceptar: boolean): Promise<BackendPropuesta> {
+  preAcceptProposal(
+    propuestaId: string,
+    aceptar: boolean,
+    motivo?: { motivo_eleccion: MotivoEleccion; motivo_detalle?: string },
+  ): Promise<BackendPropuesta> {
     return apiRequest<BackendPropuesta>(`/propuestas/${propuestaId}/pre-aceptar`, {
       method: "POST",
-      body: { aceptar } satisfies PreAceptarPropuestaPayload,
+      body: { aceptar, ...(motivo ?? {}) } satisfies PreAceptarPropuestaPayload,
     });
+  },
+
+  getTrm(): Promise<BackendTrm> {
+    return apiRequest<BackendTrm>("/trm", { method: "GET" });
   },
 
   startProposalNegotiation(cotizacionId: string, importadorId: string): Promise<BackendCotizacion> {

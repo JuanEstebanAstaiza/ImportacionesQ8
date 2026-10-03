@@ -57,6 +57,8 @@ import {
   type BackendImporter,
   type BackendOrder,
   type BackendPropuesta,
+  type MotivoEleccion,
+  type UnidadCantidad,
   type BackendUserProfile,
   type CreateAsesorPayload,
   type CreateCotizacionPayload,
@@ -667,6 +669,7 @@ type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte";
 const NAV_ADMIN=[
   {icon:LayoutGrid,    label:"Resumen",         key:"admin-dashboard"},
   {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
+  {icon:GitCompare,    label:"Asignación",      key:"admin-asignacion"},
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
   {icon:WalletCards,   label:"Cotizantes",      key:"admin-cotizantes"},
   {icon:Mail,          label:"Correos",         key:"admin-correos"},
@@ -929,6 +932,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     productLine: cot.linea_producto,
     quality: cot.tipo_calidad,
     minQuantity: String(cot.cantidad_minima),
+    unit: cot.unidad_cantidad === "m3" ? "m3" : "unidades",
     targetPrice: targetPriceValue !== null ? `${targetPriceValue} ${currency}` : "N/A",
     targetPriceCurrency: currency,
     incoterm: cot.incoterm || "DDP",
@@ -1169,7 +1173,7 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
     importerId: order.importador_id,
     created: formatShortDate(history[0]?.fecha || new Date().toISOString()),
     estimated: order.tiempo_estimado_entrega || "N/D",
-    quantity: quote?.minQuantity ? `${quote.minQuantity} unidades` : "N/D",
+    quantity: quote?.minQuantity ? cantidadConUnidad(quote.minQuantity, quote.unit, true) : "N/D",
     unitPrice: `${order.precio_acordado_usd} USD/u`,
     totalValue: `${order.precio_acordado_usd} USD`,
     incoterm: quote?.incoterm || "N/D",
@@ -2315,6 +2319,62 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
   );
 }
 
+// Qué cubre el precio según el incoterm, en palabras del comprador.
+const INCOTERM_INCLUYE: Record<string,string> = {
+  EXW:"Mercancía en fábrica; tú pones el transporte",
+  FCA:"Entregada al transportista en origen",
+  FOB:"Puesta en el barco en origen; flete y seguro aparte",
+  CFR:"Flete hasta el puerto de destino; seguro aparte",
+  CIF:"Flete y seguro hasta el puerto de destino",
+  CPT:"Transporte pagado hasta destino; seguro aparte",
+  CIP:"Transporte y seguro pagados hasta destino",
+  DAP:"Hasta tu puerta, sin impuestos de importación",
+  DPU:"Descargada en destino, sin impuestos",
+  DDP:"Puerta a puerta con impuestos y nacionalización",
+};
+
+/** Las observaciones de una propuesta: texto libre o el JSON del formulario de respuesta. */
+function leerCondicionesPropuesta(texto: string | null | undefined): { descripcion: string; ventajas: string; detalles: string[] } {
+  const vacio = { descripcion: "", ventajas: "", detalles: [] as string[] };
+  if (!texto) return vacio;
+  try {
+    const datos = JSON.parse(texto) as Record<string, unknown>;
+    if (datos && typeof datos === "object" && datos.schema === "create-response-v1") {
+      const campo = (clave: string) => (typeof datos[clave] === "string" ? String(datos[clave]).trim() : "");
+      const detalles = [
+        campo("moq") && `MOQ ${campo("moq")}`,
+        campo("port") && `Puerto ${campo("port")}`,
+        campo("productionTime") && `Producción ${campo("productionTime")}`,
+        campo("shippingTime") && `Envío ${campo("shippingTime")}`,
+      ].filter(Boolean) as string[];
+      return { descripcion: campo("description"), ventajas: campo("advantages"), detalles };
+    }
+  } catch {
+    // Texto libre.
+  }
+  return { ...vacio, descripcion: texto };
+}
+
+const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string }[] = [
+  { clave: "precio", etiqueta: "Precio", ayuda: "Me salió mejor en costo" },
+  { clave: "tiempo", etiqueta: "Tiempo de entrega", ayuda: "Llega antes" },
+  { clave: "condiciones", etiqueta: "Condiciones", ayuda: "Lo que incluye, pagos, garantías" },
+  { clave: "otro", etiqueta: "Otro motivo", ayuda: "Confianza, atención, recomendación..." },
+];
+
+/** "500 u" o "2,5 m³". */
+function cantidadConUnidad(cantidad: string | number | null | undefined, unidad?: string | null, largo = false): string {
+  if (cantidad === null || cantidad === undefined || cantidad === "") return "—";
+  const numero = Number(cantidad);
+  const texto = Number.isFinite(numero) ? numero.toLocaleString("es-CO", { maximumFractionDigits: 2 }) : String(cantidad);
+  if (unidad === "m3") return `${texto} m³`;
+  return `${texto} ${largo ? "unidades" : "u"}`;
+}
+
+function formatoPesos(valor: number): string {
+  return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTE DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2323,6 +2383,18 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
   const [loadingProposals,setLoadingProposals]=useState(true);
   const [actionMessage,setActionMessage]=useState("");
+  const [trm,setTrm]=useState<number|null>(null);
+  // Aceptar habiendo otras propuestas: antes se pregunta qué decidió la elección.
+  const [eligiendo,setEligiendo]=useState<BackendPropuesta|null>(null);
+  const [motivoEleccion,setMotivoEleccion]=useState<MotivoEleccion|null>(null);
+  const [motivoDetalle,setMotivoDetalle]=useState("");
+  const [decisionError,setDecisionError]=useState("");
+
+  useEffect(()=>{
+    let vigente=true;
+    businessService.getTrm().then((r)=>{if(vigente)setTrm(r.valor);}).catch(()=>{});
+    return ()=>{vigente=false;};
+  },[]);
 
   const loadProposals=useCallback(async()=>{
     if(!quote){
@@ -2341,7 +2413,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
 
   useEffect(()=>{void loadProposals();},[loadProposals]);
 
-  const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean)=>{
+  const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean,motivo?:{motivo_eleccion:MotivoEleccion;motivo_detalle?:string})=>{
     setActionMessage("");
     const targetProposal = proposals.find((proposal) => proposal.id === propuestaId);
     if (!targetProposal) {
@@ -2352,7 +2424,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
       await businessService.startProposalNegotiation(targetProposal.cotizacion_id, targetProposal.importador_id);
     }
 
-    await businessService.preAcceptProposal(propuestaId,aceptar);
+    await businessService.preAcceptProposal(propuestaId,aceptar,motivo);
     await loadProposals();
     if(onRefreshQuotes){
       await onRefreshQuotes();
@@ -2382,6 +2454,27 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const visibleProposals = quote.mode === "Dirigida"
     ? proposals.filter((proposal) => !quote.importadorId || proposal.importador_id === quote.importadorId)
     : proposals;
+  const otrasPendientes=(id:string)=>visibleProposals.filter(p=>p.id!==id&&p.estado==="pendiente").length;
+  const aceptarPropuesta=(p:BackendPropuesta)=>{
+    setDecisionError("");
+    if(otrasPendientes(p.id)>0){
+      setMotivoEleccion(null);
+      setMotivoDetalle("");
+      setEligiendo(p);
+      return;
+    }
+    void handleDecision(p.id,true).catch((e)=>setDecisionError(e instanceof Error?e.message:"No se pudo aceptar la propuesta."));
+  };
+  const confirmarEleccion=async()=>{
+    if(!eligiendo||!motivoEleccion)return;
+    try{
+      await handleDecision(eligiendo.id,true,{motivo_eleccion:motivoEleccion,motivo_detalle:motivoDetalle.trim()||undefined});
+      setEligiendo(null);
+    }catch(e){
+      setDecisionError(e instanceof Error?e.message:"No se pudo aceptar la propuesta.");
+    }
+  };
+  const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
   const activeProposal=visibleProposals[0]??null;
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
   const contactAsesorWhatsapp = contactAsesor?.whatsapp || "";
@@ -2453,7 +2546,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción","Producto de alta demanda, especificaciones estándar."]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["MOQ",quote.minQuantity+" u"],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas","Entrega en destino final preferida."]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["Cantidad",cantidadConUnidad(quote.minQuantity,quote.unit)],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas","Entrega en destino final preferida."]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
               </Card>
               <Card padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
@@ -2490,36 +2583,60 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                   <>
                     {quote.mode === "Abierta" && visibleProposals.length > 1 && (
                       <Card padding="md" className="mb-3">
-                        <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Comparador rápido de multi-ofertas</h4>
+                        <h4 className="text-sm font-semibold flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Comparador de propuestas</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 mb-3">En el orden en que llegaron. Mira precio, tiempo, lo que incluye y cómo cumple cada empresa: lo más barato no siempre es lo que más conviene.</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                <th className="text-left py-2 pr-3">Empresa</th>
-                                <th className="text-left py-2 pr-3">Precio</th>
-                                <th className="text-left py-2 pr-3">Entrega</th>
-                                <th className="text-left py-2 pr-3">Incoterm</th>
-                                <th className="text-left py-2">Estado</th>
+                                <th className="text-left py-2 pr-3 font-medium">Empresa</th>
+                                <th className="text-left py-2 pr-3 font-medium">Precio</th>
+                                <th className="text-left py-2 pr-3 font-medium">Tiempo</th>
+                                <th className="text-left py-2 pr-3 font-medium">Qué incluye</th>
+                                <th className="text-left py-2 font-medium">Cumplimiento</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-border/60">
-                              {visibleProposals.map((proposal) => (
+                            <tbody className="divide-y divide-border/60 align-top">
+                              {visibleProposals.map((proposal) => {
+                                const condiciones=leerCondicionesPropuesta(proposal.condiciones_adicionales);
+                                const empresa=proposal.empresa;
+                                return (
                                 <tr key={`cmp-${proposal.id}`}>
-                                  <td className="py-2 pr-3 text-xs">{proposal.importador_id.slice(0, 8).toUpperCase()}</td>
-                                  <td className="py-2 pr-3 font-semibold">{proposal.precio_ofrecido_usd} USD</td>
-                                  <td className="py-2 pr-3">{proposal.tiempo_estimado_entrega}</td>
-                                  <td className="py-2 pr-3">{proposal.incoterm}</td>
-                                  <td className="py-2">{proposal.estado}</td>
+                                  <td className="py-2.5 pr-3">
+                                    <p className="font-medium flex items-center gap-1">{nombreEmpresa(proposal)}{empresa?.verificado&&<BadgeCheck className="w-3.5 h-3.5 text-primary" aria-label="Verificada"/>}</p>
+                                    <p className="text-[11px] text-muted-foreground">{proposal.estado==="pendiente"?"Esperando tu respuesta":proposal.estado}</p>
+                                  </td>
+                                  <td className="py-2.5 pr-3">
+                                    <p className="font-medium">US${proposal.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
+                                    {trm&&<p className="text-[11px] text-muted-foreground">≈ {formatoPesos(proposal.precio_ofrecido_usd*trm)}</p>}
+                                    {proposal.cantidad?<p className="text-[11px] text-muted-foreground">por {cantidadConUnidad(proposal.cantidad,quote.unit)}</p>:null}
+                                  </td>
+                                  <td className="py-2.5 pr-3 font-medium">{proposal.tiempo_estimado_entrega}</td>
+                                  <td className="py-2.5 pr-3 max-w-[260px]">
+                                    <p className="font-medium">{proposal.incoterm}</p>
+                                    <p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(proposal.incoterm||"").toUpperCase()]??"Según lo acordado"}</p>
+                                    {condiciones.ventajas&&<p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{condiciones.ventajas}</p>}
+                                  </td>
+                                  <td className="py-2.5">
+                                    {empresa?(
+                                      <>
+                                        <p className="font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{empresa.calificacion_promedio.toFixed(1)}<span className="text-[11px] font-normal text-muted-foreground">({empresa.total_resenas} {empresa.total_resenas===1?"reseña":"reseñas"})</span></p>
+                                        <p className="text-[11px] text-muted-foreground">{empresa.pedidos_entregados} {empresa.pedidos_entregados===1?"pedido entregado":"pedidos entregados"} · {empresa.pedidos_en_curso} en curso</p>
+                                      </>
+                                    ):<span className="text-xs text-muted-foreground">—</span>}
+                                  </td>
                                 </tr>
-                              ))}
+                              );})}
                             </tbody>
                           </table>
                         </div>
                       </Card>
                     )}
+                  {decisionError&&<p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{decisionError}</p>}
                   <div className="space-y-3">{visibleProposals.map(p=>{
                     const contactName=p.contacto_asesor?.nombre||"Asesor de la empresa";
-                    const companyName=quote.importer;
+                    const companyName=nombreEmpresa(p);
+                    const condiciones=leerCondicionesPropuesta(p.condiciones_adicionales);
                     return(
                       <Card key={p.id} padding="md" className="hover:shadow-md transition-shadow">
                         <div className="flex flex-col gap-3">
@@ -2531,17 +2648,24 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{contactName}</p>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><p className="text-sm font-semibold">{p.precio_ofrecido_usd} USD</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Entrega</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Incoterm</p><p className="text-sm font-semibold">{p.incoterm}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Contacto</p><p className="text-sm font-semibold">{p.contacto_asesor?.whatsapp||"—"}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><p className="text-sm font-semibold">US${p.precio_ofrecido_usd.toLocaleString("es-CO")}</p>{trm&&<p className="text-[11px] text-muted-foreground">≈ {formatoPesos(p.precio_ofrecido_usd*trm)}</p>}</div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Tiempo</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Incluye</p><p className="text-sm font-semibold">{p.incoterm}</p><p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(p.incoterm||"").toUpperCase()]??"Según lo acordado"}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Cumplimiento</p>{p.empresa?<><p className="text-sm font-semibold flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{p.empresa.calificacion_promedio.toFixed(1)}</p><p className="text-[11px] text-muted-foreground">{p.empresa.pedidos_entregados} entregados</p></>:<p className="text-sm font-semibold">—</p>}</div>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">{p.condiciones_adicionales||"Sin observaciones adicionales."}</p>
+                              {(condiciones.descripcion||condiciones.ventajas||condiciones.detalles.length>0)?(
+                                <div className="text-xs text-muted-foreground mt-3 leading-relaxed space-y-1">
+                                  {condiciones.descripcion&&<p>{condiciones.descripcion}</p>}
+                                  {condiciones.ventajas&&<p><span className="font-medium text-foreground">Ventajas:</span> {condiciones.ventajas}</p>}
+                                  {condiciones.detalles.length>0&&<p>{condiciones.detalles.join(" · ")}</p>}
+                                </div>
+                              ):<p className="text-xs text-muted-foreground mt-3">Sin observaciones adicionales.</p>}
+                              {p.estado==="rechazada"&&p.motivo_descarte&&<p className="text-[11px] text-muted-foreground mt-2">Elegiste otra propuesta por: {MOTIVOS_ELECCION.find(m=>m.clave===p.motivo_descarte)?.etiqueta??p.motivo_descarte}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
                               {p.estado==="pendiente"?(
                                 <>
-                                  <Button variant="primary" size="sm" onClick={()=>void handleDecision(p.id,true)}>Aceptar</Button>
+                                  <Button variant="primary" size="sm" onClick={()=>aceptarPropuesta(p)}>Aceptar</Button>
                                   <Button variant="secondary" size="sm" onClick={()=>void handleDecision(p.id,false)}>Rechazar</Button>
                                 </>
                               ):(
@@ -2575,6 +2699,34 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
           </div>
         </main>
       </div>
+      <Modal open={Boolean(eligiendo)} onClose={()=>setEligiendo(null)} title="¿Qué te hizo elegir esta propuesta?">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Elegiste la de <span className="font-medium text-foreground">{eligiendo?nombreEmpresa(eligiendo):""}</span>. Tu respuesta ayuda a las demás empresas a mejorar sus próximas propuestas; no ven quién ganó ni a qué precio.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Motivo de la elección">
+            {MOTIVOS_ELECCION.map(m=>(
+              <button
+                key={m.clave}
+                type="button"
+                role="radio"
+                aria-checked={motivoEleccion===m.clave}
+                onClick={()=>setMotivoEleccion(m.clave)}
+                className={clsx("rounded-xl border p-3 text-left transition-all",motivoEleccion===m.clave?"border-primary bg-primary/5":"border-border hover:border-primary/40")}
+              >
+                <p className="text-sm font-semibold">{m.etiqueta}</p>
+                <p className="text-xs text-muted-foreground">{m.ayuda}</p>
+              </button>
+            ))}
+          </div>
+          <Textarea label="Detalle (opcional)" placeholder="Cuéntanos en una frase" value={motivoDetalle} maxLength={500} onChange={e=>setMotivoDetalle(e.target.value)}/>
+          {decisionError&&<p role="alert" className="text-sm text-rose-700">{decisionError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={()=>setEligiendo(null)}>Cancelar</Button>
+            <Button variant="primary" disabled={!motivoEleccion} onClick={()=>{void confirmarEleccion();}}>Aceptar propuesta</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -2632,7 +2784,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
 
   const compRows=[
     {label:"Precio objetivo",target:quote.targetPrice,offer:resp.price,         result:"worse" as const},
-    {label:"MOQ solicitado", target:quote.minQuantity+" u",offer:resp.moq,       result:"better"as const},
+    {label:"Cantidad solicitada", target:cantidadConUnidad(quote.minQuantity,quote.unit),offer:resp.moq,       result:"better"as const},
     {label:"Incoterm",       target:quote.incoterm,   offer:resp.incoterm,       result:(quote.incoterm===resp.incoterm?"equal":"worse")as"equal"|"worse"},
     {label:"Plazo estimado", target:"30 días",        offer:resp.deliveryTime,   result:"equal" as const},
   ];
@@ -5869,8 +6021,8 @@ function Stepper({current}:{current:number}) {
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
 const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
 const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
 const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
@@ -5946,7 +6098,7 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
 }
 
 function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"abierta"|null;si:Importer|null;form:QuoteFormState}) {
-  const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?`${form.minQuantity} u`:""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
+  const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?cantidadConUnidad(form.minQuantity,form.unit):""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
   if(modalidad==="dirigida"&&si)return(<div className="space-y-4">
     <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
     <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:si.advisor.phone})}/><ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>toast.info("El chat se habilita al enviar la cotización.")}/></div></Card>
@@ -6005,15 +6157,39 @@ function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormSta
         <div className="space-y-4">
           <div><p className="text-sm font-medium mb-2">Propósito</p><div className="flex gap-2">{(["ecommerce","corporativo"]as const).map(opt=><button key={opt} onClick={()=>upd("purpose",opt)} className={clsx("flex-1 h-9 rounded-lg border text-sm font-medium transition-all",form.purpose===opt?"bg-primary text-white border-primary shadow-sm":"bg-white text-muted-foreground border-border hover:border-primary/40")}>{opt==="ecommerce"?"Ecommerce":"Corporativo"}</button>)}</div></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Cantidad mínima"
-              placeholder="Ej. 500"
-              type="number"
-              min={0}
-              value={form.minQuantity}
-              onChange={e=>upd("minQuantity",String(Math.max(1,Number(e.target.value))))}
-              hint="En unidades"
-            />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cantidad-minima" className="text-sm font-medium text-foreground">Cantidad mínima</label>
+              <div className="relative flex items-center">
+                <input
+                  id="cantidad-minima"
+                  type="number"
+                  min={form.unit==="m3"?0.1:1}
+                  step={form.unit==="m3"?0.1:1}
+                  inputMode={form.unit==="m3"?"decimal":"numeric"}
+                  placeholder={form.unit==="m3"?"Ej. 2.5":"Ej. 500"}
+                  value={form.minQuantity}
+                  onChange={e=>{
+                    const valor=e.target.value;
+                    // En unidades no hay fracciones; en m³ sí (2,5 m³).
+                    upd("minQuantity",form.unit==="m3"?valor:(valor===""?"":String(Math.max(1,Math.round(Number(valor))))));
+                  }}
+                  className="w-full h-10 bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary border-border pl-3 pr-28"
+                />
+                <div className="absolute right-1 flex rounded-md border border-border bg-white p-0.5" role="radiogroup" aria-label="Unidad de la cantidad">
+                  {(["unidades","m3"] as const).map(u=>(
+                    <button
+                      key={u}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.unit===u}
+                      onClick={()=>setForm(p=>({...p,unit:u,minQuantity:u==="unidades"&&p.minQuantity?String(Math.max(1,Math.round(Number(p.minQuantity)))):p.minQuantity}))}
+                      className={clsx("h-7 rounded px-2 text-xs font-medium",form.unit===u?"bg-primary text-white":"text-muted-foreground")}
+                    >{u==="m3"?"m³":"Unidades"}</button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{form.unit==="m3"?"Volumen en metros cúbicos; admite decimales":"Número de piezas o unidades"}</p>
+            </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between"><label htmlFor="precio-objetivo" className="text-sm font-medium text-foreground">Precio objetivo</label></div>
               <div className="relative flex items-center">
@@ -6072,7 +6248,7 @@ function Step3Dirigida({form,importer,confirmed,setConfirmed}:{form:QuoteFormSta
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2"><CheckCircle2 className="w-5 h-5 text-primary"/><h2 className="text-base font-semibold">Revisa tu solicitud</h2></div>
-      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?`${form.minQuantity} u`:"—"],["Precio objetivo",form.targetPrice ? `${form.targetPrice} ${form.targetPriceCurrency || "USD"}` : "—"],["Incoterm",form.incoterm || "DDP"]]}].map(({title,icon:Icon,rows})=>(
+      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?cantidadConUnidad(form.minQuantity,form.unit):"—"],["Precio objetivo",form.targetPrice ? `${form.targetPrice} ${form.targetPriceCurrency || "USD"}` : "—"],["Incoterm",form.incoterm || "DDP"]]}].map(({title,icon:Icon,rows})=>(
         <Card key={title} padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5"/>{title}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">{rows.map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div></Card>
       ))}
       <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"/><span className="text-sm leading-relaxed">Confirmo que la información es correcta y autorizo el envío de esta solicitud.</span></label>
@@ -6155,8 +6331,10 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       return;
     }
 
-    const parsedMinQuantity=Number.parseInt(form.minQuantity,10);
-    if(Number.isNaN(parsedMinQuantity)||parsedMinQuantity<1){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
+    const parsedMinQuantity=form.unit==="m3"
+      ?Number.parseFloat(String(form.minQuantity).replace(",","."))
+      :Number.parseInt(form.minQuantity,10);
+    if(!Number.isFinite(parsedMinQuantity)||parsedMinQuantity<=0||(form.unit==="unidades"&&parsedMinQuantity<1)){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
 
     const quality=String(form.quality||"").toLowerCase();
     const tipoCalidad:CreateCotizacionPayload["tipo_calidad"]=quality.includes("econ")
@@ -6182,6 +6360,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       nivel_personalizacion:form.customization||undefined,
       modalidad_importacion:form.purpose,
       cantidad_minima:parsedMinQuantity,
+      unidad_cantidad:form.unit,
       precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
       precio_objetivo_moneda:form.targetPriceCurrency || "USD",
       incoterm:form.incoterm || "DDP",
@@ -6507,7 +6686,18 @@ type FormularioEmpresa = {
   tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
   /** Vacío = sin límite. Texto para poder dejar el campo en blanco al editar. */
   limiteCotizacionesDiarias:string;
+  /** Pedido mínimo que acepta la empresa; vacío = sin mínimo. */
+  pedidoMinimo:string;
+  pedidoMinimoUnidad:UnidadCantidad;
 };
+
+/** Pedido mínimo para el PUT: null si está vacío, undefined si no es un número válido. */
+function leerPedidoMinimo(texto:string):number|null|undefined{
+  const limpio=texto.trim().replace(",",".");
+  if(!limpio)return null;
+  const valor=Number.parseFloat(limpio);
+  return Number.isFinite(valor)&&valor>0?valor:undefined;
+}
 
 /**
  * Convierte lo escrito en el campo de límite diario al valor del PUT: null
@@ -6533,9 +6723,11 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   shippingMarkPrefijo:"",certs:[],banner:"",
   tierMinimoRequerido:"Bronze",
   limiteCotizacionesDiarias:"",
+  pedidoMinimo:"",
+  pedidoMinimoUnidad:"unidades",
 };
 
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
   const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
   const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
@@ -6629,6 +6821,8 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       shippingMarkPrefijo:company.shipping_mark_prefijo || "",
       tierMinimoRequerido: (["Bronze", "Silver", "Gold", "Élite"].includes(getString("tier_minimo_requerido")) ? getString("tier_minimo_requerido") : "Bronze") as FormularioEmpresa["tierMinimoRequerido"],
       limiteCotizacionesDiarias:typeof company.limite_cotizaciones_diarias==="number"?String(company.limite_cotizaciones_diarias):"",
+      pedidoMinimo:typeof company.pedido_minimo==="number"?String(company.pedido_minimo):"",
+      pedidoMinimoUnidad:company.pedido_minimo_unidad==="m3"?"m3":"unidades",
     });
     cambiosSinGuardarRef.current=false;
     setRevision(0);
@@ -6689,6 +6883,8 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         },
         solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
         limite_cotizaciones_diarias:leerLimiteDiario(actual.limiteCotizacionesDiarias),
+        pedido_minimo:leerPedidoMinimo(actual.pedidoMinimo),
+        pedido_minimo_unidad:actual.pedidoMinimoUnidad,
       });
       setEstadoGuardado(prev=>prev==="guardando"?"guardado":prev);
       void cargarCupo();
@@ -6832,7 +7028,18 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Input label="Correo de contacto" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<MailIcon className="w-4 h-4"/>}/>
                   <Input label="Teléfono" value={form.phone} onChange={e=>f("phone",e.target.value)} prefix={<Phone className="w-4 h-4"/>}/>
                   <Input label="Dirección" value={form.address} onChange={e=>f("address",e.target.value)} prefix={<MapPin className="w-4 h-4"/>}/>
-                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Opcional"/>
+                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Lo máximo que manejas por pedido. Opcional"/>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="pedido-minimo" className="text-sm font-medium text-foreground">Pedido mínimo</label>
+                    <div className="flex gap-2">
+                      <input id="pedido-minimo" inputMode="decimal" placeholder="Sin mínimo" value={form.pedidoMinimo} onChange={e=>f("pedidoMinimo",e.target.value)} className="w-full h-10 bg-white border rounded-lg text-sm px-3 border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"/>
+                      <select aria-label="Unidad del pedido mínimo" value={form.pedidoMinimoUnidad} onChange={e=>editar({pedidoMinimoUnidad:e.target.value==="m3"?"m3":"unidades"})} className="h-10 rounded-lg border border-border bg-white px-2 text-sm">
+                        <option value="unidades">Unidades</option>
+                        <option value="m3">m³</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Zarpi lo usa para asignarte solicitudes que encajen contigo</p>
+                  </div>
                 </div>
                 <div className="mt-4">
                   <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
@@ -9526,6 +9733,7 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
   "admin-respaldos": "respaldos",
+  "admin-asignacion": "asignacion",
   "admin-landing": "landing",
   "admin-correos": "correos",
 } as const;
@@ -10781,6 +10989,7 @@ export default function App() {
       quality:quote.quality||"",
       customization:quote.personalizationLevel||"",
       minQuantity:quote.minQuantity||"",
+      unit:quote.unit??"unidades",
       targetPrice:quote.targetPrice ? quote.targetPrice.replace(new RegExp(`\\s*${extractedCurrency}$`, "i"), "").trim() : "",
       targetPriceCurrency: extractedCurrency,
       incoterm:quote.incoterm||"DDP",
@@ -10909,7 +11118,7 @@ export default function App() {
     return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }
@@ -11120,6 +11329,7 @@ export default function App() {
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
     "admin-respaldos": ["admin"],
+    "admin-asignacion": ["admin"],
     "admin-landing": ["admin"],
     "admin-correos": ["admin"],
   };

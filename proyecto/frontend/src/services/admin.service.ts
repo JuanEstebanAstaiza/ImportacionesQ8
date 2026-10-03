@@ -324,6 +324,99 @@ export interface EnvioCorreoMasivoResponse {
   fallos: string[];
 }
 
+// ---- Asignación de solicitudes abiertas y ajustes de operación ----
+
+export type ModoAsignacion = "manual" | "automatica";
+
+export interface EstadoTrm {
+  valor: number;
+  /** oficial · respaldo_admin · ultima_oficial · por_defecto */
+  fuente: string;
+  vigencia: string | null;
+  fecha_consulta: string | null;
+  consulta_automatica: boolean;
+  respaldo_admin: number | null;
+  ultima_oficial: number | null;
+  ultima_oficial_vigencia: string | null;
+  ultima_oficial_consulta: string | null;
+  valor_por_defecto: number;
+}
+
+export interface ConfiguracionOperacion {
+  asignacion: { modo: ModoAsignacion; cupo_por_solicitud: number };
+  trm: EstadoTrm;
+}
+
+export interface AsignacionResumen {
+  importador_id: string;
+  nombre_empresa: string;
+  origen: string | null;
+  fecha_asignacion: string | null;
+  estado_propuesta: string | null;
+}
+
+export interface SolicitudAbiertaAdmin {
+  id: string;
+  nombre_producto: string;
+  linea_producto: string;
+  pais_importacion: string;
+  cantidad_minima: number;
+  unidad_cantidad: string;
+  precio_objetivo_usd: number | null;
+  moneda_precio_objetivo: string;
+  tipo_calidad: string;
+  incoterm: string;
+  estado: string;
+  fecha_creacion: string;
+  horas_desde_creacion: number;
+  asignadas: number;
+  cupo_por_solicitud: number;
+  propuestas_enviadas: number;
+  empresas: AsignacionResumen[];
+}
+
+export interface CriterioEncaje {
+  cumple: boolean | null;
+  detalle: string;
+}
+
+export interface CandidatoAsignacion {
+  importador_id: string;
+  nombre_empresa: string;
+  logo_url: string | null;
+  verificado: boolean;
+  especialidades: string[];
+  paises_origen: string[];
+  calificacion_promedio: number;
+  tiempo_respuesta_promedio: string | null;
+  pedido_minimo: number | null;
+  pedido_minimo_unidad: string | null;
+  capacidad_volumen: number | null;
+  limite_cotizaciones_diarias: number | null;
+  recibidas_hoy: number;
+  cupo_diario_agotado: boolean;
+  encaje: { categoria: boolean; pais: boolean; pedido_minimo: CriterioEncaje; capacidad: CriterioEncaje };
+  desempeno: {
+    solicitudes_asignadas: number;
+    propuestas_enviadas: number;
+    propuestas_aceptadas: number;
+    tasa_respuesta_pct: number | null;
+    tasa_cierre_pct: number | null;
+    pedidos_entregados: number;
+    pedidos_activos: number;
+  };
+  asignada: boolean;
+  origen_asignacion: string | null;
+  fecha_asignacion: string | null;
+  estado_propuesta: string | null;
+  puntaje: number;
+}
+
+export interface CandidatosResponse {
+  solicitud: SolicitudAbiertaAdmin;
+  candidatos: CandidatoAsignacion[];
+}
+
 export const adminService = {
   /**
    * `/importadores` pagina con un tope por defecto de 50: sin pedir el máximo,
@@ -642,5 +735,48 @@ export const adminService = {
         acepto_politica_datos: true,
       },
     });
+  },
+
+  // ---- Asignación de solicitudes abiertas ----
+
+  getOperationSettings(): Promise<ConfiguracionOperacion> {
+    return apiRequest<ConfiguracionOperacion>("/admin/configuracion-operacion", { method: "GET" });
+  },
+
+  updateAssignmentSettings(payload: { modo?: ModoAsignacion; cupo_por_solicitud?: number }): Promise<ConfiguracionOperacion> {
+    return apiRequest<ConfiguracionOperacion>("/admin/configuracion-operacion/asignacion", { method: "PUT", body: payload });
+  },
+
+  updateTrmFallback(respaldo: number | null): Promise<EstadoTrm> {
+    return apiRequest<EstadoTrm>("/admin/configuracion-operacion/trm", { method: "PUT", body: { respaldo } });
+  },
+
+  refreshTrm(): Promise<EstadoTrm> {
+    return apiRequest<EstadoTrm>("/admin/configuracion-operacion/trm/consultar", { method: "POST" });
+  },
+
+  listOpenRequests(filtro: "por_asignar" | "vigentes" | "todas" = "vigentes"): Promise<SolicitudAbiertaAdmin[]> {
+    return apiRequest<SolicitudAbiertaAdmin[]>(`/admin/solicitudes-abiertas?filtro=${filtro}`, { method: "GET" });
+  },
+
+  listAssignmentCandidates(cotizacionId: string, soloQueEncajan = true): Promise<CandidatosResponse> {
+    return apiRequest<CandidatosResponse>(
+      `/admin/solicitudes-abiertas/${cotizacionId}/candidatos?solo_que_encajan=${soloQueEncajan}`,
+      { method: "GET" },
+    );
+  },
+
+  assignRequest(cotizacionId: string, importadorIds: string[]): Promise<SolicitudAbiertaAdmin> {
+    return apiRequest<SolicitudAbiertaAdmin>(`/admin/solicitudes-abiertas/${cotizacionId}/asignar`, {
+      method: "POST",
+      body: { importador_ids: importadorIds },
+    });
+  },
+
+  unassignRequest(cotizacionId: string, importadorId: string): Promise<SolicitudAbiertaAdmin> {
+    return apiRequest<SolicitudAbiertaAdmin>(
+      `/admin/solicitudes-abiertas/${cotizacionId}/asignaciones/${importadorId}`,
+      { method: "DELETE" },
+    );
   },
 };

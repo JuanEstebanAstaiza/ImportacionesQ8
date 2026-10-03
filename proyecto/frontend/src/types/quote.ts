@@ -17,6 +17,8 @@ export interface Quote {
   productLine: string;
   quality: string;
   minQuantity: string;
+  /** Unidad de la cantidad: "unidades" o "m3". */
+  unit?: "unidades" | "m3";
   targetPrice: string;
   targetPriceCurrency?: string;
   incoterm: string;

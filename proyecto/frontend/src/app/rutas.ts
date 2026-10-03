@@ -45,6 +45,7 @@ export type Screen =
   | "admin-soporte"
   | "admin-certificaciones"
   | "admin-respaldos"
+  | "admin-asignacion"
   | "admin-landing"
   | "admin-correos"
   | "create-response"
@@ -115,6 +116,7 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-soporte", path: "/admin/soporte" },
   { screen: "admin-certificaciones", path: "/admin/certificaciones" },
   { screen: "admin-respaldos", path: "/admin/respaldos" },
+  { screen: "admin-asignacion", path: "/admin/asignacion" },
   { screen: "admin-landing", path: "/admin/landing" },
   { screen: "admin-correos", path: "/admin/correos" },
 ];
