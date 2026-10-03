@@ -8,7 +8,7 @@ Documentación de las pantallas P0 y P1 para el administrador (equipo interno qu
 
 ---
 
-## Estado actual (2026-10-01)
+## Estado actual (2026-10-03)
 
 > Las secciones de abajo ("Pantalla 10") son el diseño original del MVP. El panel real está en `src/pages/admin/AdminDashboard.tsx`; cada sección tiene su entrada en el menú lateral y su URL ([[Routing-y-Roles-Frontend]]).
 
@@ -16,6 +16,7 @@ Documentación de las pantallas P0 y P1 para el administrador (equipo interno qu
 |----------------|-----|-------------|------------|-----|
 | Resumen | `/admin` | Empresas activas y verificadas, cotizaciones, órdenes en disputa, cotizaciones abiertas recientes | `AdminDashboard` | `GET /admin/metricas` |
 | Empresas | `/admin/empresas` | Alta de empresa con cuenta dueña, datos de contacto, verificación con expediente, retirar verificación, activar/desactivar | `AdminDashboard` | [[12-Admin]] |
+| **Asignación** | `/admin/asignacion` | Solicitudes abiertas por asignar (con cuánto llevan esperando), botón **«Asignar a»** con el encaje y desempeño de cada empresa, quitar asignaciones; modo manual o automático, cupo de empresas por solicitud y TRM de respaldo | `features/admin/AsignacionSolicitudes.tsx` | [[23-Asignacion-de-Solicitudes]] |
 | Usuarios | `/admin/usuarios` | Buscar por rol y estado, activar/desactivar, invitar | `AdminDashboard` | [[12-Admin]] |
 | Cotizantes | `/admin/cotizantes` | Tier de cada cotizante (manual o automático), umbrales, puntos y su historial, recalcular tiers | `features/admin/GestionCotizantes.tsx` | [[18-Tiers-y-Perfil-Cotizante]] |
 | Correos | `/admin/correos` | Campañas a usuarios por rol, por usuario o por correo (hasta 500 destinatarios) | `features/admin/AdminEmailCampaign.tsx` | `POST /admin/correos/masivo` |

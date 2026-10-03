@@ -1,6 +1,6 @@
 # Routing y roles (Frontend)
 
-> **Última actualización:** 2026-10-01 · Fuente: `proyecto/frontend/src/app/rutas.ts` y los menús `NAV_*` de `src/app/App.tsx`.
+> **Última actualización:** 2026-10-03 · Fuente: `proyecto/frontend/src/app/rutas.ts` y los menús `NAV_*` de `src/app/App.tsx`.
 
 Reglas de navegación por rol del frontend de Zarpi.
 
@@ -24,9 +24,9 @@ Reglas de navegación por rol del frontend de Zarpi.
 | Rol | Entradas del menú (en orden) |
 |-----|------------------------------|
 | Solicitante | Dashboard · Cotizaciones · Respuestas · Chats · Órdenes · Cursos · Documentos · Pagos |
-| Importadora (dueño) | Dashboard · Cotizaciones · Asesores · **Mi empresa** · Órdenes · Chats · Cursos · Documentos |
+| Importadora (dueño) | Dashboard · **Solicitudes** · Asesores · **Mi empresa** · Órdenes · Chats · Cursos · Documentos |
 | Asesor | Dashboard · Disponibles · Mis cotizaciones · Chats |
-| Admin | Resumen · Empresas · Usuarios · Cotizantes · Correos · Soporte · Certificaciones · **Respaldos** · Landing · Chats · Documentos |
+| Admin | Resumen · Empresas · **Asignación** · Usuarios · Cotizantes · Correos · Soporte · Certificaciones · **Respaldos** · Landing · Chats · Documentos |
 | Soporte | Bandeja · Tickets · Documentos |
 
 Además, en el header: notificaciones, chats, ayuda (no-admin) y perfil.
@@ -51,7 +51,7 @@ Además, en el header: notificaciones, chats, ayuda (no-admin) y perfil.
 | `imp-dashboard`, `imp-quotes`, `imp-advisors`, `imp-profile` | `/empresa`, `/empresa/cotizaciones`, `/empresa/asesores`, `/empresa/perfil` | Importadora |
 | `adv-dashboard`, `adv-available`, `adv-my-quotes` | `/asesor`, `/asesor/disponibles`, `/asesor/cotizaciones` | Asesor |
 | `create-response` | `/asesor/responder/:cotizacion` | Importadora y asesor (responder o convertir una estimación en propuesta) |
-| `admin-dashboard` … `admin-correos` | `/admin`, `/admin/empresas`, `/admin/usuarios`, `/admin/cotizantes`, `/admin/soporte`, `/admin/certificaciones`, `/admin/respaldos`, `/admin/landing`, `/admin/correos` | Admin (`/admin/soporte` también soporte) |
+| `admin-dashboard` … `admin-correos` | `/admin`, `/admin/empresas`, `/admin/asignacion`, `/admin/usuarios`, `/admin/cotizantes`, `/admin/soporte`, `/admin/certificaciones`, `/admin/respaldos`, `/admin/landing`, `/admin/correos` | Admin (`/admin/soporte` también soporte) |
 
 ---
 

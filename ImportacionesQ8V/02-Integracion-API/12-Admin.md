@@ -256,6 +256,108 @@ Array de `CertificacionResponse`:
 
 ---
 
+### `GET /admin/configuracion-operacion`
+
+- **Resumen:** Obtener Configuracion Operacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`ConfiguracionOperacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `asignacion` | `ConfiguracionAsignacion` | sí |  |
+| `trm` | `EstadoTrm` | sí |  |
+
+---
+
+### `PUT /admin/configuracion-operacion/asignacion`
+
+- **Resumen:** Actualizar Asignacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+
+**Body (`ActualizarAsignacionRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `modo` | `Optional[string]` | no |  |
+| `cupo_por_solicitud` | `Optional[integer]` | no | Máximo de empresas por solicitud |
+
+```json
+{
+  "modo": "<modo>",
+  "cupo_por_solicitud": 0
+}
+```
+
+**Respuesta (`ConfiguracionOperacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `asignacion` | `ConfiguracionAsignacion` | sí |  |
+| `trm` | `EstadoTrm` | sí |  |
+
+---
+
+### `PUT /admin/configuracion-operacion/trm`
+
+- **Resumen:** Actualizar Trm Respaldo
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+
+**Body (`ActualizarTrmRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `respaldo` | `Optional[number]` | no | TRM de respaldo (COP por USD) para cuando falla la consulta oficial. null la quita. |
+
+```json
+{
+  "respaldo": 0
+}
+```
+
+**Respuesta (`EstadoTrm`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `valor` | `number` | sí |  |
+| `fuente` | `string` | sí |  |
+| `vigencia` | `Optional[string]` | no |  |
+| `fecha_consulta` | `Optional[string]` | no |  |
+| `consulta_automatica` | `boolean` | sí |  |
+| `respaldo_admin` | `Optional[number]` | no |  |
+| `ultima_oficial` | `Optional[number]` | no |  |
+| `ultima_oficial_vigencia` | `Optional[string]` | no |  |
+| `ultima_oficial_consulta` | `Optional[string]` | no |  |
+| `valor_por_defecto` | `number` | sí |  |
+
+---
+
+### `POST /admin/configuracion-operacion/trm/consultar`
+
+- **Resumen:** Consultar Trm Ahora
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`EstadoTrm`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `valor` | `number` | sí |  |
+| `fuente` | `string` | sí |  |
+| `vigencia` | `Optional[string]` | no |  |
+| `fecha_consulta` | `Optional[string]` | no |  |
+| `consulta_automatica` | `boolean` | sí |  |
+| `respaldo_admin` | `Optional[number]` | no |  |
+| `ultima_oficial` | `Optional[number]` | no |  |
+| `ultima_oficial_vigencia` | `Optional[string]` | no |  |
+| `ultima_oficial_consulta` | `Optional[string]` | no |  |
+| `valor_por_defecto` | `number` | sí |  |
+
+---
+
 ### `GET /admin/conversaciones`
 
 - **Resumen:** Listar Conversaciones Admin
@@ -939,6 +1041,8 @@ _Sin campos detallados en OpenAPI._
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -1010,6 +1114,8 @@ _Sin campos detallados en OpenAPI._
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -1043,6 +1149,8 @@ _Sin campos detallados en OpenAPI._
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -1128,6 +1236,130 @@ Array de `SolicitudRecreacionResponse`:
 | `parte_atribuida_final` | `Optional[string]` | sí |  |
 | `fecha_creacion` | `string` | sí |  |
 | `fecha_resolucion` | `Optional[string]` | sí |  |
+
+---
+
+### `GET /admin/solicitudes-abiertas`
+
+- **Resumen:** Listar Solicitudes Abiertas Admin
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Query:** `filtro`, `limite`
+
+**Respuesta (`array[SolicitudAbiertaAdmin]`)**
+
+Array de `SolicitudAbiertaAdmin`:
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `nombre_producto` | `string` | sí |  |
+| `linea_producto` | `string` | sí |  |
+| `pais_importacion` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `moneda_precio_objetivo` | `string` | sí |  |
+| `tipo_calidad` | `string` | sí |  |
+| `incoterm` | `string` | sí |  |
+| `estado` | `string` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+| `horas_desde_creacion` | `number` | sí |  |
+| `asignadas` | `integer` | sí |  |
+| `cupo_por_solicitud` | `integer` | sí |  |
+| `propuestas_enviadas` | `integer` | sí |  |
+| `empresas` | `array[AsignacionResumen]` | sí |  |
+
+---
+
+### `DELETE /admin/solicitudes-abiertas/{cotizacion_id}/asignaciones/{importador_id}`
+
+- **Resumen:** Quitar Asignacion
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `cotizacion_id`, `importador_id`
+
+**Respuesta (`SolicitudAbiertaAdmin`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `nombre_producto` | `string` | sí |  |
+| `linea_producto` | `string` | sí |  |
+| `pais_importacion` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `moneda_precio_objetivo` | `string` | sí |  |
+| `tipo_calidad` | `string` | sí |  |
+| `incoterm` | `string` | sí |  |
+| `estado` | `string` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+| `horas_desde_creacion` | `number` | sí |  |
+| `asignadas` | `integer` | sí |  |
+| `cupo_por_solicitud` | `integer` | sí |  |
+| `propuestas_enviadas` | `integer` | sí |  |
+| `empresas` | `array[AsignacionResumen]` | sí |  |
+
+---
+
+### `POST /admin/solicitudes-abiertas/{cotizacion_id}/asignar`
+
+- **Resumen:** Asignar Solicitud
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `cotizacion_id`
+
+**Body (`AsignarRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_ids` | `array[string]` | sí |  |
+
+```json
+{
+  "importador_ids": null
+}
+```
+
+**Respuesta (`SolicitudAbiertaAdmin`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `nombre_producto` | `string` | sí |  |
+| `linea_producto` | `string` | sí |  |
+| `pais_importacion` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | sí |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `moneda_precio_objetivo` | `string` | sí |  |
+| `tipo_calidad` | `string` | sí |  |
+| `incoterm` | `string` | sí |  |
+| `estado` | `string` | sí |  |
+| `fecha_creacion` | `string` | sí |  |
+| `horas_desde_creacion` | `number` | sí |  |
+| `asignadas` | `integer` | sí |  |
+| `cupo_por_solicitud` | `integer` | sí |  |
+| `propuestas_enviadas` | `integer` | sí |  |
+| `empresas` | `array[AsignacionResumen]` | sí |  |
+
+---
+
+### `GET /admin/solicitudes-abiertas/{cotizacion_id}/candidatos`
+
+- **Resumen:** Candidatos Para Solicitud
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `cotizacion_id`
+- **Query:** `solo_que_encajan`
+
+**Respuesta (`CandidatosResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `solicitud` | `SolicitudAbiertaAdmin` | sí |  |
+| `candidatos` | `array[CandidatoAsignacion]` | sí |  |
 
 ---
 

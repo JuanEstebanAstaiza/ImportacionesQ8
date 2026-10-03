@@ -1,5 +1,11 @@
 # Metricas MVP — ImportacionesQ8
 
+> **Cómo se miden (desde 2026-10-03):**
+> - **Bitácora `eventos`:** guarda cada cambio de estado con su fecha, monto en pesos y cantidad. Todas las métricas de esta nota se calculan sobre ella, sin cambios en el sistema.
+> - **Panel de cada empresa:** muestra las suyas.
+>
+> Ver [[24-Eventos-y-Panel-Empresa]]. Desde esa fecha, las abiertas llegan a un máximo de 3 empresas asignadas ([[23-Asignacion-de-Solicitudes]]): la "tasa de respuesta a abiertas" se mide sobre las asignadas.
+
 ## Descripción general
 
 Métricas de éxito para el MVP del proyecto ImportacionesQ8, diseñado para validar el diferenciador (flujo dual de cotización) sin comprometer módulos regulatoriamente complejos.

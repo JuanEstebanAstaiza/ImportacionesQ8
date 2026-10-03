@@ -1,6 +1,14 @@
 # Motor de Matching — ImportacionesQ8
 
 
+> **Actualización 2026-10-03: asignación en lugar de difusión.** Cada abierta llega como mucho a `cupo_por_solicitud` empresas (3 por defecto), elegidas por encaje:
+> - **Modo manual (piloto):** el matching no reparte nada; avisa a los admins y la solicitud espera a que la asignen en **Admin › Asignación**.
+> - **Modo automático:** reparte a las de mejor encaje hasta el cupo.
+> - **Fuente de verdad:** `recepciones_cotizacion`, ya no Redis. Redis solo lleva el contador de respuestas.
+> - **Propuestas selladas:** ninguna empresa ve a la competencia.
+>
+> Detalle en [[23-Asignacion-de-Solicitudes]]. El diagrama de abajo describe la difusión original de julio de 2026.
+
 > **Actualización 2026-10-01** (detalle en [[#Cupo diario y reconstrucción del reparto (2026-09-30 → 10-01)|Cupo diario y reconstrucción del reparto]]):
 > - el matching salta a las empresas que agotaron su **límite diario de cotizaciones**;
 > - cada entrega queda registrada en la tabla `recepciones_cotizacion`;

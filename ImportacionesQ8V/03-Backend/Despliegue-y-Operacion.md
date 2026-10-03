@@ -1,6 +1,6 @@
 # Despliegue y operación en producción
 
-> **Última actualización:** 2026-10-01 · En producción desde el 2026-10-01 en un droplet de DigitalOcean.
+> **Última actualización:** 2026-10-03 · En producción desde el 2026-10-01 en un droplet de DigitalOcean.
 > Archivos: `proyecto/backend/docker-compose.yml` + `docker-compose.prod.yml`, `proyecto/frontend/Caddyfile`, `proyecto/frontend/Dockerfile.prod`, `proyecto/backend/.env.production.example`, `proyecto/backend/scripts/`.
 
 ## Arquitectura de producción
@@ -100,5 +100,7 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `WOMPI_SIMULATE`, `WOMPI_*` | Pagos (simulados mientras no haya llaves reales) |
 | `BACKUP_RETENCION`, `BACKUP_REMOTO`, `MAX_BACKUP_UPLOAD_BYTES` | Backups. Ver [[Backups-y-Restauracion]] |
 | `CUPO_COTIZACIONES_UTC_OFFSET_HORAS` | Zona horaria del cupo diario (−5, Colombia) |
+| `ASIGNACION_COTIZACIONES`, `ASIGNACION_CUPO_POR_SOLICITUD` | Valor inicial del modo de asignación de abiertas (`manual` en el piloto) y del cupo de empresas por solicitud (3). El admin los cambia luego desde el panel. Ver [[23-Asignacion-de-Solicitudes]] |
+| `TRM_CONSULTA_AUTOMATICA`, `TRM_URL`, `TRM_TIMEOUT_SEGUNDOS`, `TRM_RESPALDO_COP` | TRM oficial diaria desde datos.gov.co para guardar montos en pesos. El servidor necesita salida HTTPS a `www.datos.gov.co`; si no la tiene, usa el respaldo del admin. Ver [[24-Eventos-y-Panel-Empresa]] |
 
 ← [[Indice-Backend]] · [[Estado-del-proyecto]]

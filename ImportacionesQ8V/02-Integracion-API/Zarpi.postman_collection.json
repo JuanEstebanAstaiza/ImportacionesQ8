@@ -510,6 +510,144 @@
           "response": []
         },
         {
+          "name": "Obtener Configuracion Operacion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/configuracion-operacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "configuracion-operacion"
+              ]
+            },
+            "description": "Modo y cupo de asignación, y el estado de la TRM."
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Asignacion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/configuracion-operacion/asignacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "configuracion-operacion",
+                "asignacion"
+              ]
+            },
+            "description": "Cambia el modo de asignación (`manual` / `automatica`) o el cupo por solicitud.\n\nBajar el cupo no quita asignaciones ya hechas: solo impide añadir más.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar Trm Respaldo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/configuracion-operacion/trm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "configuracion-operacion",
+                "trm"
+              ]
+            },
+            "description": "Fija (o quita, con `null`) la TRM de respaldo que se usa si falla la oficial.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar Trm Ahora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/configuracion-operacion/trm/consultar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "configuracion-operacion",
+                "trm",
+                "consultar"
+              ]
+            },
+            "description": "Vuelve a consultar la TRM oficial ahora, sin esperar al día siguiente."
+          },
+          "response": []
+        },
+        {
           "name": "Listar Conversaciones Admin",
           "request": {
             "method": "GET",
@@ -1743,6 +1881,182 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Solicitudes Abiertas Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/solicitudes-abiertas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "solicitudes-abiertas"
+              ],
+              "query": [
+                {
+                  "key": "filtro",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "limite",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Solicitudes abiertas con sus empresas asignadas.\n\n- `por_asignar`: vigentes con huecos libres en el cupo.\n- `vigentes`: las que todavía admiten propuestas.\n- `todas`: también las cerradas y canceladas."
+          },
+          "response": []
+        },
+        {
+          "name": "Quitar Asignacion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/solicitudes-abiertas/:cotizacion_id/asignaciones/:importador_id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "solicitudes-abiertas",
+                ":cotizacion_id",
+                "asignaciones",
+                ":importador_id"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                },
+                {
+                  "key": "importador_id",
+                  "value": "{{importador_id}}"
+                }
+              ]
+            },
+            "description": "Quita la asignación a una empresa que todavía no envió propuesta."
+          },
+          "response": []
+        },
+        {
+          "name": "Asignar Solicitud",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/solicitudes-abiertas/:cotizacion_id/asignar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "solicitudes-abiertas",
+                ":cotizacion_id",
+                "asignar"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "Asigna la solicitud a una o varias empresas, sin pasar del cupo por solicitud.\n\n409 si se pasaría del cupo, si la solicitud ya no admite propuestas o si una\nempresa agotó su límite diario; 400 si la empresa no trabaja la categoría.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Candidatos Para Solicitud",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/solicitudes-abiertas/:cotizacion_id/candidatos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "solicitudes-abiertas",
+                ":cotizacion_id",
+                "candidatos"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ],
+              "query": [
+                {
+                  "key": "solo_que_encajan",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Solo empresas de esa categoría y país"
+                }
+              ]
+            },
+            "description": "Empresas del circuito abierto con su encaje (categoría, país, pedido\nmínimo, capacidad), su desempeño y su cupo del día. Primero las ya\nasignadas y luego por puntaje de encaje."
           },
           "response": []
         },
@@ -3250,7 +3564,7 @@
                 "pool-empresa"
               ]
             },
-            "description": "Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas donde aparece\nen el matching) que todavía nadie ha reclamado. La cuenta dueña (representante\nlegal) y los asesores pueden verlo; cualquiera de ellos puede reclamar\n(`POST /reclamar`) — el primero se la queda."
+            "description": "Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas que tiene\nasignadas) que todavía nadie ha reclamado. La cuenta dueña (representante\nlegal) y los asesores pueden verlo; cualquiera de ellos puede reclamar\n(`POST /reclamar`) — el primero se la queda."
           },
           "response": []
         },
@@ -3521,6 +3835,70 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar Cotizacion Vista",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cotizaciones/:cotizacion_id/vista",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cotizaciones",
+                ":cotizacion_id",
+                "vista"
+              ],
+              "variable": [
+                {
+                  "key": "cotizacion_id",
+                  "value": "{{cotizacion_id}}"
+                }
+              ]
+            },
+            "description": "La empresa abrió la solicitud. Solo cuenta la primera vez (evento\n`solicitud_vista`); de ahí sale cuánto tarda en mirarla."
+          },
+          "response": []
+        },
+        {
+          "name": "Trm Vigente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/trm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "trm"
+              ]
+            },
+            "description": "TRM que usa hoy la plataforma: `{valor, fuente, vigencia, fecha_consulta}`.\n\n`fuente` es `oficial`, `respaldo_admin`, `ultima_oficial` o `por_defecto`."
           },
           "response": []
         }
@@ -5463,6 +5841,43 @@
           "response": []
         },
         {
+          "name": "Panel De La Empresa",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/importadores/panel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "importadores",
+                "panel"
+              ],
+              "query": [
+                {
+                  "key": "dias",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Periodo en días hacia atrás; 0 = todo"
+                }
+              ]
+            },
+            "description": "Panel comercial de la empresa en pesos colombianos (dashboard de la empresa).\n\n- Solicitudes recibidas, propuestas enviadas, aceptadas y descartadas.\n- Propuesta a pedido (aceptadas ÷ enviadas) y \"cierras 1 de cada X\".\n- Tasa de respuesta (propuestas enviadas ÷ solicitudes recibidas).\n- Valor promedio de lo cerrado y valor de lo que espera respuesta del comprador.\n- Pedidos en proceso por etapa y motivos por los que se perdieron propuestas.\n- Pendientes de responder con su tiempo de espera.\n\nSal"
+          },
+          "response": []
+        },
+        {
           "name": "Listar Importadores Por Categoria",
           "request": {
             "method": "GET",
@@ -5690,7 +6105,7 @@
                 }
               ]
             },
-            "description": "Listar cotizaciones abiertas que aplican al importador (usando el motor de matching).\n\n- **importador_id**: ID del importador (UUID)"
+            "description": "Listar las cotizaciones abiertas asignadas a la empresa.\n\n- **importador_id**: ID del importador (UUID)"
           },
           "response": []
         },

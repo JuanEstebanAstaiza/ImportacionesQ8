@@ -17,6 +17,7 @@ Vista de conjunto, de la propuesta a producción. El detalle de cada etapa está
 | 2026-07-20 → 08-26 | **Fase 5** — Frontend conectado y módulos de operación | Fin del cobro al solicitante, LMS de cursos, notificaciones, módulo documental, certificaciones y backup ZIP, shipping mark, reseñas, chat interno, mesa de soporte por niveles, centro de ayuda | #8 – #13 | [[Fase-5-Frontend-y-Operacion]] |
 | 2026-08-31 → 09-29 | **Fase 6** — Marca Zarpi y preparación de producción | Multimoneda y DDP, marca Zarpi, landing con CMS, rol obligatorio en el login, tiers del cotizante, correos masivos, notificaciones en vivo (SSE), stack de producción con Caddy + HTTPS | #14 – #19 | [[Fase-6-Zarpi-y-Produccion]] |
 | 2026-09-30 → 10-01 | **Fase 7** — Puesta en producción y operación | Despliegue en un droplet de DigitalOcean, límite diario de cotizaciones, calculadora de precios en el chat, backups completos con restauración desde el panel, scripts de diagnóstico y de primer admin | #22 – #25 | [[Fase-7-Puesta-en-Produccion]] |
+| 2026-10-03 → | **Fase 8** — Piloto: asignación y métricas | Bitácora de eventos con montos en COP (TRM oficial), asignación de abiertas a máx. 3 empresas, propuestas selladas, comparador sin orden por precio, panel de la empresa en pesos | En rama | [[Fase-8-Piloto-Asignacion-y-Metricas]] |
 
 ---
 
@@ -37,6 +38,7 @@ Vista de conjunto, de la propuesta a producción. El detalle de cada etapa está
 | 2026-09-29 | Stack de producción listo: Docker Compose + Caddy con HTTPS automático |
 | 2026-10-01 | **Plataforma en producción** en un droplet de DigitalOcean con dominio propio |
 | 2026-10-01 | Copias de seguridad completas y restauración desde el panel de administración |
+| 2026-10-03 | Cada cambio de estado queda en una bitácora con montos en pesos; las abiertas se asignan a máx. 3 empresas |
 
 > **PRs que no entraron directamente en `main`:** #12 (frontend de cursos) se cerró y su contenido llegó con #13; #20 (límite diario) se cerró y su contenido llegó con #22; #21 se integró en la rama `feature/QoL-proveedores`.
 
@@ -51,19 +53,19 @@ Según la autoría de los commits en `main`:
 | JuanEstebanAstaiza | Backend, documentación, seguridad, producción y la mayoría de los PRs |
 | JuanSamuelArbelaez | Frontend: auth, cursos, documentos, landing y marca Zarpi, modo oscuro, tiers, correos |
 | Evelio | Backend del LMS, notificaciones, métricas y auditoría de seguridad/capacidad (2026-07-29) |
-| Claude (Claude Code) | Fase 7: límite diario, calculadora, backups, scripts de despliegue y esta documentación |
+| Claude (Claude Code) | Fases 7 y 8: límite diario, calculadora, backups, scripts de despliegue, bitácora de eventos, asignación y panel de la empresa, y esta documentación |
 
 ---
 
-## El sistema hoy, en números (2026-10-01)
+## El sistema hoy, en números (2026-10-03)
 
 | Métrica | Valor | Cómo se midió |
 |---------|-------|---------------|
-| Operaciones REST | 201 + 1 WebSocket | OpenAPI exportado ([[Catalogo-Completo]]) |
-| Migraciones Alembic | 24 (`0001` → `0024`) | `proyecto/backend/alembic/versions` |
-| Tablas | 52 | Modelos SQLAlchemy |
-| Tests de backend | 656 casos en 42 archivos, todos verdes | `pytest` (2026-10-01) |
-| Pantallas del frontend con URL propia | 39 | `proyecto/frontend/src/app/rutas.ts` |
+| Operaciones REST | 212 + 1 WebSocket | OpenAPI exportado ([[Catalogo-Completo]]) |
+| Migraciones Alembic | 25 (`0001` → `0025`) | `proyecto/backend/alembic/versions` |
+| Tablas | 54 | Modelos SQLAlchemy |
+| Tests de backend | 706 casos en 46 archivos, todos verdes | `pytest` (2026-10-03) |
+| Pantallas del frontend con URL propia | 40 | `proyecto/frontend/src/app/rutas.ts` |
 | PRs integrados en `main` | 22 (#1–#11, #13–#19, #22–#25) | Historial de merges y GitHub |
 
 ---

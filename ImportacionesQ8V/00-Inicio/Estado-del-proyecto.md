@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-> **Última actualización:** 2026-10-01 · **Zarpi está en producción** (droplet de DigitalOcean, HTTPS con Caddy).
+> **Última actualización:** 2026-10-03 · **Zarpi está en producción** (droplet de DigitalOcean, HTTPS con Caddy).
 > Línea de tiempo completa: [[Cronologia-del-Proyecto]] · Próximos pasos: [[Hoja-de-Ruta]].
 
 ---
@@ -13,8 +13,8 @@ Zarpi conecta a quienes quieren importar (solicitantes) con empresas importadora
 
 | Área | Estado |
 |------|--------|
-| Backend (FastAPI) | ✅ Completo: 201 operaciones REST + WebSocket, 24 migraciones, 656 tests verdes |
-| Frontend (Vite + React) | ✅ Completo y conectado a la API: 39 pantallas con URL propia, modo claro/oscuro |
+| Backend (FastAPI) | ✅ Completo: 212 operaciones REST + WebSocket, 25 migraciones, 706 tests verdes |
+| Frontend (Vite + React) | ✅ Completo y conectado a la API: 40 pantallas con URL propia, modo claro/oscuro |
 | Producción | ✅ Docker Compose + Caddy (HTTPS automático) en un droplet de DigitalOcean desde el 2026-10-01 |
 | Copias de seguridad | ✅ Automatizables por cron; restauración desde el panel. Falta activar cron y copia externa (ver [[Hoja-de-Ruta]]) |
 | Validación de negocio | ⬜ Empieza con el lanzamiento: metas en [[Hoja-de-Ruta]] |
@@ -27,6 +27,8 @@ Zarpi conecta a quienes quieren importar (solicitantes) con empresas importadora
 |--------|:-------:|:--------:|-------|---------------|
 | Registro, login con rol, OTP, recuperación de contraseña | ✅ | ✅ | jul–sep 2026 | [[02-Auth]] · [[Autenticacion]] |
 | Cotizaciones dirigidas y abiertas, matching por país y categoría | ✅ | ✅ | jul 2026 | [[05-Cotizaciones-y-Propuestas]] · [[Matching-Cotizaciones]] |
+| **Asignación de abiertas a máx. 3 empresas** (manual en el piloto), propuestas selladas, comparador sin orden por precio | ✅ | ✅ | 2026-10-03 | [[23-Asignacion-de-Solicitudes]] |
+| **Bitácora de eventos** con montos en COP (TRM oficial) y **panel de la empresa** | ✅ | ✅ | 2026-10-03 | [[24-Eventos-y-Panel-Empresa]] |
 | Multimoneda en precio objetivo, DDP por defecto, shipping mark | ✅ | ✅ | ago 2026 | [[05-Cotizaciones-y-Propuestas]] |
 | **Límite diario de cotizaciones por empresa** | ✅ | ✅ | 2026-09-30 | [[19-Limite-Diario-Cotizaciones]] |
 | Propuestas: borrador del asesor, envío del dueño, doble aceptación, orden automática | ✅ | ✅ | jul 2026 | [[05-Cotizaciones-y-Propuestas]] |
@@ -56,7 +58,7 @@ Zarpi conecta a quienes quieren importar (solicitantes) con empresas importadora
 
 ## Calidad
 
-- **Tests:** 656 casos en 42 archivos (`pytest`), todos verdes el 2026-10-01. La CI de GitHub corre la suite del backend en Docker en cada cambio de `proyecto/backend/`.
+- **Tests:** 706 casos en 46 archivos (`pytest`), todos verdes el 2026-10-03. La CI de GitHub corre la suite del backend en Docker en cada cambio de `proyecto/backend/`.
 - **Seguridad:**
   - Auditorías de julio de 2026 y OWASP ~92/100 ([[Indice-Calidad]]).
   - Controles posteriores: HTTPS con HSTS, rate limiting, tickets para WebSocket y SSE, modo mantenimiento al restaurar, validación de rutas en ZIPs subidos. Ver [[Seguridad]].

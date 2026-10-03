@@ -38,6 +38,8 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[20-Calculadora-Precios-Chat]] | Calculadora de precios estimados que la empresa envía al cliente por el chat |
 | [[21-Ayuda-y-Soporte]] | Centro de ayuda: artículos, categorías, votos (generado desde OpenAPI) |
 | [[22-Landing-CMS]] | Landing pública por bloques, aliados, noticias y contacto (generado desde OpenAPI) |
+| [[23-Asignacion-de-Solicitudes]] | Asignación de abiertas a máx. 3 empresas por encaje, propuestas selladas y comparador |
+| [[24-Eventos-y-Panel-Empresa]] | Bitácora de eventos con montos en COP (TRM) y panel comercial de la empresa |
 | `Zarpi.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---

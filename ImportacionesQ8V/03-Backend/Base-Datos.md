@@ -1,6 +1,6 @@
 # Base de Datos — Zarpi (ImportacionesQ8)
 
-> **Última actualización:** 2026-10-01 · 24 migraciones, 52 tablas. Las secciones por tabla describen el núcleo de julio de 2026; lo añadido después está en [[#Migraciones y esquema inicial]].
+> **Última actualización:** 2026-10-03 · 25 migraciones, 54 tablas. Las secciones por tabla describen el núcleo de julio de 2026; lo añadido después está en [[#Migraciones y esquema inicial]].
 
 ## Descripción general
 
@@ -314,9 +314,9 @@ erDiagram
 
 ## Migraciones y esquema inicial
 
-### Alembic (estado actual — 2026-10-01)
+### Alembic (estado actual — 2026-10-03)
 
-El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`. Hay **24 revisiones** y 52 tablas.
+El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`. Hay **25 revisiones** y 54 tablas.
 
 | Pieza | Rol |
 |-------|-----|
@@ -354,6 +354,7 @@ El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`. Hay **24 
 | `0022` | 2026-09-21 | `usuarios.tier_manual`, `umbrales_tier_cotizante`, `movimientos_puntos_cotizacion` |
 | `0023` | 2026-09-29 | `importadores.tier_minimo_requerido`; `notificaciones.cotizacion_id` y `conversacion_id`; `usuarios.importaciones_fuera_plataforma`; `cotizaciones.tier_solicitante_creacion` |
 | `0024` | 2026-09-30 | `importadores.limite_cotizaciones_diarias` y `recepciones_cotizacion` (cupo diario) |
+| `0025` | 2026-10-03 | Bitácora `eventos` (rellenada con el histórico) y `configuracion_plataforma`. Cambios en columnas: `cotizaciones.unidad_cantidad`, `motivo_eleccion(_detalle)` y `cantidad_minima` a decimal; `propuestas.cantidad`, `motivo_descarte(_detalle)`, `fecha_descarte`; `recepciones_cotizacion.origen`, `asignado_por`; `importadores.pedido_minimo(_unidad)` |
 
 #### Tablas añadidas después del esquema documentado arriba
 
@@ -370,7 +371,8 @@ Las secciones de tabla de esta nota describen el núcleo (julio de 2026). Estas 
 | Chat y soporte | `lecturas_conversacion` (+ columnas de soporte en `conversaciones_chat`) | [[Chat-WebSocket]] |
 | Ayuda y landing | `articulos_ayuda`, `landing_blocks`, `landing_allies`, `landing_news` | [[21-Ayuda-y-Soporte]] · [[22-Landing-CMS]] |
 | Tiers | `umbrales_tier_cotizante`, `movimientos_puntos_cotizacion` | [[18-Tiers-y-Perfil-Cotizante]] |
-| Cupo diario | `recepciones_cotizacion` | [[19-Limite-Diario-Cotizaciones]] |
+| Cupo diario y asignación | `recepciones_cotizacion` (fuente de verdad de qué abiertas tiene cada empresa) | [[19-Limite-Diario-Cotizaciones]] · [[23-Asignacion-de-Solicitudes]] |
+| Bitácora y ajustes | `eventos` (cada cambio de estado con montos en COP), `configuracion_plataforma` (modo y cupo de asignación, TRM) | [[24-Eventos-y-Panel-Empresa]] |
 
 Comandos típicos:
 

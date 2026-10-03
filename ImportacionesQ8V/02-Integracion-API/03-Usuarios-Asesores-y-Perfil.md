@@ -28,7 +28,7 @@ Array de `CotizacionAsignadaItem`:
 | `modalidad` | `string` | sí |  |
 | `nombre_producto` | `string` | sí |  |
 | `descripcion_cliente` | `string` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
 | `precio_objetivo_usd` | `Optional[number]` | no |  |
 | `incoterm` | `string` | sí |  |
 | `estado` | `string` | sí |  |

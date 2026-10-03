@@ -59,6 +59,7 @@ flowchart TB
   HIS --> F5[Fase-5]
   HIS --> F6[Fase-6]
   HIS --> F7[Fase-7]
+  HIS --> F8[Fase-8]
 
   API -.->|contratos HTTP| BE
   FE -.->|consume| API

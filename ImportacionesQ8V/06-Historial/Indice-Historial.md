@@ -24,6 +24,7 @@ Archivo de cómo se construyó Zarpi, etapa por etapa. Sirve para entender **có
 | 2026-07-20 → 08-26 | [[Fase-5-Frontend-y-Operacion]] | Frontend conectado, LMS, documentos, reseñas, soporte, ayuda |
 | 2026-08-31 → 09-29 | [[Fase-6-Zarpi-y-Produccion]] | Marca Zarpi, landing CMS, tiers, correos, stack de producción |
 | 2026-09-30 → 10-01 | [[Fase-7-Puesta-en-Produccion]] | Producción, límite diario, calculadora, backups y restauración |
+| 2026-10-03 → | [[Fase-8-Piloto-Asignacion-y-Metricas]] | Bitácora de eventos en COP, asignación con cupos, propuestas selladas, comparador y panel de la empresa |
 
 > Las notas de "Semana 1–4" se escribieron como plan de trabajo de un MVP a 3 semanas. Las cuatro semanas se ejecutaron en el backend entre el 5 y el 8 de julio de 2026. Se conservan tal cual como registro histórico, y por eso usan el nombre ImportacionesQ8 y mencionan un frontend que aún no existía.
 

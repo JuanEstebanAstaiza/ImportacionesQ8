@@ -729,6 +729,59 @@
         ]
       }
     },
+    "/importadores/panel": {
+      "get": {
+        "tags": [
+          "Importadores"
+        ],
+        "summary": "Panel De La Empresa",
+        "description": "Panel comercial de la empresa en pesos colombianos (dashboard de la empresa).\n\n- Solicitudes recibidas, propuestas enviadas, aceptadas y descartadas.\n- Propuesta a pedido (aceptadas ÷ enviadas) y \"cierras 1 de cada X\".\n- Tasa de respuesta (propuestas enviadas ÷ solicitudes recibidas).\n- Valor promedio de lo cerrado y valor de lo que espera respuesta del comprador.\n- Pedidos en proceso por etapa y motivos por los que se perdieron propuestas.\n- Pendientes de responder con su tiempo de espera.\n\nSale de la bitácora de eventos (`services/panel_empresa.py`).",
+        "operationId": "panel_de_la_empresa_importadores_panel_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dias",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 0,
+              "description": "Periodo en días hacia atrás; 0 = todo",
+              "default": 90,
+              "title": "Dias"
+            },
+            "description": "Periodo en días hacia atrás; 0 = todo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelEmpresaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/importadores/metricas": {
       "get": {
         "tags": [
@@ -1348,7 +1401,7 @@
           "Importadores"
         ],
         "summary": "Listar Solicitudes Abiertas",
-        "description": "Listar cotizaciones abiertas que aplican al importador (usando el motor de matching).\n\n- **importador_id**: ID del importador (UUID)",
+        "description": "Listar las cotizaciones abiertas asignadas a la empresa.\n\n- **importador_id**: ID del importador (UUID)",
         "operationId": "listar_solicitudes_abiertas_importadores__importador_id__solicitudes_abiertas_get",
         "security": [
           {
@@ -1571,7 +1624,7 @@
           "Cotizaciones"
         ],
         "summary": "Listar Pool Empresa",
-        "description": "Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas donde aparece\nen el matching) que todavía nadie ha reclamado. La cuenta dueña (representante\nlegal) y los asesores pueden verlo; cualquiera de ellos puede reclamar\n(`POST /reclamar`) — el primero se la queda.",
+        "description": "Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas que tiene\nasignadas) que todavía nadie ha reclamado. La cuenta dueña (representante\nlegal) y los asesores pueden verlo; cualquiera de ellos puede reclamar\n(`POST /reclamar`) — el primero se la queda.",
         "operationId": "listar_pool_empresa_cotizaciones_pool_empresa_get",
         "responses": {
           "200": {
@@ -1630,6 +1683,47 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cotizaciones/{cotizacion_id}/vista": {
+      "post": {
+        "tags": [
+          "Cotizaciones"
+        ],
+        "summary": "Marcar Cotizacion Vista",
+        "description": "La empresa abrió la solicitud. Solo cuenta la primera vez (evento\n`solicitud_vista`); de ahí sale cuánto tarda en mirarla.",
+        "operationId": "marcar_cotizacion_vista_cotizaciones__cotizacion_id__vista_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cotizacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cotizacion Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1962,7 +2056,7 @@
           "Propuestas"
         ],
         "summary": "Enviar Propuesta",
-        "description": "Enviar una propuesta directamente (sin pasar por borrador). Solo la cuenta\ndueña de la empresa puede enviar propuestas directamente; un asesor debe\nredactarla primero como borrador (`POST /propuestas/borrador`) y esta misma\ncuenta dueña la envía después (`POST /propuestas/{id}/enviar`).\n\n- **cotizacion_id**: ID de la cotización a la que responde\n- **precio_ofrecido_usd**: Precio ofrecido por el importador\n- **tiempo_estimado_entrega**: Tiempo estimado (ej: \"45 días\")\n- **incoterm**: Incoterm propuesto (FOB, CIF, EXW, DDP, etc.)\n- **condiciones_adicionales**: Condiciones adicionales (opcional)\n\nValidaciones:\n1. La cotización debe existir y estar abierta a propuestas (abierta/propuestas_recibidas) o dirigida a tu empresa\n2. Si es abierta: el importador debe estar en la lista de matching para esta cotización\n3. La categoría de la cotización debe ser congruente con la especialidad de tu empresa\n4. El importador no puede enviar más de una propuesta por cotización",
+        "description": "Enviar una propuesta directamente (sin pasar por borrador). Solo la cuenta\ndueña de la empresa puede enviar propuestas directamente; un asesor debe\nredactarla primero como borrador (`POST /propuestas/borrador`) y esta misma\ncuenta dueña la envía después (`POST /propuestas/{id}/enviar`).\n\n- **cotizacion_id**: ID de la cotización a la que responde\n- **precio_ofrecido_usd**: Precio ofrecido por el importador\n- **tiempo_estimado_entrega**: Tiempo estimado (ej: \"45 días\")\n- **incoterm**: Incoterm propuesto (FOB, CIF, EXW, DDP, etc.)\n- **condiciones_adicionales**: Condiciones adicionales (opcional)\n\nValidaciones:\n1. La cotización debe existir y estar abierta a propuestas (abierta/propuestas_recibidas) o dirigida a tu empresa\n2. Si es abierta: la solicitud debe estar asignada a tu empresa\n3. La categoría de la cotización debe ser congruente con la especialidad de tu empresa\n4. El importador no puede enviar más de una propuesta por cotización",
         "operationId": "enviar_propuesta_propuestas_post",
         "requestBody": {
           "content": {
@@ -6040,6 +6134,423 @@
         ]
       }
     },
+    "/admin/configuracion-operacion": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Obtener Configuracion Operacion",
+        "description": "Modo y cupo de asignación, y el estado de la TRM.",
+        "operationId": "obtener_configuracion_operacion_admin_configuracion_operacion_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfiguracionOperacionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/configuracion-operacion/asignacion": {
+      "put": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Actualizar Asignacion",
+        "description": "Cambia el modo de asignación (`manual` / `automatica`) o el cupo por solicitud.\n\nBajar el cupo no quita asignaciones ya hechas: solo impide añadir más.",
+        "operationId": "actualizar_asignacion_admin_configuracion_operacion_asignacion_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarAsignacionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfiguracionOperacionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/configuracion-operacion/trm": {
+      "put": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Actualizar Trm Respaldo",
+        "description": "Fija (o quita, con `null`) la TRM de respaldo que se usa si falla la oficial.",
+        "operationId": "actualizar_trm_respaldo_admin_configuracion_operacion_trm_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarTrmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoTrm"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/configuracion-operacion/trm/consultar": {
+      "post": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Consultar Trm Ahora",
+        "description": "Vuelve a consultar la TRM oficial ahora, sin esperar al día siguiente.",
+        "operationId": "consultar_trm_ahora_admin_configuracion_operacion_trm_consultar_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoTrm"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/solicitudes-abiertas": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar Solicitudes Abiertas Admin",
+        "description": "Solicitudes abiertas con sus empresas asignadas.\n\n- `por_asignar`: vigentes con huecos libres en el cupo.\n- `vigentes`: las que todavía admiten propuestas.\n- `todas`: también las cerradas y canceladas.",
+        "operationId": "listar_solicitudes_abiertas_admin_admin_solicitudes_abiertas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filtro",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(por_asignar|vigentes|todas)$",
+              "default": "vigentes",
+              "title": "Filtro"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limite"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitudAbiertaAdmin"
+                  },
+                  "title": "Response Listar Solicitudes Abiertas Admin Admin Solicitudes Abiertas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/solicitudes-abiertas/{cotizacion_id}/candidatos": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Candidatos Para Solicitud",
+        "description": "Empresas del circuito abierto con su encaje (categoría, país, pedido\nmínimo, capacidad), su desempeño y su cupo del día. Primero las ya\nasignadas y luego por puntaje de encaje.",
+        "operationId": "candidatos_para_solicitud_admin_solicitudes_abiertas__cotizacion_id__candidatos_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cotizacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cotizacion Id"
+            }
+          },
+          {
+            "name": "solo_que_encajan",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo empresas de esa categoría y país",
+              "default": false,
+              "title": "Solo Que Encajan"
+            },
+            "description": "Solo empresas de esa categoría y país"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidatosResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/solicitudes-abiertas/{cotizacion_id}/asignar": {
+      "post": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Asignar Solicitud",
+        "description": "Asigna la solicitud a una o varias empresas, sin pasar del cupo por solicitud.\n\n409 si se pasaría del cupo, si la solicitud ya no admite propuestas o si una\nempresa agotó su límite diario; 400 si la empresa no trabaja la categoría.",
+        "operationId": "asignar_solicitud_admin_solicitudes_abiertas__cotizacion_id__asignar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cotizacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cotizacion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignarRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudAbiertaAdmin"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/solicitudes-abiertas/{cotizacion_id}/asignaciones/{importador_id}": {
+      "delete": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Quitar Asignacion",
+        "description": "Quita la asignación a una empresa que todavía no envió propuesta.",
+        "operationId": "quitar_asignacion_admin_solicitudes_abiertas__cotizacion_id__asignaciones__importador_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cotizacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cotizacion Id"
+            }
+          },
+          {
+            "name": "importador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Importador Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudAbiertaAdmin"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trm": {
+      "get": {
+        "tags": [
+          "Cotizaciones"
+        ],
+        "summary": "Trm Vigente",
+        "description": "TRM que usa hoy la plataforma: `{valor, fuente, vigencia, fecha_consulta}`.\n\n`fuente` es `oficial`, `respaldo_admin`, `ultima_oficial` o `por_defecto`.",
+        "operationId": "trm_vigente_trm_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Trm Vigente Trm Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/legal/politica-tratamiento-datos": {
       "get": {
         "tags": [
@@ -9553,6 +10064,41 @@
         "type": "object",
         "title": "ActividadPlataformaResponse"
       },
+      "ActualizarAsignacionRequest": {
+        "properties": {
+          "modo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "automatica"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modo"
+          },
+          "cupo_por_solicitud": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cupo Por Solicitud",
+            "description": "Máximo de empresas por solicitud"
+          }
+        },
+        "type": "object",
+        "title": "ActualizarAsignacionRequest"
+      },
       "ActualizarMiembroRequest": {
         "properties": {
           "rol_org": {
@@ -9584,6 +10130,26 @@
         },
         "type": "object",
         "title": "ActualizarMiembroRequest"
+      },
+      "ActualizarTrmRequest": {
+        "properties": {
+          "respaldo": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 50000.0,
+                "minimum": 500.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respaldo",
+            "description": "TRM de respaldo (COP por USD) para cuando falla la consulta oficial. null la quita."
+          }
+        },
+        "type": "object",
+        "title": "ActualizarTrmRequest"
       },
       "AdminCrearImportadorRequest": {
         "properties": {
@@ -10468,6 +11034,58 @@
         ],
         "title": "AsesorResponse"
       },
+      "AsignacionResumen": {
+        "properties": {
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "nombre_empresa": {
+            "type": "string",
+            "title": "Nombre Empresa"
+          },
+          "origen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origen"
+          },
+          "fecha_asignacion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Asignacion"
+          },
+          "estado_propuesta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Propuesta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "importador_id",
+          "nombre_empresa"
+        ],
+        "title": "AsignacionResumen"
+      },
       "AsignarAsesorRequest": {
         "properties": {
           "asesor_id": {
@@ -10485,6 +11103,24 @@
         "type": "object",
         "title": "AsignarAsesorRequest",
         "description": "Reasignación explícita del responsable de una cotización.\n\n`asesor_id = None` devuelve la cotización al pool de la empresa."
+      },
+      "AsignarRequest": {
+        "properties": {
+          "importador_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Importador Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "importador_ids"
+        ],
+        "title": "AsignarRequest"
       },
       "BackupSubidoResponse": {
         "properties": {
@@ -10811,6 +11447,198 @@
         },
         "type": "object",
         "title": "CampoPersonalizadoUpdate"
+      },
+      "CandidatoAsignacion": {
+        "properties": {
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "nombre_empresa": {
+            "type": "string",
+            "title": "Nombre Empresa"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "verificado": {
+            "type": "boolean",
+            "title": "Verificado"
+          },
+          "especialidades": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Especialidades",
+            "default": []
+          },
+          "paises_origen": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paises Origen",
+            "default": []
+          },
+          "calificacion_promedio": {
+            "type": "number",
+            "title": "Calificacion Promedio"
+          },
+          "tiempo_respuesta_promedio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiempo Respuesta Promedio"
+          },
+          "pedido_minimo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Minimo"
+          },
+          "pedido_minimo_unidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Minimo Unidad"
+          },
+          "capacidad_volumen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacidad Volumen"
+          },
+          "limite_cotizaciones_diarias": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limite Cotizaciones Diarias"
+          },
+          "recibidas_hoy": {
+            "type": "integer",
+            "title": "Recibidas Hoy"
+          },
+          "cupo_diario_agotado": {
+            "type": "boolean",
+            "title": "Cupo Diario Agotado"
+          },
+          "encaje": {
+            "$ref": "#/components/schemas/EncajeCandidato"
+          },
+          "desempeno": {
+            "$ref": "#/components/schemas/DesempenoCandidato"
+          },
+          "asignada": {
+            "type": "boolean",
+            "title": "Asignada"
+          },
+          "origen_asignacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origen Asignacion"
+          },
+          "fecha_asignacion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Asignacion"
+          },
+          "estado_propuesta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Propuesta"
+          },
+          "puntaje": {
+            "type": "number",
+            "title": "Puntaje"
+          }
+        },
+        "type": "object",
+        "required": [
+          "importador_id",
+          "nombre_empresa",
+          "verificado",
+          "calificacion_promedio",
+          "recibidas_hoy",
+          "cupo_diario_agotado",
+          "encaje",
+          "desempeno",
+          "asignada",
+          "puntaje"
+        ],
+        "title": "CandidatoAsignacion"
+      },
+      "CandidatosResponse": {
+        "properties": {
+          "solicitud": {
+            "$ref": "#/components/schemas/SolicitudAbiertaAdmin"
+          },
+          "candidatos": {
+            "items": {
+              "$ref": "#/components/schemas/CandidatoAsignacion"
+            },
+            "type": "array",
+            "title": "Candidatos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "solicitud",
+          "candidatos"
+        ],
+        "title": "CandidatosResponse"
       },
       "CantidadImportacionesResponse": {
         "properties": {
@@ -11485,6 +12313,44 @@
         ],
         "title": "ComprarCreditosResponse"
       },
+      "ConfiguracionAsignacion": {
+        "properties": {
+          "modo": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "automatica"
+            ],
+            "title": "Modo"
+          },
+          "cupo_por_solicitud": {
+            "type": "integer",
+            "title": "Cupo Por Solicitud"
+          }
+        },
+        "type": "object",
+        "required": [
+          "modo",
+          "cupo_por_solicitud"
+        ],
+        "title": "ConfiguracionAsignacion"
+      },
+      "ConfiguracionOperacionResponse": {
+        "properties": {
+          "asignacion": {
+            "$ref": "#/components/schemas/ConfiguracionAsignacion"
+          },
+          "trm": {
+            "$ref": "#/components/schemas/EstadoTrm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asignacion",
+          "trm"
+        ],
+        "title": "ConfiguracionOperacionResponse"
+      },
       "ContactoAsignadoResponse": {
         "properties": {
           "usuario_id": {
@@ -12095,7 +12961,7 @@
             "title": "Descripcion Cliente"
           },
           "cantidad_minima": {
-            "type": "integer",
+            "type": "number",
             "title": "Cantidad Minima"
           },
           "precio_objetivo_usd": {
@@ -12254,10 +13120,20 @@
             "title": "Modalidad Importacion"
           },
           "cantidad_minima": {
-            "type": "integer",
-            "minimum": 1.0,
+            "type": "number",
+            "exclusiveMinimum": 0.0,
             "title": "Cantidad Minima",
-            "description": "Cantidad mínima a importar"
+            "description": "Cantidad mínima a importar, en `unidad_cantidad`"
+          },
+          "unidad_cantidad": {
+            "type": "string",
+            "enum": [
+              "unidades",
+              "m3"
+            ],
+            "title": "Unidad Cantidad",
+            "description": "Unidad de la cantidad: 'unidades' o 'm3' (metros cúbicos)",
+            "default": "unidades"
           },
           "precio_objetivo_usd": {
             "anyOf": [
@@ -12452,8 +13328,13 @@
             "title": "Modalidad Importacion"
           },
           "cantidad_minima": {
-            "type": "integer",
+            "type": "number",
             "title": "Cantidad Minima"
+          },
+          "unidad_cantidad": {
+            "type": "string",
+            "title": "Unidad Cantidad",
+            "default": "unidades"
           },
           "precio_objetivo_usd": {
             "anyOf": [
@@ -12590,6 +13471,28 @@
               }
             ],
             "title": "Motivo Cancelacion"
+          },
+          "motivo_eleccion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Eleccion"
+          },
+          "motivo_eleccion_detalle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Eleccion Detalle"
           },
           "conversacion_id": {
             "anyOf": [
@@ -12784,6 +13687,30 @@
         ],
         "title": "CrearAgenteSoporteRequest",
         "description": "Alta de una cuenta del equipo de atención al cliente."
+      },
+      "CriterioEncaje": {
+        "properties": {
+          "cumple": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cumple"
+          },
+          "detalle": {
+            "type": "string",
+            "title": "Detalle"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detalle"
+        ],
+        "title": "CriterioEncaje"
       },
       "CupoDiarioResponse": {
         "properties": {
@@ -13239,6 +14166,59 @@
         "type": "object",
         "title": "CursoUpdate"
       },
+      "DesempenoCandidato": {
+        "properties": {
+          "solicitudes_asignadas": {
+            "type": "integer",
+            "title": "Solicitudes Asignadas",
+            "default": 0
+          },
+          "propuestas_enviadas": {
+            "type": "integer",
+            "title": "Propuestas Enviadas",
+            "default": 0
+          },
+          "propuestas_aceptadas": {
+            "type": "integer",
+            "title": "Propuestas Aceptadas",
+            "default": 0
+          },
+          "tasa_respuesta_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasa Respuesta Pct"
+          },
+          "tasa_cierre_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasa Cierre Pct"
+          },
+          "pedidos_entregados": {
+            "type": "integer",
+            "title": "Pedidos Entregados",
+            "default": 0
+          },
+          "pedidos_activos": {
+            "type": "integer",
+            "title": "Pedidos Activos",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DesempenoCandidato"
+      },
       "DesgloseEstimacion": {
         "properties": {
           "valor_mercancia": {
@@ -13508,6 +14488,87 @@
         ],
         "title": "DocumentoOrdenItem"
       },
+      "EmpresaPropuestaResumen": {
+        "properties": {
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "nombre_empresa": {
+            "type": "string",
+            "title": "Nombre Empresa"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "verificado": {
+            "type": "boolean",
+            "title": "Verificado",
+            "default": false
+          },
+          "calificacion_promedio": {
+            "type": "number",
+            "title": "Calificacion Promedio",
+            "default": 0
+          },
+          "total_resenas": {
+            "type": "integer",
+            "title": "Total Resenas",
+            "default": 0
+          },
+          "pedidos_entregados": {
+            "type": "integer",
+            "title": "Pedidos Entregados",
+            "default": 0
+          },
+          "pedidos_en_curso": {
+            "type": "integer",
+            "title": "Pedidos En Curso",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "importador_id",
+          "nombre_empresa"
+        ],
+        "title": "EmpresaPropuestaResumen",
+        "description": "Lo que el comprador necesita para comparar a quién le compra: no solo\nprecio y plazo, también cómo cumple esa empresa."
+      },
+      "EncajeCandidato": {
+        "properties": {
+          "categoria": {
+            "type": "boolean",
+            "title": "Categoria"
+          },
+          "pais": {
+            "type": "boolean",
+            "title": "Pais"
+          },
+          "pedido_minimo": {
+            "$ref": "#/components/schemas/CriterioEncaje"
+          },
+          "capacidad": {
+            "$ref": "#/components/schemas/CriterioEncaje"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria",
+          "pais",
+          "pedido_minimo",
+          "capacidad"
+        ],
+        "title": "EncajeCandidato"
+      },
       "EnvioCorreoMasivoRequest": {
         "properties": {
           "asunto": {
@@ -13690,6 +14751,100 @@
           "estado"
         ],
         "title": "EstadoOrdenUpdate"
+      },
+      "EstadoTrm": {
+        "properties": {
+          "valor": {
+            "type": "number",
+            "title": "Valor"
+          },
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "vigencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigencia"
+          },
+          "fecha_consulta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Consulta"
+          },
+          "consulta_automatica": {
+            "type": "boolean",
+            "title": "Consulta Automatica"
+          },
+          "respaldo_admin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respaldo Admin"
+          },
+          "ultima_oficial": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Oficial"
+          },
+          "ultima_oficial_vigencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Oficial Vigencia"
+          },
+          "ultima_oficial_consulta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Oficial Consulta"
+          },
+          "valor_por_defecto": {
+            "type": "number",
+            "title": "Valor Por Defecto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor",
+          "fuente",
+          "consulta_automatica",
+          "valor_por_defecto"
+        ],
+        "title": "EstadoTrm"
       },
       "EstimacionPrecioRequest": {
         "properties": {
@@ -14511,6 +15666,28 @@
             ],
             "title": "Limite Cotizaciones Diarias"
           },
+          "pedido_minimo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Minimo"
+          },
+          "pedido_minimo_unidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Minimo Unidad"
+          },
           "fecha_registro": {
             "type": "string",
             "format": "date-time",
@@ -14668,6 +15845,35 @@
             ],
             "title": "Limite Cotizaciones Diarias",
             "description": "Máximo de cotizaciones (dirigidas + abiertas) a recibir por día. Enviar null para quitar el límite."
+          },
+          "pedido_minimo": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Minimo",
+            "description": "Pedido mínimo que acepta la empresa. Enviar null para quitarlo."
+          },
+          "pedido_minimo_unidad": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unidades",
+                  "m3"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pedido Minimo Unidad",
+            "description": "Unidad del pedido mínimo: 'unidades' o 'm3'"
           }
         },
         "type": "object",
@@ -16793,12 +17999,265 @@
         ],
         "title": "PagoResponse"
       },
+      "PanelEmpresaResponse": {
+        "properties": {
+          "importador_id": {
+            "type": "string",
+            "title": "Importador Id"
+          },
+          "desde": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desde"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda",
+            "default": "COP"
+          },
+          "trm": {
+            "type": "number",
+            "title": "Trm"
+          },
+          "trm_fuente": {
+            "type": "string",
+            "title": "Trm Fuente"
+          },
+          "solicitudes_recibidas": {
+            "type": "integer",
+            "title": "Solicitudes Recibidas"
+          },
+          "propuestas_enviadas": {
+            "type": "integer",
+            "title": "Propuestas Enviadas"
+          },
+          "propuestas_aceptadas": {
+            "type": "integer",
+            "title": "Propuestas Aceptadas"
+          },
+          "propuestas_descartadas": {
+            "type": "integer",
+            "title": "Propuestas Descartadas"
+          },
+          "propuestas_esperando": {
+            "type": "integer",
+            "title": "Propuestas Esperando"
+          },
+          "conversion_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversion Pct"
+          },
+          "cierre_uno_de_cada": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cierre Uno De Cada"
+          },
+          "tasa_respuesta_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasa Respuesta Pct"
+          },
+          "tiempo_promedio_respuesta_horas": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiempo Promedio Respuesta Horas"
+          },
+          "valor_cerrado_cop": {
+            "type": "number",
+            "title": "Valor Cerrado Cop",
+            "default": 0
+          },
+          "valor_promedio_cerrado_cop": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Promedio Cerrado Cop"
+          },
+          "valor_esperando_cop": {
+            "type": "number",
+            "title": "Valor Esperando Cop",
+            "default": 0
+          },
+          "pedidos_por_etapa": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Pedidos Por Etapa"
+          },
+          "pedidos_entregados": {
+            "type": "integer",
+            "title": "Pedidos Entregados"
+          },
+          "motivos_perdida": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Motivos Perdida"
+          },
+          "pendientes_responder": {
+            "items": {
+              "$ref": "#/components/schemas/PendienteResponder"
+            },
+            "type": "array",
+            "title": "Pendientes Responder"
+          },
+          "total_pendientes_responder": {
+            "type": "integer",
+            "title": "Total Pendientes Responder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "importador_id",
+          "trm",
+          "trm_fuente",
+          "solicitudes_recibidas",
+          "propuestas_enviadas",
+          "propuestas_aceptadas",
+          "propuestas_descartadas",
+          "propuestas_esperando",
+          "pedidos_por_etapa",
+          "pedidos_entregados",
+          "motivos_perdida",
+          "pendientes_responder",
+          "total_pendientes_responder"
+        ],
+        "title": "PanelEmpresaResponse",
+        "description": "Panel comercial de la empresa importadora, en pesos colombianos.\n\nLas tasas son de cohorte: de las solicitudes recibidas en el periodo,\ncuántas respondió; de las propuestas enviadas en el periodo, cuántas\nterminaron en pedido."
+      },
+      "PendienteResponder": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "nombre_producto": {
+            "type": "string",
+            "title": "Nombre Producto"
+          },
+          "linea_producto": {
+            "type": "string",
+            "title": "Linea Producto"
+          },
+          "modalidad": {
+            "type": "string",
+            "title": "Modalidad"
+          },
+          "cantidad": {
+            "type": "number",
+            "title": "Cantidad"
+          },
+          "unidad": {
+            "type": "string",
+            "title": "Unidad"
+          },
+          "recibida": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recibida"
+          },
+          "horas_esperando": {
+            "type": "number",
+            "title": "Horas Esperando"
+          },
+          "nivel": {
+            "type": "string",
+            "title": "Nivel"
+          },
+          "con_borrador": {
+            "type": "boolean",
+            "title": "Con Borrador",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "nombre_producto",
+          "linea_producto",
+          "modalidad",
+          "cantidad",
+          "unidad",
+          "recibida",
+          "horas_esperando",
+          "nivel"
+        ],
+        "title": "PendienteResponder"
+      },
       "PreaceptarPropuestaRequest": {
         "properties": {
           "aceptar": {
             "type": "boolean",
             "title": "Aceptar",
             "default": true
+          },
+          "motivo_eleccion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "precio",
+                  "tiempo",
+                  "condiciones",
+                  "otro"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Eleccion"
+          },
+          "motivo_detalle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Detalle"
           }
         },
         "type": "object",
@@ -16918,6 +18377,19 @@
               }
             ],
             "title": "Condiciones Adicionales"
+          },
+          "cantidad": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cantidad",
+            "description": "Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida)"
           }
         },
         "type": "object",
@@ -16990,6 +18462,61 @@
             "type": "boolean",
             "title": "Preaceptada Por Empresa",
             "default": false
+          },
+          "cantidad": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cantidad"
+          },
+          "fecha_envio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Envio"
+          },
+          "motivo_descarte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Descarte"
+          },
+          "motivo_descarte_detalle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Descarte Detalle"
+          },
+          "empresa": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmpresaPropuestaResumen"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "contacto_asesor": {
             "anyOf": [
@@ -18018,6 +19545,109 @@
           "parte_atribuida_sugerida"
         ],
         "title": "SolicitarRecreacionRequest"
+      },
+      "SolicitudAbiertaAdmin": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "nombre_producto": {
+            "type": "string",
+            "title": "Nombre Producto"
+          },
+          "linea_producto": {
+            "type": "string",
+            "title": "Linea Producto"
+          },
+          "pais_importacion": {
+            "type": "string",
+            "title": "Pais Importacion"
+          },
+          "cantidad_minima": {
+            "type": "number",
+            "title": "Cantidad Minima"
+          },
+          "unidad_cantidad": {
+            "type": "string",
+            "title": "Unidad Cantidad"
+          },
+          "precio_objetivo_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Objetivo Usd"
+          },
+          "moneda_precio_objetivo": {
+            "type": "string",
+            "title": "Moneda Precio Objetivo"
+          },
+          "tipo_calidad": {
+            "type": "string",
+            "title": "Tipo Calidad"
+          },
+          "incoterm": {
+            "type": "string",
+            "title": "Incoterm"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "horas_desde_creacion": {
+            "type": "number",
+            "title": "Horas Desde Creacion"
+          },
+          "asignadas": {
+            "type": "integer",
+            "title": "Asignadas"
+          },
+          "cupo_por_solicitud": {
+            "type": "integer",
+            "title": "Cupo Por Solicitud"
+          },
+          "propuestas_enviadas": {
+            "type": "integer",
+            "title": "Propuestas Enviadas"
+          },
+          "empresas": {
+            "items": {
+              "$ref": "#/components/schemas/AsignacionResumen"
+            },
+            "type": "array",
+            "title": "Empresas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre_producto",
+          "linea_producto",
+          "pais_importacion",
+          "cantidad_minima",
+          "unidad_cantidad",
+          "moneda_precio_objetivo",
+          "tipo_calidad",
+          "incoterm",
+          "estado",
+          "fecha_creacion",
+          "horas_desde_creacion",
+          "asignadas",
+          "cupo_por_solicitud",
+          "propuestas_enviadas",
+          "empresas"
+        ],
+        "title": "SolicitudAbiertaAdmin"
       },
       "SolicitudRecreacionResponse": {
         "properties": {

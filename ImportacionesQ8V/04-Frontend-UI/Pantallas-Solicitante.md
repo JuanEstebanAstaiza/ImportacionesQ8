@@ -8,7 +8,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 
 ---
 
-## Estado actual (2026-10-01)
+## Estado actual (2026-10-03)
 
 > Las secciones de abajo son el diseño original del MVP; la numeración "Pantalla N" es la de ese diseño. Las pantallas reales están en `src/app/App.tsx`. Rutas en [[Routing-y-Roles-Frontend]].
 
@@ -17,8 +17,8 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 | Landing | `/` | Página pública de Zarpi, editable desde el admin ([[22-Landing-CMS]]) |
 | Registro / Login | `/registro`, `/login` | Registro natural/jurídica con OTP de email; login con selección de rol |
 | Dashboard | `/inicio` | Resumen de cotizaciones, respuestas y órdenes |
-| Cotizaciones | `/cotizaciones`, `/cotizaciones/:id` | Lista y detalle; **duplicar** una cotización |
-| Nueva cotización | `/cotizaciones/nueva` | 3 pasos: modalidad (dirigida a una empresa o abierta), producto (precio objetivo multimoneda, DDP por defecto, shipping mark) y confirmación |
+| Cotizaciones | `/cotizaciones`, `/cotizaciones/:id` | Lista y detalle; **duplicar** una cotización. En el detalle, **comparador de propuestas** (ver abajo) |
+| Nueva cotización | `/cotizaciones/nueva` | 3 pasos: modalidad (dirigida a una empresa o abierta), producto (cantidad en **unidades o m³**, precio objetivo multimoneda, DDP por defecto, shipping mark) y confirmación |
 | Respuestas | `/respuestas`, `/respuestas/:id` | Propuestas recibidas, comparación y preaceptación |
 | Órdenes | `/ordenes`, `/ordenes/:id` | Seguimiento del embarque; **reseñas pendientes** de órdenes entregadas |
 | Ficha de empresa | `/empresas/:id` | Presentación, certificaciones, reseñas y "N proyectos" |
@@ -28,6 +28,16 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 | Cursos | `/cursos` | Catálogo, reproductor, progreso y certificado |
 | Perfil | `/perfil` | Datos personales y **referidos** |
 | Ayuda | `/ayuda` | Centro de ayuda y apertura de tickets de soporte |
+
+**Comparador de propuestas** (detalle de una cotización abierta con varias propuestas, desde el 2026-10-03):
+- Las propuestas salen **en el orden en que llegaron**, no por precio.
+- Cada fila muestra al mismo nivel:
+  - empresa;
+  - **precio** (USD y su equivalente en COP);
+  - **tiempo**;
+  - **qué incluye** (lectura del incoterm y ventajas declaradas);
+  - **cumplimiento** (calificación, reseñas, pedidos entregados y en curso).
+- Al **aceptar** habiendo otras propuestas, se pregunta qué decidió la elección: precio, tiempo de entrega, condiciones u otro. Eso se convierte en el motivo de pérdida que ven las demás empresas en su panel. Ver [[23-Asignacion-de-Solicitudes]].
 
 Avisos que ve el cliente al crear una cotización dirigida:
 - **Tier insuficiente:** la empresa exige un nivel mayor. Puede desbloquearla con 1 punto ([[18-Tiers-y-Perfil-Cotizante]]).

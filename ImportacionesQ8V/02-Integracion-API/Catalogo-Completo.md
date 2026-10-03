@@ -1,6 +1,6 @@
 # Catálogo completo de endpoints
 
-Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01 con `scripts/generate_frontend_api_docs.py`). El WebSocket `/ws/chat/{conversacion_id}` no aparece en OpenAPI: ver [[08-Chat-y-WebSocket]].
+Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03 con `scripts/generate_frontend_api_docs.py`). El WebSocket `/ws/chat/{conversacion_id}` no aparece en OpenAPI: ver [[08-Chat-y-WebSocket]].
 
 | Método | Ruta | Tag | Auth | Resumen |
 |--------|------|-----|------|---------|
@@ -17,6 +17,10 @@ Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01
 | `POST` | `/admin/certificaciones` | Administración | JWT | Crear Certificacion |
 | `DELETE` | `/admin/certificaciones/{certificacion_id}` | Administración | JWT | Retirar Certificacion |
 | `PUT` | `/admin/certificaciones/{certificacion_id}` | Administración | JWT | Actualizar Certificacion |
+| `GET` | `/admin/configuracion-operacion` | Administración | JWT | Obtener Configuracion Operacion |
+| `PUT` | `/admin/configuracion-operacion/asignacion` | Administración | JWT | Actualizar Asignacion |
+| `PUT` | `/admin/configuracion-operacion/trm` | Administración | JWT | Actualizar Trm Respaldo |
+| `POST` | `/admin/configuracion-operacion/trm/consultar` | Administración | JWT | Consultar Trm Ahora |
 | `GET` | `/admin/conversaciones` | Administración | JWT | Listar Conversaciones Admin |
 | `GET` | `/admin/conversaciones/{conversacion_id}/mensajes` | Administración | JWT | Leer Conversacion Admin |
 | `POST` | `/admin/conversaciones/{conversacion_id}/mensajes` | Administración | JWT | Responder Conversacion Admin |
@@ -48,6 +52,10 @@ Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01
 | `GET` | `/admin/metricas` | Administración | JWT | Obtener Metricas |
 | `GET` | `/admin/recreaciones` | Administración | JWT | Listar Recreaciones |
 | `PUT` | `/admin/recreaciones/{solicitud_id}/resolver` | Administración | JWT | Resolver Recreacion |
+| `GET` | `/admin/solicitudes-abiertas` | Administración | JWT | Listar Solicitudes Abiertas Admin |
+| `DELETE` | `/admin/solicitudes-abiertas/{cotizacion_id}/asignaciones/{importador_id}` | Administración | JWT | Quitar Asignacion |
+| `POST` | `/admin/solicitudes-abiertas/{cotizacion_id}/asignar` | Administración | JWT | Asignar Solicitud |
+| `GET` | `/admin/solicitudes-abiertas/{cotizacion_id}/candidatos` | Administración | JWT | Candidatos Para Solicitud |
 | `GET` | `/admin/usuarios` | Administración | JWT | Listar Usuarios |
 | `PUT` | `/admin/usuarios/{usuario_id}/estado` | Administración | JWT | Actualizar Estado Usuario |
 | `GET` | `/asesores/dashboard/stats` | Asesores | JWT | Dashboard Stats Asesor |
@@ -95,6 +103,7 @@ Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01
 | `PUT` | `/cotizaciones/{cotizacion_id}/propuestas/aceptar` | Cotizaciones | JWT | Aceptar Propuesta |
 | `POST` | `/cotizaciones/{cotizacion_id}/reclamar` | Cotizaciones | JWT | Reclamar Cotizacion |
 | `POST` | `/cotizaciones/{cotizacion_id}/solicitar-recreacion` | Cotizaciones | JWT | Solicitar Recreacion |
+| `POST` | `/cotizaciones/{cotizacion_id}/vista` | Cotizaciones | JWT | Marcar Cotizacion Vista |
 | `GET` | `/cotizantes/{solicitante_id}/perfil-publico` | Cotizantes | JWT | Obtener Perfil Publico |
 | `POST` | `/creditos/comprar` | Créditos | JWT | Comprar Creditos |
 | `GET` | `/creditos/movimientos` | Créditos | JWT | Listar Movimientos |
@@ -145,6 +154,7 @@ Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01
 | `POST` | `/importadores/evidencias` | Importadores | JWT | Crear Evidencia |
 | `DELETE` | `/importadores/evidencias/{evidencia_id}` | Importadores | JWT | Eliminar Evidencia |
 | `GET` | `/importadores/metricas` | Importadores | JWT | Metricas Importador |
+| `GET` | `/importadores/panel` | Importadores | JWT | Panel De La Empresa |
 | `GET` | `/importadores/por-categoria` | Importadores | Público | Listar Importadores Por Categoria |
 | `GET` | `/importadores/{importador_id}` | Importadores | Público | Obtener Importador |
 | `PUT` | `/importadores/{importador_id}` | Importadores | JWT | Actualizar Perfil Importador |
@@ -202,6 +212,7 @@ Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01
 | `PUT` | `/resenas/{resena_id}` | Reseñas | JWT | Editar Resena |
 | `PUT` | `/resenas/{resena_id}/moderar` | Reseñas | JWT | Moderar Resena |
 | `POST` | `/resenas/{resena_id}/responder` | Reseñas | JWT | Responder Resena |
+| `GET` | `/trm` | Cotizaciones | JWT | Trm Vigente |
 | `GET` | `/usuarios/me` | Usuarios | JWT | Obtener Mi Perfil |
 | `PUT` | `/usuarios/me` | Usuarios | JWT | Actualizar Mi Perfil |
 | `GET` | `/usuarios/{solicitante_id}/perfil-publico` | Usuarios | JWT | Obtener Perfil Publico Cotizante |
@@ -231,3 +242,7 @@ Total: **201** operaciones REST exportadas desde OpenAPI (generado el 2026-10-01
 - [[15-Cursos-LMS|APIs — Cursos / LMS]]
 - [[16-Notificaciones|APIs — Notificaciones in-app]]
 - [[17-Documentos-y-Multimedia|APIs — Gestión documental y multimedia]]
+- [[19-Limite-Diario-Cotizaciones|APIs — Límite diario de cotizaciones]]
+- [[20-Calculadora-Precios-Chat|APIs — Calculadora de precios en el chat]]
+- [[23-Asignacion-de-Solicitudes|APIs — Asignación de solicitudes abiertas]]
+- [[24-Eventos-y-Panel-Empresa|APIs — Bitácora de eventos y panel de la empresa]]

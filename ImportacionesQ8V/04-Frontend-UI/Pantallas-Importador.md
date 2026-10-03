@@ -8,7 +8,7 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 
 ---
 
-## Estado actual (2026-10-01)
+## Estado actual (2026-10-03)
 
 > Las secciones de abajo son el diseño original del MVP. Las pantallas reales están en `src/app/App.tsx`. Rutas en [[Routing-y-Roles-Frontend]].
 
@@ -16,8 +16,8 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 
 | Pantalla | URL | Qué permite |
 |----------|-----|-------------|
-| Dashboard | `/empresa` | Resumen comercial de la empresa (`GET /importadores/metricas`) |
-| Cotizaciones | `/empresa/cotizaciones` | Bandeja de dirigidas y abiertas que encajan con su especialidad, asignar asesor, confirmar propuestas |
+| Dashboard | `/empresa` | **Panel de la empresa** en pesos (`GET /importadores/panel`, `features/importador/PanelEmpresa.tsx`). Ver tabla de abajo |
+| Solicitudes | `/empresa/cotizaciones` | Bandeja de dirigidas y de abiertas **asignadas** a la empresa; asignar asesor, confirmar propuestas. En el menú se llamaba "Cotizaciones" |
 | Asesores | `/empresa/asesores` | Crear, activar y desactivar asesores; chat interno con cada uno |
 | **Mi empresa** | `/empresa/perfil` | Ver tabla de abajo. Se guarda solo (autoguardado) |
 | Órdenes | `/ordenes` | Seguimiento y avance del estado de cada embarque |
@@ -30,9 +30,27 @@ Secciones de **Mi empresa**:
 |---------|--------------|
 | Información general | Razón social, logo, contacto, descripción, "solo cotizaciones dirigidas" |
 | Información comercial | Tiempo de respuesta, **tier mínimo exigido al cotizante**, categorías, países, certificaciones |
+| Información general (capacidad y pedido mínimo) | Capacidad de volumen y **pedido mínimo** (unidades o m³): criterios con los que Zarpi le asigna solicitudes. Ver [[23-Asignacion-de-Solicitudes]] |
 | **Límite de cotizaciones por día** | Tarjeta con interruptor, máximo diario y barra de uso de hoy. Ver [[19-Limite-Diario-Cotizaciones]] |
 | Shipping mark | Prefijo con el que se rotula la carga de la empresa |
 | Presentación de la empresa | Vídeo y fotos para la ficha pública (`features/importador/PresentacionEmpresa.tsx`) |
+
+**Panel de la empresa** (periodo de 30 días, 90 días, 12 meses o todo):
+
+| Bloque | Qué muestra |
+|--------|-------------|
+| Solicitudes recibidas | Con "Respondes el X %" |
+| Propuestas enviadas | Aceptadas y no elegidas |
+| **Propuesta a pedido** | Aceptadas ÷ enviadas, en lenguaje simple: "Cierras 1 de cada X propuestas" |
+| Tasa de respuesta | Propuestas enviadas ÷ solicitudes recibidas |
+| Valor promedio de los negocios cerrados | En COP, con el total cerrado |
+| Propuestas esperando respuesta del comprador | Valor en COP y número de propuestas |
+| Tiempo promedio de respuesta, asesores conectados | — |
+| Pendientes de responder | Lista con color según la espera: verde < 24 h, amarillo 24–48 h, rojo > 48 h |
+| Pedidos en proceso | Por etapa: compra, embarque, tránsito, nacionalización, entrega |
+| Por qué no te eligen | Motivos de pérdida: precio, tiempo de entrega, condiciones, otro |
+
+Todos los montos van en pesos con la moneda escrita ("$4.250.000 COP"), convertidos con la TRM de cada momento. Definiciones en [[24-Eventos-y-Panel-Empresa]].
 
 **En el chat con un cliente** (cotización u orden):
 - El botón **"Calcular precio"** abre la calculadora, con resultado en vivo prellenado con la cotización.

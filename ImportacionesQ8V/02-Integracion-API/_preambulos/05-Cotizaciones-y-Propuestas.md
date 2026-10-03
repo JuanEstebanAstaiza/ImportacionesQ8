@@ -43,8 +43,30 @@ Consecuencias para quien integra:
 - `POST /cotizaciones` en modalidad **dirigida** devuelve `400` si la empresa
   destino no trabaja esa línea de producto. El aviso llega al cliente al crearla,
   no a la empresa al intentar responderla.
-- `GET /cotizaciones` para una cuenta de empresa (`importador` / `asesor`) ya
-  filtra las cotizaciones abiertas: solo devuelve las que esa empresa puede
-  responder de verdad. Las dirigidas a ella se listan siempre.
+- `GET /cotizaciones` para una cuenta de empresa (`importador` / `asesor`) solo
+  devuelve las abiertas **asignadas** a esa empresa que además puede responder
+  (ver [[23-Asignacion-de-Solicitudes]]). Las dirigidas a ella se listan siempre.
 - Una empresa **sin especialidades declaradas** no queda bloqueada al responder,
   pero tampoco entra en el reparto automático de cotizaciones abiertas.
+
+## Cantidad y unidad (desde 2026-10-03)
+
+- `cantidad_minima` admite decimales y va acompañada de `unidad_cantidad`:
+  `"unidades"` (por defecto, debe ser entera; si no, `422`) o `"m3"`.
+- La propuesta puede traer `cantidad` (la que cubre el precio). Si no la trae, se
+  entiende la pedida. `precio_ofrecido_usd` es el **total** de la propuesta.
+
+## Asignación, propuestas selladas y motivo de elección (desde 2026-10-03)
+
+- Una abierta solo la ve, reclama y responde una empresa que la tenga asignada; si
+  no, `403`.
+- Para una empresa, la cotización abierta oculta datos de la competencia:
+  responsable, contacto, chat, y que ya haya propuestas.
+- El solicitante recibe las propuestas en orden de llegada, con un campo `empresa`
+  que trae el cumplimiento de cada una. Al aceptar puede enviar `motivo_eleccion`
+  (`precio`, `tiempo`, `condiciones`, `otro`) y `motivo_detalle`, que pasan a
+  `motivo_descarte` de las propuestas perdedoras.
+- `POST /cotizaciones/{id}/vista` marca que la empresa abrió la solicitud (para la
+  bitácora).
+
+Detalle en [[23-Asignacion-de-Solicitudes]] y [[24-Eventos-y-Panel-Empresa]].

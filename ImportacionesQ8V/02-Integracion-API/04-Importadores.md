@@ -34,6 +34,8 @@ Array de `ImportadorResponse`:
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -277,6 +279,8 @@ Array de `ImportadorResponse`:
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -360,6 +364,8 @@ Array de `ImportadorResponse`:
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -461,6 +467,42 @@ Array de `EvidenciaImportadorResponse`:
 
 ---
 
+### `GET /importadores/panel`
+
+- **Resumen:** Panel De La Empresa
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Query:** `dias`
+
+**Respuesta (`PanelEmpresaResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `importador_id` | `string` | sí |  |
+| `desde` | `Optional[string]` | no |  |
+| `moneda` | `string` | no |  |
+| `trm` | `number` | sí |  |
+| `trm_fuente` | `string` | sí |  |
+| `solicitudes_recibidas` | `integer` | sí |  |
+| `propuestas_enviadas` | `integer` | sí |  |
+| `propuestas_aceptadas` | `integer` | sí |  |
+| `propuestas_descartadas` | `integer` | sí |  |
+| `propuestas_esperando` | `integer` | sí |  |
+| `conversion_pct` | `Optional[number]` | no |  |
+| `cierre_uno_de_cada` | `Optional[number]` | no |  |
+| `tasa_respuesta_pct` | `Optional[number]` | no |  |
+| `tiempo_promedio_respuesta_horas` | `Optional[number]` | no |  |
+| `valor_cerrado_cop` | `number` | no |  |
+| `valor_promedio_cerrado_cop` | `Optional[number]` | no |  |
+| `valor_esperando_cop` | `number` | no |  |
+| `pedidos_por_etapa` | `object` | sí |  |
+| `pedidos_entregados` | `integer` | sí |  |
+| `motivos_perdida` | `object` | sí |  |
+| `pendientes_responder` | `array[PendienteResponder]` | sí |  |
+| `total_pendientes_responder` | `integer` | sí |  |
+
+---
+
 ### `GET /importadores/por-categoria`
 
 - **Resumen:** Listar Importadores Por Categoria
@@ -502,6 +544,8 @@ _Sin campos detallados en OpenAPI._
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---
@@ -528,6 +572,8 @@ _Sin campos detallados en OpenAPI._
 | `shipping_mark_prefijo` | `Optional[string]` | no | Prefijo de la empresa en el shipping mark (ej. 'ctl'). Cadena vacía para quitarlo. |
 | `tier_minimo_requerido` | `Optional[string]` | no | Tier mínimo del cotizante: Bronze, Silver, Gold o Élite. También se acepta dentro de `perfil_publico` por compatibilidad. |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no | Máximo de cotizaciones (dirigidas + abiertas) a recibir por día. Enviar null para quitar el límite. |
+| `pedido_minimo` | `Optional[number]` | no | Pedido mínimo que acepta la empresa. Enviar null para quitarlo. |
+| `pedido_minimo_unidad` | `Optional[string]` | no | Unidad del pedido mínimo: 'unidades' o 'm3' |
 
 ```json
 {
@@ -562,6 +608,8 @@ _Sin campos detallados en OpenAPI._
 | `shipping_mark_prefijo` | `Optional[string]` | no |  |
 | `tier_minimo_requerido` | `string` | no |  |
 | `limite_cotizaciones_diarias` | `Optional[integer]` | no |  |
+| `pedido_minimo` | `Optional[number]` | no |  |
+| `pedido_minimo_unidad` | `Optional[string]` | no |  |
 | `fecha_registro` | `string` | sí |  |
 
 ---

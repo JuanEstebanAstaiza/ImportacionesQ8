@@ -1,6 +1,6 @@
 # Hoja de ruta y metas
 
-> **Última actualización:** 2026-10-01 · Zarpi está en producción desde el **2026-10-01**.
+> **Última actualización:** 2026-10-03 · Zarpi está en producción desde el **2026-10-01**.
 > Las metas de negocio son las que el equipo fijó en [[Metricas-MVP]] y [[Modelo-Negocio]], ancladas a la fecha real de lanzamiento. Las fechas objetivo son una **propuesta** para revisar y ajustar en equipo.
 
 ---
@@ -35,7 +35,10 @@ Criterios de decisión de [[Metricas-MVP]]:
 | Respuesta a cotizaciones abiertas | > 60 % en 48 h, > 80 % en 72 h |
 | Compradores nuevos por mes | 20–50 (registro → primera cotización > 40 %) |
 
-**Cómo medirlo con la plataforma:** el panel de admin (*Resumen*) y `GET /admin/metricas` dan los conteos. Las empresas ven su rendimiento en `GET /importadores/metricas`. Conviene registrar la línea base de cada métrica el primer lunes de cada mes en esta nota.
+**Cómo medirlo con la plataforma:**
+- **Bitácora de eventos** (tabla `eventos`, desde el 2026-10-03): guarda cada solicitud, asignación, vista, propuesta, elección (con motivo) e hito de pedido, con fecha, monto en pesos y cantidad. Cualquier métrica de esta tabla se puede calcular sobre ella; ver [[24-Eventos-y-Panel-Empresa]].
+- **Empresas:** ven su rendimiento en su panel (`GET /importadores/panel`).
+- **Admin:** *Resumen* y `GET /admin/metricas` dan los conteos generales. Conviene registrar la línea base de cada métrica el primer lunes de cada mes en esta nota.
 
 ### Estrategia por etapas ([[Modelo-Negocio]])
 
@@ -61,6 +64,12 @@ Criterios de decisión de [[Metricas-MVP]]:
 - [ ] **Primer admin y credenciales:** crear el admin con `scripts/crear_admin.py` y verificar que no quedan contraseñas por defecto.
 - [ ] **DNS de `www`:** crear el registro, o quitar el bloque `www.` del `Caddyfile`, para que Caddy no reintente el certificado.
 - [ ] **Pagos:** decidir si Wompi se usa en esta etapa (cursos de pago). Mientras tanto, `WOMPI_SIMULATE=true`.
+- [ ] **TRM en producción:**
+  - comprobar que el droplet llega a `www.datos.gov.co` (en **Admin › Asignación**, la TRM debe decir "TRM oficial del día");
+  - fijar un valor de respaldo.
+- [ ] **Asignación del piloto:**
+  - pedir a cada empresa su pedido mínimo y capacidad en **Mi empresa**;
+  - revisar cada mañana las solicitudes "Por asignar".
 
 ### P1 — Primeros dos meses (oct → nov 2026)
 
@@ -73,6 +82,9 @@ Criterios de decisión de [[Metricas-MVP]]:
 - [ ] **Probar con un asesor** la calculadora y "Convertir en propuesta" (la prueba de punta a punta se hizo con la cuenta dueña).
 - [ ] **Coherencia de marca en el vault:** las notas vivas aún dicen ImportacionesQ8. Las notas históricas se dejan como están.
 - [ ] **Actualizar los documentos de negocio** con el modelo de cobro vigente (ver arriba).
+- [ ] **Automatizar la asignación** con los datos del piloto: calibrar el puntaje de encaje y pasar a modo automático. Ver [[23-Asignacion-de-Solicitudes]].
+- [ ] **Cantidad en el formulario de propuesta:** el API ya acepta `cantidad`; hoy se toma la pedida.
+- [ ] **Chat con varias empresas en una abierta:** hoy el hilo es uno por cotización. Decidir con el piloto si cada empresa asignada necesita el suyo.
 
 ### P2 — Mediano plazo (dic 2026 → mar 2027)
 

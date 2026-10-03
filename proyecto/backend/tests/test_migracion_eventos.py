@@ -31,7 +31,7 @@ def test_rellena_la_bitacora_con_el_historico(tmp_path):
     Base.metadata.create_all(engine)
     t0 = datetime(2026, 9, 1, 10, 0, 0)
     cot, prop_a, prop_b, orden = (str(uuid4()) for _ in range(4))
-    emp_a, emp_b, solicitante = (str(uuid4()) for _ in range(3))
+    emp_a, emp_b, solicitante, cot_dirigida = (str(uuid4()) for _ in range(4))
 
     with engine.begin() as c:
         c.execute(sa.text("DROP TABLE eventos"))
@@ -63,12 +63,23 @@ def test_rellena_la_bitacora_con_el_historico(tmp_path):
                 "VALUES (:id, :o, :a, :n, :f)"
             ), {"id": str(uuid4()), "o": orden, "a": anterior, "n": nuevo, "f": t0 + timedelta(days=dias)})
         c.execute(sa.text("UPDATE recepciones_cotizacion SET origen = NULL"))
+        # Dirigida anterior a `recepciones_cotizacion`: también cuenta como recibida.
+        c.execute(sa.text(
+            "INSERT INTO cotizaciones (id, solicitante_id, importador_id, modalidad, pais_importacion, nombre_producto, "
+            "descripcion_cliente, linea_producto, tipo_calidad, cantidad_minima, unidad_cantidad, moneda_precio_objetivo, "
+            "incoterm, estado, tier_minimo_requerido, desbloqueada_por_puntos, fecha_creacion, fecha_actualizacion) "
+            "VALUES (:id, :sol, :emp, 'dirigida', 'China', 'Gorras', 'desc', 'Textiles', 'estandar', 300, 'unidades', "
+            "'USD', 'FOB', 'dirigida', 'Bronze', 0, :f, :f)"
+        ), {"id": cot_dirigida, "sol": solicitante, "emp": emp_b, "f": t0})
 
     with engine.begin() as c:
         with Operations.context(MigrationContext.configure(c)):
             _migracion().upgrade()
 
     with engine.connect() as c:
+        dirigida = c.execute(sa.text(
+            "SELECT importador_id FROM eventos WHERE tipo = 'solicitud_asignada' AND cotizacion_id = :c"
+        ), {"c": cot_dirigida}).scalar()
         filas = c.execute(sa.text(
             "SELECT tipo, importador_id, propuesta_id, estado_nuevo, monto_usd, cantidad, unidad, trm, datos "
             "FROM eventos ORDER BY fecha, tipo"
@@ -76,8 +87,8 @@ def test_rellena_la_bitacora_con_el_historico(tmp_path):
         origenes = {r[0] for r in c.execute(sa.text("SELECT origen FROM recepciones_cotizacion"))}
 
     tipos = [f["tipo"] for f in filas]
-    assert tipos.count("solicitud_creada") == 1
-    assert tipos.count("solicitud_asignada") == 2
+    assert tipos.count("solicitud_creada") == 2
+    assert tipos.count("solicitud_asignada") == 3
     assert tipos.count("propuesta_enviada") == 2
     assert tipos.count("propuesta_aceptada") == 1
     assert tipos.count("propuesta_descartada") == 1
@@ -88,6 +99,7 @@ def test_rellena_la_bitacora_con_el_historico(tmp_path):
     assert aceptada["propuesta_id"] == prop_a and aceptada["monto_usd"] == 2000
     assert aceptada["cantidad"] == 500 and aceptada["unidad"] == "unidades"
     assert origenes == {"automatica"}
+    assert dirigida == emp_b
 
     # Idempotente: si la tabla ya existe no vuelve a rellenar.
     with engine.begin() as c:

@@ -1,13 +1,13 @@
 # Resumen ejecutivo — Zarpi
 
-> **Fecha:** 2026-10-01
+> **Fecha:** 2026-10-03
 
 ## Qué es
 
 **Zarpi** es una plataforma que conecta a personas y empresas que quieren importar productos con **empresas importadoras** que se los traen. El cliente pide una cotización de dos formas:
 
 - **Dirigida:** a una empresa concreta que elige del catálogo.
-- **Abierta:** la plataforma la reparte sola entre las importadoras que trabajan ese país y esa categoría, y el cliente compara sus propuestas.
+- **Abierta:** Zarpi la asigna a un máximo de 3 importadoras elegidas por encaje (categoría, pedido mínimo, capacidad y desempeño). Ninguna ve las propuestas de las otras, y el cliente compara precio, tiempo, qué incluye y cumplimiento al mismo nivel.
 
 Ese flujo dual es el diferenciador frente a los canales actuales: catálogos estáticos, WhatsApp o contacto uno a uno.
 
@@ -20,6 +20,9 @@ Ese flujo dual es el diferenciador frente a los canales actuales: catálogos est
   - panel de administración con respaldos.
 - **Construido en 3 meses** (5 de julio → 1 de octubre de 2026) en 22 PRs integrados: 201 operaciones de API y 656 tests automáticos verdes.
 - **Seguridad revisada:** auditorías y OWASP ~92/100 en julio; carga probada con 1000 usuarios concurrentes.
+- **Listo para medir el piloto (2026-10-03):**
+  - cada cambio de estado queda en una bitácora con fecha, monto en pesos (TRM oficial) y cantidad;
+  - cada empresa ve su panel: cuántas propuestas cierra, valor cerrado y por cerrar, pedidos por etapa y por qué la eligen o no.
 
 ## Modelo de negocio vigente
 
