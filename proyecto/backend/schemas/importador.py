@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Any, Dict, List, Optional
+from typing import Literal, Any, Dict, List, Optional
 from datetime import datetime
 
 from schemas.certificacion import CertificacionOtorgadaResponse
@@ -54,6 +54,9 @@ class ImportadorResponse(BaseModel):
     tier_minimo_requerido: str = "Bronze"
     # Tope de cotizaciones que la empresa acepta recibir por día (None = sin límite).
     limite_cotizaciones_diarias: Optional[int] = None
+    # Pedido mínimo que acepta la empresa (criterio de encaje para asignar).
+    pedido_minimo: Optional[float] = None
+    pedido_minimo_unidad: Optional[str] = None
     fecha_registro: datetime
 
     model_config = {"from_attributes": True}
@@ -85,6 +88,12 @@ class ImportadorUpdate(BaseModel):
         le=LIMITE_COTIZACIONES_DIARIAS_MAX,
         description="Máximo de cotizaciones (dirigidas + abiertas) a recibir por día. "
         "Enviar null para quitar el límite.",
+    )
+    pedido_minimo: Optional[float] = Field(
+        None, gt=0, description="Pedido mínimo que acepta la empresa. Enviar null para quitarlo."
+    )
+    pedido_minimo_unidad: Optional[Literal["unidades", "m3"]] = Field(
+        None, description="Unidad del pedido mínimo: 'unidades' o 'm3'"
     )
 
     @field_validator("tier_minimo_requerido")

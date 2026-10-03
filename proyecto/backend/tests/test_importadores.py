@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from utils.security import hash_password, create_access_token
-from conftest import crear_usuario_con_token
+from conftest import asignar_en_bd, crear_usuario_con_token
 from conftest import crear_empresa_importadora, auth_headers_for, registro_payload
 
 
@@ -421,7 +421,7 @@ class TestBandejaSolicitudesImportador:
 
     def test_solicitudes_abiertas_con_matching(self, client, db_session, importador_user, solicitante_user):
         """GET /importadores/{id}/solicitudes-abiertas solo muestra cotizaciones donde el importador
-        aparece en la lista de matching de Redis (no todas las cotizaciones abiertas)."""
+        tiene asignadas (no todas las cotizaciones abiertas)."""
         cotizacion_con_matching = Cotizacion(
             id=str(uuid4()),
             solicitante_id=solicitante_user.id,
@@ -454,6 +454,7 @@ class TestBandejaSolicitudesImportador:
         )
         db_session.add_all([cotizacion_con_matching, cotizacion_sin_matching])
         db_session.commit()
+        asignar_en_bd(db_session, cotizacion_con_matching.id, importador_user.importador_id)
 
         import config
         redis_mock = MagicMock()

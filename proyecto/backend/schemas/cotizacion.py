@@ -176,6 +176,19 @@ class PropuestaCreate(BaseModel):
         None, gt=0, description="Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida)"
     )
 
+class EmpresaPropuestaResumen(BaseModel):
+    """Lo que el comprador necesita para comparar a quién le compra: no solo
+    precio y plazo, también cómo cumple esa empresa."""
+    importador_id: str
+    nombre_empresa: str
+    logo_url: Optional[str] = None
+    verificado: bool = False
+    calificacion_promedio: float = 0
+    total_resenas: int = 0
+    pedidos_entregados: int = 0
+    pedidos_en_curso: int = 0
+
+
 class PropuestaResponse(BaseModel):
     id: str
     cotizacion_id: str
@@ -192,6 +205,8 @@ class PropuestaResponse(BaseModel):
     fecha_envio: Optional[datetime] = None
     motivo_descarte: Optional[str] = None
     motivo_descarte_detalle: Optional[str] = None
+    # Solo para el comprador: la empresa que la envió y su cumplimiento.
+    empresa: Optional[EmpresaPropuestaResumen] = None
     # --- Navegación cruzada (Fase 7): contacto de quien redactó/envió la propuesta ---
     contacto_asesor: Optional[ContactoAsignadoResponse] = None
 

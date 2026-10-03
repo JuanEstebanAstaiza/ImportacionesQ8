@@ -8,6 +8,7 @@
   decimal, y `motivo_eleccion(_detalle)`: por qué el cliente eligió una propuesta.
 - `propuestas.cantidad` y el motivo y la fecha de descarte.
 - `recepciones_cotizacion.origen` / `asignado_por`: cómo llegó la solicitud.
+- `importadores.pedido_minimo(_unidad)`: criterio de encaje para asignar.
 
 La bitácora se rellena con lo que ya se puede reconstruir de los datos: la
 creación de cada solicitud, a quién se entregó, las propuestas enviadas, las
@@ -72,6 +73,8 @@ def upgrade() -> None:
     _agregar("propuestas", sa.Column("motivo_descarte_detalle", sa.Text(), nullable=True))
     _agregar("propuestas", sa.Column("fecha_descarte", sa.DateTime(), nullable=True))
     _agregar("recepciones_cotizacion", sa.Column("origen", sa.String(length=20), nullable=True))
+    _agregar("importadores", sa.Column("pedido_minimo", sa.Float(), nullable=True))
+    _agregar("importadores", sa.Column("pedido_minimo_unidad", sa.String(length=10), nullable=True))
     _agregar("recepciones_cotizacion", sa.Column("asignado_por", sa.String(length=36), nullable=True))
 
     if op.get_bind().dialect.name == "mysql":
@@ -235,6 +238,8 @@ def downgrade() -> None:
     if "configuracion_plataforma" in _tablas():
         op.drop_table("configuracion_plataforma")
     for tabla, columna in (
+        ("importadores", "pedido_minimo_unidad"),
+        ("importadores", "pedido_minimo"),
         ("recepciones_cotizacion", "asignado_por"),
         ("recepciones_cotizacion", "origen"),
         ("propuestas", "fecha_descarte"),

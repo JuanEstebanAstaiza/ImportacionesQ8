@@ -45,6 +45,10 @@ class Importador(Base):
     # las dirigidas y el matching deja de repartirle abiertas hasta el día
     # siguiente. Ver `services/cupo_cotizaciones.py`.
     limite_cotizaciones_diarias = Column(Integer, nullable=True)
+    # Pedido mínimo que la empresa acepta, en "unidades" o "m3". Es uno de los
+    # criterios de encaje con los que el admin asigna las solicitudes abiertas.
+    pedido_minimo = Column(Float, nullable=True)
+    pedido_minimo_unidad = Column(String(10), nullable=True)
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

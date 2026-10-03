@@ -19,6 +19,7 @@ from routers.pagos import router as pagos_router, creditos_router
 from routers.usuarios import router as usuarios_router, asesores_router, cotizantes_router
 from routers.chat import router as chat_router, ws_router as chat_ws_router
 from routers.admin import router as admin_router
+from routers.asignacion import router as asignacion_router, trm_router
 from routers.legal import router as legal_router
 from routers.organizaciones import router as organizaciones_router
 from routers.disputas import router as disputas_router
@@ -216,6 +217,8 @@ app.include_router(cotizantes_router)
 app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.include_router(admin_router)
+app.include_router(asignacion_router)
+app.include_router(trm_router)
 app.include_router(legal_router)
 app.include_router(organizaciones_router)
 app.include_router(disputas_router)

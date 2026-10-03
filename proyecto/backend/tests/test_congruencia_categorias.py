@@ -22,7 +22,7 @@ from models.cotizacion import Cotizacion
 from models.usuario import Usuario
 from utils.categorias import CATEGORIAS_CANONICAS, categoria_en, clave_categoria, texto_en
 from utils.security import hash_password
-from conftest import auth_headers_for, crear_empresa_importadora, crear_usuario_con_token
+from conftest import asignar_en_bd, auth_headers_for, crear_empresa_importadora, crear_usuario_con_token
 
 
 class TestClaveCategoria:
@@ -185,6 +185,21 @@ class TestResponderPeseALaVarianteLexica:
             json=_payload_propuesta(creada.json()["id"]),
             headers=auth_headers_for(dueño),
         )
+        # Ni siquiera se le asigna: la categoría es un criterio de la asignación.
+        assert respuesta.status_code == status.HTTP_403_FORBIDDEN
+        assert "asignada" in respuesta.json()["detail"]
+
+    def test_tampoco_responde_si_se_la_asignaron_por_error(self, client, db_session, solicitante, empresa_textil):
+        usuario_solicitante, _ = solicitante
+        importador, dueño = empresa_textil
+        cotizacion = _crear_cotizacion_en_bd(db_session, usuario_solicitante.id, linea_producto="Químicos")
+        asignar_en_bd(db_session, cotizacion.id, importador.id)
+
+        respuesta = client.post(
+            "/propuestas",
+            json=_payload_propuesta(str(cotizacion.id)),
+            headers=auth_headers_for(dueño),
+        )
         assert respuesta.status_code == status.HTTP_400_BAD_REQUEST
         assert "congruente" in respuesta.json()["detail"]
 
@@ -231,8 +246,11 @@ class TestBandejaDeLaEmpresa:
 
     def test_si_se_listan_las_abiertas_de_su_categoria(self, client, db_session, solicitante, empresa_textil):
         usuario_solicitante, _ = solicitante
-        _, dueño = empresa_textil
+        importador, dueño = empresa_textil
         propia = _crear_cotizacion_en_bd(db_session, usuario_solicitante.id, linea_producto="Textiles")
+        asignar_en_bd(db_session, propia.id, importador.id)
+        # Una de su categoría que no le asignaron no aparece.
+        _crear_cotizacion_en_bd(db_session, usuario_solicitante.id, linea_producto="Textiles")
 
         listado = client.get("/cotizaciones", headers=auth_headers_for(dueño))
         assert [c["id"] for c in listado.json()] == [str(propia.id)]
@@ -283,8 +301,10 @@ class TestBandejaDeLaEmpresa:
         db_session.add(asesor)
         db_session.commit()
 
-        _crear_cotizacion_en_bd(db_session, usuario_solicitante.id, linea_producto="Químicos")
+        otra = _crear_cotizacion_en_bd(db_session, usuario_solicitante.id, linea_producto="Químicos")
         propia = _crear_cotizacion_en_bd(db_session, usuario_solicitante.id, linea_producto="Textiles")
+        asignar_en_bd(db_session, otra.id, importador.id)
+        asignar_en_bd(db_session, propia.id, importador.id)
 
         listado = client.get("/cotizaciones", headers=auth_headers_for(asesor))
         assert [c["id"] for c in listado.json()] == [str(propia.id)]
@@ -314,6 +334,7 @@ class TestMensajeDeBorradorExistente:
             linea_producto="Textil",
             asesor_asignado_id=str(asesor.id),
         )
+        asignar_en_bd(db_session, cotizacion.id, importador.id)
 
         borrador = client.post(
             "/propuestas/borrador",

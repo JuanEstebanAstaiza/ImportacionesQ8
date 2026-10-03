@@ -321,6 +321,21 @@ def crear_usuario_con_token(db_session, *, rol="solicitante", email=None, **kwar
     return user, auth_headers_for(user)
 
 
+def asignar_en_bd(db_session, cotizacion_id, importador_id, origen="manual"):
+    """Asigna una abierta a una empresa directamente en BD (lo que hace el admin
+    desde el panel). Para los tests que insertan cotizaciones sin pasar por la API."""
+    from models.recepcion_cotizacion import RecepcionCotizacion
+
+    db_session.add(RecepcionCotizacion(
+        importador_id=str(importador_id),
+        cotizacion_id=str(cotizacion_id),
+        modalidad="abierta",
+        entregada=True,
+        origen=origen,
+    ))
+    db_session.commit()
+
+
 def auth_headers_for(usuario):
     """Genera headers de autenticación válidos para un Usuario de prueba, incluyendo
     el claim importador_id si la cuenta pertenece a una empresa."""
