@@ -203,6 +203,11 @@ class PropuestaResponse(BaseModel):
     preaceptada_por_empresa: bool = False
     cantidad: Optional[float] = None
     fecha_envio: Optional[datetime] = None
+    # Veces que la empresa la reescribió tras enviarla, y cuándo fue la última.
+    # El comprador necesita verlo: una propuesta ajustada después de llegar ya
+    # no es la que comparó al principio.
+    revisiones: int = 0
+    fecha_modificacion: Optional[datetime] = None
     motivo_descarte: Optional[str] = None
     motivo_descarte_detalle: Optional[str] = None
     # Solo para el comprador: la empresa que la envió y su cumplimiento.

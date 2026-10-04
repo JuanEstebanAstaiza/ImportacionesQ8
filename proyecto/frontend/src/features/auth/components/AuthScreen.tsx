@@ -180,7 +180,7 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         {/* Fondo*/}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <img
-            src={dark ? "brand/fondo-2.png" : "brand/fondo-5.png"}
+            src={dark ? "/brand/fondo-2.png" : "/brand/fondo-5.png"}
             alt="Fondo de autenticación"
             className="auth-background w-full h-full object-cover object-center transition-all duration-300"
           />

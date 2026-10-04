@@ -51,6 +51,7 @@ import {
   type BackendAsesor,
   type BackendChatAttachmentItem,
   type BackendChatConversation,
+  type BackendMiembroEquipo,
   type BackendCotizacion,
   type BackendCupoDiario,
   type BackendExplorerResponse,
@@ -490,7 +491,7 @@ function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
 // "interno" es el canal de la empresa con su asesor (coordinación del equipo);
 // "soporte" es un ticket con el equipo de la plataforma. Ninguno de los dos
 // cuelga de una cotización o una orden.
-type ChatType="orden"|"cotizacion"|"interno"|"soporte";
+type ChatType="orden"|"cotizacion"|"interno"|"soporte"|"equipo";
 
 const URGENCIA_SOPORTE:Record<string,{label:string;clase:string;peso:number}>={
   critica:{label:"Crítica", clase:"bg-red-100 text-red-800 border-red-200",       peso:4},
@@ -1257,7 +1258,7 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
-function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte}:SidebarCtrl) {
+function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
@@ -1328,6 +1329,24 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
               <LifeBuoy className="w-4 h-4 flex-shrink-0"/>
               <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
                 <span className="whitespace-nowrap">Soporte técnico</span>
+              </div>
+            </button>
+          )}
+          {/* El equipo de la plataforma no se abre tickets a sí mismo: su vía
+              es el canal interno con administración y con sus compañeros. */}
+          {showCanalEquipo&&(
+            <button
+              onClick={onCanalEquipo}
+              className={clsx(
+                "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full mb-1",
+                "text-muted-foreground hover:text-foreground hover:bg-muted",
+                isExpanded ? "gap-2.5" : "justify-center gap-0",
+              )}
+              title={!isExpanded ? "Canal del equipo" : undefined}
+            >
+              <Users className="w-4 h-4 flex-shrink-0"/>
+              <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                <span className="whitespace-nowrap">Canal del equipo</span>
               </div>
             </button>
           )}
@@ -2646,6 +2665,17 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-semibold text-sm">{companyName}</p>
                                 <span className={clsx("px-2 py-0.5 rounded text-xs font-medium",p.estado==="aceptada"?"bg-emerald-50 text-emerald-700":p.estado==="rechazada"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-700")}>{p.estado}</span>
+                                {/* La empresa puede ajustar su propuesta tras enviarla para reflejar
+                                    lo negociado por chat. Se avisa de forma visible: lo que se está
+                                    comparando ya no es la oferta que llegó. */}
+                                {(p.revisiones??0)>0&&(
+                                  <span
+                                    className="px-2 py-0.5 rounded text-xs font-medium bg-sky-50 text-sky-700"
+                                    title={p.fecha_modificacion?`Última modificación: ${new Date(p.fecha_modificacion).toLocaleString("es-CO")}`:undefined}
+                                  >
+                                    Versión {(p.revisiones??0)+1}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{contactName}</p>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
@@ -2661,6 +2691,12 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                                   {condiciones.detalles.length>0&&<p>{condiciones.detalles.join(" · ")}</p>}
                                 </div>
                               ):<p className="text-xs text-muted-foreground mt-3">Sin observaciones adicionales.</p>}
+                              {(p.revisiones??0)>0&&p.fecha_modificacion&&(
+                                <p className="text-[11px] text-sky-700 mt-2">
+                                  La empresa modificó esta propuesta el {new Date(p.fecha_modificacion).toLocaleString("es-CO",{dateStyle:"medium",timeStyle:"short"})}
+                                  {(p.revisiones??0)>1?` (${p.revisiones} cambios desde que la envió)`:""}.
+                                </p>
+                              )}
                               {p.estado==="rechazada"&&p.motivo_descarte&&<p className="text-[11px] text-muted-foreground mt-2">Elegiste otra propuesta por: {MOTIVOS_ELECCION.find(m=>m.clave===p.motivo_descarte)?.etiqueta??p.motivo_descarte}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -3260,7 +3296,7 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
   return Boolean(tier) && esCotizante && esRolAutorizado;
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<void>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
@@ -3721,35 +3757,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     }
   }
 
+  // Delega en el helper compartido: abrirlo aqui con
+  // `popup.location.replace(blobUrl)` dejaba la pestana en `about:blank`,
+  // porque el navegador no permite navegar de primer nivel a una `blob:` URL.
   async function handleOpenResource(url: string | null, fileName: string) {
-    const popup = window.open("about:blank", "_blank");
-    if (popup) {
-      popup.document.title = `Abriendo ${fileName}...`;
-      popup.document.body.innerHTML = "<p style=\"font-family: 'AT Avenor', sans-serif; padding: 16px;\">Cargando recurso...</p>";
-    }
-
-    try {
-      const blob = await fetchProtectedBlob(url);
-      if (!blob) {
-        popup?.close();
-        toast.error("No hay recurso disponible para abrir");
-        return;
-      }
-
-      const objectUrl = window.URL.createObjectURL(blob);
-      if (popup) {
-        popup.location.replace(objectUrl);
-      } else {
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
-      }
-
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(objectUrl);
-      }, 120000);
-    } catch (error) {
-      popup?.close();
-      console.error("Error abriendo recurso desde chat:", error);
-      toast.error(`No se pudo abrir ${fileName}`);
+    const resultado = await abrirArchivoEnPestana(url, fileName);
+    if (!resultado.ok) {
+      toast.error(resultado.motivo || `No se pudo abrir ${fileName}`);
     }
   }
 
@@ -3838,7 +3852,12 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // Para el equipo de la plataforma esto es una bandeja de soporte: filtrar por
   // órdenes o cotizaciones no significa nada ahí, y lo que importa es la
   // urgencia con la que el usuario pidió ayuda.
-  const FILTERS = esEquipoPlataforma
+  const FILTERS = modoEquipo
+    ? [
+        {k:"all",label:"Todas"},
+        {k:"no-leidas",label:"No leídas"},
+      ]
+    : esEquipoPlataforma
     ? [
         {k:"all",label:"Abiertos"},
         {k:"no-leidas",label:"No leídas"},
@@ -4021,15 +4040,42 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="chats"/>
+      <Sidebar {...sb} active={modoEquipo?"team-channel":"chats"}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <div className="flex-1 flex overflow-hidden">
 
           {/* ── Left: conversation list ─────────────────────────────────── */}
           <div className="w-72 flex-shrink-0 border-r border-border bg-white flex flex-col">
+            {modoEquipo&&(
+              <div className="px-3 pt-3 pb-2 border-b border-border space-y-2">
+                <div>
+                  <p className="text-sm font-semibold">Canal del equipo</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Administración y soporte. Los clientes y las empresas no entran aquí.
+                  </p>
+                </div>
+                <select
+                  aria-label="Abrir un hilo con alguien del equipo"
+                  className="w-full rounded-lg border border-border bg-white px-2 py-1.5 text-xs"
+                  value=""
+                  onChange={(e)=>{
+                    const id=e.target.value;
+                    if(id&&onAbrirHiloEquipo){void onAbrirHiloEquipo(id);}
+                    e.target.value="";
+                  }}
+                >
+                  <option value="">Hablar en privado con…</option>
+                  {miembrosEquipo.map((m)=>(
+                    <option key={m.id} value={m.id}>
+                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:" · administración"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="px-3 pt-3 pb-2 border-b border-border">
-              <Input placeholder="Buscar por código, empresa, asesor..." value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
+              <Input placeholder={modoEquipo?"Buscar en el canal...":"Buscar por código, empresa, asesor..."} value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
             </div>
             <div className="flex gap-1 px-3 py-2 border-b border-border overflow-x-auto">
               {FILTERS.map(f=>(
@@ -5254,44 +5300,9 @@ function DocumentosScreen({
   }
 
   async function handleOpenResource(url: string | null, fileName: string) {
-    const popup = window.open("about:blank", "_blank");
-    if (popup) {
-      popup.document.title = `Abriendo ${fileName}...`;
-      popup.document.body.innerHTML =
-        '<p style="font-family: \'AT Avenor\', sans-serif; padding: 16px;">Cargando recurso...</p>';
-    }
-    try {
-      const blob = await fetchProtectedBlob(url);
-      if (!blob) {
-        popup?.close();
-        return;
-      }
-      const objectUrl = window.URL.createObjectURL(blob);
-      if (popup) {
-        popup.location.replace(objectUrl);
-      } else {
-        const fallback = document.createElement("a");
-        fallback.href = objectUrl;
-        fallback.target = "_blank";
-        fallback.rel = "noopener noreferrer";
-        document.body.appendChild(fallback);
-        fallback.click();
-        fallback.remove();
-      }
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(objectUrl);
-      }, 120000);
-    } catch (error) {
-      popup?.close();
-      console.error(`Error abriendo archivo ${fileName}:`, error);
-      const message = error instanceof Error ? error.message : "Error desconocido";
-      if (message.includes("(404)")) {
-        toast.error(`No se encontró el archivo en el servidor: ${fileName}`);
-      } else {
-        toast.error(`No se pudo abrir ${fileName}`);
-      }
-    } finally {
-      setMenuState(null);
+    const resultado = await abrirArchivoEnPestana(url, fileName);
+    if (!resultado.ok) {
+      toast.error(resultado.motivo || `No se pudo abrir ${fileName}`);
     }
   }
 
@@ -7999,6 +8010,13 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   // Solo la cuenta dueña envía; el asesor guarda y deja el borrador listo.
   const esBorradorPendienteDeEnvio = userRole==="importadora" && existingProposal?.estado==="borrador";
 
+  // No es lo mismo responder por primera vez que reescribir algo que el
+  // comprador ya tiene delante: la pantalla se llamaba "Responder cotización"
+  // en los dos casos, y parecía que se podía responder varias veces.
+  const esPropuestaYaVista = existingProposal?.estado==="pendiente";
+  const revisionesPrevias = existingProposal?.revisiones ?? 0;
+  const tituloPantalla = esPropuestaYaVista ? "Editar mi propuesta" : "Responder cotización";
+
   // El formulario se hidrata una sola vez por propuesta: el refresco automático
   // trae un objeto nuevo cada pocos segundos y volver a copiarlo pisaba lo que
   // el usuario estuviera escribiendo. La estimación del chat (`prefill`) se
@@ -8174,9 +8192,20 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
           </div>
-          <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:"Responder cotización"}]}/>
-          <h1 className="text-xl font-semibold mt-3">Responder cotización</h1>
+          <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:tituloPantalla}]}/>
+          <h1 className="text-xl font-semibold mt-3">{tituloPantalla}</h1>
           <p className="text-sm text-muted-foreground mt-0.5 mb-6">{quote.product} · {quote.code}</p>
+          {esPropuestaYaVista&&(
+            <div className="mb-6 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sm text-sky-900 flex items-start gap-2">
+              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+              <span>
+                No estás respondiendo de nuevo: estás <strong>modificando la propuesta que ya enviaste</strong>.
+                El comprador la tiene delante y verá que la cambiaste, con la fecha.
+                {revisionesPrevias>0&&<> Ya la has cambiado {revisionesPrevias===1?"una vez":`${revisionesPrevias} veces`}.</>}
+                {" "}Guardar también anula la aceptación que hubiera de cualquiera de las dos partes.
+              </span>
+            </div>
+          )}
           {esBorradorPendienteDeEnvio&&(
             <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
@@ -8352,7 +8381,11 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                       onClick={submit}
                       className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
                     >
-                      {userRole === "asesor" ? "Guardar borrador" : "Enviar propuesta"}
+                      {userRole === "asesor"
+                        ? "Guardar borrador"
+                        : esPropuestaYaVista
+                          ? "Guardar cambios"
+                          : "Enviar propuesta"}
                     </Button>
                   )}
                 </div>
@@ -9476,7 +9509,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
         {/* Fondo con z-0 */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <img
-            src={dark ? "brand/fondo-1.png" : "brand/fondo-4.png"}
+            src={dark ? "/brand/fondo-1.png" : "/brand/fondo-4.png"}
             alt="Fondo de registro"
             className="auth-background w-full h-full object-cover object-center transition-all duration-300"
           />
@@ -10076,6 +10109,8 @@ export default function App() {
   const [requesterOrders,setRequesterOrders]=useState<Order[]>([]);
   const [importerOrders,setImporterOrders]=useState<Order[]>([]);
   const [chatConversations,setChatConversations]=useState<ChatConv[]>([]);
+  // Con quién se puede abrir un hilo privado en el canal del equipo.
+  const [miembrosEquipo,setMiembrosEquipo]=useState<BackendMiembroEquipo[]>([]);
   // Conversación abierta en pantalla: es la única que necesita canal en vivo.
   const [activeChatId,setActiveChatId]=useState<string|null>(null);
   const { config: platformConfig, isLoading: platformConfigLoading } = usePlatformConfig();
@@ -10282,19 +10317,23 @@ export default function App() {
     const cotizanteTierByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.solicitante_tier || "Bronze"]));
     const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
     const mappedConversations: ChatConv[] = rows.map((row) => {
-      // Ni el hilo interno ni el ticket de soporte cuelgan de una cotización.
+      // Ni el hilo interno, ni el ticket de soporte, ni el canal del equipo de
+      // la plataforma cuelgan de una cotización.
       const esInterno = row.tipo === "interna";
       const esSoporte = row.tipo === "soporte";
+      const esEquipo = row.tipo === "equipo";
       const importerId = esInterno
         ? (row.importador_id || "")
-        : esSoporte
+        : esSoporte || esEquipo
           ? ""
           : (importerByQuoteId.get(row.cotizacion_id || "") || row.importador_usuario_id || "");
       const importer = importerById.get(importerId);
       return {
         id: row.id,
-        type: esSoporte ? "soporte" : esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
-        refCode: esSoporte
+        type: esEquipo ? "equipo" : esSoporte ? "soporte" : esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
+        refCode: esEquipo
+          ? "Plataforma"
+          : esSoporte
           ? "Soporte"
           : esInterno
             ? "Equipo"
@@ -10853,6 +10892,42 @@ export default function App() {
     goTo("help-support");
   }
 
+  /**
+   * Abre (o reutiliza) la sala común del equipo y lleva a SU pantalla.
+   *
+   * Es la vía que sustituye al ticket para administración y soporte: el ticket
+   * es el canal de los usuarios CON la plataforma, y un agente atendiéndose a
+   * sí mismo no significa nada.
+   *
+   * Tiene pantalla propia (`/equipo`) y no la bandeja de `/chats`: ahí están
+   * los tickets de clientes y empresas, y mezclar las dos cosas es justo lo que
+   * no debe pasar en un canal interno.
+   */
+  async function abrirCanalEquipo(){
+    try{
+      const canal=await businessService.openTeamChannel();
+      await reloadChatData();
+      setInitialChatConvId(canal.id);
+      goTo("team-channel");
+    }catch(error){
+      const mensaje=error instanceof Error?error.message:"No se pudo abrir el canal del equipo";
+      toast.error(mensaje);
+    }
+  }
+
+  /** Abre el hilo privado con una persona del equipo, dentro de la misma pantalla. */
+  async function abrirHiloEquipo(miembroId:string){
+    try{
+      const hilo=await businessService.openTeamChannel(miembroId);
+      await reloadChatData();
+      setInitialChatConvId(hilo.id);
+      goTo("team-channel");
+    }catch(error){
+      const mensaje=error instanceof Error?error.message:"No se pudo abrir el hilo";
+      toast.error(mensaje);
+    }
+  }
+
   const sb:SidebarCtrl={
     active:screen,
     onNav:handleNav,
@@ -10865,9 +10940,13 @@ export default function App() {
     chatCount:chatUnreadCount,
     onHelp:handleHelpClick,
     showHelp:userRole!=="admin",
-    // El equipo de la plataforma no se pide soporte a sí mismo.
+    // El equipo de la plataforma no se pide soporte a sí mismo: el ticket es el
+    // canal de los usuarios con la plataforma. Antes el botón seguía saliendo
+    // para soporte, y al pulsarlo el backend respondía 403.
     onSoporte:()=>setSoporteAbierto(true),
-    showSoporte:userRole!=="admin",
+    showSoporte:userRole!=="admin"&&userRole!=="soporte",
+    onCanalEquipo:()=>{void abrirCanalEquipo();},
+    showCanalEquipo:userRole==="admin"||userRole==="soporte",
     profileSubtitle:headerSubtitle,
     profilePhotoUrl:currentUserProfile?.foto_url || null,
     onLogout:()=>{void handleLogout();},
@@ -10877,6 +10956,32 @@ export default function App() {
   function openResponse(id:string,from:ResponseFrom,fromQuoteId?:string){
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
   }
+  // El canal interno de la plataforma va en su propia pantalla: en `/chats`
+  // están los tickets de clientes y empresas, y no deben mezclarse.
+  // Los miembros del equipo solo se piden con una sesión interna: para
+  // cualquier otro rol el endpoint responde 403, y pedirlo sería ruido.
+  useEffect(()=>{
+    if(userRole!=="admin"&&userRole!=="soporte"){
+      setMiembrosEquipo([]);
+      return;
+    }
+    let cancelado=false;
+    void (async()=>{
+      try{
+        const filas=await businessService.listTeamMembers();
+        if(!cancelado) setMiembrosEquipo(filas);
+      }catch{
+        // Sin la lista solo se pierde el selector de hilos privados; la sala
+        // común sigue funcionando, así que no se molesta al usuario.
+        if(!cancelado) setMiembrosEquipo([]);
+      }
+    })();
+    return ()=>{cancelado=true;};
+  },[userRole]);
+
+  const conversacionesDelEquipo = chatConversations.filter((c)=>c.type==="equipo");
+  const conversacionesDeChats = chatConversations.filter((c)=>c.type!=="equipo");
+
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
 
   async function handleCloseTicket(conversationId: string, resolucion: string) {
@@ -11290,6 +11395,10 @@ export default function App() {
     "adv-my-quotes": ["asesor"],
     "user-profile": ["solicitante", "asesor"],
     "help-support": ["solicitante", "importadora", "asesor"],
+    // Canal interno de la plataforma. Sin esta entrada, un cliente o una
+    // empresa que escribiera /equipo veía el armazón de la pantalla (título y
+    // selector), aunque vacío y con el backend negándole los datos.
+    "team-channel": ["admin", "soporte"],
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
@@ -11417,7 +11526,8 @@ export default function App() {
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;

@@ -6,7 +6,7 @@ import secrets
 import string
 
 import config
-from models.usuario import Usuario
+from models.usuario import ROLES_PLATAFORMA, Usuario
 from models.password_reset import PasswordResetToken
 from models.organizacion import OrganizacionSolicitante, MiembroOrganizacion, RolOrganizacion
 from models.referido import CodigoReferido, ReferidoUso
@@ -285,9 +285,20 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
         )
 
     # El selector de rol del login es un paso de seguridad, no un adorno: si la
-    # cuenta no es admin, el rol elegido en la pantalla tiene que coincidir con
-    # el que de verdad tiene el usuario, o se rechaza el acceso.
-    if login.rol and usuario.rol != "admin" and _normalizar_rol_login(login.rol) != _normalizar_rol_login(usuario.rol):
+    # cuenta no es del equipo de la plataforma, el rol elegido en la pantalla
+    # tiene que coincidir con el que de verdad tiene el usuario, o se rechaza el
+    # acceso.
+    #
+    # La excepción cubre a todo el equipo interno, no solo a administración: el
+    # selector ofrece los tres roles de fuera (solicitante, importadora, asesor)
+    # y ninguno es el de un agente de soporte, así que exigirle coincidencia lo
+    # dejaba sin ninguna forma de entrar por la web —se podían dar de alta
+    # agentes desde el panel que después no podían iniciar sesión—.
+    if (
+        login.rol
+        and usuario.rol not in ROLES_PLATAFORMA
+        and _normalizar_rol_login(login.rol) != _normalizar_rol_login(usuario.rol)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(

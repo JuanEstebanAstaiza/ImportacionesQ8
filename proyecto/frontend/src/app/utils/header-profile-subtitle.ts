@@ -27,5 +27,12 @@ export function resolveHeaderSubtitle(input: ResolveHeaderSubtitleInput): string
     return "Administrador del sistema";
   }
 
+  // Sin esta rama, un agente de soporte se veía rotulado como "Solicitante" en
+  // su propia cabecera: el tipo ya contemplaba el rol, pero no había caso y
+  // caía en el valor por defecto.
+  if (role === "soporte") {
+    return "Equipo de soporte de la plataforma";
+  }
+
   return "Solicitante";
 }

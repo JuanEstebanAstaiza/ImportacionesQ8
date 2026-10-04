@@ -64,6 +64,13 @@ export interface SidebarCtrl {
   /** Abre el formulario para pedir soporte técnico al equipo de la plataforma. */
   onSoporte?: () => void;
   showSoporte?: boolean;
+  /**
+   * Canal interno del equipo de la plataforma (administración ↔ soporte).
+   * Sustituye al botón de soporte para esas cuentas: un agente no se abre un
+   * ticket a sí mismo, pero sí necesita coordinarse con el resto del equipo.
+   */
+  onCanalEquipo?: () => void;
+  showCanalEquipo?: boolean;
   profileSubtitle?: string;
   profilePhotoUrl?: string | null;
   onLogout?: () => void;

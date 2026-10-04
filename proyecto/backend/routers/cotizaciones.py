@@ -1133,6 +1133,11 @@ async def editar_propuesta(
     # Solo cuenta para la bitácora lo que ve el cliente: retocar un borrador no
     # cambia nada del negocio todavía.
     if propuesta_db.estado == EstadoPropuesta.pendiente.value:
+        # El comprador ya la tenía delante: se lleva la cuenta para poder
+        # decirle que lo que compara no es la oferta que llegó.
+        propuesta_db.revisiones = (propuesta_db.revisiones or 0) + 1
+        propuesta_db.fecha_modificacion = datetime.utcnow()
+
         from services.eventos import TiposEvento, evento_propuesta
 
         cotizacion = db.query(Cotizacion).filter(Cotizacion.id == propuesta_db.cotizacion_id).first()
@@ -1331,6 +1336,8 @@ async def listar_propuestas(
             preaceptada_por_empresa=p.preaceptada_por_empresa,
             cantidad=p.cantidad,
             fecha_envio=p.fecha_envio,
+            revisiones=p.revisiones or 0,
+            fecha_modificacion=p.fecha_modificacion,
             motivo_descarte=p.motivo_descarte,
             motivo_descarte_detalle=p.motivo_descarte_detalle,
             empresa=empresas.get(p.importador_id),

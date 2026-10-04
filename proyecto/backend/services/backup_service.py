@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, List, Optional
 from uuid import UUID
 
-from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import inspect as sa_inspect, text
 from sqlalchemy.orm import Session
 
 from database import Base, engine
@@ -263,6 +263,39 @@ def _destino_de_archivo(nombre_en_zip: str) -> Optional[Path]:
     return destino
 
 
+def _sin_claves_foraneas(db: Session, activar: bool) -> None:
+    """Enciende o apaga la comprobación de claves foráneas de la sesión.
+
+    Hace falta para recargar la base entera: el orden de
+    `Base.metadata.sorted_tables` no puede satisfacer a todas las restricciones
+    porque el esquema tiene **ciclos** y auto-referencias:
+
+    - `usuarios.organizacion_id` → `organizaciones_solicitantes.id` y
+      `organizaciones_solicitantes.owner_usuario_id` → `usuarios.id`;
+    - `carpetas.parent_id` y `cotizaciones.cotizacion_origen_id` apuntan a su
+      propia tabla, así que dentro de una tabla también importaría el orden de
+      las filas.
+
+    Sin esto, el `DELETE` en orden inverso moría con «Cannot delete or update a
+    parent row» en cuanto existía una sola persona jurídica —una fila de
+    `usuarios` con `organizacion_id`—, y la restauración no se podía completar.
+    Es lo mismo que hace un `mysqldump` al recargar, y vale porque el ZIP es una
+    foto completa y coherente de las 53 tablas; además `verificar_conteos`
+    comprueba después que entró todo.
+    """
+    nombre = engine.dialect.name
+    try:
+        if nombre == "mysql":
+            db.execute(text("SET FOREIGN_KEY_CHECKS = 1" if activar else "SET FOREIGN_KEY_CHECKS = 0"))
+        elif nombre == "sqlite":
+            db.execute(text("PRAGMA foreign_keys = ON" if activar else "PRAGMA foreign_keys = OFF"))
+    except Exception:
+        # No poder tocar el ajuste no debe tumbar la restauración: si el motor
+        # no lo soporta, se intenta igual con el orden de `sorted_tables`.
+        logger.warning("No se pudo %s la comprobación de claves foráneas (%s)",
+                       "reactivar" if activar else "desactivar", nombre, exc_info=True)
+
+
 def _restaurar_datos(db: Session, zf: zipfile.ZipFile, aplicar: bool, informar: Callable[[str], None]) -> dict:
     """Vacía y recarga las tablas del ZIP en UNA transacción. Devuelve filas por tabla."""
     disponibles = {
@@ -277,6 +310,8 @@ def _restaurar_datos(db: Session, zf: zipfile.ZipFile, aplicar: bool, informar: 
         return cargadas
 
     try:
+        if aplicar:
+            _sin_claves_foraneas(db, False)
         # El borrado va en orden inverso (hijos primero) por las claves foráneas.
         for tabla in reversed(tablas):
             if aplicar:
@@ -301,12 +336,21 @@ def _restaurar_datos(db: Session, zf: zipfile.ZipFile, aplicar: bool, informar: 
                     db.execute(tabla.insert(), limpias[inicio:inicio + 500])
 
         if aplicar:
+            # Reactivar ANTES del commit: así el propio commit valida que la
+            # foto cargada es coherente en vez de dejar referencias colgando.
+            _sin_claves_foraneas(db, True)
             db.commit()
         else:
             db.rollback()
     except Exception:
         db.rollback()
         raise
+    finally:
+        if aplicar:
+            # El ajuste vive en la sesión, y la sesión se reutiliza del pool:
+            # dejarla con las claves foráneas apagadas convertiría cualquier
+            # petición posterior en una que no valida nada.
+            _sin_claves_foraneas(db, True)
     return cargadas
 
 

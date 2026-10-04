@@ -181,6 +181,13 @@ export interface BackendPropuesta {
   /** Cantidad que cubre el precio (null = la pedida en la cotización). */
   cantidad?: number | null;
   fecha_envio?: string | null;
+  /**
+   * Veces que la empresa reescribió la propuesta DESPUÉS de enviarla, y cuándo
+   * fue el último cambio. El comprador tiene que verlo: lo que compara ya no
+   * es la oferta que llegó. La versión que se muestra es `revisiones + 1`.
+   */
+  revisiones?: number;
+  fecha_modificacion?: string | null;
   /** Si el cliente eligió otra propuesta: por qué (precio, tiempo, condiciones, otro). */
   motivo_descarte?: string | null;
   motivo_descarte_detalle?: string | null;
@@ -544,6 +551,16 @@ export interface EstimacionEnMensaje {
   orden_id?: string | null;
 }
 
+/** Alguien del equipo de la plataforma, para el canal interno. */
+export interface BackendMiembroEquipo {
+  id: string;
+  nombre: string | null;
+  email: string;
+  rol: string;
+  nivel_soporte: number | null;
+  activo: boolean;
+}
+
 export interface BackendChatConversation {
   id: string;
   /**
@@ -838,6 +855,25 @@ export const businessService = {
       method: "POST",
       body: { asesor_id: asesorId ?? null, mensaje_inicial: mensajeInicial ?? null },
     });
+  },
+
+  /**
+   * Canal interno del equipo de la plataforma (administración ↔ soporte).
+   *
+   * Sin `miembroId` entra en la sala común, donde está todo el equipo; con él,
+   * abre el hilo privado con esa persona. Es lo que usa el equipo en vez de
+   * abrirse un ticket, que el backend le niega.
+   */
+  openTeamChannel(miembroId?: string, mensajeInicial?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/equipo", {
+      method: "POST",
+      body: { miembro_id: miembroId ?? null, mensaje_inicial: mensajeInicial ?? null },
+    });
+  },
+
+  /** El resto del equipo de la plataforma, para elegir con quién abrir un hilo. */
+  listTeamMembers(): Promise<BackendMiembroEquipo[]> {
+    return apiRequest<BackendMiembroEquipo[]>("/chat/equipo/miembros", { method: "GET" });
   },
 
   /** Pide ayuda al equipo de la plataforma. Cada llamada abre un ticket propio. */

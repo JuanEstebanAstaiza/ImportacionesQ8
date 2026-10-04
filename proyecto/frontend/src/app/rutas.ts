@@ -26,6 +26,7 @@ export type Screen =
   | "responses"
   | "response-detail"
   | "chats"
+  | "team-channel"
   | "orders"
   | "order-detail"
   | "documentos"
@@ -89,6 +90,9 @@ export const RUTAS: Ruta[] = [
   // Comunes
   { screen: "chats", path: "/chats" },
   { screen: "chats", path: "/chats", param: "conversation" },
+  // Canal interno de administración y soporte. Va aparte de `/chats` para que
+  // no se mezcle con los tickets de clientes y empresas.
+  { screen: "team-channel", path: "/equipo" },
   { screen: "documentos", path: "/documentos" },
   { screen: "pagos", path: "/pagos" },
   { screen: "courses", path: "/cursos" },

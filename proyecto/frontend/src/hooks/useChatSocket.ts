@@ -25,13 +25,25 @@ interface WsTicketResponse {
   expires_in_seconds?: number;
 }
 
-function buildWebSocketUrl(path: string): string {
+/**
+ * `path` es solo la ruta; la query va en `params`.
+ *
+ * Asignar a `url.pathname` una cadena que ya traía `?ticket=...` no construye
+ * una query: la API de URL escapa el `?` y el ticket terminaba dentro de la
+ * ruta (`/ws/chat/<id>%3Fticket=...`). El backend no veía ningún ticket y
+ * cerraba el handshake con 403, así que el canal en vivo nunca llegaba a
+ * abrirse y reintentaba cada 3 s indefinidamente.
+ */
+function buildWebSocketUrl(path: string, params: Record<string, string> = {}): string {
   const base = getApiBaseUrl();
   try {
     const url = new URL(base);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const prefix = url.pathname.replace(/\/+$/, "");
     url.pathname = `${prefix}${path}`;
+    for (const [clave, valor] of Object.entries(params)) {
+      url.searchParams.set(clave, valor);
+    }
     return url.toString();
   } catch {
     return "";
@@ -82,7 +94,7 @@ export function useChatSocket(
         return;
       }
 
-      const url = buildWebSocketUrl(`/ws/chat/${conversationId}?ticket=${encodeURIComponent(ticket)}`);
+      const url = buildWebSocketUrl(`/ws/chat/${conversationId}`, { ticket });
       if (!url) {
         return;
       }

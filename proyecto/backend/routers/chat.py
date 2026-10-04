@@ -23,7 +23,9 @@ from schemas.chat import (
     IniciarChatInternoRequest, AbrirSoporteRequest, CerrarTicketRequest,
     EscalarTicketRequest, CalificarSoporteRequest,
     EstimacionPrecioRequest, EstimacionPrecioResponse,
+    AbrirCanalEquipoRequest, MiembroEquipoItem,
 )
+from services import acceso_chat
 from services.mesa_soporte import acotar_nivel, elegir_agente, nivel_inicial
 from schemas.features import TraducirRequest, TraducirResponse
 from utils.dependencies import get_db, get_current_user, require_rol_in
@@ -76,73 +78,14 @@ async def emitir_ticket_ws(
     return WsTicketResponse(ticket=ticket)
 
 
-def _es_equipo_plataforma(rol: str) -> bool:
-    """¿Es una cuenta interna de Zarpi (administración o soporte)?
-
-    Los agentes de soporte atienden los mismos hilos que un administrador; lo
-    que no pueden es administrar la plataforma. Esa distinción vive en los
-    endpoints, no aquí.
-    """
-    return rol in ROLES_PLATAFORMA
-
-
-def _tipo_de(conversacion: ConversacionChat) -> str:
-    return str(conversacion.tipo or TipoConversacion.negociacion.value)
-
-
-def _es_interna(conversacion: ConversacionChat) -> bool:
-    return _tipo_de(conversacion) == TipoConversacion.interna.value
-
-
-def _es_soporte(conversacion: ConversacionChat) -> bool:
-    return _tipo_de(conversacion) == TipoConversacion.soporte.value
-
-
-def _verificar_acceso_conversacion(
-    conversacion: ConversacionChat,
-    current_user: dict,
-    db: Optional[Session] = None,
-) -> bool:
-    """Solo el solicitante y el usuario de la empresa (dueño o asesor asignado)
-    de esa conversación pueden leer/escribir mensajes en ella (evita IDOR entre
-    conversaciones de otros clientes/empresas)."""
-    user_id = current_user["user_id"]
-    rol = current_user["rol"]
-
-    if _es_soporte(conversacion):
-        # Un ticket lo ven quien lo abrió y el equipo de la plataforma. Nadie más:
-        # el usuario puede haber contado ahí datos de su operación.
-        return _es_equipo_plataforma(rol) or conversacion.solicitante_id == user_id
-
-    if _es_interna(conversacion):
-        # Canal de coordinación de la empresa: el cliente nunca entra, ni
-        # siquiera al hilo interno de la orden que él mismo encargó.
-        if rol == "asesor":
-            return conversacion.importador_usuario_id == user_id
-        if rol == "importador":
-            return bool(
-                conversacion.importador_id
-                and current_user.get("importador_id") == conversacion.importador_id
-            )
-        return _es_equipo_plataforma(rol)
-
-    if rol == "solicitante":
-        return conversacion.solicitante_id == user_id
-    if rol == "asesor":
-        return conversacion.importador_usuario_id == user_id
-    if rol == "importador":
-        if conversacion.importador_usuario_id == user_id:
-            return True
-        # El dueño supervisa las conversaciones de sus asesores: sin esto, un
-        # asesor desactivado dejaba el hilo ilegible para toda la empresa.
-        importador_id = current_user.get("importador_id")
-        if db is None or not importador_id:
-            return False
-        contraparte = db.query(Usuario).filter(
-            Usuario.id == conversacion.importador_usuario_id
-        ).first()
-        return bool(contraparte and contraparte.importador_id == importador_id)
-    return _es_equipo_plataforma(rol)
+# La regla de acceso vive en `services/acceso_chat.py`: `routers/documentos.py`
+# la necesita igual para los adjuntos del hilo, y tenerla duplicada hacía que
+# las dos copias divergieran. Aquí quedan los alias con los que ya se usaba.
+_es_equipo_plataforma = acceso_chat.es_equipo_plataforma
+_tipo_de = acceso_chat.tipo_de
+_es_interna = acceso_chat.es_interna
+_es_soporte = acceso_chat.es_soporte
+_verificar_acceso_conversacion = acceso_chat.puede_acceder
 
 
 def _nombre_de_usuario(db: Session, usuario_id: Optional[str]) -> Optional[str]:
@@ -226,6 +169,17 @@ def _contraparte(db: Session, conversacion: ConversacionChat, current_user: dict
     cliente de un asesor, ni un cliente de otro.
     """
     user_id = current_user.get("user_id")
+
+    if acceso_chat.es_equipo(conversacion):
+        # En la sala común la contraparte es el equipo entero, no una persona.
+        if acceso_chat.es_sala_del_equipo(conversacion):
+            return _Contraparte(nombre="Canal del equipo", rol="plataforma")
+        otro = (
+            conversacion.importador_usuario_id
+            if conversacion.solicitante_id == user_id
+            else conversacion.solicitante_id
+        )
+        return _persona(db, otro)
 
     if _es_soporte(conversacion):
         # Para el equipo de soporte la contraparte es quien pidió ayuda; para el
@@ -325,10 +279,14 @@ def _persistir_adjuntos_chat(
     )
     # Una copia por participante: el receptor la ve en su gestión documental y
     # queda autorizado a descargarla.
+    #
+    # Quiénes son depende del tipo de hilo (un ticket de soporte no tiene lado
+    # empresa, el canal interno no tiene solicitante), así que lo resuelve
+    # `acceso_chat.participantes`. Sumar las dos columnas a pelo colaba un
+    # `None` y el clon salía sin dueño: 500 al adjuntar en esos dos canales.
     destinatarios = {owner_user_id}
     if conversacion:
-        destinatarios.add(conversacion.solicitante_id)
-        destinatarios.add(conversacion.importador_usuario_id)
+        destinatarios |= acceso_chat.participantes(db, conversacion)
 
     for archivo_id in meta.get("archivo_ids", []) if isinstance(meta.get("archivo_ids"), list) else []:
         archivo = (
@@ -580,6 +538,124 @@ async def iniciar_chat_interno(
         )
         db.add(conversacion)
         db.flush()
+
+    if datos.mensaje_inicial and datos.mensaje_inicial.strip():
+        db.add(MensajeChat(
+            id=str(uuid4()),
+            conversacion_id=conversacion.id,
+            remitente_id=user_id,
+            contenido=datos.mensaje_inicial.strip()[:2000],
+            tipo=TipoMensajeChat.texto.value,
+        ))
+
+    db.commit()
+    db.refresh(conversacion)
+
+    ultimo = db.query(MensajeChat).filter(
+        MensajeChat.conversacion_id == conversacion.id
+    ).order_by(MensajeChat.fecha_envio.desc()).first()
+
+    return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+require_plataforma = require_rol_in("admin", "soporte")
+
+
+@router.get("/equipo/miembros", response_model=List[MiembroEquipoItem])
+async def listar_miembros_equipo(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_plataforma),
+):
+    """El resto del equipo de la plataforma, para elegir con quién hablar.
+
+    No incluye a quien pregunta: un hilo con uno mismo no tiene sentido y la
+    sala común ya cubre "escribir a todos".
+    """
+    filas = (
+        db.query(Usuario)
+        .filter(
+            Usuario.rol.in_(ROLES_PLATAFORMA),
+            Usuario.activo.is_(True),
+            Usuario.id != current_user["user_id"],
+        )
+        .order_by(Usuario.rol.asc(), Usuario.nombre.asc())
+        .all()
+    )
+    return [
+        MiembroEquipoItem(
+            id=str(u.id), nombre=u.nombre, email=u.email, rol=u.rol,
+            nivel_soporte=u.nivel_soporte, activo=bool(u.activo),
+        )
+        for u in filas
+    ]
+
+
+@router.post("/equipo", response_model=ConversacionChatResponse, status_code=status.HTTP_201_CREATED)
+async def abrir_canal_equipo(
+    # Con cuerpo opcional: entrar en la sala común no necesita decir nada, y
+    # exigir un `{}` solo para eso daba un 422 desconcertante.
+    datos: AbrirCanalEquipoRequest = AbrirCanalEquipoRequest(),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_plataforma),
+):
+    """Abre (o reutiliza) el canal del equipo de la plataforma.
+
+    Sin `miembro_id`, la sala común donde está todo el equipo; con
+    `miembro_id`, el hilo privado con esa persona.
+
+    Existe porque administración y soporte no pueden abrirse tickets —el ticket
+    es el canal de los usuarios con la plataforma, y un agente atendiéndose a sí
+    mismo no significa nada—, pero sí necesitan un sitio para coordinarse.
+    """
+    user_id = current_user["user_id"]
+
+    if datos.miembro_id:
+        otro = db.query(Usuario).filter(
+            Usuario.id == str(datos.miembro_id),
+            Usuario.rol.in_(ROLES_PLATAFORMA),
+            Usuario.activo.is_(True),
+        ).first()
+        if not otro:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Esa persona no es del equipo de la plataforma",
+            )
+        if str(otro.id) == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No puedes abrir un hilo contigo mismo; usa la sala del equipo",
+            )
+        primero, segundo = acceso_chat.miembros_ordenados(user_id, str(otro.id))
+        conversacion = db.query(ConversacionChat).filter(
+            ConversacionChat.tipo == TipoConversacion.equipo.value,
+            ConversacionChat.solicitante_id == primero,
+            ConversacionChat.importador_usuario_id == segundo,
+        ).first()
+        if not conversacion:
+            conversacion = ConversacionChat(
+                id=str(uuid4()),
+                tipo=TipoConversacion.equipo.value,
+                solicitante_id=primero,
+                importador_usuario_id=segundo,
+                asunto=None,
+            )
+            db.add(conversacion)
+            db.flush()
+    else:
+        # La sala común es única: sin miembros concretos, los dos campos en NULL.
+        conversacion = db.query(ConversacionChat).filter(
+            ConversacionChat.tipo == TipoConversacion.equipo.value,
+            ConversacionChat.solicitante_id.is_(None),
+            ConversacionChat.importador_usuario_id.is_(None),
+        ).first()
+        if not conversacion:
+            conversacion = ConversacionChat(
+                id=str(uuid4()),
+                tipo=TipoConversacion.equipo.value,
+                asunto="Canal del equipo",
+            )
+            db.add(conversacion)
+            db.flush()
 
     if datos.mensaje_inicial and datos.mensaje_inicial.strip():
         db.add(MensajeChat(
@@ -985,22 +1061,46 @@ async def listar_mis_conversaciones(
     try:
         rol = current_user["rol"]
 
+        # El canal del equipo entra en la bandeja de administración y soporte:
+        # la sala común, más los hilos privados de quien pregunta.
+        canal_equipo = and_(
+            ConversacionChat.tipo == TipoConversacion.equipo.value,
+            or_(
+                and_(
+                    ConversacionChat.solicitante_id.is_(None),
+                    ConversacionChat.importador_usuario_id.is_(None),
+                ),
+                ConversacionChat.solicitante_id == user_id_str,
+                ConversacionChat.importador_usuario_id == user_id_str,
+            ),
+        )
+
         query = db.query(ConversacionChat)
         if rol == "soporte":
             # Un agente ve lo suyo y lo que nadie ha tomado. Enseñarle los
             # tickets de sus compañeros convertiría la asignación en decorado.
             query = query.filter(
-                ConversacionChat.tipo == TipoConversacion.soporte.value,
                 or_(
-                    ConversacionChat.agente_asignado_id == user_id_str,
-                    ConversacionChat.agente_asignado_id.is_(None),
-                ),
+                    and_(
+                        ConversacionChat.tipo == TipoConversacion.soporte.value,
+                        or_(
+                            ConversacionChat.agente_asignado_id == user_id_str,
+                            ConversacionChat.agente_asignado_id.is_(None),
+                        ),
+                    ),
+                    canal_equipo,
+                )
             )
         elif rol == "admin":
-            # La bandeja del equipo de la plataforma son los tickets de soporte,
-            # no las conversaciones ajenas: para supervisar existe el panel de
-            # administración, que además pagina y filtra.
-            query = query.filter(ConversacionChat.tipo == TipoConversacion.soporte.value)
+            # La bandeja del equipo de la plataforma son los tickets de soporte
+            # y su canal interno, no las conversaciones ajenas: para supervisar
+            # existe el panel de administración, que además pagina y filtra.
+            query = query.filter(
+                or_(
+                    ConversacionChat.tipo == TipoConversacion.soporte.value,
+                    canal_equipo,
+                )
+            )
         elif rol == "solicitante":
             # `solicitante_id` es NULL en las internas, así que este filtro ya
             # las deja fuera por sí solo; sus tickets de soporte sí entran,

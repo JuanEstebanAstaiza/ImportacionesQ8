@@ -43,6 +43,7 @@ from schemas.documental import (
     FavoritoToggle,
     ResourceTagAssign,
 )
+from services import acceso_chat
 from services.documental_service import (
     clonar_archivo_para_chat,
     create_document_file,
@@ -663,14 +664,19 @@ async def buscar_archivos(
     return items
 
 
-def _can_access_chat(conversation: ConversacionChat, current_user: dict) -> bool:
-    uid = current_user.get("user_id")
-    role = current_user.get("rol")
-    if role == "solicitante":
-        return conversation.solicitante_id == uid
-    if role in ("importador", "asesor"):
-        return conversation.importador_usuario_id == uid
-    return role == "admin"
+def _can_access_chat(
+    conversation: ConversacionChat,
+    current_user: dict,
+    db: Optional[Session] = None,
+) -> bool:
+    """La misma regla que decide quién lee los mensajes del hilo.
+
+    Esta función tenía su propia versión, que solo aceptaba al usuario a cuyo
+    nombre estaba la conversación. Con eso, quien sí podía leer el hilo se
+    quedaba sin sus adjuntos: la cuenta dueña supervisando el chat de su asesor,
+    el otro lado del canal interno y el agente de soporte en su propio ticket.
+    """
+    return acceso_chat.puede_acceder(conversation, current_user, db)
 
 
 @router.post("/compartir-chat", response_model=dict)
@@ -698,7 +704,7 @@ async def compartir_recursos_chat(
         conversation = db.query(ConversacionChat).filter(ConversacionChat.id == conversation_id).first()
         if not conversation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversación no encontrada: {conversation_id}")
-        if not _can_access_chat(conversation, current_user):
+        if not _can_access_chat(conversation, current_user, db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para compartir en una de las conversaciones")
 
         message_text = payload.mensaje or "Recursos compartidos desde gestión documental"
@@ -717,7 +723,12 @@ async def compartir_recursos_chat(
 
         # Una copia por participante: cada uno la ve en su propia gestión
         # documental y queda autorizado a descargarla vía `MensajeAdjunto`.
-        destinatarios = {conversation.solicitante_id, conversation.importador_usuario_id}
+        #
+        # Quiénes son depende del tipo de hilo, así que lo resuelve
+        # `acceso_chat.participantes`. Leer aquí las dos columnas a pelo metía un
+        # `None` en un ticket de soporte o en el canal interno, y el clon salía
+        # sin dueño: 500 al compartir.
+        destinatarios = acceso_chat.participantes(db, conversation)
         destinatarios.add(user_id)
 
         for file_row in files:
@@ -763,7 +774,7 @@ async def listar_adjuntos_chat(
     conversation = db.query(ConversacionChat).filter(ConversacionChat.id == conversacion_id).first()
     if not conversation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
-    if not _can_access_chat(conversation, current_user):
+    if not _can_access_chat(conversation, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
 
     rows = (
