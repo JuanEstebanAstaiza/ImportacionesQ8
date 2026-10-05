@@ -18,6 +18,7 @@ export type Screen =
   | "reset-password"
   | "policy-data"
   | "policy-terms"
+  | "policy-payments"
   | "dashboard"
   | "importer-profile"
   | "quotes"
@@ -75,6 +76,7 @@ export const RUTAS: Ruta[] = [
   { screen: "reset-password", path: "/restablecer-password" },
   { screen: "policy-data", path: "/politica-de-datos" },
   { screen: "policy-terms", path: "/terminos" },
+  { screen: "policy-payments", path: "/politica-de-pagos" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },

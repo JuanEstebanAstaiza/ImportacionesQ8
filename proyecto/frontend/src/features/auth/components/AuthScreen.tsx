@@ -9,6 +9,7 @@ import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/au
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
 import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import type { LegalPage } from "@/features/legal/types";
 
 type AuthView = "login" | "forgot" | "otp";
 export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
@@ -17,7 +18,7 @@ interface AuthScreenProps {
   onLogin: (role: PortalRole) => void;
   onRegister: () => void;
   onLanding: () => void;
-  onPolicy: (page: "data" | "terms") => void;
+  onPolicy: (page: LegalPage) => void;
   logo: React.ReactNode;
   initialEmail?: string;
 }
@@ -230,6 +231,9 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         </button>
         <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
           Términos
+        </button>
+        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
+          Pagos y Reembolsos
         </button>
       </footer>
     </div>

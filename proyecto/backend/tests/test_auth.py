@@ -214,6 +214,13 @@ class TestLegalPlaceholders:
         assert "titulo" in data
         assert "contenido" in data
 
+    def test_politica_pagos_reembolsos(self, client):
+        response = client.get("/legal/politica-pagos-reembolsos")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["version"] == "1.0"
+        assert data["url"].endswith("/politica-de-pagos")
+
 
 class TestHealthCheck:
     def test_root_endpoint(self, client):

@@ -31,6 +31,8 @@ import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
+import type { LegalPage } from "@/features/legal/types";
+import { EMPRESA } from "@/features/legal/empresa";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
@@ -91,6 +93,12 @@ import type { UrgenciaSoporte } from "@/services/business.service";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 const SHOW_PAYMENTS_MODULE = false;
+/** Pantalla (y por tanto URL) de cada documento legal. */
+const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
+  data: "policy-data",
+  terms: "policy-terms",
+  payments: "policy-payments",
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM COMPONENTS
@@ -8439,7 +8447,7 @@ const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"contact",label:"Contacto"},
 ];
 
-function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:"data"|"terms")=>void;importers:Importer[]}) {
+function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[]}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [activeTab,setActiveTab]=useState<LandingSection>("home");
@@ -8822,11 +8830,14 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             <div className="flex flex-col sm:flex-row gap-4 text-xs text-white/70">
               <button onClick={()=>onPolicy("data")} className="hover:text-accent transition-colors text-left">Política de Tratamiento de Datos</button>
               <button onClick={()=>onPolicy("terms")} className="hover:text-accent transition-colors text-left">Términos y Condiciones</button>
+              <button onClick={()=>onPolicy("payments")} className="hover:text-accent transition-colors text-left">Pagos y Reembolsos</button>
               <button onClick={onLogin} className="hover:text-accent transition-colors text-left">Iniciar sesión</button>
             </div>
           </div>
-          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center">
-            © 2026 Zarpi. Todos los derechos reservados.
+          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center space-y-1">
+            <p>{EMPRESA.razonSocial} · {EMPRESA.nit} · {EMPRESA.domicilio}</p>
+            <p>{EMPRESA.telefono} · <a href={`mailto:${EMPRESA.correo}`} className="hover:text-accent transition-colors">{EMPRESA.correo}</a></p>
+            <p>© 2026 Zarpi. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>
@@ -9315,7 +9326,7 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
-function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:"data"|"terms")=>void}) {
+function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:LegalPage)=>void}) {
   const [userType,setUserType]=useState<RegUserType>("solicitante");
   const [personType,setPersonType]=useState<RegPersonType>("natural");
   const [accepted,setAccepted]=useState(false);
@@ -9690,6 +9701,9 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
         <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
           Términos
         </button>
+        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
+          Pagos y Reembolsos
+        </button>
       </footer>
     </div>
   );
@@ -9698,7 +9712,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────────────────────────────────────────
-function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void;initialEmail?:string}) {
+function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:LegalPage)=>void;initialEmail?:string}) {
   return (
     <AuthScreen
       onLogin={onLogin}
@@ -10607,7 +10621,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
     if (!publicScreens.includes(screen)) {
       setScreen("login");
     }
@@ -10622,8 +10636,6 @@ export default function App() {
       "landing",
       "login",
       "register",
-      "policy-data",
-      "policy-terms",
       "reset-password",
     ];
 
@@ -11383,7 +11395,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -11449,7 +11461,7 @@ export default function App() {
       onLogin={handleLogin}
       onRegister={()=>goTo("register")}
       onLanding={()=>goTo("landing")}
-      onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}
+      onPolicy={page=>goTo(PANTALLA_LEGAL[page])}
       initialEmail={loginPrefillEmail}
     />
   );
@@ -11483,12 +11495,14 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} importers={marketplaceImporters}/>;
-  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters}/>;
+  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
-  if(screen==="policy-data")return <LegalPolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="policy-terms")return <LegalPolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} initialEmail={loginPrefillEmail}/>;
+  // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
+  // regrese a donde estaba el usuario antes de abrir el primero.
+  const legalPage=(Object.keys(PANTALLA_LEGAL) as LegalPage[]).find(page=>PANTALLA_LEGAL[page]===screen);
+  if(legalPage)return <LegalPolicyScreen page={legalPage} onBack={()=>goTo(prevScreen)} onOpen={page=>setScreen(PANTALLA_LEGAL[page])}/>;
+  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
     // ── Importer portal ───────────────────────────────────────────────────────
