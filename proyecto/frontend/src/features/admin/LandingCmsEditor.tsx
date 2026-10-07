@@ -269,62 +269,119 @@ function LandingLivePreview({ blocks, allies }: { blocks: LandingBlock[]; allies
   const ordered = [...blocks].filter((block) => block.activo).sort((a, b) => a.orden - b.orden);
 
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm text-foreground">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-semibold">Vista previa en vivo — Novedades y aliados</p>
         <button
           type="button"
           onClick={() => setDark((current) => !current)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-foreground"
         >
-          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} {dark ? "Ver en claro" : "Ver en oscuro"}
+          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} 
+          {dark ? "Ver en claro" : "Ver en oscuro"}
         </button>
       </div>
-      <div className={clsx(dark && "dark")}>
-        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 text-black dark:border-zinc-800 dark:bg-[#0F0F0F] dark:text-white">
-          {ordered.map((block) => (
-            <div key={block.id} className={ALIGN_CLASS[block.alineacion] || "text-left"}>
-              {block.tipo === "heading" ? (
-                <p className={clsx(HEADING_SIZE_CLASS[block.tamano_fuente] || HEADING_SIZE_CLASS.md, TOKEN_TEXT_CLASS[block.token_color], FONT_CLASS[block.fuente])}>
-                  {block.contenido || "Encabezado de ejemplo"}
-                </p>
-              ) : null}
-              {block.tipo === "paragraph" ? (
-                <p className={clsx(TEXT_SIZE_CLASS[block.tamano_fuente] || TEXT_SIZE_CLASS.md, TOKEN_TEXT_CLASS[block.token_color], FONT_CLASS[block.fuente])}>
-                  {block.contenido || "Texto de ejemplo."}
-                </p>
-              ) : null}
-              {block.tipo === "image" && block.contenido ? (
-                <ProtectedImage
-                  path={block.contenido}
-                  alt=""
-                  className="inline-block max-h-40 rounded-lg border border-slate-200 object-cover dark:border-zinc-800"
-                />
-              ) : null}
-              {block.tipo === "video" && block.contenido ? (
-                <ProtectedVideo path={block.contenido} className="inline-block max-h-40 rounded-lg border border-slate-200 dark:border-zinc-800" />
-              ) : null}
-              {block.tipo === "button" ? (
-                <span className={clsx("inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold", TOKEN_BUTTON_CLASS[block.token_color])}>
-                  {block.contenido || "Boton"}
-                </span>
-              ) : null}
-              {block.tipo === "allies_grid" ? (
-                <div className="grid grid-cols-3 gap-3">
-                  {allies.filter((a) => a.activo).slice(0, 6).map((ally) => (
-                    <div key={ally.id} className="rounded-lg border border-slate-200 p-2 text-center text-xs dark:border-zinc-800">
-                      {ally.logo_url ? (
-                        <ProtectedImage path={ally.logo_url} alt={ally.nombre} className="mx-auto h-8 object-contain" />
-                      ) : ally.nombre}
-                    </div>
-                  ))}
-                  {allies.length === 0 ? <p className="col-span-3 text-xs text-slate-500 dark:text-zinc-400">Sin aliados</p> : null}
-                </div>
-              ) : null}
-            </div>
-          ))}
-          {ordered.length === 0 ? <p className="text-sm text-slate-500 dark:text-zinc-400">Esta seccion no tiene bloques visibles.</p> : null}
-        </div>
+
+      {/* Contenedor con fondo e iluminación forzada vía style */}
+      <div 
+        style={{
+          backgroundColor: dark ? "#0F0F0F" : "#FFFFFF",
+          color: dark ? "#FFFFFF" : "#000000",
+        }}
+        className={clsx(
+          "rounded-xl border p-6 transition-colors duration-200 space-y-4",
+          dark ? "border-zinc-800" : "border-slate-200"
+        )}
+      >
+        {ordered.map((block) => (
+          <div key={block.id} className={ALIGN_CLASS[block.alineacion] || "text-left"}>
+            {block.tipo === "heading" ? (
+              <p
+                className={clsx(
+                  HEADING_SIZE_CLASS[block.tamano_fuente] || HEADING_SIZE_CLASS.md,
+                  FONT_CLASS[block.fuente],
+                  dark ? "text-accent" : "text-primary"
+                )}
+              >
+                {block.contenido || "Encabezado de ejemplo"}
+              </p>
+            ) : null}
+
+            {block.tipo === "paragraph" ? (
+              <p
+                className={clsx(
+                  TEXT_SIZE_CLASS[block.tamano_fuente] || TEXT_SIZE_CLASS.md,
+                  FONT_CLASS[block.fuente],
+                  dark ? "text-white" : "text-black"
+                )}
+              >
+                {block.contenido || "Texto de ejemplo."}
+              </p>
+            ) : null}
+
+            {block.tipo === "image" && block.contenido ? (
+              <ProtectedImage
+                path={block.contenido}
+                alt=""
+                className={clsx(
+                  "inline-block max-h-40 rounded-lg border object-cover",
+                  dark ? "border-zinc-800" : "border-slate-200"
+                )}
+              />
+            ) : null}
+
+            {block.tipo === "video" && block.contenido ? (
+              <ProtectedVideo 
+                path={block.contenido} 
+                className={clsx(
+                  "inline-block max-h-40 rounded-lg border",
+                  dark ? "border-zinc-800" : "border-slate-200"
+                )} 
+              />
+            ) : null}
+
+            {block.tipo === "button" ? (
+              <span
+                className={clsx(
+                  "inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+                  dark ? "bg-accent text-accent-foreground" : "bg-primary text-primary-foreground"
+                )}
+              >
+                {block.contenido || "Boton"}
+              </span>
+            ) : null}
+
+            {block.tipo === "allies_grid" ? (
+              <div className="grid grid-cols-3 gap-3">
+                {allies.filter((a) => a.activo).slice(0, 6).map((ally) => (
+                  <div 
+                    key={ally.id} 
+                    style={{ backgroundColor: dark ? "#171717" : "#FFFFFF" }}
+                    className={clsx(
+                      "rounded-lg border p-2 text-center text-xs",
+                      dark ? "border-zinc-800 text-white" : "border-slate-200 text-black"
+                    )}
+                  >
+                    {ally.logo_url ? (
+                      <ProtectedImage path={ally.logo_url} alt={ally.nombre} className="mx-auto h-8 object-contain" />
+                    ) : ally.nombre}
+                  </div>
+                ))}
+                {allies.length === 0 ? (
+                  <p className={clsx("col-span-3 text-xs", dark ? "text-zinc-400" : "text-slate-500")}>
+                    Sin aliados
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+
+        {ordered.length === 0 ? (
+          <p className={clsx("text-sm", dark ? "text-zinc-400" : "text-slate-500")}>
+            Esta sección no tiene bloques visibles.
+          </p>
+        ) : null}
       </div>
     </div>
   );
