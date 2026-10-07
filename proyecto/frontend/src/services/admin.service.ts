@@ -4,6 +4,18 @@ import type { RegisterResponse } from "@/types/auth";
 
 export type AdminUserRole = "solicitante" | "importador" | "asesor" | "admin";
 
+export interface UsuarioEncontrado {
+  id: string;
+  email: string;
+  nombre: string | null;
+  rol: string;
+  activo: boolean;
+  /** Empresa importadora de la cuenta, si es dueña o asesora. */
+  empresa: string | null;
+  tier: string | null;
+  es_curador: boolean;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -458,6 +470,15 @@ export const adminService = {
       method: "POST",
       body: { motivo },
     });
+  },
+
+  /** Autocompletado: cuentas cuyo correo, nombre o apellido contienen cada palabra de `q`. */
+  buscarUsuarios(q: string, filtros: { rol?: string; soloActivos?: boolean; limite?: number } = {}): Promise<UsuarioEncontrado[]> {
+    const query = new URLSearchParams({ q });
+    if (filtros.rol) query.set("rol", filtros.rol);
+    if (filtros.soloActivos === false) query.set("solo_activos", "false");
+    if (filtros.limite) query.set("limite", String(filtros.limite));
+    return apiRequest<UsuarioEncontrado[]>(`/admin/usuarios/buscar?${query.toString()}`, { method: "GET" });
   },
 
   listUsers(filters?: { rol?: string; activo?: boolean }): Promise<AdminUser[]> {

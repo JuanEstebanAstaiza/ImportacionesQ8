@@ -4,7 +4,9 @@ import { CheckCircle2, Mail, Send } from "lucide-react";
 import {
   adminService,
   type AdminUser,
+  type UsuarioEncontrado,
 } from "@/services/admin.service";
+import { BuscadorUsuarios } from "@/app/components/busqueda/BuscadorUsuarios";
 
 const SEGMENTS = [
   { value: "solicitante", label: "Cotizantes" },
@@ -71,6 +73,32 @@ export function AdminEmailCampaign() {
       roles: current.roles.includes(role) ? current.roles.filter((item) => item !== role) : [...current.roles, role],
     }));
   }
+
+  /**
+   * La lista solo trae las cuentas más recientes; con el buscador se llega a
+   * cualquiera. La cuenta encontrada se suma arriba, ya marcada.
+   */
+  function agregarEncontrado(encontrado: UsuarioEncontrado) {
+    setUsers((actuales) => (actuales.some((u) => u.id === encontrado.id) ? actuales : [{
+      id: encontrado.id,
+      email: encontrado.email,
+      rol: encontrado.rol,
+      importador_id: null,
+      nombre: encontrado.nombre,
+      activo: encontrado.activo,
+      perfil_completo: true,
+      fecha_creacion: "",
+    }, ...actuales]));
+    setForm((current) => (current.usuarios_ids.includes(encontrado.id)
+      ? current
+      : { ...current, usuarios_ids: [...current.usuarios_ids, encontrado.id] }));
+  }
+
+  // Las elegidas primero, para verlas sin bajar por toda la lista.
+  const usuariosOrdenados = useMemo(
+    () => [...users].sort((a, b) => Number(form.usuarios_ids.includes(b.id)) - Number(form.usuarios_ids.includes(a.id))),
+    [users, form.usuarios_ids],
+  );
 
   function toggleUser(userId: string) {
     setForm((current) => ({
@@ -174,9 +202,10 @@ export function AdminEmailCampaign() {
 
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm dark:bg-card/80">
             <h3 className="mb-1 text-sm font-semibold text-foreground">Usuarios específicos</h3>
-            <p className="mb-2 text-xs text-muted-foreground">Selecciona cuentas activas.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Busca por correo o nombre, o marca entre las cuentas recientes.</p>
+            <BuscadorUsuarios className="mb-2" onSeleccionar={agregarEncontrado} />
             <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-              {loadingUsers ? <p className="text-xs text-muted-foreground">Cargando usuarios...</p> : users.map((user) => (
+              {loadingUsers ? <p className="text-xs text-muted-foreground">Cargando usuarios...</p> : usuariosOrdenados.map((user) => (
                 <label key={user.id} className="flex cursor-pointer items-start gap-2 text-xs text-foreground">
                   <input type="checkbox" checked={form.usuarios_ids.includes(user.id)} onChange={() => toggleUser(user.id)} className="mt-0.5 h-4 w-4 rounded border-border accent-primary" />
                   <span className="min-w-0"><span className="block truncate font-medium">{user.nombre || user.email}</span><span className="block truncate text-muted-foreground">{user.email} · {user.rol}</span></span>

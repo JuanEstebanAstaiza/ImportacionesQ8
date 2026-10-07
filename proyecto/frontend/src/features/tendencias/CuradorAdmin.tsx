@@ -6,6 +6,7 @@ import {
   tendenciasService,
   type AccesoAdmin, type CambioTendencias, type CierreFabricas, type CuradorItem, type Temporada,
 } from "@/services/tendencias.service";
+import { BuscadorUsuarios, UsuarioElegido } from "@/app/components/busqueda/BuscadorUsuarios";
 
 import {
   BTN, BTN_ICONO, BotonConfirmar, CARD, Campo, Cargando, INPUT, Vacio, formatoBogota,
@@ -120,6 +121,7 @@ function Accesos() {
   const [soloVigentes, setSoloVigentes] = useState(true);
   const [cargando, setCargando] = useState(true);
   const [email, setEmail] = useState("");
+  const [nombreElegido, setNombreElegido] = useState<string | null>(null);
   const [dias, setDias] = useState("30");
   const [nota, setNota] = useState("");
   const [otorgando, setOtorgando] = useState(false);
@@ -139,13 +141,14 @@ function Accesos() {
 
   async function otorgar() {
     const n = numeroOpcional(dias);
-    if (!email.trim()) { toast.error("Escribe el correo."); return; }
+    if (!email.trim()) { toast.error("Elige la cuenta."); return; }
     if (n == null || n < 1 || n > 3650) { toast.error("Días: entre 1 y 3650."); return; }
     setOtorgando(true);
     try {
       const a = await tendenciasService.otorgarAcceso({ email: email.trim(), dias: n, nota: nota.trim() || undefined });
       toast.success(`Acceso regalado a ${a.email ?? email.trim()} hasta el ${formatoBogota(a.fin)}`);
       setEmail("");
+      setNombreElegido(null);
       setNota("");
       await cargar();
     } catch (err) {
@@ -172,8 +175,15 @@ function Accesos() {
       <section className={`${CARD} space-y-3`}>
         <h3 className="flex items-center gap-2 text-base font-semibold"><Gift className="h-4 w-4" />Regalar acceso</h3>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-          <Campo label="Correo de la cuenta">
-            <input type="email" className={INPUT} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="persona@empresa.com" />
+          <Campo label="Cuenta">
+            {email ? (
+              <UsuarioElegido email={email} nombre={nombreElegido} onCambiar={() => { setEmail(""); setNombreElegido(null); }} />
+            ) : (
+              <BuscadorUsuarios
+                placeholder="Busca por correo o nombre"
+                onSeleccionar={(u) => { setEmail(u.email); setNombreElegido(u.nombre); }}
+              />
+            )}
           </Campo>
           <div>
             <p className="mb-1 text-sm font-medium">Días</p>
@@ -261,7 +271,6 @@ function Accesos() {
 function Curadores() {
   const [curadores, setCuradores] = useState<CuradorItem[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [email, setEmail] = useState("");
   const [ocupado, setOcupado] = useState(false);
 
   async function cargar() {
@@ -277,12 +286,11 @@ function Curadores() {
   useEffect(() => { void cargar(); }, []);
 
   async function asignar(correo: string, valor: boolean) {
-    if (!correo.trim()) { toast.error("Escribe el correo."); return; }
+    if (!correo.trim()) { toast.error("Elige la cuenta."); return; }
     setOcupado(true);
     try {
       await tendenciasService.asignarCurador(correo.trim(), valor);
       toast.success(valor ? "Curador agregado" : "Curador quitado");
-      if (valor) setEmail("");
       await cargar();
     } catch (err) {
       toast.error(mensajeError(err));
@@ -297,12 +305,15 @@ function Curadores() {
         <h3 className="text-base font-semibold">Equipo curador</h3>
         <p className="text-sm text-muted-foreground">Crean y editan ediciones y productos. El rol se asigna a cuentas existentes.</p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <input type="email" className={`${INPUT} flex-1 sm:max-w-sm`} value={email} onChange={(e) => setEmail(e.target.value)}
-          placeholder="correo@zarpi.co" onKeyDown={(e) => { if (e.key === "Enter") void asignar(email, true); }} />
-        <button type="button" disabled={ocupado} onClick={() => void asignar(email, true)} className={BTN}>
-          <UserPlus className="h-4 w-4" />Agregar
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <BuscadorUsuarios
+          className="flex-1 sm:max-w-sm"
+          placeholder="Agrega a alguien: busca por correo o nombre"
+          excluir={new Set(curadores.map((c) => c.id))}
+          disabled={ocupado}
+          onSeleccionar={(u) => void asignar(u.email, true)}
+        />
+        {ocupado ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden />}
       </div>
       {cargando ? <Cargando /> : curadores.length === 0 ? <Vacio>No hay curadores asignados.</Vacio> : (
         <ul className="divide-y divide-border rounded-lg border border-border">

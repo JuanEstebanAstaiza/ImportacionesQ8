@@ -14,7 +14,6 @@ import {
   PackageCheck,
   Pencil,
   Plus,
-  Search,
   Sparkles,
   Trash2,
   Upload,
@@ -42,6 +41,7 @@ import {
   type ProductoCatalogoDatos,
   type TierCotizante,
 } from "@/services/catalogos.service";
+import { Autocompletar, Resaltar } from "@/app/components/busqueda/Autocompletar";
 
 import {
   CLASE_BOTON_PRIMARIO,
@@ -729,10 +729,7 @@ function SeccionAcceso({
 }) {
   const [accesos, setAccesos] = useState<AccesoManual[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [clientes, setClientes] = useState<ClienteEmpresa[] | null>(null);
-  const [cargandoClientes, setCargandoClientes] = useState(false);
   const [eligiendo, setEligiendo] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
   const [procesando, setProcesando] = useState<string | null>(null);
   const [porQuitar, setPorQuitar] = useState<string | null>(null);
 
@@ -746,20 +743,6 @@ function SeccionAcceso({
       .finally(() => { if (vigente) setCargando(false); });
     return () => { vigente = false; };
   }, [catalogo.id]);
-
-  async function abrirSelector() {
-    setEligiendo(true);
-    if (clientes !== null) return;
-    setCargandoClientes(true);
-    try {
-      setClientes(await catalogosService.clientes());
-    } catch (error) {
-      toast.error(mensajeError(error));
-      setEligiendo(false);
-    } finally {
-      setCargandoClientes(false);
-    }
-  }
 
   async function dar(cliente: ClienteEmpresa) {
     setProcesando(cliente.usuario_id);
@@ -793,12 +776,6 @@ function SeccionAcceso({
   }
 
   const yaAgregados = useMemo(() => new Set(accesos.map((a) => a.usuario_id)), [accesos]);
-  const candidatos = useMemo(() => {
-    const termino = busqueda.trim().toLocaleLowerCase("es");
-    return (clientes ?? []).filter(
-      (c) => !yaAgregados.has(c.usuario_id) && (!termino || c.nombre.toLocaleLowerCase("es").includes(termino)),
-    );
-  }, [clientes, busqueda, yaAgregados]);
 
   const Icono = ICONO_CRITERIO[catalogo.criterio] ?? Users;
   const ayuda = CRITERIOS.find((c) => c.valor === catalogo.criterio)?.ayuda;
@@ -835,7 +812,7 @@ function SeccionAcceso({
             <p className="text-xs text-muted-foreground">Clientes invitados uno a uno.</p>
           </div>
           {esDueno && !eligiendo ? (
-            <button type="button" onClick={abrirSelector} className={CLASE_BOTON_PRIMARIO}>
+            <button type="button" onClick={() => setEligiendo(true)} className={CLASE_BOTON_PRIMARIO}>
               <UserPlus className="h-4 w-4" /> Dar acceso
             </button>
           ) : null}
@@ -845,7 +822,7 @@ function SeccionAcceso({
           <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-3 dark:bg-primary/10">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-medium">Elige a quién darle acceso</p>
-              <button type="button" onClick={() => { setEligiendo(false); setBusqueda(""); }} aria-label="Cerrar selector" className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+              <button type="button" onClick={() => setEligiendo(false)} aria-label="Cerrar selector" className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -853,45 +830,33 @@ function SeccionAcceso({
               <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               Solo aparecen compradores que ya cotizaron o compraron con tu empresa. Al darle acceso le llega una notificación.
             </p>
-            <div className="relative mb-2">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input className={`${CLASE_INPUT} pl-8`} placeholder="Buscar por nombre" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-            </div>
-            {cargandoClientes ? (
-              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-            ) : (clientes ?? []).length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                Todavía no tienes clientes en Zarpi. Cuando un comprador te envíe una solicitud o cierre una orden contigo, podrás invitarlo.
-              </p>
-            ) : candidatos.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                {busqueda ? "Ningún cliente coincide con la búsqueda." : "Todos tus clientes ya tienen acceso manual."}
-              </p>
-            ) : (
-              <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border bg-white">
-                {candidatos.map((c) => (
-                  <li key={c.usuario_id} className="flex items-center gap-3 px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{c.nombre}</p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <InsigniaTier tier={c.tier} />
-                        {c.ordenes_con_empresa > 0
-                          ? `${c.ordenes_con_empresa} ${c.ordenes_con_empresa === 1 ? "orden" : "órdenes"} contigo`
-                          : "Sin órdenes aún"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => dar(c)}
-                      disabled={procesando !== null}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-60"
-                    >
-                      {procesando === c.usuario_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Dar acceso
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <Autocompletar<ClienteEmpresa>
+              buscar={(q) => catalogosService.clientes(q)}
+              minimo={0}
+              placeholder="Busca por nombre o correo"
+              excluir={yaAgregados}
+              disabled={procesando !== null}
+              onSeleccionar={(c) => void dar(c)}
+              obtenerClave={(c) => c.usuario_id}
+              textoSinResultados="Ningún cliente coincide. Solo aparecen compradores que ya cotizaron o compraron con tu empresa."
+              renderOpcion={(c, q) => (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium"><Resaltar texto={c.nombre} consulta={q} /></p>
+                    <p className="truncate text-xs text-muted-foreground">{c.email_parcial}</p>
+                  </div>
+                  <span className="flex shrink-0 flex-col items-end gap-0.5 text-[11px] text-muted-foreground">
+                    <InsigniaTier tier={c.tier} />
+                    {c.ordenes_con_empresa > 0
+                      ? `${c.ordenes_con_empresa} ${c.ordenes_con_empresa === 1 ? "orden" : "órdenes"} contigo`
+                      : "Sin órdenes aún"}
+                  </span>
+                </div>
+              )}
+            />
+            {procesando !== null ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Dando acceso…</p>
+            ) : null}
           </div>
         ) : null}
 

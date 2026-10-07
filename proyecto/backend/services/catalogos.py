@@ -115,6 +115,8 @@ def clientes_de_empresa(db: Session, importador_id: str) -> List[Dict]:
             {
                 "usuario_id": u.id,
                 "nombre": " ".join(x for x in (u.nombre, u.apellido) if x) or u.email.split("@")[0],
+                # Solo para buscar en el servidor; no sale en la respuesta.
+                "_email": u.email,
                 "tier": u.tier or TierCotizante.bronze.value,
                 "ordenes_con_empresa": int(ordenes.get(u.id, 0)),
             }
