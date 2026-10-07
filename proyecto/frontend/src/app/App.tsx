@@ -1532,21 +1532,36 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
-      <div/>
+      {/* LADO IZQUIERDO */}
+      <div className="flex items-center">
+        {authUser?.rol === "solicitante" && (
+          <span
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"
+            title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.)."
+          >
+            <WalletCards className="h-3.5 w-3.5" />
+            {creditos}
+          </span>
+        )}
+      </div>
+
+      {/* LADO DERECHO */}
       <div className="flex items-center gap-1">
         <div className="relative">
           <button onClick={handler} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <Bell className="w-4 h-4"/>
           </button>
-          {count>0&&<span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">{count>9?"9+":count}</span>}
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">
+              {count > 9 ? "9+" : count}
+            </span>
+          )}
         </div>
+
         <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
-        {authUser?.rol === "solicitante" && (
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles">
-            <WalletCards className="h-3.5 w-3.5" />{creditos}
-          </span>
-        )}
-        {showHelp&&<NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
+
+        {showHelp && <NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
+
         <button
           onClick={toggleTheme}
           title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
@@ -1555,13 +1570,17 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
         >
           {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
         </button>
+
         <div className="w-px h-5 bg-border mx-2"/>
+
         <div className="flex items-center gap-2.5">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-medium text-foreground leading-tight">{displayName}</p>
             <p className="text-xs text-muted-foreground leading-tight">{displayCompany}</p>
           </div>
-          <button onClick={profileHandler} title="Editar perfil"><Avatar initials={displayInitials} size="md" src={displayPhotoUrl?resolveApiUrl(displayPhotoUrl):undefined}/></button>
+          <button onClick={profileHandler} title="Editar perfil">
+            <Avatar initials={displayInitials} size="md" src={displayPhotoUrl ? resolveApiUrl(displayPhotoUrl) : undefined}/>
+          </button>
         </div>
       </div>
     </header>
@@ -2268,7 +2287,13 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
           <div>
             <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
             <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-3"><h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1><span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"><WalletCards className="h-3.5 w-3.5" />{creditos} créditos</span></div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.).">
+                  <WalletCards className="h-3.5 w-3.5"/>
+                  {creditos} créditos
+                </span>
+              </div>
               <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
