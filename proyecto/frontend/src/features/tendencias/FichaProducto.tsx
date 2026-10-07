@@ -9,6 +9,7 @@ import {
   Maximize2,
   Megaphone,
   Plane,
+  PlayCircle,
   Ship,
   ShieldAlert,
   X,
@@ -16,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { VideoAdaptable } from "@/app/components/media/VideoAdaptable";
 import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
 import {
   tendenciasService,
@@ -60,10 +62,65 @@ function hoyLocal(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function Galeria({ producto }: { producto: ProductoTendencia }) {
+/** Video (si lo hay) y fotos del producto. El video va primero. */
+function Galeria({ producto, edicionId }: { producto: ProductoTendencia; edicionId: string | null }) {
+  const tieneVideo = Boolean(producto.video_horizontal || producto.video_vertical);
   const [indice, setIndice] = useState(0);
+  const [verVideo, setVerVideo] = useState(tieneVideo);
   const fotos = producto.fotos.slice(0, 5);
   const actual = fotos[Math.min(indice, fotos.length - 1)];
+
+  const miniaturas = (tieneVideo || fotos.length > 1) && (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {tieneVideo && (
+        <button
+          type="button"
+          onClick={() => setVerVideo(true)}
+          aria-label="Ver video"
+          aria-current={verVideo}
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-2 bg-[#0F0F0F] text-white transition-colors ${
+            verVideo ? "border-primary dark:border-accent" : "border-transparent opacity-70 hover:opacity-100"
+          }`}
+        >
+          <PlayCircle className="h-6 w-6" />
+        </button>
+      )}
+      {fotos.map((foto, i) => (
+        <button
+          key={`${foto}-${i}`}
+          type="button"
+          onClick={() => { setIndice(i); setVerVideo(false); }}
+          aria-label={`Foto ${i + 1}`}
+          aria-current={!verVideo && i === indice}
+          className={`shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
+            !verVideo && i === indice ? "border-primary dark:border-accent" : "border-transparent opacity-70 hover:opacity-100"
+          }`}
+        >
+          <ImagenArchivo src={foto} alt={`${producto.nombre} ${i + 1}`} className="h-14 w-14" />
+        </button>
+      ))}
+    </div>
+  );
+
+  if (verVideo && tieneVideo) {
+    return (
+      <div className="space-y-2">
+        <VideoAdaptable
+          horizontal={producto.video_horizontal}
+          vertical={producto.video_vertical}
+          mensajeSinAcceso="Necesitas una suscripción vigente a Tendencias para ver este video."
+          onReproducir={(encuadre) => {
+            void tendenciasService.registrarEvento("video_reproducido", {
+              producto_id: producto.id,
+              encuadre,
+              ...(edicionId ? { edicion_id: edicionId } : {}),
+            });
+          }}
+        />
+        {miniaturas}
+      </div>
+    );
+  }
 
   if (!actual) {
     return (
@@ -91,24 +148,7 @@ function Galeria({ producto }: { producto: ProductoTendencia }) {
           <Maximize2 className="h-4 w-4" />
         </span>
       </button>
-      {fotos.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {fotos.map((foto, i) => (
-            <button
-              key={`${foto}-${i}`}
-              type="button"
-              onClick={() => setIndice(i)}
-              aria-label={`Foto ${i + 1}`}
-              aria-current={i === indice}
-              className={`shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
-                i === indice ? "border-primary dark:border-accent" : "border-transparent opacity-70 hover:opacity-100"
-              }`}
-            >
-              <ImagenArchivo src={foto} alt={`${producto.nombre} ${i + 1}`} className="h-14 w-14" />
-            </button>
-          ))}
-        </div>
-      )}
+      {miniaturas}
     </div>
   );
 }
@@ -234,7 +274,7 @@ export function FichaProducto({
         </header>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-6">
-          <Galeria producto={producto} />
+          <Galeria producto={producto} edicionId={edicionId} />
 
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{producto.categoria_visible}</p>

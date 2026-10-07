@@ -12,7 +12,7 @@ Transporte = Literal["mar", "aereo"]
 # solicitud creada) los registra el servidor cuando ocurren.
 EventoCliente = Literal[
     "edicion_vista", "producto_visto", "modo_cambiado", "pedir_propuestas_clic",
-    "calendario_visto", "aviso_abierto",
+    "calendario_visto", "aviso_abierto", "video_reproducido",
 ]
 
 
@@ -69,6 +69,9 @@ class ProductoDatos(BaseModel):
     linea_producto: Optional[str] = Field(None, max_length=100)
     pais_origen: str = Field("China", min_length=1, max_length=100)
     fotos: List[str] = Field(default_factory=list, max_length=MAX_FOTOS_POR_PRODUCTO)
+    # Rutas de gestión documental (`/documentos/archivos/{id}/descargar`).
+    video_horizontal: Optional[str] = Field(None, max_length=500)
+    video_vertical: Optional[str] = Field(None, max_length=500)
     por_que_ahora: str = Field(..., min_length=1, max_length=220)
     temporada_id: Optional[str] = None
     fecha_en_bodega: Optional[date] = None
@@ -84,7 +87,7 @@ class ProductoDatos(BaseModel):
     que_pedir_en_cotizacion: Optional[str] = None
 
     @field_validator(
-        "linea_producto", "temporada_id", "guia_para_quien", "guia_donde", "guia_contenido",
+        "video_horizontal", "video_vertical", "linea_producto", "temporada_id", "guia_para_quien", "guia_donde", "guia_contenido",
         "que_pedir_en_cotizacion",
     )
     @classmethod
@@ -164,6 +167,8 @@ class EventoTendencias(BaseModel):
     edicion_id: Optional[str] = None
     producto_id: Optional[str] = None
     modo: Optional[Transporte] = None
+    # Para `video_reproducido`: qué versión se vio.
+    encuadre: Optional[Literal["horizontal", "vertical"]] = None
 
 
 class Guardar(BaseModel):

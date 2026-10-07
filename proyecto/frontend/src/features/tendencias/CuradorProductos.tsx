@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Loader2, Plus, Save, Search, ShieldAlert, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Film, Loader2, Monitor, Plus, Save, Search, ShieldAlert, Smartphone, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
 import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { ProtectedVideoPlayer, VIDEO_FORMATS_LABEL, VIDEO_UPLOAD_ACCEPT } from "@/app/components/media/ReproductorVideo";
 import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
 import { toApiPath } from "@/services/api-client";
 import type { BackendArchivoItem } from "@/services/business.service";
@@ -27,6 +28,9 @@ type Formulario = {
   linea_producto: string;
   pais_origen: string;
   fotos: string[];
+  /** "" = sin video en ese encuadre. */
+  video_horizontal: string;
+  video_vertical: string;
   por_que_ahora: string;
   /** "" = Todo el año. */
   temporada_id: string;
@@ -44,11 +48,61 @@ type Formulario = {
 };
 
 const VACIO: Formulario = {
-  nombre: "", categoria_visible: "", linea_producto: "", pais_origen: "China", fotos: [], por_que_ahora: "",
+  nombre: "", categoria_visible: "", linea_producto: "", pais_origen: "China", fotos: [], video_horizontal: "", video_vertical: "", por_que_ahora: "",
   temporada_id: "", fecha_en_bodega: "", transporte_sugerido: "mar", dias_mar: "", dias_aereo: "",
   revisar_requisitos: false, para_negocio: false, guia_para_quien: "", guia_angulos: ["", "", ""], guia_donde: "",
   guia_contenido: "", que_pedir_en_cotizacion: "",
 };
+
+/** Un encuadre de video: vista previa si ya hay uno, o el botón para subirlo. */
+function EspacioVideo({
+  titulo, detalle, icono: Icono, url, vertical, onCambiar,
+}: {
+  titulo: string;
+  detalle: string;
+  icono: typeof Monitor;
+  url: string;
+  vertical: boolean;
+  onCambiar: (url: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border-2 border-dashed border-border p-3">
+      <p className="flex items-center gap-1.5 text-sm font-medium"><Icono className="h-4 w-4 text-primary dark:text-accent" />{titulo}</p>
+      <p className="mb-2 text-xs text-muted-foreground">{detalle}</p>
+      {url ? (
+        <div className="space-y-2">
+          <div className={`mx-auto overflow-hidden rounded-lg bg-black ${vertical ? "aspect-[9/16] h-64" : "aspect-video w-full"}`}>
+            <ProtectedVideoPlayer key={url} url={url} className="h-full w-full object-contain" />
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <DocumentUploadButton
+              label="Reemplazar"
+              accept={VIDEO_UPLOAD_ACCEPT}
+              origen="tendencias"
+              onUploaded={(a) => onCambiar(toApiPath(a.storage_url || `/documentos/archivos/${a.id}/descargar`))}
+              onError={(m) => toast.error(m)}
+            />
+            <button type="button" onClick={() => onCambiar("")} className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-3 text-xs font-medium text-destructive hover:bg-destructive/10">
+              <X className="h-3.5 w-3.5" /> Quitar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <Film className="h-6 w-6 text-muted-foreground/50" />
+          <p className="text-xs text-muted-foreground">{VIDEO_FORMATS_LABEL}</p>
+          <DocumentUploadButton
+            label="Subir video"
+            accept={VIDEO_UPLOAD_ACCEPT}
+            origen="tendencias"
+            onUploaded={(a) => onCambiar(toApiPath(a.storage_url || `/documentos/archivos/${a.id}/descargar`))}
+            onError={(m) => toast.error(m)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function formularioDe(p: ProductoCurador): Formulario {
   const angulos = [...(p.guia_angulos ?? [])];
@@ -59,6 +113,8 @@ function formularioDe(p: ProductoCurador): Formulario {
     linea_producto: p.linea_producto ?? "",
     pais_origen: p.pais_origen || "China",
     fotos: [...p.fotos],
+    video_horizontal: p.video_horizontal ?? "",
+    video_vertical: p.video_vertical ?? "",
     por_que_ahora: p.por_que_ahora,
     temporada_id: p.temporada_id ?? "",
     fecha_en_bodega: p.fecha_en_bodega_explicita ?? "",
@@ -90,6 +146,8 @@ function datosDe(f: Formulario): ProductoDatos {
     linea_producto: nulo(f.linea_producto),
     pais_origen: f.pais_origen.trim() || "China",
     fotos: f.fotos,
+    video_horizontal: f.video_horizontal || null,
+    video_vertical: f.video_vertical || null,
     por_que_ahora: f.por_que_ahora.trim(),
     temporada_id: f.temporada_id || null,
     fecha_en_bodega: f.fecha_en_bodega || null,
@@ -373,6 +431,35 @@ function EditorProducto({ id, onVolver }: { id: string | null; onVolver: (guarda
           {form.fotos.length === 0 && (
             <p className="text-xs text-amber-700 dark:text-amber-300">Sin fotos se puede guardar, pero no se puede programar una edición que lo incluya.</p>
           )}
+        </section>
+
+        {/* Video */}
+        <section className={`${CARD} space-y-3 lg:col-span-2`}>
+          <div>
+            <h3 className="text-base font-semibold">Video <span className="text-xs font-normal text-muted-foreground">(opcional)</span></h3>
+            <p className="text-sm text-muted-foreground">
+              Sube la versión horizontal, la vertical o las dos. En computador se muestra la horizontal y en celular la
+              vertical; si solo subes una, se ve esa en todas las pantallas. En el destacado se reproduce directo en la tarjeta.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <EspacioVideo
+              titulo="Horizontal · computador"
+              detalle="16:9, por ejemplo 1920 × 1080"
+              icono={Monitor}
+              url={form.video_horizontal}
+              vertical={false}
+              onCambiar={(v) => set("video_horizontal", v)}
+            />
+            <EspacioVideo
+              titulo="Vertical · celular"
+              detalle="9:16, por ejemplo 1080 × 1920"
+              icono={Smartphone}
+              url={form.video_vertical}
+              vertical
+              onCambiar={(v) => set("video_vertical", v)}
+            />
+          </div>
         </section>
 
         {/* Fechas */}

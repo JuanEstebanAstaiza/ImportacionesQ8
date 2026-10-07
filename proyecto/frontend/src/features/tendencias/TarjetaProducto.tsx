@@ -1,8 +1,9 @@
 import type { KeyboardEvent, MouseEvent } from "react";
-import { Bookmark, ImageOff, Sparkles } from "lucide-react";
+import { Bookmark, ImageOff, PlayCircle, Sparkles } from "lucide-react";
 
 import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import type { ProductoTendencia } from "@/services/tendencias.service";
+import { VideoAdaptable } from "@/app/components/media/VideoAdaptable";
+import { tendenciasService, type ProductoTendencia } from "@/services/tendencias.service";
 import { EstadoChip, EtiquetaRequisitos } from "@/features/tendencias/ui";
 
 /**
@@ -18,7 +19,13 @@ type TarjetaProductoProps = {
   /** El destacado de la edición: más grande y con el botón de pedir propuestas a la vista. */
   destacado?: boolean;
   onPedirPropuestas?: () => void;
+  /** Para atribuir la reproducción del video a la edición en las métricas. */
+  edicionId?: string | null;
 };
+
+function tieneVideo(producto: ProductoTendencia): boolean {
+  return Boolean(producto.video_horizontal || producto.video_vertical);
+}
 
 function Foto({ producto, className }: { producto: ProductoTendencia; className: string }) {
   const foto = producto.fotos[0];
@@ -58,6 +65,7 @@ export function TarjetaProducto({
   onAlternarGuardado,
   destacado = false,
   onPedirPropuestas,
+  edicionId = null,
 }: TarjetaProductoProps) {
   const alTeclear = (e: KeyboardEvent) => {
     if (e.target !== e.currentTarget) return;
@@ -77,7 +85,31 @@ export function TarjetaProducto({
         className="group grid cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-[#18171C] text-white transition-colors hover:border-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EDF953] sm:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]"
       >
         <div className="relative">
-          <Foto producto={producto} className="aspect-square w-full sm:h-full" />
+          {tieneVideo(producto) ? (
+            // El video del destacado se reproduce ahí mismo; los clics sobre él
+            // no abren la ficha.
+            <div
+              className="flex h-full items-center bg-black pt-12 sm:pt-0"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <VideoAdaptable
+                className="w-full p-2"
+                horizontal={producto.video_horizontal}
+                vertical={producto.video_vertical}
+                mensajeSinAcceso="Necesitas una suscripción vigente a Tendencias para ver este video."
+                onReproducir={(encuadre) => {
+                  void tendenciasService.registrarEvento("video_reproducido", {
+                    producto_id: producto.id,
+                    encuadre,
+                    ...(edicionId ? { edicion_id: edicionId } : {}),
+                  });
+                }}
+              />
+            </div>
+          ) : (
+            <Foto producto={producto} className="aspect-square w-full sm:h-full" />
+          )}
           <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-[#EDF953] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#16151B]">
             <Sparkles className="h-3 w-3" />
             Destacado
@@ -130,6 +162,11 @@ export function TarjetaProducto({
     >
       <div className="relative">
         <Foto producto={producto} className="aspect-square w-full" />
+        {tieneVideo(producto) && (
+          <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
+            <PlayCircle className="h-3.5 w-3.5" /> Video
+          </span>
+        )}
         <div className="absolute right-2.5 top-2.5">
           <BotonGuardar guardado={guardado} onClick={onAlternarGuardado} />
         </div>

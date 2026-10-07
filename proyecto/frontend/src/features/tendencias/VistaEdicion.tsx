@@ -147,6 +147,7 @@ export function VistaEdicion({
                 onAbrir={() => onAbrir(destacado)}
                 onAlternarGuardado={() => onAlternarGuardado(destacado)}
                 onPedirPropuestas={() => onPedirPropuestas(destacado)}
+                edicionId={edicion.id}
               />
             )}
             {resto.length > 0 && (

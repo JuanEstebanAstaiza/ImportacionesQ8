@@ -87,16 +87,27 @@ La empresa solo puede agregar a mano a compradores que ya tuvieron trato con ell
 
 `GET /tendencias/curaduria/metricas` responde por edición y por producto: vistas, guardados, clics en pedir propuestas, **solicitudes** (la métrica principal) y cuántas terminaron en orden.
 
-Eventos (bitácora `eventos`, tipo `tendencias.*`): `edicion_vista`, `producto_visto`, `modo_cambiado`, `pedir_propuestas_clic`, `calendario_visto`, `aviso_abierto` (los manda el navegador por `POST /tendencias/eventos`); `producto_guardado`, `guardado_quitado`, `aviso_suscrito` (los registra el servidor).
+Eventos (bitácora `eventos`, tipo `tendencias.*`): `edicion_vista`, `producto_visto`, `modo_cambiado`, `pedir_propuestas_clic`, `calendario_visto`, `aviso_abierto`, `video_reproducido` (los manda el navegador por `POST /tendencias/eventos`); `producto_guardado`, `guardado_quitado`, `aviso_suscrito` (los registra el servidor).
 
 ---
+
+## Videos de los productos
+
+Cada producto de Tendencias admite un video en dos encuadres, ambos opcionales (migración `20261007_0029`):
+
+| Campo | Encuadre | Se muestra en |
+|-------|----------|---------------|
+| `video_horizontal` | 16:9 | Pantallas anchas (computador) |
+| `video_vertical` | 9:16 | Celulares y tabletas en vertical |
+
+Si solo hay uno, se muestra ese en todas las pantallas; si hay los dos, quien mira puede cambiar de versión. El video del **destacado** se reproduce directamente en su tarjeta; en los demás productos aparece primero en la galería de la ficha. El reproductor es el mismo de los cursos (`app/components/media/ReproductorVideo.tsx`), y el que elige el encuadre es `VideoAdaptable.tsx`. Cada reproducción registra el evento `tendencias.video_reproducido` con el encuadre visto.
 
 ## Fotos
 
 Las fotos se suben al módulo documental y se guardan como rutas `/documentos/archivos/{id}/descargar`. `GET /documentos/archivos/{id}/descargar` ahora deja verlas a:
 
 - la empresa que recibe una cotización (antes solo el comprador que la subió podía abrir sus fotos);
-- quien tiene acceso a Tendencias, si la foto es de un producto de Tendencias;
+- quien tiene acceso a Tendencias, si la foto o el video es de un producto de Tendencias;
 - los compradores que pueden ver el catálogo, si la foto es de un producto de un catálogo.
 
 Las cotizaciones también aceptan ahora hasta **10 fotos** del producto (`fotos_producto`, migración `20261006_0027`); `foto_producto` queda como portada.

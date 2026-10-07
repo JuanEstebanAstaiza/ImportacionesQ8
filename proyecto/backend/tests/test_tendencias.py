@@ -403,3 +403,51 @@ def test_aviso_se_envia_solo_a_suscritos_con_acceso(client, db_session, monkeypa
     _edicion_publicada(client, admin)
     assert enviados == [con_acceso.id]
     assert sin_acceso.id not in enviados
+
+
+# ── Videos ───────────────────────────────────────────────────────────────────
+
+def _video(db_session, owner_id):
+    from pathlib import Path
+    from uuid import uuid4
+    from models.documental import Archivo
+
+    archivo_id = str(uuid4())
+    ruta = Path("uploads/documentos") / f"{archivo_id}_clip.mp4"
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    db_session.add(Archivo(
+        id=archivo_id, owner_user_id=owner_id, nombre="clip.mp4", extension="mp4", mime_type="video/mp4",
+        tipo_recurso="video", size_bytes=12, storage_path=str(ruta),
+        storage_url=f"/documentos/archivos/{archivo_id}/descargar", origen="tendencias",
+    ))
+    db_session.commit()
+    return f"/documentos/archivos/{archivo_id}/descargar"
+
+
+def test_producto_con_video_horizontal_y_vertical(client, db_session):
+    curador, admin = _admin(db_session)
+    horizontal = _video(db_session, curador.id)
+    vertical = _video(db_session, curador.id)
+    p = _producto(client, admin, video_horizontal=horizontal, video_vertical=vertical)
+    assert (p["video_horizontal"], p["video_vertical"]) == (horizontal, vertical)
+    _edicion_publicada(client, admin, [p])
+
+    con_acceso, h_con = crear_usuario_con_token(db_session)
+    _, h_sin = crear_usuario_con_token(db_session)
+    svc.otorgar_acceso(db_session, usuario_id=con_acceso.id, dias=5, origen="cortesia")
+    db_session.commit()
+
+    producto = client.get("/tendencias/edicion-actual", headers=h_con).json()["edicion"]["productos"][0]
+    assert producto["video_vertical"] == vertical
+    assert client.get(vertical, headers=h_con).status_code == 200
+    assert client.get(horizontal, headers=h_sin).status_code == 403
+
+
+def test_quitar_un_video_lo_deja_vacio(client, db_session):
+    curador, admin = _admin(db_session)
+    p = _producto(client, admin, video_vertical=_video(db_session, curador.id))
+    datos = {k: p[k] for k in ("nombre", "categoria_visible", "linea_producto", "fotos", "por_que_ahora")}
+    r = client.put(f"/tendencias/curaduria/productos/{p['id']}", json={**datos, "video_vertical": "  "}, headers=admin)
+    assert r.status_code == 200, r.text
+    assert r.json()["video_vertical"] is None

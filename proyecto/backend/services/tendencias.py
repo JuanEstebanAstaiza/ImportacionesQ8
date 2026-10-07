@@ -9,7 +9,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, Iterable, List, Optional
 
-from sqlalchemy import String, func
+from sqlalchemy import String, func, or_
 from sqlalchemy.orm import Session
 
 from models.tendencias import (
@@ -249,6 +249,8 @@ def serializar_producto(
         "linea_producto": producto.linea_producto,
         "pais_origen": producto.pais_origen,
         "fotos": list(producto.fotos or []),
+        "video_horizontal": producto.video_horizontal,
+        "video_vertical": producto.video_vertical,
         "por_que_ahora": producto.por_que_ahora,
         "temporada": (
             {"id": temporada.id, "nombre": temporada.nombre, "fecha": temporada.fecha.isoformat()}
@@ -515,13 +517,18 @@ def enviar_aviso(db: Session, edicion: EdicionTendencias) -> int:
 # ── Fotos ────────────────────────────────────────────────────────────────────
 
 def es_foto_de_tendencias_visible(db: Session, archivo_id: str, usuario: Optional[Usuario]) -> bool:
-    """Las fotos de los productos las sube el curador; las ven quienes tienen
-    acceso a Tendencias."""
+    """Las fotos y los videos de los productos los sube el curador; los ven
+    quienes tienen acceso a Tendencias."""
     if usuario is None:
         return False
+    patron = f"%/{archivo_id}/%"
     referenciada = (
         db.query(ProductoTendencia.id)
-        .filter(func.cast(ProductoTendencia.fotos, String).like(f"%{archivo_id}%"))
+        .filter(or_(
+            func.cast(ProductoTendencia.fotos, String).like(f"%{archivo_id}%"),
+            ProductoTendencia.video_horizontal.like(patron),
+            ProductoTendencia.video_vertical.like(patron),
+        ))
         .first()
     )
     return referenciada is not None and tiene_acceso(db, usuario)

@@ -78,6 +78,11 @@ class ProductoTendencia(Base):
     linea_producto = Column(String(100), nullable=True)
     pais_origen = Column(String(100), nullable=False, default="China")
     fotos = Column(JSON, nullable=False, default=list)
+    # Video del producto en dos encuadres: el horizontal (16:9) se muestra en
+    # pantallas anchas y el vertical (9:16) en celulares. Ambos opcionales; si
+    # solo hay uno, se muestra ese en todas las pantallas.
+    video_horizontal = Column(String(500), nullable=True)
+    video_vertical = Column(String(500), nullable=True)
     por_que_ahora = Column(String(220), nullable=False)
     temporada_id = Column(String(36), ForeignKey("tendencias_temporadas.id"), nullable=True)
     fecha_en_bodega = Column(Date, nullable=True)

@@ -315,8 +315,9 @@ def cancelar_aviso(db: Session = Depends(get_db), usuario: Usuario = Depends(usu
 @router.post("/eventos", status_code=status.HTTP_204_NO_CONTENT)
 def evento_cliente(datos: sch.EventoTendencias, db: Session = Depends(get_db),
                    usuario: Usuario = Depends(con_acceso)):
+    extra = {k: v for k, v in {"modo": datos.modo, "encuadre": datos.encuadre}.items() if v}
     _evento(db, datos.tipo, usuario, edicion_id=datos.edicion_id, producto_id=datos.producto_id,
-            datos={"modo": datos.modo} if datos.modo else None)
+            datos=extra or None)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

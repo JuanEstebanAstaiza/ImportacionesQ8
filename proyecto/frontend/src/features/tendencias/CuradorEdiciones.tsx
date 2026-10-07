@@ -350,6 +350,13 @@ function VistaPreviaMovil({ portada, numero, productos }: {
         {grande && <p className="text-xs leading-snug text-white/70">{p.por_que_ahora}</p>}
         <EstadoProductoChip estado={p.fechas.estado} texto={p.fechas.estado_texto} />
         {p.revisar_requisitos && <p className="text-[10px] text-amber-300">Revisar requisitos</p>}
+        {(p.video_vertical || p.video_horizontal) && (
+          // La vista previa es la de celular: avisa qué versión del video verá.
+          <p className="text-[10px] text-white/60">
+            ▶ {p.video_vertical ? "Video vertical" : "Video horizontal (no hay versión vertical)"}
+            {grande ? " · se reproduce en la tarjeta" : ""}
+          </p>
+        )}
       </div>
     </div>
   );

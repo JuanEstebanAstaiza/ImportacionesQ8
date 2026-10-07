@@ -51,6 +51,10 @@ export interface ProductoTendencia {
   pais_origen: string;
   /** Rutas de archivo (`/documentos/archivos/{id}/descargar`); requieren sesión. */
   fotos: string[];
+  /** Video 16:9 para pantallas anchas. */
+  video_horizontal: string | null;
+  /** Video 9:16 para celulares. Si falta uno, se muestra el otro en todas las pantallas. */
+  video_vertical: string | null;
   por_que_ahora: string;
   temporada: TemporadaResumen | null;
   transporte_sugerido: ModoTransporte;
@@ -162,7 +166,8 @@ export type EventoCliente =
   | "modo_cambiado"
   | "pedir_propuestas_clic"
   | "calendario_visto"
-  | "aviso_abierto";
+  | "aviso_abierto"
+  | "video_reproducido";
 
 // ── Curaduría ────────────────────────────────────────────────────────────────
 
@@ -192,6 +197,8 @@ export interface ProductoDatos {
   linea_producto?: string | null;
   pais_origen?: string;
   fotos: string[];
+  video_horizontal?: string | null;
+  video_vertical?: string | null;
   por_que_ahora: string;
   temporada_id?: string | null;
   fecha_en_bodega?: string | null;
@@ -295,7 +302,7 @@ export const tendenciasService = {
   /** Medición: nunca rompe la pantalla si falla. */
   registrarEvento: (
     tipo: EventoCliente,
-    datos: { edicion_id?: string; producto_id?: string; modo?: ModoTransporte } = {},
+    datos: { edicion_id?: string; producto_id?: string; modo?: ModoTransporte; encuadre?: "horizontal" | "vertical" } = {},
   ) => apiRequest<void>("/tendencias/eventos", { method: "POST", body: { tipo, ...datos } }).catch(() => undefined),
 
   // Curador
