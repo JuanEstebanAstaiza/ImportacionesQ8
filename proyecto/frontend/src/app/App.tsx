@@ -11532,7 +11532,7 @@ export default function App() {
     }
     const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
     if (!publicScreens.includes(screen)) {
-      setScreen("login");
+      setScreen("landing");
     }
   }, [isAuthenticated, isInitializing, screen]);
 
