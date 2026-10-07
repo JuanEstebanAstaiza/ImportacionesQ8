@@ -13,9 +13,13 @@ export interface LegalSection {
 
 export interface LegalDocument {
   titulo: string;
-  /** Una frase que resume el documento, bajo el título. */
-  resumen: string;
+  /** Una frase que resume el documento, bajo el título (los Términos no la llevan). */
+  resumen?: string;
   version: string;
   vigenteDesde: string;
+  /** Encabezado del cuadro final con los datos de la empresa. */
+  tituloDatos: string;
+  /** Los Términos incluyen la matrícula mercantil en ese cuadro. */
+  mostrarMatricula?: boolean;
   secciones: LegalSection[];
 }

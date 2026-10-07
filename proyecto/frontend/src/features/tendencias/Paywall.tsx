@@ -20,6 +20,7 @@ import {
 } from "@/services/tendencias.service";
 import { PortadaEdicion } from "@/features/tendencias/PortadaEdicion";
 import { fechaInstante, mensajeError, pesosCop } from "@/features/tendencias/formato";
+import { EMPRESA } from "@/features/legal/empresa";
 import { PieInformativo } from "@/features/tendencias/ui";
 
 /**
@@ -198,7 +199,7 @@ export function Paywall({ acceso, onAccesoActivado }: PaywallProps) {
               </p>
               <p className="text-sm">
                 Estás en un entorno local sin pasarela de pagos. Confirma el pago de{" "}
-                <strong>{pesosCop(checkout.monto_cop)}</strong> por {checkout.dias} días como si Wompi lo hubiera aprobado.
+                <strong>{pesosCop(checkout.monto_cop)}</strong> por {checkout.dias} días como si {EMPRESA.pasarela} lo hubiera aprobado.
               </p>
               <button
                 type="button"
@@ -226,7 +227,7 @@ export function Paywall({ acceso, onAccesoActivado }: PaywallProps) {
                 <span className="text-sm text-muted-foreground"> / {acceso.dias_suscripcion} días</span>
               </p>
               <p className="text-sm text-muted-foreground">
-                Pago único con Wompi. Al terminar el periodo puedes renovarlo; no se cobra solo.
+                Pago único con {EMPRESA.pasarela}. Al terminar el periodo puedes renovarlo; no se cobra solo.
               </p>
               <button
                 type="button"

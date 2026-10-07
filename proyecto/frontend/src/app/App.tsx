@@ -6057,7 +6057,7 @@ function PagosScreen({sb}:{sb:SidebarCtrl}) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración Wompi pendiente</span></div></div>
+          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración de pagos pendiente</span></div></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{[["Total pagado","$16,700 USD","text-emerald-600"],["Pendiente","$3,200 USD","text-orange-600"],["En liberación parcial","$8,900 USD","text-blue-600"]].map(([l,v,c])=><Card key={l as string} padding="md"><p className="text-xs text-muted-foreground">{l as string}</p><p className={clsx("text-2xl font-semibold mt-1",c as string)}>{v as string}</p></Card>)}</div>
           <Card padding="none"><div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><p className="text-sm font-semibold">Historial de pagos</p><span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">Visual mockup</span></div>
             <table className="w-full text-sm"><thead><tr className="border-b border-border">{["ID","Concepto","Fecha","Estado","Monto"].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>)}</tr></thead>
@@ -8937,7 +8937,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             </div>
           </div>
           <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center space-y-1">
-            <p>{EMPRESA.razonSocial} · {EMPRESA.nit} · {EMPRESA.domicilio}</p>
+            <p>{EMPRESA.razonSocial} · NIT {EMPRESA.nit} · {EMPRESA.domicilio}</p>
             <p>{EMPRESA.telefono} · <a href={`mailto:${EMPRESA.correo}`} className="hover:text-accent transition-colors">{EMPRESA.correo}</a></p>
             <p>© 2026 Zarpi. Todos los derechos reservados.</p>
           </div>

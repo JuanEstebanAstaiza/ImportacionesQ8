@@ -78,7 +78,7 @@ export function LegalPolicyScreen({ page, onBack, onOpen }: LegalPolicyScreenPro
         </nav>
 
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{documento.titulo}</h1>
-        <p className="text-muted-foreground mt-3">{documento.resumen}</p>
+        {documento.resumen && <p className="text-muted-foreground mt-3">{documento.resumen}</p>}
         <p className="text-xs text-muted-foreground mt-3">
           Versión {documento.version} · Vigente desde el {documento.vigenteDesde}
         </p>
@@ -121,10 +121,13 @@ export function LegalPolicyScreen({ page, onBack, onOpen }: LegalPolicyScreenPro
         </div>
 
         <div className="mt-14 p-6 rounded-xl border border-border text-sm">
-          <p className="font-semibold text-foreground mb-3">Datos del prestador del servicio</p>
+          <p className="font-semibold text-foreground mb-3">{documento.tituloDatos}</p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-muted-foreground">
             <dt>Razón social</dt><dd className="text-foreground">{EMPRESA.razonSocial}</dd>
             <dt>NIT</dt><dd className="text-foreground">{EMPRESA.nit}</dd>
+            {documento.mostrarMatricula && (
+              <><dt>Matrícula mercantil</dt><dd className="text-foreground">{EMPRESA.matricula}, {EMPRESA.camaraComercio}</dd></>
+            )}
             <dt>Domicilio</dt><dd className="text-foreground">{EMPRESA.domicilio}</dd>
             <dt>Teléfono</dt><dd className="text-foreground">{EMPRESA.telefono}</dd>
             <dt>Correo</dt>

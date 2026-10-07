@@ -54,7 +54,7 @@ async def politica_pagos_reembolsos():
     """Versión vigente de la política de pagos, cancelaciones y reembolsos."""
     return _documento(
         "Política de Pagos, Cancelaciones y Reembolsos",
-        "Qué cobra Zarpi, cómo se paga a través de Wompi y cuándo proceden el "
+        "Qué cobra Zarpi, cómo se paga a través de ePayco y cuándo proceden el "
         "retracto, la reversión del pago y los reembolsos.",
         "/politica-de-pagos",
     )
