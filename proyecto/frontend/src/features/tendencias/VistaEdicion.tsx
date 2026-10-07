@@ -11,12 +11,6 @@ import { TarjetaProducto } from "@/features/tendencias/TarjetaProducto";
 import { ESTADOS_PIDELO_YA, fechaLarga } from "@/features/tendencias/formato";
 import { EstadoChip } from "@/features/tendencias/ui";
 
-/**
- * Una edición vista por el comprador: portada, "Pide a tiempo" (solo en la
- * edición actual), filtros, el destacado en grande y el resto en tarjetas.
- * La usan la edición de la semana y las ediciones anteriores.
- */
-
 type Filtro = "todos" | "pidelo_ya" | "para_negocio" | "guardados";
 
 const FILTROS: { clave: Filtro; etiqueta: string }[] = [
@@ -28,7 +22,6 @@ const FILTROS: { clave: Filtro; etiqueta: string }[] = [
 
 type VistaEdicionProps = {
   edicion: EdicionCompleta;
-  /** Próximas temporadas que todavía alcanzan; solo para la edición actual. */
   pideATiempo?: TemporadaConLimites[];
   estaGuardado: (producto: ProductoTendencia) => boolean;
   onAlternarGuardado: (producto: ProductoTendencia) => void;
@@ -38,7 +31,7 @@ type VistaEdicionProps = {
 
 function PideATiempo({ temporadas }: { temporadas: TemporadaConLimites[] }) {
   return (
-    <section className="rounded-xl border border-border bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm text-card-foreground sm:p-5">
       <h2 className="flex items-center gap-2 text-base font-bold">
         <CalendarClock className="h-4 w-4 text-primary dark:text-accent" />
         Pide a tiempo
@@ -109,7 +102,8 @@ export function VistaEdicion({
 
       {pideATiempo && pideATiempo.length > 0 && <PideATiempo temporadas={pideATiempo} />}
 
-      <section className="rounded-2xl bg-[#0F0F0F] p-4 text-white sm:p-6">
+      {/* SECCIÓN ADAPTADA A MODO CLARO Y OSCURO */}
+      <section className="rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-6">
         <div className="mb-5 flex flex-wrap items-center gap-2">
           {FILTROS.map(({ clave, etiqueta }) => {
             const cuantos = productos.filter((p) => pasaFiltro(p, clave)).length;
@@ -121,18 +115,20 @@ export function VistaEdicion({
                 onClick={() => setFiltro(clave)}
                 aria-pressed={activo}
                 className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors ${
-                  activo ? "bg-[#EDF953] text-[#16151B]" : "border border-white/20 text-white/80 hover:border-white/50 hover:text-white"
+                  activo
+                    ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
+                    : "border border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground"
                 }`}
               >
                 {etiqueta}
-                <span className={activo ? "opacity-70" : "text-white/50"}>{cuantos}</span>
+                <span className={activo ? "opacity-80" : "text-muted-foreground/70"}>{cuantos}</span>
               </button>
             );
           })}
         </div>
 
         {visibles.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-white/15 px-4 py-10 text-center text-sm text-white/60">
+          <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
             {filtro === "guardados"
               ? "No has guardado productos de esta edición. Usa el marcador de cada tarjeta para guardarlos."
               : "Ningún producto de esta edición entra en este filtro."}
