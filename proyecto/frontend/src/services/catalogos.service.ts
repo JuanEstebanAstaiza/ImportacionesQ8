@@ -67,6 +67,8 @@ export interface ClienteEmpresa {
   nombre: string;
   tier: TierCotizante;
   ordenes_con_empresa: number;
+  /** «ma•••••ez@gmail.com»: para distinguir a dos clientes, sin revelar el correo. */
+  email_parcial: string;
 }
 
 export interface AccesoManual {
@@ -93,7 +95,9 @@ export const catalogosService = {
   borrarProducto: (catalogoId: string, productoId: string) =>
     apiRequest<void>(`/catalogos/${catalogoId}/productos/${productoId}`, { method: "DELETE" }),
   /** Compradores que ya cotizaron con la empresa: entre ellos se elige a mano. */
-  clientes: () => apiRequest<ClienteEmpresa[]>("/catalogos/clientes"),
+  /** `q` busca por nombre o por correo (completo o en parte). */
+  clientes: (q?: string) =>
+    apiRequest<ClienteEmpresa[]>(`/catalogos/clientes${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   accesos: (catalogoId: string) => apiRequest<AccesoManual[]>(`/catalogos/${catalogoId}/accesos`),
   darAcceso: (catalogoId: string, usuarioId: string) =>
     apiRequest<{ usuario_id: string }>(`/catalogos/${catalogoId}/accesos`, { method: "POST", body: { usuario_id: usuarioId } }),

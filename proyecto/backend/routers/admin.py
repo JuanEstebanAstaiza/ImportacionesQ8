@@ -584,6 +584,52 @@ async def actualizar_estado_importador(
 
 # ==================== Monitoreo de usuarios ====================
 
+@router.get("/usuarios/buscar")
+async def buscar_usuarios(
+    q: str = Query(..., min_length=1, max_length=120, description="Parte del correo, nombre o apellido"),
+    rol: Optional[str] = Query(None, description="Restringir a un rol"),
+    solo_activos: bool = Query(True),
+    limite: int = Query(8, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Autocompletado de usuarios para los campos del panel que piden el correo
+    de una cuenta existente (regalar acceso, asignar curador, campañas).
+    Cada palabra escrita debe aparecer en el correo, el nombre o el apellido."""
+    from utils.busqueda_usuarios import LONGITUD_MINIMA, filtro_sql, prioridad
+
+    if len(q.strip()) < LONGITUD_MINIMA:
+        return []
+    consulta = db.query(Usuario).filter(*filtro_sql(q))
+    if rol:
+        consulta = consulta.filter(Usuario.rol == rol)
+    if solo_activos:
+        consulta = consulta.filter(Usuario.activo.is_(True))
+    # Se traen más de los que se muestran para ordenar primero a quien empieza
+    # por lo escrito; el orden alfabético de SQL no basta.
+    usuarios = consulta.order_by(Usuario.email).limit(limite * 5).all()
+    nombre = lambda u: " ".join(x for x in (u.nombre, u.apellido) if x)
+    usuarios.sort(key=lambda u: prioridad(q, u.email, nombre(u)))
+    usuarios = usuarios[:limite]
+    empresas = dict(
+        db.query(Importador.id, Importador.nombre_empresa)
+        .filter(Importador.id.in_({u.importador_id for u in usuarios if u.importador_id})).all()
+    ) if any(u.importador_id for u in usuarios) else {}
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "nombre": nombre(u) or None,
+            "rol": u.rol,
+            "activo": u.activo,
+            "empresa": empresas.get(u.importador_id),
+            "tier": u.tier,
+            "es_curador": bool(u.es_curador),
+        }
+        for u in usuarios
+    ]
+
+
 @router.get("/usuarios", response_model=List[UsuarioAdminResponse])
 async def listar_usuarios(
     rol: Optional[str] = Query(None, description="Filtrar por rol"),

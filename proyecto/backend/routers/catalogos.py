@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
@@ -244,10 +244,28 @@ def borrar_producto(catalogo_id: str, producto_id: str, db: Session = Depends(ge
 
 
 @router.get("/clientes")
-def clientes(db: Session = Depends(get_db), usuario: Usuario = Depends(de_empresa)):
+def clientes(
+    q: Optional[str] = Query(None, max_length=120, description="Parte del nombre o del correo"),
+    limite: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(de_empresa),
+):
     """Compradores que ya tuvieron trato con la empresa, entre quienes puede
-    elegir a quién le desbloquea un catálogo."""
-    return svc.clientes_de_empresa(db, usuario.importador_id)
+    elegir a quién le desbloquea un catálogo.
+
+    Con `q` filtra por nombre o correo. El correo se busca completo pero solo se
+    devuelve enmascarado (`email_parcial`): la empresa puede encontrar al cliente
+    que recuerda por su correo sin que la lista le revele el de los demás."""
+    from utils.busqueda_usuarios import coincide, enmascarar_correo, prioridad
+
+    filas = svc.clientes_de_empresa(db, usuario.importador_id)
+    if q and q.strip():
+        filas = [c for c in filas if coincide(q, (c["nombre"], c["_email"]))]
+        filas.sort(key=lambda c: prioridad(q, c["_email"], c["nombre"]))
+    return [
+        {**{k: v for k, v in c.items() if k != "_email"}, "email_parcial": enmascarar_correo(c["_email"])}
+        for c in filas[:limite]
+    ]
 
 
 @router.get("/{catalogo_id}/accesos")
