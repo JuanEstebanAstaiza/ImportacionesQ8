@@ -1536,11 +1536,11 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
       <div className="flex items-center">
         {authUser?.rol === "solicitante" && (
           <span
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"
             title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.)."
           >
             <WalletCards className="h-3.5 w-3.5" />
-            {creditos}
+            {creditos} créditos
           </span>
         )}
       </div>
