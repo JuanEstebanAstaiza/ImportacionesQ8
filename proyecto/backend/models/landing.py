@@ -14,7 +14,13 @@ from database import Base
 # de LandingScreen.
 SECCIONES_LANDING = ("home", "about", "how-it-works", "news", "contact")
 
-TIPOS_BLOQUE_LANDING = ("heading", "paragraph", "image", "video", "button", "allies_grid")
+TIPOS_BLOQUE_LANDING = ("heading", "paragraph", "image", "video", "button", "allies_grid", "video_rotativo")
+
+# Carrusel de videos de "Quiénes somos": un único bloque de la sección "about"
+# cuyo `contenido` es JSON (ver schemas/landing.py::VideosQuienesSomos). Se
+# administra con su propio endpoint y "Guardar estructura" no lo toca.
+TIPO_VIDEO_ROTATIVO = "video_rotativo"
+SECCION_QUIENES_SOMOS = "about"
 
 ALINEACIONES_BLOQUE = ("left", "center", "right")
 

@@ -1,6 +1,6 @@
 import { apiRequest } from "@/services/api-client";
 
-export type LandingBlockType = "heading" | "paragraph" | "image" | "video" | "button" | "allies_grid";
+export type LandingBlockType = "heading" | "paragraph" | "image" | "video" | "button" | "allies_grid" | "video_rotativo";
 export type LandingBlockAlign = "left" | "center" | "right";
 export type LandingButtonAction = "open_login" | "open_register" | "external_link";
 export type LandingBrandToken = "primary" | "surface" | "border" | "foreground" | "muted";
@@ -65,6 +65,41 @@ export interface LandingContactResponse {
   mensaje: string;
 }
 
+/** Un video del carrusel de "Quiénes somos", en uno o dos encuadres. */
+export interface VideoRotativo {
+  id?: string;
+  titulo?: string | null;
+  /** 16:9, para computador. Ruta de gestión documental. */
+  horizontal?: string | null;
+  /** 9:16, para celular. */
+  vertical?: string | null;
+}
+
+export interface VideosQuienesSomos {
+  activo: boolean;
+  /** Cada cuántos segundos pasa al siguiente (si el video no termina antes). Entre 5 y 300. */
+  intervalo_segundos: number;
+  videos: VideoRotativo[];
+}
+
+export const VIDEOS_QUIENES_SOMOS_VACIO: VideosQuienesSomos = { activo: true, intervalo_segundos: 20, videos: [] };
+
+/** Lee la configuración del carrusel guardada como JSON en su bloque `video_rotativo`. */
+export function leerVideosQuienesSomos(blocks: LandingBlock[] | undefined | null): VideosQuienesSomos {
+  const bloque = (blocks ?? []).find((b) => b.tipo === "video_rotativo" && b.seccion === "about");
+  if (!bloque?.contenido) return { ...VIDEOS_QUIENES_SOMOS_VACIO, activo: bloque?.activo ?? true };
+  try {
+    const datos = JSON.parse(bloque.contenido) as Partial<VideosQuienesSomos>;
+    return {
+      activo: bloque.activo,
+      intervalo_segundos: Number(datos.intervalo_segundos) || VIDEOS_QUIENES_SOMOS_VACIO.intervalo_segundos,
+      videos: Array.isArray(datos.videos) ? datos.videos.filter((v) => v && (v.horizontal || v.vertical)) : [],
+    };
+  } catch {
+    return { ...VIDEOS_QUIENES_SOMOS_VACIO, activo: bloque.activo };
+  }
+}
+
 export const landingService = {
   /** Vista pública: solo bloques/aliados/noticias activos. Sin autenticación. */
   getDynamicContent(): Promise<LandingDynamicContent> {
@@ -81,6 +116,11 @@ export const landingService = {
       method: "PUT",
       body: { blocks },
     });
+  },
+
+  /** Carrusel de "Quiénes somos". Tiene su propio guardado: "Guardar estructura" no lo toca. Solo admin. */
+  saveVideosQuienesSomos(config: VideosQuienesSomos): Promise<LandingBlock> {
+    return apiRequest<LandingBlock>("/landing/videos-quienes-somos", { method: "PUT", body: config });
   },
 
   createAlly(payload: LandingAllyPayload): Promise<LandingAlly> {

@@ -57,7 +57,8 @@ export type Screen =
   | "tendencias"
   | "catalogos"
   | "imp-catalogos"
-  | "curaduria";
+  | "curaduria"
+  | "admin-tipografia";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
 export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation";
@@ -132,6 +133,7 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-asignacion", path: "/admin/asignacion" },
   { screen: "admin-landing", path: "/admin/landing" },
   { screen: "admin-correos", path: "/admin/correos" },
+  { screen: "admin-tipografia", path: "/admin/tipografia" },
   // Panel del curador de Tendencias: lo usan el admin y quien tenga la
   // capacidad de curador, sea cual sea su rol.
   { screen: "curaduria", path: "/curaduria" },

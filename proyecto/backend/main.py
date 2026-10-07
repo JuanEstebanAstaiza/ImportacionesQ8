@@ -32,6 +32,7 @@ from routers.ayuda import router as ayuda_router
 from routers.landing import router as landing_router
 from routers.tendencias import router as tendencias_router
 from routers.catalogos import router as catalogos_router
+from routers.tipografia import router as tipografia_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -265,6 +266,7 @@ app.include_router(ayuda_router)
 app.include_router(landing_router)
 app.include_router(tendencias_router)
 app.include_router(catalogos_router)
+app.include_router(tipografia_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

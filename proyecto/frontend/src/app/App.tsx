@@ -18,7 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
-  Sparkles, LibraryBig,
+  Sparkles, LibraryBig, Type,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ import { PanelCurador } from "@/features/tendencias/PanelCurador";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
 import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
 import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
+import { TipografiaPlataforma } from "@/features/admin/TipografiaPlataforma";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -78,7 +79,8 @@ import {
 } from "@/services/business.service";
 import { CalculadoraPreciosChat, TarjetaEstimacion, propuestaDesdeEstimacion, type PropuestaDesdeEstimacion } from "@/features/chat/CalculadoraPrecios";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
-import { landingService, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
+import { landingService, leerVideosQuienesSomos, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
+import { CarruselVideos } from "@/app/components/media/CarruselVideos";
 import { safeHttpUrl } from "@/utils/safe-url";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
@@ -699,6 +701,7 @@ const NAV_ADMIN=[
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
   {icon:Sparkles,      label:"Tendencias",      key:"curaduria"},
+  {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
@@ -9388,7 +9391,8 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
   const [dynamicContentError,setDynamicContentError]=useState("");
 
   useEffect(()=>{
-    if(activeTab!=="news"||dynamicContent)return;
+    // "Quiénes somos" también lo usa: su carrusel de videos vive en el CMS.
+    if((activeTab!=="news"&&activeTab!=="about")||dynamicContent)return;
     landingService.getDynamicContent()
       .then(setDynamicContent)
       .catch(()=>setDynamicContentError("No se pudo cargar el contenido de novedades y aliados."));
@@ -9706,7 +9710,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       </>
       )}
 
-      {activeTab==="about" && <LandingAboutSection/>}
+      {activeTab==="about" && <LandingAboutSection content={dynamicContent}/>}
       {activeTab==="how-it-works" && <LandingHowItWorksSection/>}
       {activeTab==="news" && (
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
@@ -9885,7 +9889,8 @@ function LandingBackground() {
 }
 
 /** "Quiénes somos": los tres principios del negocio (Zarpi_Modelo_de_Monetizacion). */
-function LandingAboutSection() {
+function LandingAboutSection({content}:{content:LandingDynamicContent|null}) {
+  const carrusel=leerVideosQuienesSomos(content?.blocks);
   const principios=[
     {title:"No somos importadores de registro",desc:"Conectamos solicitantes con empresas nacionalizadoras verificadas; no figuramos como importador de registro en ninguna operación."},
     {title:"No custodiamos dinero de terceros",desc:"El pago del servicio se acuerda y se ejecuta entre el solicitante y la nacionalizadora; la plataforma no retiene ni administra esos fondos."},
@@ -9901,6 +9906,9 @@ function LandingAboutSection() {
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Un modelo claro, desde el primer día</h1>
           <p className="text-muted-foreground mt-3 max-w-xl mx-auto">Zarpi conecta, no custodia ni interviene como importador. Así protegemos tanto al solicitante como a la empresa importadora.</p>
         </div>
+        {carrusel.activo&&carrusel.videos.length>0&&(
+          <CarruselVideos className="mb-12" videos={carrusel.videos} intervaloSegundos={carrusel.intervalo_segundos}/>
+        )}
         <div className="grid sm:grid-cols-1 gap-5">
           {principios.map((principio,i)=>(
             <Card key={principio.title} padding="lg" className="border-primary/15">
@@ -10027,7 +10035,8 @@ function LandingDynamicBlock({block,onLogin,onRegister}:{block:LandingBlock;onLo
 }
 
 function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:LandingDynamicContent|null;error:string;onLogin:()=>void;onRegister:()=>void}) {
-  const dynamicBlocks=(content?.blocks??[]).filter(b=>b.tipo!=="allies_grid").sort((a,b)=>a.orden-b.orden);
+  // El carrusel de videos es de "Quiénes somos", no de esta sección.
+  const dynamicBlocks=(content?.blocks??[]).filter(b=>b.tipo!=="allies_grid"&&b.tipo!=="video_rotativo").sort((a,b)=>a.orden-b.orden);
   return (
     <section className="pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
@@ -12396,6 +12405,7 @@ export default function App() {
     "admin-asignacion": ["admin"],
     "admin-landing": ["admin"],
     "admin-correos": ["admin"],
+    "admin-tipografia": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -12517,6 +12527,7 @@ export default function App() {
     }
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
+    if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
     if(screen==="curaduria"){
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
       return <PantallaPortal sb={sb} active="curaduria" titulo="Tendencias · Curaduría"><PanelCurador esAdmin={userRole==="admin"}/></PantallaPortal>;

@@ -25,6 +25,7 @@ TAGS_CON_GUIA_MANUAL = {
     "Cotizantes",            # 18-Tiers-y-Perfil-Cotizante.md
     "Tendencias",            # 25-Tendencias-y-Catalogos.md
     "Catálogos de empresas", # 25-Tendencias-y-Catalogos.md
+    "Tipografía",            # 26-Tipografia-y-Videos-Landing.md
 }
 
 TAG_FILES = {
