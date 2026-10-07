@@ -231,7 +231,7 @@ const POLITICA_DATOS: LegalDocument = {
       titulo: "Datos que recogemos",
       bloques: [
         [
-          "Datos de identificación y contacto: nombre, apellido, tipo y número de documento o NIT, razón social, tipo de persona, correo electrónico, teléfono, WhatsApp y foto de perfil.",
+          "Datos de identificación y contacto: nombre, apellido, tipo y número de documento o NIT, razón social, tipo de persona, correo electrónico, teléfono y foto de perfil.",
           "Datos de la actividad en la Plataforma: solicitudes de cotización (descripción, cantidades, fotos, enlaces de referencia, precio objetivo), propuestas, órdenes, documentos cargados, mensajes del chat, tickets de soporte, reseñas y calificaciones.",
           "Datos del perfil de cotizante: número de solicitudes y órdenes, valor de las operaciones cerradas, nivel asignado y la información que el usuario declare sobre compras de mercancía importada hechas por fuera de la Plataforma.",
           `Datos de pagos: referencia, valor, estado y fecha de las transacciones. Los datos de la tarjeta o de la cuenta bancaria los recibe y procesa directamente la pasarela ${EMPRESA.pasarela}; Zarpi no los almacena.`,

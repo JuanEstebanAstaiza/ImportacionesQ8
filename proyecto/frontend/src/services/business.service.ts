@@ -170,7 +170,6 @@ export interface BackendContactoAsesor {
   usuario_id: string;
   nombre: string | null;
   foto_url: string | null;
-  whatsapp: string | null;
 }
 
 export interface BackendPropuesta {
@@ -295,7 +294,6 @@ export interface BackendUserProfile {
   nombre: string | null;
   telefono: string | null;
   foto_url: string | null;
-  whatsapp: string | null;
   activo: boolean;
   perfil_completo: boolean;
   fecha_creacion: string;
@@ -330,7 +328,6 @@ export interface UpdateUserProfilePayload {
   nombre?: string;
   telefono?: string;
   foto_url?: string;
-  whatsapp?: string;
 }
 
 export interface UpdateImporterPayload {
@@ -475,6 +472,7 @@ export interface BackendOrder {
   importador_id: string;
   solicitante_id: string;
   asesor_asignado_id: string | null;
+  asesor_nombre: string | null;
   estado: string;
   precio_acordado_usd: number;
   tiempo_estimado_entrega: string | null;

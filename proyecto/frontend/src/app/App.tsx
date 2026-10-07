@@ -165,44 +165,24 @@ function Button({variant="primary",size="md",loading=false,fullWidth=false,icon,
 }
 
 // ─── Unified contact action button ───────────────────────────────────────────
-type ContactType="whatsapp"|"chat"|"email"|"phone";
+type ContactType="chat"|"email";
 function ContactBtn({type,size="sm",label,className,onClick,disabled,title}:{type:ContactType;size?:"sm"|"md";label?:string;className?:string;onClick?:()=>void;disabled?:boolean;title?:string}) {
   const cfg:Record<ContactType,{icon:React.FC<{className?:string}>;defaultLabel:string;cls:string}>={
-    whatsapp:{icon:Phone,         defaultLabel:"WhatsApp",cls:"border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"},
     chat:    {icon:MessageCircle, defaultLabel:"Chat",    cls:"border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"},
     email:   {icon:MailIcon,      defaultLabel:"Correo",  cls:"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"},
-    phone:   {icon:Phone,         defaultLabel:"Llamar",  cls:"border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"},
   };
   const c=cfg[type];const Icon=c.icon;
   const iconSize=size==="sm"?"w-3.5 h-3.5":"w-4 h-4";
   return <Button variant="secondary" size={size} icon={<Icon className={iconSize}/>} className={clsx(c.cls,className)} onClick={onClick} disabled={disabled} title={title}>{label??c.defaultLabel}</Button>;
 }
 
-function normalizePhoneForWa(value:string|undefined|null):string{
-  const digits=String(value||"").replace(/\D+/g,"");
-  if(!digits)return "";
-  if(digits.length>=10&&digits.length<=15)return digits;
-  return "";
-}
-
-function openSmartContact({type,whatsapp,email,onOpenChat}:{type:ContactType;whatsapp?:string|null;email?:string|null;onOpenChat?:()=>void}){
+function openSmartContact({type,email,onOpenChat}:{type:ContactType;email?:string|null;onOpenChat?:()=>void}){
   if(type==="chat"){
     if(onOpenChat){
       onOpenChat();
       return;
     }
     toast.error("No hay chat disponible para esta conversación.");
-    return;
-  }
-
-  const wa=normalizePhoneForWa(whatsapp);
-  if((type==="whatsapp"||type==="phone")&&wa){
-    window.open(`https://wa.me/${wa}`, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  if(type==="whatsapp"||type==="phone"){
-    toast.error("No hay número de WhatsApp disponible.");
     return;
   }
 
@@ -415,6 +395,7 @@ interface Order {
   quoteCode:string;
   product:string;
   importerId:string;
+  advisorName?:string;
   created:string;
   estimated:string;
   quantity:string;
@@ -853,7 +834,7 @@ function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | 
     readPerfilPublicoString(perfil, "advisor_role", "asesor_rol", "cargo_contacto", "contact_role") ||
     "Asesor";
   const advisorEmail = readPerfilPublicoString(perfil, "advisor_email", "asesor_email", "email", "correo");
-  const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono", "whatsapp");
+  const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono");
 
   return {
     advisorName,
@@ -880,7 +861,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     // pero nadie los leía, así que no aparecían en ninguna pantalla pública.
     website: readPerfilPublicoString(perfil, "website", "sitio_web", "web"),
     email: readPerfilPublicoString(perfil, "email", "correo", "email_contacto"),
-    phone: readPerfilPublicoString(perfil, "phone", "telefono", "whatsapp"),
+    phone: readPerfilPublicoString(perfil, "phone", "telefono"),
     address: readPerfilPublicoString(perfil, "address", "direccion"),
     foundedYear: readPerfilPublicoString(perfil, "year", "anio_fundacion", "fundacion"),
     industries: readPerfilPublicoStringArray(perfil, "industries", "industrias", "sectores"),
@@ -1212,6 +1193,7 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
     quoteCode: quote?.code || `COT-${order.cotizacion_id.slice(0, 8).toUpperCase()}`,
     product: quote?.product || "Producto no disponible",
     importerId: order.importador_id,
+    advisorName: order.asesor_nombre || undefined,
     created: formatShortDate(history[0]?.fecha || new Date().toISOString()),
     estimated: order.tiempo_estimado_entrega || "N/D",
     quantity: quote?.minQuantity ? cantidadConUnidad(quote.minQuantity, quote.unit, true) : "N/D",
@@ -2159,7 +2141,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp.advisor.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
               </div>
@@ -2252,7 +2234,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                         <p className="text-xs text-primary mt-0.5">{adv.email}</p>
                       </div>
                       <div className="flex gap-1.5">
-                        <ContactBtn type="whatsapp" label="WA" size="sm" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:adv.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                        <ContactBtn type="chat" size="sm" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                         <ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                       </div>
                     </div>
@@ -2291,7 +2273,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 <h3 className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Acciones rápidas</h3>
                 <div className="flex flex-col gap-2">
                   <Button variant="primary" size="sm" fullWidth icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
-                  <ContactBtn type="whatsapp" size="sm" label="Contactar por WhatsApp" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp.advisor.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                  <ContactBtn type="chat" size="sm" label="Contactar por chat" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                   {relChats.length>0&&<Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChats[0].id)}>Abrir chat</Button>}
                 </div>
               </Card>
@@ -2691,7 +2673,6 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
   const activeProposal=visibleProposals[0]??null;
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
-  const contactAsesorWhatsapp = contactAsesor?.whatsapp || "";
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
   const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
   const quoteLifecycleIndex = relatedOrder
@@ -2919,10 +2900,10 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               {contactAsesor?<Card padding="md">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor asignado</h3>
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p><p className="text-xs text-muted-foreground">{contactAsesor.whatsapp||"Sin WhatsApp"}</p></div></div>
+                  <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p></div></div>
                   <div className="flex flex-col gap-1.5">
                     <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
-                    <ContactBtn type="whatsapp" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:contactAsesorWhatsapp,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
+                    <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   </div>
                 </div>
               </Card>:<Card padding="md" className="border-dashed"><div className="py-4 text-center"><p className="text-xs text-muted-foreground">Sin contacto de asesor todavía</p></div></Card>}
@@ -3070,7 +3051,6 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
                 <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
                 <div className="flex gap-2">
-                  <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp?.advisor.phone,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                 </div>
@@ -3221,7 +3201,7 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onViewImporterProfile,canManageOrder,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
+function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advisorName,onViewImporterProfile,canManageOrder,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];advisorName?:string;onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
   const [isAdvancing,setIsAdvancing]=useState(false);
   const [advanceMessage,setAdvanceMessage]=useState("");
   const [advanceError,setAdvanceError]=useState("");
@@ -3256,7 +3236,10 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
   }
 
   const imp=importers.find(i=>i.id===order.importerId);
-  const advisor=imp?.advisor;
+  const resolvedAdvisorName = order.advisorName || advisorName;
+  const advisor=resolvedAdvisorName
+    ? {...(imp?.advisor || {initials: initialsFromName(resolvedAdvisorName), color: "bg-slate-500", role: "Asesor", email: ""}), name: resolvedAdvisorName}
+    : imp?.advisor;
   const relChatId = order.conversationId;
   const history = order.history;
   const documents = order.documents;
@@ -3312,7 +3295,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
                 <div className="flex gap-6 flex-wrap">{[["Empresa",imp?.name || "Empresa importadora"],["Asesor",advisor?.name || "Asesor"],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" label="Contactar asesor" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:advisor?.phone,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
+                <ContactBtn type="chat" label="Contactar asesor" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>irA(documentosRef)}>Ver documentos</Button>
                 {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
                 <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>} onClick={()=>irA(seguimientoRef)}>Ver seguimiento</Button>
@@ -3394,7 +3377,6 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
                 <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
                 <div className="flex gap-1.5">
-                  <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:advisor?.phone,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                   <ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                   <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 </div>
@@ -3586,7 +3568,6 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const chatAdvisorName = conv?.advisorName || imp?.advisor.name || "Asesor";
   const chatAdvisorRole = conv?.advisorRole || imp?.advisor.role || "Asesor";
   const chatAdvisorEmail = conv?.advisorEmail || imp?.advisor.email || "";
-  const chatAdvisorWhatsapp = conv?.advisorPhone || imp?.advisor.phone || "";
   const chatAdvisorInitials = conv?.advisorInitials || imp?.advisor.initials || "AS";
   const chatAdvisorColor = conv?.advisorColor || imp?.advisor.color || "bg-slate-500";
 
@@ -4793,9 +4774,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                         <div className="flex items-center gap-2"><Avatar initials={imp?.initials || initialsFromName(contraparte.empresa)} size="sm" color={imp?.color || "bg-slate-500"} variant="logo" src={imp?.logoUrl?resolveApiUrl(imp.logoUrl):undefined}/><div><p className="text-xs font-semibold">{contraparte.empresa}</p></div></div>
                       </div>
                     )}
-                    {contraparte.empresa&&(chatAdvisorWhatsapp||chatAdvisorEmail)&&(
+                    {contraparte.empresa&&chatAdvisorEmail&&(
                       <div className="flex gap-1">
-                        <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
                         <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
                       </div>
                     )}
@@ -6579,18 +6559,6 @@ function RightPanel({
             </div>
           </div>
           <div className="flex gap-2">
-            <ContactBtn
-              type="whatsapp"
-              label="WA"
-              size="sm"
-              className="flex-1 justify-center"
-              onClick={() =>
-                openSmartContact({
-                  type: "whatsapp",
-                  whatsapp: si.advisor.phone,
-                })
-              }
-            />
             <ContactBtn
               type="chat"
               size="sm"
@@ -10926,7 +10894,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   );
 }
 
-function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
+function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
   const [form,setForm]=useState(profile);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
@@ -10943,7 +10911,6 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
       await onSave({
         nombre:form.nombre,
         telefono:form.telefono,
-        whatsapp:form.whatsapp,
         foto_url:form.fotoUrl?.trim()||undefined,
       });
       setSaved(true);
@@ -10977,7 +10944,6 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
               <Input label="Nombre" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>
               <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))}/>
               <Input label="Email" value={form.email} disabled/>
-              <Input label="WhatsApp" value={form.whatsapp} onChange={e=>setForm(p=>({...p,whatsapp:e.target.value}))}/>
               <div className="sm:col-span-2">
                 <Input label="Foto de perfil" value={form.fotoUrl} onChange={e=>setForm(p=>({...p,fotoUrl:e.target.value}))} placeholder="URL del archivo"/>
                 <div className="mt-2 flex gap-2">
@@ -12128,7 +12094,7 @@ export default function App() {
   async function handleLogout(){
     await signOut();
     setUserRole("solicitante");
-    setScreen("login");
+    goTo("landing");
   }
 
   async function handleCreateQuote(payload: CreateCotizacionPayload, desbloquear = false){
@@ -12193,7 +12159,7 @@ export default function App() {
     await reloadImporters();
   }
 
-  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;whatsapp:string;foto_url?:string}) {
+  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;foto_url?:string}) {
     await businessService.updateMyUserProfile(payload);
     await reloadCurrentUserProfile();
   }
@@ -12538,10 +12504,10 @@ export default function App() {
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
-    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
+    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
-    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
+    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
     return null;
   };
 

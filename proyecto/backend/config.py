@@ -71,7 +71,7 @@ SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@zarpi.co")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://zarpi.co").rstrip("/")
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
 OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))
 LOGIN_TARDIO_HORAS = int(os.getenv("LOGIN_TARDIO_HORAS", "72"))

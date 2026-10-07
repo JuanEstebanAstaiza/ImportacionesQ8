@@ -44,9 +44,10 @@ export default defineConfig({
   server: {
     // Escucha en todas las interfaces para que el Dev Tunnel pueda exponerlo.
     host: true,
+    port: 5173,
     // El browser remoto no alcanza localhost:8000: todo el tráfico de API y de
     // archivos viaja por este mismo origen y el proxy lo reenvía al backend.
-    allowedHosts: ['.devtunnels.ms', '.use.devtunnels.ms', '.ngrok-free.app', '.ngrok.io', '.trycloudflare.com'],
+    allowedHosts: true,
     // Los eventos de archivo del host no cruzan el bind mount de Docker en
     // Windows/macOS, así que dentro del contenedor la recarga en caliente no se
     // enteraba de ningún cambio. El sondeo cuesta CPU, de modo que se activa
