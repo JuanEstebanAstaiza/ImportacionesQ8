@@ -18,6 +18,7 @@ from models.curso import CompraCurso, Curso, EstadoCurso, LeccionCurso
 from models.certificacion import Certificacion
 from models.evidencia import EstadoEvidenciaImportador, EvidenciaImportador
 from models.importador import Importador
+from models.usuario import Usuario
 from models.landing import LandingAlly, LandingBlock, LandingNews
 from models.documental import (
     Archivo,
@@ -1012,6 +1013,23 @@ def _tiene_acceso_por_curso(db: Session, archivo_id: str, current_user: dict) ->
     return comprado is not None
 
 
+def _es_foto_de_producto_visible(db: Session, archivo_id: str, user_id: str) -> bool:
+    """Fotos de producto que suben unos y ven otros: las de una cotización (las
+    ve la empresa que la cotiza), las de Tendencias (quien tiene acceso) y las
+    de un catálogo de empresa (los clientes a quienes se lo desbloqueó)."""
+    from services.catalogos import es_foto_de_catalogo_visible, es_foto_de_cotizacion_visible
+    from services.tendencias import es_foto_de_tendencias_visible
+
+    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if usuario is None:
+        return False
+    return (
+        es_foto_de_cotizacion_visible(db, archivo_id, usuario)
+        or es_foto_de_tendencias_visible(db, archivo_id, usuario)
+        or es_foto_de_catalogo_visible(db, archivo_id, usuario)
+    )
+
+
 @router.get("/archivos/{archivo_id}/descargar")
 async def descargar_archivo(
     archivo_id: str,
@@ -1037,6 +1055,7 @@ async def descargar_archivo(
             or current_user.get("rol") == "admin"
             or _es_adjunto_de_chat_del_usuario(db, archivo_id, user_id)
             or _tiene_acceso_por_curso(db, archivo_id, current_user)
+            or _es_foto_de_producto_visible(db, archivo_id, user_id)
         )
 
     if not allowed:

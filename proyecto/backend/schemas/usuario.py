@@ -17,6 +17,8 @@ class UsuarioMeResponse(BaseModel):
     activo: bool
     perfil_completo: bool
     fecha_creacion: datetime
+    # Curador de Tendencias (capacidad aparte del rol).
+    es_curador: bool = False
 
     model_config = {"from_attributes": True}
 

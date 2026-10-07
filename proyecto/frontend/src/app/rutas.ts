@@ -53,7 +53,11 @@ export type Screen =
   | "create-response"
   | "notifications"
   | "user-profile"
-  | "help-support";
+  | "help-support"
+  | "tendencias"
+  | "catalogos"
+  | "imp-catalogos"
+  | "curaduria";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
 export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation";
@@ -88,6 +92,8 @@ export const RUTAS: Ruta[] = [
   { screen: "orders", path: "/ordenes" },
   { screen: "order-detail", path: "/ordenes", param: "order" },
   { screen: "importer-profile", path: "/empresas", param: "importer" },
+  { screen: "tendencias", path: "/tendencias" },
+  { screen: "catalogos", path: "/catalogos" },
 
   // Comunes
   { screen: "chats", path: "/chats" },
@@ -107,6 +113,7 @@ export const RUTAS: Ruta[] = [
   { screen: "imp-quotes", path: "/empresa/cotizaciones" },
   { screen: "imp-advisors", path: "/empresa/asesores" },
   { screen: "imp-profile", path: "/empresa/perfil" },
+  { screen: "imp-catalogos", path: "/empresa/catalogos" },
 
   // Asesor
   { screen: "adv-dashboard", path: "/asesor" },
@@ -125,6 +132,9 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-asignacion", path: "/admin/asignacion" },
   { screen: "admin-landing", path: "/admin/landing" },
   { screen: "admin-correos", path: "/admin/correos" },
+  // Panel del curador de Tendencias: lo usan el admin y quien tenga la
+  // capacidad de curador, sea cual sea su rol.
+  { screen: "curaduria", path: "/curaduria" },
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";

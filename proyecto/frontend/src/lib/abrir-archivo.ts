@@ -153,3 +153,25 @@ export async function descargarArchivo(
     return { ok: false, motivo: error instanceof Error ? error.message : "No se pudo descargar el archivo." };
   }
 }
+
+/**
+ * Dirección local (`blob:`) de un archivo, para pintarlo en un `<img>`.
+ *
+ * Un `<img src>` tampoco manda el token, así que las fotos alojadas en el
+ * backend se descargan con `fetch` igual que al abrirlas. Quien la pide debe
+ * revocarla con `URL.revokeObjectURL` cuando deje de mostrarla. Los recursos
+ * externos se devuelven tal cual.
+ */
+export async function obtenerUrlLocalArchivo(valor: string | null | undefined): Promise<string> {
+  const canonica = toApiPath(valor);
+  if (!canonica) {
+    throw new Error("El archivo no tiene una dirección válida.");
+  }
+  const destino = resolveApiUrl(canonica);
+  const token = getStoredToken();
+  if (!esRecursoDelBackend(canonica) || !token) {
+    return destino;
+  }
+  const blob = await descargarComoBlob(destino, token);
+  return window.URL.createObjectURL(blob);
+}

@@ -25,7 +25,7 @@ export interface Quote {
   description?: string;
   notes?: string;
   referenceLink?: string;
-  productPhotoUrl?: string;
+  productPhotoUrls?: string[];
   personalizationLevel?: string;
   importMode?: string;
   /** Marca de embarque ya compuesta ("ctl-prendascontrol"), si se conoce la empresa. */

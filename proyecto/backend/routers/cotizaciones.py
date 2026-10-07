@@ -504,6 +504,10 @@ async def crear_cotizacion(
         costo_creditos = 0.0
         wallet = None
 
+    from services.origen_cotizacion import validar_origen
+
+    campos_origen = validar_origen(db, solicitante, cotizacion_data)
+
     # Validar modalidad dirigida
     if cotizacion_data.modalidad == "dirigida" and not cotizacion_data.importador_id:
         raise HTTPException(
@@ -596,6 +600,8 @@ async def crear_cotizacion(
         tier_solicitante_creacion=solicitante.tier,
         desbloqueada_por_puntos=requiere_desbloqueo,
         foto_producto=cotizacion_data.foto_producto,
+        fotos_producto=cotizacion_data.fotos_producto or None,
+        **campos_origen,
         pais_importacion=cotizacion_data.pais_importacion,
         nivel_personalizacion=cotizacion_data.nivel_personalizacion,
         nombre_producto=cotizacion_data.nombre_producto,
@@ -623,6 +629,7 @@ async def crear_cotizacion(
     evento_solicitud(
         db, TiposEvento.SOLICITUD_CREADA, nuevo_cotizacion, usuario=current_user,
         estado_nuevo=nuevo_cotizacion.estado,
+        datos={k: v for k, v in campos_origen.items() if v},
     )
 
     if nuevo_cotizacion.modalidad == "dirigida" and nuevo_cotizacion.importador_id:

@@ -65,6 +65,7 @@ export interface BackendCotizacion {
   solicitante_puntos_cotizacion?: number;
   bloqueada?: boolean;
   foto_producto?: string | null;
+  fotos_producto?: string[];
   pais_importacion: string;
   nivel_personalizacion?: string | null;
   nombre_producto: string;
@@ -95,7 +96,13 @@ export interface BackendCotizacion {
 export interface CreateCotizacionPayload {
   modalidad: "dirigida" | "abierta";
   importador_id?: string;
-  foto_producto?: string;
+  /** Fotos del producto en orden; la primera es la portada. Máximo 10. */
+  fotos_producto?: string[];
+  /** De dónde sale la solicitud; el backend valida que el comprador tenga acceso. */
+  origen?: "directa" | "tendencias" | "catalogo";
+  tendencia_edicion_id?: string | null;
+  tendencia_producto_id?: string;
+  catalogo_producto_id?: string;
   pais_importacion: string;
   nombre_producto: string;
   descripcion_cliente: string;
@@ -294,6 +301,8 @@ export interface BackendUserProfile {
   fecha_creacion: string;
   tier?: string;
   puntos_cotizacion?: number;
+  /** Curador de Tendencias (capacidad aparte del rol). */
+  es_curador?: boolean;
 }
 
 export interface BackendCotizantePerfilPublico {

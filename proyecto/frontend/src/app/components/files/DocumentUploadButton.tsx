@@ -12,6 +12,8 @@ type DocumentUploadButtonProps = {
   disabled?: boolean;
   className?: string;
   multiple?: boolean;
+  /** Cuántos archivos se pueden elegir de una vez. Si se eligen más, no se sube ninguno. */
+  maxArchivos?: number;
   onUploaded: (archivo: BackendArchivoItem) => void | Promise<void>;
   onError?: (message: string) => void;
   variant?: "primary" | "secondary" | "ghost";
@@ -37,6 +39,7 @@ export function DocumentUploadButton({
   disabled = false,
   className,
   multiple = false,
+  maxArchivos,
   onUploaded,
   onError,
   variant = "secondary",
@@ -53,6 +56,15 @@ export function DocumentUploadButton({
     }
 
     if (isUploading) {
+      return;
+    }
+
+    if (maxArchivos !== undefined && files.length > maxArchivos) {
+      onError?.(
+        maxArchivos === 1
+          ? "Solo puedes agregar un archivo más."
+          : `Solo puedes agregar ${maxArchivos} archivos más. Elegiste ${files.length}.`,
+      );
       return;
     }
 

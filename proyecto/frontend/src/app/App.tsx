@@ -18,6 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
+  Sparkles, LibraryBig,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -36,6 +37,12 @@ import { EMPRESA } from "@/features/legal/empresa";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { TendenciasComprador } from "@/features/tendencias/TendenciasComprador";
+import { PanelCurador } from "@/features/tendencias/PanelCurador";
+import type { PrefillSolicitud } from "@/features/tendencias/prefill";
+import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
+import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -641,6 +648,8 @@ function FormatFileIcon({ extension, mimeType, compact = false }: { extension: s
 const NAV_ITEMS=[
   {icon:LayoutGrid,   label:"Dashboard",    key:"dashboard"},
   {icon:FileText,     label:"Cotizaciones", key:"quotes"},
+  {icon:Sparkles,     label:"Tendencias",   key:"tendencias"},
+  {icon:LibraryBig,   label:"Catálogos",    key:"catalogos"},
   {icon:ClipboardList,label:"Respuestas",   key:"responses"},
   {icon:MessageSquare,label:"Chats",        key:"chats"},
   {icon:ShoppingCart, label:"Órdenes",      key:"orders"},
@@ -654,6 +663,7 @@ const NAV_IMPORTADORA=[
   {icon:FileText,      label:"Solicitudes",  key:"imp-quotes"},
   {icon:Users,         label:"Asesores",     key:"imp-advisors"},
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
+  {icon:LibraryBig,    label:"Catálogos",    key:"imp-catalogos"},
   {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
   {icon:BookOpen,      label:"Cursos",       key:"courses"},
@@ -664,6 +674,7 @@ const NAV_ASESOR=[
   {icon:LayoutGrid,    label:"Dashboard",       key:"adv-dashboard"},
   {icon:Zap,           label:"Disponibles",     key:"adv-available"},
   {icon:ClipboardList, label:"Mis cotizaciones",key:"adv-my-quotes"},
+  {icon:LibraryBig,    label:"Catálogos",       key:"imp-catalogos"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
 ];
 
@@ -687,6 +698,7 @@ const NAV_ADMIN=[
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
+  {icon:Sparkles,      label:"Tendencias",      key:"curaduria"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
@@ -949,7 +961,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     description: cot.descripcion_cliente,
     notes: cot.notas_adicionales ?? "",
     referenceLink: cot.link_referencia ?? "",
-    productPhotoUrl: cot.foto_producto ?? "",
+    productPhotoUrls: cot.fotos_producto?.length ? cot.fotos_producto : (cot.foto_producto ? [cot.foto_producto] : []),
     personalizationLevel: cot.nivel_personalizacion ?? "",
     importMode: cot.modalidad_importacion ?? "",
     shippingMark: cot.shipping_mark ?? null,
@@ -1012,6 +1024,22 @@ function findCustomFieldValue(customFields: Record<string, unknown> | null | und
   return "";
 }
 
+/** Miniaturas de las fotos del producto; al pulsar una se abre completa. */
+function GaleriaFotosProducto({fotos}:{fotos:string[]}) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-2">Fotos del producto ({fotos.length})</p>
+      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+        {fotos.map((url,i)=>(
+          <button key={url} type="button" onClick={()=>{void abrirArchivoEnPestana(url).then(r=>{if(!r.ok)toast.error(r.motivo||"No se pudo abrir la foto.");});}} className="aspect-square rounded-lg overflow-hidden border border-border hover:ring-2 hover:ring-primary/40 transition" title={`Ver foto ${i+1}`}>
+            <ImagenArchivo src={url} alt={`Foto ${i+1} del producto`} className="w-full h-full"/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function getQuoteAttachmentLinks(quote: Quote): string[] {
   const links = new Set<string>();
   const maybePushLink = (value: unknown) => {
@@ -1024,7 +1052,7 @@ function getQuoteAttachmentLinks(quote: Quote): string[] {
     }
   };
 
-  maybePushLink(quote.productPhotoUrl);
+  (quote.productPhotoUrls ?? []).forEach(maybePushLink);
   maybePushLink(quote.referenceLink);
 
   const custom = quote.customFields;
@@ -1228,6 +1256,8 @@ interface AppNotification {
   id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
   title:string;body:string;date:string;read:boolean;
   cotizacionId?:string;conversationId?:string;approval?:boolean;
+  /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
+  destino?:"tendencias"|"catalogos";
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1261,6 +1291,7 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
     cotizacionId,
     conversationId,
     approval,
+    destino: notification.tipo === "tendencias" ? "tendencias" : notification.tipo === "catalogo" ? "catalogos" : undefined,
   };
 }
 
@@ -2571,10 +2602,11 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción","Producto de alta demanda, especificaciones estándar."]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción",quote.description||"—"]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2 sm:col-span-3":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5 whitespace-pre-line">{v}</p></div>)}</div>
+                {(quote.productPhotoUrls??[]).length>0&&<div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>}
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["Cantidad",cantidadConUnidad(quote.minQuantity,quote.unit)],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas","Entrega en destino final preferida."]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["Cantidad",cantidadConUnidad(quote.minQuantity,quote.unit)],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas",quote.notes||"—"]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
               </Card>
               <Card padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
@@ -5986,6 +6018,22 @@ function DocumentosScreen({
   );
 }
 
+/** Armazón común (sidebar, cabecera, migas) para las pantallas que viven en `features/`. */
+function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:string;titulo:string;children:React.ReactNode}) {
+  return (
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Sidebar {...sb} active={active}/>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <AppHeader user={USER} sb={sb}/>
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+          <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key||"dashboard")},{label:titulo}]}/>
+          <div className="mt-3">{children}</div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
 function PagosScreen({sb}:{sb:SidebarCtrl}) {
   if (!SHOW_PAYMENTS_MODULE) {
     return (
@@ -6041,8 +6089,10 @@ function Stepper({current}:{current:number}) {
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrls:string[];country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
+/** Igual que `MAX_FOTOS_PRODUCTO` en backend/schemas/cotizacion.py. */
+const MAX_FOTOS_PRODUCTO=10;
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrls:[],country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
 const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
 const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
 const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
@@ -6131,32 +6181,41 @@ function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"
 }
 
 function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>;onProductPhotoUploaded:(fileItem:BackendArchivoItem)=>void|Promise<void>;importer:Importer|null}) {
-  const [dragOver,setDragOver]=useState(false);
   const upd=(f:keyof QuoteFormState,v:string)=>setForm(p=>({...p,[f]:v}));
+  const fotos=form.productPhotoUrls;
+  const quitarFoto=(url:string)=>setForm(p=>({...p,productPhotoUrls:p.productPhotoUrls.filter(f=>f!==url)}));
   return (
     <div className="space-y-5">
       <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
         <div className="space-y-4">
-          <div><p className="text-sm font-medium mb-1.5">Foto <span className="text-xs text-muted-foreground font-normal">(opcional)</span></p>
-            <div onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} className={clsx("border-2 border-dashed rounded-xl p-8 text-center transition-all",dragOver?"border-primary bg-primary/5":"border-border hover:border-primary/40 hover:bg-muted/30")}>
-              {form.productPhotoUrl
-                ?<div className="space-y-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto"/>
-                  <p className="text-sm font-medium">Foto vinculada desde Documentos</p>
-                  <div className="flex items-center justify-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.productPhotoUrl);}}>Ver</Button>
-                    <Button variant="ghost" size="sm" onClick={()=>upd("productPhotoUrl","")}>Quitar</Button>
-                  </div>
+          <div><p className="text-sm font-medium mb-1.5">Fotos <span className="text-xs text-muted-foreground font-normal">(opcional, hasta {MAX_FOTOS_PRODUCTO})</span></p>
+            <div className={clsx("border-2 border-dashed rounded-xl p-5 transition-all",fotos.length?"border-border":"border-border hover:border-primary/40 hover:bg-muted/30")}>
+              {fotos.length>0
+                ?<div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {fotos.map((url,i)=>(
+                    <div key={url} className="relative group aspect-square rounded-lg overflow-hidden border border-border">
+                      <button type="button" onClick={()=>{void abrirArchivoEnPestana(url);}} className="block w-full h-full" title="Ver foto">
+                        <ImagenArchivo src={url} alt={`Foto ${i+1} del producto`} className="w-full h-full"/>
+                      </button>
+                      {i===0&&<span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">Portada</span>}
+                      <button type="button" onClick={()=>quitarFoto(url)} aria-label={`Quitar foto ${i+1}`} className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><X className="h-3.5 w-3.5"/></button>
+                    </div>
+                  ))}
                 </div>
-                :<><Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sube la foto real del producto al módulo documental</p><p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG, JPEG o WebP</p></>
+                :<div className="text-center py-3"><Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sube fotos reales del producto: el producto, la etiqueta, el empaque, las medidas</p><p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG, JPEG o WebP · la primera será la portada</p></div>
               }
-              <div className="mt-3 flex justify-center">
+              <div className="mt-3 flex items-center justify-center gap-3">
                 <DocumentUploadButton
-                  label="Subir foto"
+                  label={fotos.length?"Agregar fotos":"Subir fotos"}
                   accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                   origen="cotizacion"
+                  multiple
+                  maxArchivos={MAX_FOTOS_PRODUCTO-fotos.length}
+                  disabled={fotos.length>=MAX_FOTOS_PRODUCTO}
                   onUploaded={onProductPhotoUploaded}
+                  onError={message=>toast.error(message)}
                 />
+                <span className="text-xs text-muted-foreground">{fotos.length}/{MAX_FOTOS_PRODUCTO}</span>
               </div>
             </div>
           </div>
@@ -6286,7 +6345,17 @@ function Step3Abierta() {
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>}) {
+/** Producto de Tendencias o de un catálogo del que sale una solicitud. */
+interface OrigenSolicitud {
+  origen:"tendencias"|"catalogo";
+  nombre:string;
+  revisarRequisitos:boolean;
+  tendenciaEdicionId?:string|null;
+  tendenciaProductoId?:string;
+  catalogoProductoId?:string;
+}
+
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -6370,7 +6439,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     const payload:CreateCotizacionPayload={
       modalidad,
       ...(modalidad==="dirigida"&&selectedId?{importador_id:selectedId}:{}),
-      ...(form.productPhotoUrl?{foto_producto:form.productPhotoUrl}:{}),
+      ...(form.productPhotoUrls.length?{fotos_producto:form.productPhotoUrls}:{}),
       pais_importacion:form.country,
       nombre_producto:form.productName,
       descripcion_cliente:form.description.trim(),
@@ -6387,6 +6456,17 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       notas_adicionales:form.notes||undefined,
       shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
       tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
+      ...(origen?.origen==="tendencias"?{
+        origen:"tendencias" as const,
+        tendencia_edicion_id:origen.tendenciaEdicionId??null,
+        tendencia_producto_id:origen.tendenciaProductoId,
+      }:{}),
+      // Desde un catálogo solo vale si va dirigida a la empresa dueña; si el
+      // comprador cambió de empresa, la solicitud pasa a ser directa.
+      ...(origen?.origen==="catalogo"&&modalidad==="dirigida"&&selectedId===preselectedImporterId?{
+        origen:"catalogo" as const,
+        catalogo_producto_id:origen.catalogoProductoId,
+      }:{}),
     };
 
     try{
@@ -6435,9 +6515,25 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               {/* Columna Izquierda: Formulario (Con scroll independiente) */}
               <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+                  {origen&&(
+                    <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                      <p className="font-medium flex items-center gap-2">
+                        {origen.origen==="tendencias"?<Sparkles className="w-4 h-4 text-primary"/>:<LibraryBig className="w-4 h-4 text-primary"/>}
+                        {origen.origen==="tendencias"?"Desde Tendencias":"Desde el catálogo de la empresa"}: {origen.nombre}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Ya cargamos el producto. Completa la cantidad, la calidad y lo que haga falta.</p>
+                      {origen.revisarRequisitos&&(
+                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la nacionalizadora que lo revise en su propuesta.</p>
+                      )}
+                    </div>
+                  )}
                   <div style={slideStyle}>
                     {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
-                    {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}
+                    {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>{
+                      const url=toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
+                      if(prev.productPhotoUrls.length>=MAX_FOTOS_PRODUCTO||prev.productPhotoUrls.includes(url))return prev;
+                      return {...prev,productPhotoUrls:[...prev.productPhotoUrls,url]};
+                    })}/>}
                     {step===3 && modalidad==="dirigida" && si && <Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}
                     {step===3 && modalidad==="abierta" && <Step3Abierta/>}
                   </div>
@@ -7673,6 +7769,12 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
               Aceptar y abrir chat
             </Button>
           </div>
+        )}
+
+        {(quote.productPhotoUrls??[]).length>0&&(
+          <Card padding="md">
+            <GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/>
+          </Card>
         )}
 
         <Card padding="md">
@@ -10097,6 +10199,8 @@ export default function App() {
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
+  // Producto de Tendencias o de un catálogo del que sale la solicitud en curso.
+  const [origenSolicitud,setOrigenSolicitud]=useState<OrigenSolicitud|null>(null);
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>(
     ()=>idInicialDe("conversation") || undefined,
   );
@@ -10882,7 +10986,12 @@ export default function App() {
       : NAV_ITEMS;
     // Con el módulo educativo apagado en el backend, "Cursos" desaparece del
     // menú: dejarlo visible llevaría a una pantalla cuya API responde 404.
-    const items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    // El curador de Tendencias es una capacidad, no un rol: se le suma la
+    // entrada del panel a su menú, sea soporte, asesor o cualquier otro.
+    if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="curaduria")){
+      items=[...items,{icon:Sparkles,label:"Curaduría",key:"curaduria"}];
+    }
     return items as NavItem[];
   }
 
@@ -11056,7 +11165,34 @@ export default function App() {
     await reloadChatData();
     openChat(conversation.id);
   }
-  function openNewQuote(importerId?:string){setQuotePrefill(undefined);setPreselectedImporterId(importerId);goTo("new-quote");}
+  function openNewQuote(importerId?:string){setQuotePrefill(undefined);setOrigenSolicitud(null);setPreselectedImporterId(importerId);goTo("new-quote");}
+
+  /**
+   * «Pedir propuestas» desde Tendencias o desde el catálogo de una empresa:
+   * abre el asistente de solicitud con el producto ya cargado. Desde un
+   * catálogo la solicitud va dirigida a la empresa dueña.
+   */
+  function pedirPropuestasDesde(p:PrefillSolicitud){
+    setQuotePrefill({
+      productName:p.nombre,
+      description:p.descripcion,
+      productPhotoUrls:p.fotos.slice(0,MAX_FOTOS_PRODUCTO),
+      country:p.pais||"",
+      productLine:p.lineaProducto||"",
+      ...(p.cantidadMinima?{minQuantity:String(p.cantidadMinima)}:{}),
+      ...(p.unidad?{unit:p.unidad}:{}),
+    });
+    setOrigenSolicitud({
+      origen:p.origen,
+      nombre:p.nombre,
+      revisarRequisitos:Boolean(p.revisarRequisitos),
+      tendenciaEdicionId:p.tendenciaEdicionId??null,
+      tendenciaProductoId:p.tendenciaProductoId,
+      catalogoProductoId:p.catalogoProductoId,
+    });
+    setPreselectedImporterId(p.importadorId);
+    goTo("new-quote");
+  }
 
   /**
    * Duplicar una cotización: se abre el formulario con sus datos copiados.
@@ -11064,12 +11200,13 @@ export default function App() {
    * envía después es una cotización nueva y corriente.
    */
   function duplicateQuote(quote:Quote){
+    setOrigenSolicitud(null);
     const extractedCurrency = parseTargetPriceCurrency(quote.targetPriceCurrency || "USD");
     setQuotePrefill({
       productName:quote.product||"",
       description:quote.description||"",
       referenceLink:quote.referenceLink||"",
-      productPhotoUrl:quote.productPhotoUrl||"",
+      productPhotoUrls:quote.productPhotoUrls??[],
       country:quote.country||"",
       productLine:quote.productLine||"",
       quality:quote.quality||"",
@@ -11090,6 +11227,10 @@ export default function App() {
     void businessService.markNotificationAsRead(id).catch(() => undefined);
   }
   async function openNotification(notification: AppNotification){
+    if (notification.destino) {
+      goTo(notification.destino);
+      return;
+    }
     if (!notification.cotizacionId && !notification.conversationId) return;
     const conversations = await businessService.listChatConversations().catch(() => []);
     const conversation = notification.conversationId
@@ -11407,6 +11548,9 @@ export default function App() {
     "adv-my-quotes": ["asesor"],
     "user-profile": ["solicitante", "asesor"],
     "help-support": ["solicitante", "importadora", "asesor"],
+    "tendencias": ["solicitante"],
+    "catalogos": ["solicitante"],
+    "imp-catalogos": ["importadora", "asesor"],
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
     // empresa que escribiera /equipo veía el armazón de la pantalla (título y
     // selector), aunque vacío y con el backend negándole los datos.
@@ -11536,7 +11680,17 @@ export default function App() {
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaProductoId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud}/>;
+    if(screen==="tendencias"){
+      const consulta=new URLSearchParams(window.location.search);
+      return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasComprador onPedirPropuestas={pedirPropuestasDesde} edicionInicialId={consulta.get("edicion")} desdeAviso={consulta.get("src")==="aviso"}/></PantallaPortal>;
+    }
+    if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
+    if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
+    if(screen==="curaduria"){
+      if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
+      return <PantallaPortal sb={sb} active="curaduria" titulo="Tendencias · Curaduría"><PanelCurador esAdmin={userRole==="admin"}/></PantallaPortal>;
+    }
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;

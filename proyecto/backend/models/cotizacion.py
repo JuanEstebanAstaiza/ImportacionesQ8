@@ -47,7 +47,12 @@ class Cotizacion(Base):
     # momento: si luego el recálculo lo baja de nivel, lo ya enviado no puede
     # volver a quedar bloqueado. NULL en cotizaciones anteriores a esta columna.
     tier_solicitante_creacion = Column(String(10), nullable=True)
+    # Portada: la primera de `fotos_producto`. Se conserva aparte porque es lo
+    # que leen los listados y los clientes anteriores a la galería.
     foto_producto = Column(String(500), nullable=True)
+    # Galería del producto, en el orden en que el cliente la subió (máx.
+    # MAX_FOTOS_PRODUCTO). NULL en cotizaciones anteriores a la galería.
+    fotos_producto = Column(JSON, nullable=True)
     pais_importacion = Column(String(100), nullable=False)
     nivel_personalizacion = Column(String(50), nullable=True)
     nombre_producto = Column(String(255), nullable=False)
@@ -68,6 +73,12 @@ class Cotizacion(Base):
     # combina con el prefijo de la empresa importadora para rotular las cajas.
     # Ver `utils/shipping_mark.py`.
     shipping_mark_sufijo = Column(String(40), nullable=True)
+    # De dónde salió la solicitud: "directa" (formulario), "tendencias" o
+    # "catalogo". Permite medir cuántas solicitudes trae cada edición y producto.
+    origen = Column(String(20), nullable=False, default="directa", server_default="directa")
+    tendencia_edicion_id = Column(String(36), nullable=True, index=True)
+    tendencia_producto_id = Column(String(36), nullable=True, index=True)
+    catalogo_producto_id = Column(String(36), nullable=True, index=True)
     # Valores de los campos personalizados definidos por el importador (solo aplica
     # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.
     campos_personalizados_valores = Column(JSON, nullable=True)

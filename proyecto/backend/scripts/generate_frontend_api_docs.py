@@ -23,6 +23,8 @@ TAGS_CON_GUIA_MANUAL = {
     "Notificaciones",        # 16-Notificaciones.md
     "Gestión Documental",    # 17-Documentos-y-Multimedia.md
     "Cotizantes",            # 18-Tiers-y-Perfil-Cotizante.md
+    "Tendencias",            # 25-Tendencias-y-Catalogos.md
+    "Catálogos de empresas", # 25-Tendencias-y-Catalogos.md
 }
 
 TAG_FILES = {

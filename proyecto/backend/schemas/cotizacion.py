@@ -4,6 +4,8 @@ from datetime import datetime
 
 from utils.shipping_mark import LONGITUD_MAX_SUFIJO, normalizar_segmento
 
+MAX_FOTOS_PRODUCTO = 10
+
 class ContactoAsignadoResponse(BaseModel):
     """Contacto de la empresa importadora a cargo de negociar una cotización
     (Semana 4 - Fase 7: navegación cruzada / contacto del asesor asignado)."""
@@ -47,7 +49,13 @@ class CotizacionCreate(BaseModel):
         return v
     
     importador_id: Optional[str] = None  # Solo para modalidad dirigida
+    # Obsoleto: una sola foto. Se acepta para no romper clientes anteriores y
+    # se trata como una galería de un elemento.
     foto_producto: Optional[str] = None
+    fotos_producto: Optional[List[str]] = Field(
+        default=None,
+        description=f"URLs de las fotos del producto, en orden. Máximo {MAX_FOTOS_PRODUCTO}.",
+    )
     pais_importacion: str = Field(..., min_length=1, description="País desde donde se importa")
     nivel_personalizacion: Optional[str] = None
     nombre_producto: str = Field(..., min_length=1, max_length=255, description="Nombre del producto a importar")
@@ -81,6 +89,42 @@ class CotizacionCreate(BaseModel):
     campos_personalizados_valores: Optional[Dict[str, Any]] = Field(
         None, description="Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor}"
     )
+    origen: Literal["directa", "tendencias", "catalogo"] = Field(
+        default="directa", description="De dónde sale la solicitud: formulario, Tendencias o catálogo de una empresa"
+    )
+    tendencia_edicion_id: Optional[str] = None
+    tendencia_producto_id: Optional[str] = None
+    catalogo_producto_id: Optional[str] = None
+
+    @field_validator("fotos_producto")
+    @classmethod
+    def validar_fotos_producto(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        fotos = []
+        for url in v:
+            url = (url or "").strip()
+            if not url:
+                continue
+            if len(url) > 500:
+                raise ValueError("La dirección de una foto supera los 500 caracteres")
+            if url not in fotos:
+                fotos.append(url)
+        if len(fotos) > MAX_FOTOS_PRODUCTO:
+            raise ValueError(f"Puedes adjuntar como máximo {MAX_FOTOS_PRODUCTO} fotos del producto")
+        return fotos
+
+    @model_validator(mode="after")
+    def unificar_fotos(self):
+        # Quien envía solo `foto_producto` (clientes anteriores) obtiene una
+        # galería de una foto; quien envía la galería, su primera foto de portada.
+        if self.fotos_producto is None and self.foto_producto:
+            self.fotos_producto = [self.foto_producto.strip()]
+        if self.fotos_producto:
+            self.foto_producto = self.fotos_producto[0]
+        elif self.fotos_producto is not None:
+            self.foto_producto = None
+        return self
 
     @model_validator(mode="after")
     def cantidad_entera_en_unidades(self):
@@ -126,6 +170,20 @@ class CotizacionResponse(BaseModel):
     solicitante_puntos_cotizacion: int = 0
     bloqueada: bool = False
     foto_producto: Optional[str]
+    fotos_producto: List[str] = Field(default_factory=list, validate_default=True)
+    origen: str = "directa"
+    tendencia_edicion_id: Optional[str] = None
+    tendencia_producto_id: Optional[str] = None
+    catalogo_producto_id: Optional[str] = None
+
+    @field_validator("fotos_producto", mode="before")
+    @classmethod
+    def galeria_o_portada(cls, v, info):
+        # Las cotizaciones anteriores a la galería solo tienen `foto_producto`.
+        if v:
+            return v
+        portada = info.data.get("foto_producto")
+        return [portada] if portada else []
     pais_importacion: str
     nivel_personalizacion: Optional[str]
     nombre_producto: str

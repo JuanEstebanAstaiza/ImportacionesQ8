@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Integer
 from uuid import uuid4
 from datetime import datetime
 import enum
@@ -30,7 +30,14 @@ class Pago(Base):
     usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
     wompi_payment_id = Column(String(100), unique=True, nullable=False, index=True)
     monto_usd = Column(Float, nullable=False)
-    creditos_comprados = Column(Float, nullable=False)
+    creditos_comprados = Column(Float, nullable=False, default=0)
+    # Qué se pagó: "creditos" (recarga del wallet) o "suscripcion_tendencias".
+    concepto = Column(String(30), nullable=False, default="creditos", server_default="creditos")
+    # Valor cobrado en pesos, para los conceptos que se venden en COP.
+    monto_cop = Column(Float, nullable=True)
+    # Días de acceso que compra este pago (suscripción). Se fija al crear el
+    # pago para que un cambio de tarifa no altere lo que el usuario ya pagó.
+    dias_acceso = Column(Integer, nullable=True)
     estado = Column(String(20), default=EstadoPago.pendiente, nullable=False)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_confirmacion = Column(DateTime, nullable=True)

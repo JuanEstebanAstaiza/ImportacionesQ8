@@ -94,6 +94,11 @@ from models.notificacion import Notificacion  # noqa: F401
 from models.recepcion_cotizacion import RecepcionCotizacion  # noqa: F401
 from models.evento import Evento  # noqa: F401
 from models.configuracion import ConfiguracionPlataforma  # noqa: F401
+from models.tendencias import (  # noqa: F401
+    AccesoTendencias, CambioTendencias, CierreFabricas, EdicionProducto, EdicionTendencias,
+    GuardadoTendencia, ProductoTendencia, SuscripcionAvisoTendencias, Temporada,
+)
+from models.catalogo import AccesoCatalogo, CatalogoEmpresa, ProductoCatalogo  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -571,6 +576,21 @@ def cleanup_test_db(db_session):
         db_session.query(ConversacionChat).delete()
         db_session.query(MovimientoCredito).delete()
         db_session.query(SolicitudRecreacion).delete()
+
+        # Tendencias y catálogos: referencian usuarios, pagos y empresas.
+        db_session.query(AccesoTendencias).delete()
+        db_session.query(GuardadoTendencia).delete()
+        db_session.query(SuscripcionAvisoTendencias).delete()
+        db_session.query(CambioTendencias).delete()
+        db_session.query(EdicionProducto).delete()
+        db_session.query(EdicionTendencias).delete()
+        db_session.query(ProductoTendencia).delete()
+        db_session.query(Temporada).delete()
+        db_session.query(CierreFabricas).delete()
+        db_session.query(AccesoCatalogo).delete()
+        db_session.query(ProductoCatalogo).delete()
+        db_session.query(CatalogoEmpresa).delete()
+
         db_session.query(Pago).delete()
         db_session.query(OrdenDocumento).delete()
         db_session.query(DocumentoOrden).delete()

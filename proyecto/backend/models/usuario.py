@@ -96,6 +96,9 @@ class Usuario(Base):
     # Nivel de la mesa de soporte al que pertenece esta cuenta (solo rol
     # "soporte"). Determina qué tickets se le pueden asignar. NULL en el resto.
     nivel_soporte = Column(Integer, nullable=True)
+    # Curador de Tendencias: arma y programa las ediciones semanales. Es una
+    # capacidad extra, no un rol: la asigna el admin a usuarios existentes.
+    es_curador = Column(Boolean, nullable=False, default=False, server_default="0")
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva
