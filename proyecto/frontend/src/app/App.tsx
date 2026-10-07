@@ -1513,16 +1513,21 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
 // ─────────────────────────────────────────────────────────────────────────────
 // APP HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string;photoUrl?:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
+function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { name: string; company: string; initials: string; photoUrl?: string }; notifCount?: number; onNotif?: () => void; onProfile?: () => void; sb?: SidebarCtrl }) {
   const { dark, toggleTheme } = useBrandTheme();
   const { user: authUser } = useAuth();
-  const count=sb?.notifCount??notifCount;
-  const handler=sb?.onNotif??onNotif;
-  const profileHandler=sb?.onProfile??onProfile;
-  const chatHandler=sb?.onChat;
-  const helpHandler=sb?.onHelp;
-  const chatCount=sb?.chatCount??0;
-  const showHelp=sb?.showHelp??true;
+  
+  // Estado para el popover de créditos
+  const [showCreditosModal, setShowCreditosModal] = useState(false);
+  const creditosRef = useRef<HTMLDivElement>(null);
+
+  const count = sb?.notifCount ?? notifCount;
+  const handler = sb?.onNotif ?? onNotif;
+  const profileHandler = sb?.onProfile ?? onProfile;
+  const chatHandler = sb?.onChat;
+  const helpHandler = sb?.onHelp;
+  const chatCount = sb?.chatCount ?? 0;
+  const showHelp = sb?.showHelp ?? true;
   const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
@@ -1530,18 +1535,71 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
   const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
   const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
+
+  // Cierre automático al hacer clic fuera del badge/popover
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (creditosRef.current && !creditosRef.current.contains(event.target as Node)) {
+        setShowCreditosModal(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
-    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
-      {/* LADO IZQUIERDO */}
+    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0 relative">
+      {/* LADO IZQUIERDO: BADGE Y POPOVER DE CRÉDITOS */}
       <div className="flex items-center">
         {authUser?.rol === "solicitante" && (
-          <span
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"
-            title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.)."
-          >
-            <WalletCards className="h-3.5 w-3.5" />
-            {creditos} créditos
-          </span>
+          <div className="relative" ref={creditosRef}>
+            <button
+              type="button"
+              onClick={() => setShowCreditosModal((prev) => !prev)}
+              onMouseEnter={() => setShowCreditosModal(true)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <WalletCards className="h-3.5 w-3.5 animate-pulse" />
+              <span>{creditos} créditos</span>
+            </button>
+
+            {/* Popover animado */}
+            {showCreditosModal && (
+              <div 
+                className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
+                    <WalletCards className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
+                        {creditos}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por solicitud
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreditosModal(false)}
+                    className="font-medium text-primary hover:underline dark:text-accent"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -2245,23 +2303,43 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;onRefreshQuotes?:()=>Promise<void>;creditos:number;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
-  const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
-  const [quoteToUnlock,setQuoteToUnlock]=useState<Quote|null>(null);
-  const [unlocking,setUnlocking]=useState(false);
-  const [unlockError,setUnlockError]=useState("");
-  const lastQ=quotes[0]??null;
+function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb, quotes, responses }: { onNewQuote: () => void; onViewDetail: (id: string) => void; onRefreshQuotes?: () => Promise<void>; creditos: number; sb: SidebarCtrl; quotes: Quote[]; responses: QuoteResponse[] }) {
+  const [search, setSearch] = useState("");
+  const [statusF, setStatusF] = useState("");
+  const [modeF, setModeF] = useState("");
+  const [respF, setRespF] = useState("");
+  const [quoteToUnlock, setQuoteToUnlock] = useState<Quote | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+
+  // Estado para controlar el popover de créditos al lado del título
+  const [showCreditosPopover, setShowCreditosPopover] = useState(false);
+  const creditosPopoverRef = useRef<HTMLDivElement>(null);
+
+  const lastQ = quotes[0] ?? null;
   const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
     acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
     return acc;
   }, {});
 
-  const filtered=quotes.filter(q=>{
-    const ms=!search||[q.code,q.product,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
-    const mst=!statusF||q.status===statusF;const mm=!modeF||q.mode===modeF;
-    const count=responseCountByQuoteId[q.id]||0;
-    const mr=!respF||(respF==="sin"?count===0:count>0);
-    return ms&&mst&&mm&&mr;
+  // Cierre automático del popover al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (creditosPopoverRef.current && !creditosPopoverRef.current.contains(event.target as Node)) {
+        setShowCreditosPopover(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = quotes.filter(q => {
+    const ms = !search || [q.code, q.product, q.importer].some(v => v.toLowerCase().includes(search.toLowerCase()));
+    const mst = !statusF || q.status === statusF;
+    const mm = !modeF || q.mode === modeF;
+    const count = responseCountByQuoteId[q.id] || 0;
+    const mr = !respF || (respF === "sin" ? count === 0 : count > 0);
+    return ms && mst && mm && mr;
   });
 
   async function unlockQuote() {
@@ -2278,42 +2356,88 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
       setUnlocking(false);
     }
   }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="quotes"/>
+      <Sidebar {...sb} active="quotes" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
+        <AppHeader user={USER} sb={sb} />
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
+            <Breadcrumb items={[{ label: "Inicio", onClick: () => sb.onNav("dashboard") }, { label: "Cotizaciones" }]} />
             <div className="flex items-center justify-between mt-3">
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.).">
-                  <WalletCards className="h-3.5 w-3.5"/>
-                  {creditos} créditos
-                </span>
+                
+                {/* POP OVER DE CRÉDITOS ANIMADO EN EL ENCABEZADO */}
+                <div className="relative" ref={creditosPopoverRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreditosPopover((prev) => !prev)}
+                    onMouseEnter={() => setShowCreditosPopover(true)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <WalletCards className="h-3.5 w-3.5 animate-pulse" />
+                    <span>{creditos} créditos</span>
+                  </button>
+
+                  {showCreditosPopover && (
+                    <div className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
+                          <WalletCards className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
+                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
+                              {creditos}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por desbloqueo
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCreditosPopover(false)}
+                          className="font-medium text-primary hover:underline dark:text-accent"
+                        >
+                          Entendido
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
+
+              <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card padding="md">
-              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ&&<Badge variant={lastQ.status}/>}</div>
-              {lastQ?(
+              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ && <Badge variant={lastQ.status} />}</div>
+              {lastQ ? (
                 <>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                     <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
                     <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
                     <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",lastQ.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id]||0}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", lastQ.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id] || 0}</p></div>
                   </div>
-                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(lastQ.id)}>Ver detalle</Button></div>
+                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(lastQ.id)}>Ver detalle</Button></div>
                 </>
-              ):(
+              ) : (
                 <div className="py-8 text-center">
-                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/>
+                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">No hay cotizaciones registradas aún.</p>
                 </div>
               )}
@@ -2323,65 +2447,68 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Con propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) > 0).length}</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) > 0).length}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Sin propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) === 0).length}</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) === 0).length}</p>
                 </div>
               </div>
             </Card>
           </div>
+
           <div>
             <h2 className="text-base font-semibold mb-4">Historial de cotizaciones</h2>
             <Card padding="sm" className="mb-4">
               <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-                <div className="w-44"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
-                <div className="w-32"><Select value={modeF} onChange={e=>setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
-                <div className="w-44"><Select value={respF} onChange={e=>setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
-                {(search||statusF||modeF||respF)&&<Button variant="ghost" size="sm" onClick={()=>{setSearch("");setStatusF("");setModeF("");setRespF("");}}>Limpiar</Button>}
+                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} prefix={<Search className="w-4 h-4" />} /></div>
+                <div className="w-44"><Select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
+                <div className="w-32"><Select value={modeF} onChange={e => setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
+                <div className="w-44"><Select value={respF} onChange={e => setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
+                {(search || statusF || modeF || respF) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusF(""); setModeF(""); setRespF(""); }}>Limpiar</Button>}
               </div>
             </Card>
+
             <Card padding="none">
               <div className="px-5 py-3.5 border-b border-border"><p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">{filtered.length}</span> cotizaciones</p></div>
-              {filtered.length>0?(
+              {filtered.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b border-border">{["Código","Fecha","Producto","Importadora","Modalidad","Estado","Resp.","Últ. act.",""].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
-                    <tbody>{filtered.map((row,i)=>(
-                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors",i%2===0?"bg-white":"bg-slate-50/50")}>
+                    <thead><tr className="border-b border-border">{["Código", "Fecha", "Producto", "Importadora", "Modalidad", "Estado", "Resp.", "Últ. act.", ""].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
+                    <tbody>{filtered.map((row, i) => (
+                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
                         <td className="px-4 py-3 font-mono text-xs font-medium">{row.code}</td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.date}</td>
                         <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
-                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
+                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", row.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{row.mode}</span></td>
                         <td className="px-4 py-3">
                           {row.bloqueada ? (
                             <div className="flex min-w-[150px] flex-col items-start gap-1">
                               <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">Cotización bloqueada</span>
                               <span className="text-[11px] text-muted-foreground">Requiere <TierBadge tier={row.tierMinimoRequerido} /></span>
                             </div>
-                          ) : <Badge variant={row.status}/>}
+                          ) : <Badge variant={row.status} />}
                         </td>
-                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id]||0}</span></td>
+                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id] || 0}</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button>
-                            {row.bloqueada && <Button variant="primary" size="sm" onClick={()=>{setUnlockError("");setQuoteToUnlock(row);}}>Desbloquear por 1 punto</Button>}
+                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(row.id)}>Ver detalle</Button>
+                            {row.bloqueada && <Button variant="primary" size="sm" onClick={() => { setUnlockError(""); setQuoteToUnlock(row); }}>Desbloquear por 1 crédito</Button>}
                           </div>
                         </td>
                       </tr>
                     ))}</tbody>
                   </table>
                 </div>
-              ):<div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
+              ) : <div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" /><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
             </Card>
           </div>
         </main>
       </div>
-      <Modal open={Boolean(quoteToUnlock)} onClose={()=>{if(!unlocking)setQuoteToUnlock(null);}} title="Desbloquear cotización">
+
+      <Modal open={Boolean(quoteToUnlock)} onClose={() => { if (!unlocking) setQuoteToUnlock(null); }} title="Desbloquear cotización">
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <p className="text-sm font-semibold">{quoteToUnlock?.code} · {quoteToUnlock?.product}</p>
@@ -2390,12 +2517,12 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
               <span>Requerido:</span><TierBadge tier={quoteToUnlock?.tierMinimoRequerido} />
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">Se descontará 1 punto de cotización de tu saldo para habilitar esta oportunidad.</p>
-          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? 0} puntos</span></p>
+          <p className="text-sm text-muted-foreground">Se descontará 1 crédito de tu saldo para habilitar esta oportunidad.</p>
+          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? creditos} créditos</span></p>
           {unlockError && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">{unlockError}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={unlocking} onClick={()=>setQuoteToUnlock(null)}>Cancelar</Button>
-            <Button variant="primary" loading={unlocking} onClick={()=>{void unlockQuote();}}>Desbloquear por 1 punto</Button>
+            <Button variant="secondary" disabled={unlocking} onClick={() => setQuoteToUnlock(null)}>Cancelar</Button>
+            <Button variant="primary" loading={unlocking} onClick={() => { void unlockQuote(); }}>Desbloquear por 1 crédito</Button>
           </div>
         </div>
       </Modal>
@@ -6105,10 +6232,10 @@ function Stepper({current}:{current:number}) {
       const step=i+1;const done=step<current;const active=step===current;
       return (<div key={step} className="flex items-center flex-1 last:flex-none">
         <div className="flex flex-col items-center gap-1.5">
-          <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",done?"bg-primary text-white":active?"bg-primary text-white ring-4 ring-primary/20":"bg-muted text-muted-foreground border border-border")}>{done?<Check className="w-4 h-4"/>:step}</div>
-          <span className={clsx("text-xs font-medium whitespace-nowrap hidden sm:block",active?"text-primary":done?"text-foreground":"text-muted-foreground")}>{label}</span>
+          <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",done?"bg-primary dark:bg-accent text-white dark:text-black":active?"bg-primary dark:bg-accent text-white dark:text-black ring-4 ring-primary/20 dark:ring-accent/20":"bg-muted text-muted-foreground border border-border")}>{done?<Check className="w-4 h-4"/>:step}</div>
+          <span className={clsx("text-xs font-medium whitespace-nowrap hidden sm:block",active?"text-primary dark:text-accent":done?"text-foreground":"text-muted-foreground")}>{label}</span>
         </div>
-        {i<STEPS.length-1&&<div className={clsx("flex-1 h-0.5 mx-2 mb-4 transition-all duration-300",step<current?"bg-primary":"bg-border")}/>}
+        {i<STEPS.length-1&&<div className={clsx("flex-1 h-0.5 mx-2 mb-4 transition-all duration-300",step<current?"bg-primary dark:bg-accent":"bg-border")}/>}
       </div>);
     })}</div>
   );
@@ -6134,53 +6261,216 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
 
   return (
     <div className="space-y-6">
+      {/* SELECCIÓN DE MODALIDAD */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[{m:"dirigida" as const,icon:Building2,title:"Cotización dirigida",desc:"Elige una empresa importadora específica para enviar directamente tu solicitud."},{m:"abierta" as const,icon:Globe,title:"Cotización abierta",desc:"La solicitud se distribuirá automáticamente entre importadores compatibles."}].map(({m,icon:Icon,title,desc})=>(
-          <button key={m} onClick={()=>{setModalidad(m);if(m==="abierta")setSelectedId(null);}} className={clsx("p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",modalidad===m?"border-primary bg-primary/5 shadow-md":"border-border bg-white hover:border-primary/40")}>
-            <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center mb-2.5",modalidad===m?"bg-primary":"bg-muted")}><Icon className={clsx("w-5 h-5",modalidad===m?"text-white":"text-muted-foreground")}/></div>
-            <h3 className="font-semibold text-sm mb-1.5">{title}</h3><p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-            {modalidad===m&&<div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium"><Check className="w-3.5 h-3.5"/>Seleccionada</div>}
-          </button>
-        ))}
+        {[
+          {
+            m: "dirigida" as const,
+            icon: Building2,
+            title: "Cotización dirigida",
+            desc: "Elige una empresa importadora específica para enviar directamente tu solicitud.",
+          },
+          {
+            m: "abierta" as const,
+            icon: Globe,
+            title: "Cotización abierta",
+            desc: "La solicitud se distribuirá automáticamente entre importadores compatibles.",
+          },
+        ].map(({ m, icon: Icon, title, desc }) => {
+          const seleccionada = modalidad === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setModalidad(m);
+                if (m === "abierta") setSelectedId(null);
+              }}
+              className={clsx(
+                "p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",
+                seleccionada
+                  ? "border-primary dark:border-accent bg-primary/5 dark:bg-accent/10 shadow-md text-foreground"
+                  : "border-border bg-card hover:border-primary/40 dark:hover:border-accent/50 text-foreground"
+              )}
+            >
+              <div
+                className={clsx(
+                  "w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-colors",
+                  seleccionada
+                    ? "bg-primary dark:bg-accent"
+                    : "bg-muted group-hover:bg-primary/10 dark:group-hover:bg-accent/10"
+                )}
+              >
+                <Icon
+                  className={clsx(
+                    "w-5 h-5 transition-colors",
+                    seleccionada
+                      ? "text-primary-foreground dark:text-accent-foreground"
+                      : "text-muted-foreground"
+                  )}
+                />
+              </div>
+
+              <h3 className="font-semibold text-sm mb-1.5">{title}</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+
+              {seleccionada && (
+                <div className="mt-3 flex items-center gap-1 text-xs font-medium text-primary dark:text-accent">
+                  <Check className="w-3.5 h-3.5" />
+                  Seleccionada
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {modalidad==="dirigida"&& (
+      {/* SECCIÓN DE IMPORTADORAS */}
+      {modalidad === "dirigida" && (
         <div>
-          <h3 className="text-sm font-semibold mb-3">Selecciona una importadora</h3>
-          <Card padding="sm" className="mb-4">
+          <h3 className="text-sm font-semibold mb-3 text-foreground">Selecciona una importadora</h3>
+
+          {/* FILTROS Y BÚSQUEDA */}
+          <Card padding="sm" className="mb-4 bg-card border-border">
             <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-              <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
-              <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
-              <div className="w-44"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Certificación</option><option value="certificadas">Con certificaciones</option></Select></div>
-              {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
+              <div className="flex-1 min-w-[140px]">
+                <Input
+                  placeholder="Buscar empresa..."
+                  value={cs}
+                  onChange={(e) => setCs(e.target.value)}
+                  prefix={<Search className="w-4 h-4 text-muted-foreground" />}
+                  className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+                />
+              </div>
+              <div className="w-32">
+                <Select
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                >
+                  <option value="">País</option>
+                  {[...new Set(importers.map((i) => i.country))].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="w-36">
+                <Select
+                  value={ccat}
+                  onChange={(e) => setCcat(e.target.value)}
+                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                >
+                  <option value="">Categoría</option>
+                  {[...new Set(importers.flatMap((i) => i.categories))].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="w-44">
+                <Select
+                  value={cr}
+                  onChange={(e) => setCr(e.target.value)}
+                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                >
+                  <option value="">Certificación</option>
+                  <option value="certificadas">Con certificaciones</option>
+                </Select>
+              </div>
+              {hasF && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    setCs("");
+                    setCc("");
+                    setCcat("");
+                    setCr("");
+                  }}
+                  className="hover:text-primary dark:hover:text-accent"
+                >
+                  Limpiar
+                </Button>
+              )}
             </div>
           </Card>
 
-          {fi.length===0 ? (
-            <Card padding="lg" className="border-dashed">
-              <div className="py-6 text-center"><p className="text-sm text-muted-foreground">No se encontraron empresas</p></div>
+          {/* TARJETAS DE IMPORTADORAS */}
+          {fi.length === 0 ? (
+            <Card padding="lg" className="border-dashed border-border bg-card">
+              <div className="py-6 text-center">
+                <p className="text-sm text-muted-foreground">No se encontraron empresas</p>
+              </div>
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {fi.map(imp=>{
-                const sel=selectedId===imp.id;
-                return(
-                  <div key={imp.id} onClick={()=>setSelectedId(sel?null:imp.id)} className={clsx("relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200",sel?"border-primary shadow-lg bg-white":"border-border bg-white hover:border-primary/40 hover:shadow-md")}>
-                    {sel&&<div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-white"/></div>}
+              {fi.map((imp) => {
+                const sel = selectedId === imp.id;
+                return (
+                  <div
+                    key={imp.id}
+                    onClick={() => setSelectedId(sel ? null : imp.id)}
+                    className={clsx(
+                      "relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 bg-card text-card-foreground",
+                      sel
+                        ? "border-primary dark:border-accent shadow-lg"
+                        : "border-border hover:border-primary/40 dark:hover:border-accent/50 hover:shadow-md"
+                    )}
+                  >
+                    {/* Checkbox badge de selección */}
+                    {sel && (
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary dark:bg-accent flex items-center justify-center">
+                        <Check className="w-3 h-3 text-primary-foreground dark:text-accent-foreground" />
+                      </div>
+                    )}
+
+                    {/* Info de la empresa */}
                     <div className="flex items-start gap-3 mb-3">
-                      <Avatar initials={imp.initials} size="lg" color={imp.color}/>
+                      <Avatar initials={imp.initials} size="lg" color={imp.color} />
                       <div className="min-w-0">
-                        <div className="flex items-start gap-1"><p className="font-semibold text-sm leading-tight">{imp.name}</p>{imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div>
+                        <div className="flex items-start gap-1">
+                          <p className="font-semibold text-sm leading-tight text-foreground">{imp.name}</p>
+                          {imp.verified && (
+                            <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{imp.specialty}</p>
                         <p className="text-xs text-muted-foreground/70 mt-0.5">{imp.country}</p>
                       </div>
                     </div>
+
+                    {/* Métricas */}
                     <div className="flex items-center justify-between text-xs mb-3">
-                      <div className="flex items-center gap-1 text-emerald-700">{(imp.certs??[]).length>0&&(<><Shield className="w-3 h-3"/><span className="font-medium">{(imp.certs??[]).length} cert.</span></>)}</div>
-                      <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span>{imp.responseTime}</span></div>
+                      <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        {(imp.certs ?? []).length > 0 && (
+                          <>
+                            <Shield className="w-3 h-3" />
+                            <span className="font-medium">{(imp.certs ?? []).length} cert.</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        <span>{imp.responseTime}</span>
+                      </div>
                     </div>
-                    <button onClick={e=>{e.stopPropagation();setSelectedId(sel?null:imp.id);}} className={clsx("w-full h-8 rounded-lg text-xs font-medium transition-all",sel?"bg-primary text-white":"bg-muted text-foreground hover:bg-primary/10")}>{sel?"Seleccionada":"Seleccionar"}</button>
+
+                    {/* Botón de Selección */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(sel ? null : imp.id);
+                      }}
+                      className={clsx(
+                        "w-full h-8 rounded-lg text-xs font-medium transition-all",
+                        sel
+                          ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
+                          : "bg-muted text-foreground hover:bg-primary/10 dark:hover:bg-accent/10"
+                      )}
+                    >
+                      {sel ? "Seleccionada" : "Seleccionar"}
+                    </button>
                   </div>
                 );
               })}
@@ -6192,154 +6482,630 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
   );
 }
 
-function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"abierta"|null;si:Importer|null;form:QuoteFormState}) {
-  const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?cantidadConUnidad(form.minQuantity,form.unit):""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
-  if(modalidad==="dirigida"&&si)return(<div className="space-y-4">
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:si.advisor.phone})}/><ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>toast.info("El chat se habilita al enviar la cotización.")}/></div></Card>
-    {step>=2&&<Summary/>}
-    {step===3&&<Card padding="md" className="border-primary/20 bg-primary/5"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse"/><span className="text-xs font-semibold text-primary">Lista para enviar</span></div></Card>}
-  </div>);
-  if(modalidad==="abierta"){if(step===1)return(<Card padding="md"><div className="flex items-center gap-2 mb-3"><div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center"><Globe className="w-4 h-4 text-primary"/></div><h3 className="text-sm font-semibold">¿Cómo funciona?</h3></div><div className="space-y-3">{[{i:Send,t:"Tu solicitud llega a importadores activos compatibles."},{i:Users,t:"Múltiples empresas enviarán propuestas."},{i:CheckCircle2,t:"Compara y decide con cuál continuar."}].map(({i:Icon,t},idx)=><div key={idx} className="flex items-start gap-2.5"><div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5"><Icon className="w-3 h-3 text-primary"/></div><p className="text-xs text-muted-foreground leading-relaxed">{t}</p></div>)}</div></Card>);
-  return(<div className="space-y-4"><Summary/>{step===3&&<Card padding="md"><div className="space-y-2">{[["Empresas potenciales","23 activas"],["País",form.country||"—"],["Categoría",form.productLine||"—"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-semibold">{v}</span></div>)}<div className="pt-2 border-t border-border flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"/><span className="text-xs font-semibold text-orange-600">Esperando propuestas</span></div></div></Card>}</div>);}
-  return(<Card padding="md" className="border-dashed"><div className="flex flex-col items-center text-center py-4 gap-2"><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Building className="w-5 h-5 text-muted-foreground/40"/></div><p className="text-sm text-muted-foreground">Selecciona una modalidad.</p></div></Card>);
+function RightPanel({
+  step,
+  modalidad,
+  si,
+  form,
+}: {
+  step: number;
+  modalidad: "dirigida" | "abierta" | null;
+  si: Importer | null;
+  form: QuoteFormState;
+}) {
+  const Summary = () => (
+    <Card padding="md" className="bg-card border-border text-card-foreground">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+        Resumen
+      </h3>
+      <div className="space-y-2">
+        {[
+          ["Producto", form.productName],
+          ["País", form.country],
+          ["Calidad", form.quality],
+          [
+            "Cantidad",
+            form.minQuantity
+              ? cantidadConUnidad(form.minQuantity, form.unit)
+              : "",
+          ],
+          ["Incoterm", form.incoterm],
+        ].map(([k, v]) => (
+          <div key={k} className="flex justify-between items-start gap-2">
+            <span className="text-xs text-muted-foreground flex-shrink-0">
+              {k}
+            </span>
+            <span className="text-xs font-medium text-right text-foreground">
+              {v || <span className="italic text-muted-foreground/50">—</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+
+  if (modalidad === "dirigida" && si)
+    return (
+      <div className="space-y-4">
+        {/* Empresa seleccionada */}
+        <Card padding="md" className="bg-card border-border text-card-foreground">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Empresa seleccionada
+          </h3>
+          <div className="flex items-start gap-3 mb-3">
+            <Avatar initials={si.initials} size="xl" color={si.color} />
+            <div>
+              <p className="font-semibold text-sm text-foreground">{si.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {si.specialty}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-1.5 pt-3 border-t border-border">
+            {[
+              ["Miembro desde", si.memberSince],
+              ["Proyectos", si.projects.toString()],
+              ["Respuesta", si.responseTime],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-xs text-muted-foreground">{k}</span>
+                <span className="text-xs font-medium text-foreground">{v}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Asesor */}
+        <Card padding="md" className="bg-card border-border text-card-foreground">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Asesor
+          </h3>
+          <div className="flex items-start gap-2.5 mb-3">
+            <Avatar
+              initials={si.advisor.initials}
+              size="lg"
+              color={si.advisor.color}
+            />
+            <div>
+              <p className="font-semibold text-sm text-foreground">
+                {si.advisor.name}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {si.advisor.role}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <ContactBtn
+              type="whatsapp"
+              label="WA"
+              size="sm"
+              className="flex-1 justify-center"
+              onClick={() =>
+                openSmartContact({
+                  type: "whatsapp",
+                  whatsapp: si.advisor.phone,
+                })
+              }
+            />
+            <ContactBtn
+              type="chat"
+              size="sm"
+              className="flex-1 justify-center"
+              onClick={() =>
+                toast.info("El chat se habilita al enviar la cotización.")
+              }
+            />
+          </div>
+        </Card>
+
+        {step >= 2 && <Summary />}
+
+        {step === 3 && (
+          <Card
+            padding="md"
+            className="border-primary/20 bg-primary/5 dark:border-accent/30 dark:bg-accent/10"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary dark:bg-accent animate-pulse" />
+              <span className="text-xs font-semibold text-primary dark:text-accent">
+                Lista para enviar
+              </span>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+
+  if (modalidad === "abierta") {
+    if (step === 1)
+      return (
+        <Card padding="md" className="bg-card border-border text-card-foreground">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 dark:bg-accent/10 flex items-center justify-center">
+              <Globe className="w-4 h-4 text-primary dark:text-accent" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              ¿Cómo funciona?
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {[
+              {
+                i: Send,
+                t: "Tu solicitud llega a importadores activos compatibles.",
+              },
+              { i: Users, t: "Múltiples empresas enviarán propuestas." },
+              {
+                i: CheckCircle2,
+                t: "Compara y decide con cuál continuar.",
+              },
+            ].map(({ i: Icon, t }, idx) => (
+              <div key={idx} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/10 dark:bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Icon className="w-3 h-3 text-primary dark:text-accent" />
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      );
+
+    return (
+      <div className="space-y-4">
+        <Summary />
+        {step === 3 && (
+          <Card padding="md" className="bg-card border-border text-card-foreground">
+            <div className="space-y-2">
+              {[
+                ["Empresas potenciales", "23 activas"],
+                ["País", form.country || "—"],
+                ["Categoría", form.productLine || "—"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between">
+                  <span className="text-xs text-muted-foreground">{k}</span>
+                  <span className="text-xs font-semibold text-foreground">
+                    {v}
+                  </span>
+                </div>
+              ))}
+              <div className="pt-2 border-t border-border flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-orange-400 dark:bg-amber-400 animate-pulse" />
+                <span className="text-xs font-semibold text-orange-600 dark:text-amber-400">
+                  Esperando propuestas
+                </span>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Card padding="md" className="border-dashed border-border bg-card">
+      <div className="flex flex-col items-center text-center py-4 gap-2">
+        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+          <Building className="w-5 h-5 text-muted-foreground/50" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Selecciona una modalidad.
+        </p>
+      </div>
+    </Card>
+  );
 }
 
-function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>;onProductPhotoUploaded:(fileItem:BackendArchivoItem)=>void|Promise<void>;importer:Importer|null}) {
-  const upd=(f:keyof QuoteFormState,v:string)=>setForm(p=>({...p,[f]:v}));
-  const fotos=form.productPhotoUrls;
-  const quitarFoto=(url:string)=>setForm(p=>({...p,productPhotoUrls:p.productPhotoUrls.filter(f=>f!==url)}));
+function Step2({
+  form,
+  setForm,
+  onProductPhotoUploaded,
+  importer,
+}: {
+  form: QuoteFormState;
+  setForm: React.Dispatch<React.SetStateAction<QuoteFormState>>;
+  onProductPhotoUploaded: (fileItem: BackendArchivoItem) => void | Promise<void>;
+  importer: Importer | null;
+}) {
+  const upd = (f: keyof QuoteFormState, v: string) =>
+    setForm((p) => ({ ...p, [f]: v }));
+  const fotos = form.productPhotoUrls;
+  const quitarFoto = (url: string) =>
+    setForm((p) => ({
+      ...p,
+      productPhotoUrls: p.productPhotoUrls.filter((f) => f !== url),
+    }));
+
   return (
     <div className="space-y-5">
-      <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
+      {/* INFORMACIÓN DEL PRODUCTO */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <Tag className="w-4 h-4 text-primary dark:text-accent" />
+          Información del producto
+        </h3>
         <div className="space-y-4">
-          <div><p className="text-sm font-medium mb-1.5">Fotos <span className="text-xs text-muted-foreground font-normal">(opcional, hasta {MAX_FOTOS_PRODUCTO})</span></p>
-            <div className={clsx("border-2 border-dashed rounded-xl p-5 transition-all",fotos.length?"border-border":"border-border hover:border-primary/40 hover:bg-muted/30")}>
-              {fotos.length>0
-                ?<div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  {fotos.map((url,i)=>(
-                    <div key={url} className="relative group aspect-square rounded-lg overflow-hidden border border-border">
-                      <button type="button" onClick={()=>{void abrirArchivoEnPestana(url);}} className="block w-full h-full" title="Ver foto">
-                        <ImagenArchivo src={url} alt={`Foto ${i+1} del producto`} className="w-full h-full"/>
+          <div>
+            <p className="text-sm font-medium mb-1.5 text-foreground">
+              Fotos{" "}
+              <span className="text-xs text-muted-foreground font-normal">
+                (opcional, hasta {MAX_FOTOS_PRODUCTO})
+              </span>
+            </p>
+            <div
+              className={clsx(
+                "border-2 border-dashed rounded-xl p-5 transition-all bg-card",
+                fotos.length
+                  ? "border-border"
+                  : "border-border hover:border-primary/40 dark:hover:border-accent/50 hover:bg-muted/30"
+              )}
+            >
+              {fotos.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {fotos.map((url, i) => (
+                    <div
+                      key={url}
+                      className="relative group aspect-square rounded-lg overflow-hidden border border-border bg-muted"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void abrirArchivoEnPestana(url);
+                        }}
+                        className="block w-full h-full"
+                        title="Ver foto"
+                      >
+                        <ImagenArchivo
+                          src={url}
+                          alt={`Foto ${i + 1} del producto`}
+                          className="w-full h-full object-cover"
+                        />
                       </button>
-                      {i===0&&<span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">Portada</span>}
-                      <button type="button" onClick={()=>quitarFoto(url)} aria-label={`Quitar foto ${i+1}`} className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><X className="h-3.5 w-3.5"/></button>
+                      {i === 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          Portada
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => quitarFoto(url)}
+                        aria-label={`Quitar foto ${i + 1}`}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
-                :<div className="text-center py-3"><Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sube fotos reales del producto: el producto, la etiqueta, el empaque, las medidas</p><p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG, JPEG o WebP · la primera será la portada</p></div>
-              }
+              ) : (
+                <div className="text-center py-3">
+                  <Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Sube fotos reales del producto: el producto, la etiqueta, el
+                    empaque, las medidas
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    PNG, JPG, JPEG o WebP · la primera será la portada
+                  </p>
+                </div>
+              )}
               <div className="mt-3 flex items-center justify-center gap-3">
                 <DocumentUploadButton
-                  label={fotos.length?"Agregar fotos":"Subir fotos"}
+                  label={fotos.length ? "Agregar fotos" : "Subir fotos"}
                   accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                   origen="cotizacion"
                   multiple
-                  maxArchivos={MAX_FOTOS_PRODUCTO-fotos.length}
-                  disabled={fotos.length>=MAX_FOTOS_PRODUCTO}
+                  maxArchivos={MAX_FOTOS_PRODUCTO - fotos.length}
+                  disabled={fotos.length >= MAX_FOTOS_PRODUCTO}
                   onUploaded={onProductPhotoUploaded}
-                  onError={message=>toast.error(message)}
+                  onError={(message) => toast.error(message)}
                 />
-                <span className="text-xs text-muted-foreground">{fotos.length}/{MAX_FOTOS_PRODUCTO}</span>
+                <span className="text-xs text-muted-foreground">
+                  {fotos.length}/{MAX_FOTOS_PRODUCTO}
+                </span>
               </div>
             </div>
           </div>
-          <Input label="Nombre del producto" placeholder="Ej. Café Verde Colombiano Premium" value={form.productName} onChange={e=>upd("productName",e.target.value)}/>
-          <Textarea label="Descripción" placeholder="Describe el producto..." rows={3} value={form.description} onChange={e=>upd("description",e.target.value)}/>
-          <Input label="Link de referencia" placeholder="https://proveedor.com/producto" type="url" value={form.referenceLink} onChange={e=>upd("referenceLink",e.target.value)} hint="URL del proveedor (opcional)"/>
+          <Input
+            label="Nombre del producto"
+            placeholder="Ej. Café Verde Colombiano Premium"
+            value={form.productName}
+            onChange={(e) => upd("productName", e.target.value)}
+            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
+          />
+          <Textarea
+            label="Descripción"
+            placeholder="Describe el producto..."
+            rows={3}
+            value={form.description}
+            onChange={(e) => upd("description", e.target.value)}
+            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
+          />
+          <Input
+            label="Link de referencia"
+            placeholder="https://proveedor.com/producto"
+            type="url"
+            value={form.referenceLink}
+            onChange={(e) => upd("referenceLink", e.target.value)}
+            hint="URL del proveedor (opcional)"
+            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
+          />
         </div>
       </Card>
-      <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Layers className="w-4 h-4 text-primary"/>Clasificación</h3>
+
+      {/* CLASIFICACIÓN */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-primary dark:text-accent" />
+          Clasificación
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select label="País de importación" value={form.country} onChange={e=>upd("country",e.target.value)}><option value="">Seleccionar</option>{COUNTRIES.map(c=><option key={c}>{c}</option>)}</Select>
-          <Select label="Línea de producto" value={form.productLine} onChange={e=>upd("productLine",e.target.value)}><option value="">Seleccionar</option>{LINES.map(l=><option key={l}>{l}</option>)}</Select>
-          <Select label="Calidad" value={form.quality} onChange={e=>upd("quality",e.target.value)}><option value="">Seleccionar</option>{["Económica","Estándar","Premium","Ultra premium"].map(q=><option key={q}>{q}</option>)}</Select>
-          <Select label="Personalización" value={form.customization} onChange={e=>upd("customization",e.target.value)}><option value="">Seleccionar</option><option>Estándar</option><option>Personalización de marca</option><option>Personalización de diseño completo</option></Select>
+          <Select
+            label="País de importación"
+            value={form.country}
+            onChange={(e) => upd("country", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            {COUNTRIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Línea de producto"
+            value={form.productLine}
+            onChange={(e) => upd("productLine", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            {LINES.map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Calidad"
+            value={form.quality}
+            onChange={(e) => upd("quality", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            {["Económica", "Estándar", "Premium", "Ultra premium"].map((q) => (
+              <option key={q}>{q}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Personalización"
+            value={form.customization}
+            onChange={(e) => upd("customization", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            <option>Estándar</option>
+            <option>Personalización de marca</option>
+            <option>Personalización de diseño completo</option>
+          </Select>
         </div>
       </Card>
-      <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary"/>Importación</h3>
+
+      {/* IMPORTACIÓN */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-primary dark:text-accent" />
+          Importación
+        </h3>
         <div className="space-y-4">
-          <div><p className="text-sm font-medium mb-2">Propósito</p><div className="flex gap-2">{(["ecommerce","corporativo"]as const).map(opt=><button key={opt} onClick={()=>upd("purpose",opt)} className={clsx("flex-1 h-9 rounded-lg border text-sm font-medium transition-all",form.purpose===opt?"bg-primary text-white border-primary shadow-sm":"bg-white text-muted-foreground border-border hover:border-primary/40")}>{opt==="ecommerce"?"Ecommerce":"Corporativo"}</button>)}</div></div>
+          <div>
+            <p className="text-sm font-medium mb-2 text-foreground">Propósito</p>
+            <div className="flex gap-2">
+              {(["ecommerce", "corporativo"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => upd("purpose", opt)}
+                  className={clsx(
+                    "flex-1 h-9 rounded-lg border text-sm font-medium transition-all",
+                    form.purpose === opt
+                      ? "bg-primary text-primary-foreground border-primary dark:bg-accent dark:text-accent-foreground dark:border-accent shadow-sm"
+                      : "bg-card text-muted-foreground border-border hover:border-primary/40 dark:hover:border-accent/50"
+                  )}
+                >
+                  {opt === "ecommerce" ? "Ecommerce" : "Corporativo"}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* CANTIDAD MÍNIMA CON SELECTOR DE UNIDADES */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="cantidad-minima" className="text-sm font-medium text-foreground">Cantidad mínima</label>
+              <label
+                htmlFor="cantidad-minima"
+                className="text-sm font-medium text-foreground"
+              >
+                Cantidad mínima
+              </label>
               <div className="relative flex items-center">
                 <input
                   id="cantidad-minima"
                   type="number"
-                  min={form.unit==="m3"?0.1:1}
-                  step={form.unit==="m3"?0.1:1}
-                  inputMode={form.unit==="m3"?"decimal":"numeric"}
-                  placeholder={form.unit==="m3"?"Ej. 2.5":"Ej. 500"}
+                  min={form.unit === "m3" ? 0.1 : 1}
+                  step={form.unit === "m3" ? 0.1 : 1}
+                  inputMode={form.unit === "m3" ? "decimal" : "numeric"}
+                  placeholder={form.unit === "m3" ? "Ej. 2.5" : "Ej. 500"}
                   value={form.minQuantity}
-                  onChange={e=>{
-                    const valor=e.target.value;
-                    // En unidades no hay fracciones; en m³ sí (2,5 m³).
-                    upd("minQuantity",form.unit==="m3"?valor:(valor===""?"":String(Math.max(1,Math.round(Number(valor))))));
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    upd(
+                      "minQuantity",
+                      form.unit === "m3"
+                        ? valor
+                        : valor === ""
+                        ? ""
+                        : String(Math.max(1, Math.round(Number(valor))))
+                    );
                   }}
-                  className="w-full h-10 bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary border-border pl-3 pr-28"
+                  className="w-full h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent pl-3 pr-28 transition-colors"
                 />
-                <div className="absolute right-1 flex rounded-md border border-border bg-white p-0.5" role="radiogroup" aria-label="Unidad de la cantidad">
-                  {(["unidades","m3"] as const).map(u=>(
+                <div
+                  className="absolute right-1 flex rounded-md border border-border bg-muted/40 p-0.5"
+                  role="radiogroup"
+                  aria-label="Unidad de la cantidad"
+                >
+                  {(["unidades", "m3"] as const).map((u) => (
                     <button
                       key={u}
                       type="button"
                       role="radio"
-                      aria-checked={form.unit===u}
-                      onClick={()=>setForm(p=>({...p,unit:u,minQuantity:u==="unidades"&&p.minQuantity?String(Math.max(1,Math.round(Number(p.minQuantity)))):p.minQuantity}))}
-                      className={clsx("h-7 rounded px-2 text-xs font-medium",form.unit===u?"bg-primary text-white":"text-muted-foreground")}
-                    >{u==="m3"?"m³":"Unidades"}</button>
+                      aria-checked={form.unit === u}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          unit: u,
+                          minQuantity:
+                            u === "unidades" && p.minQuantity
+                              ? String(Math.max(1, Math.round(Number(p.minQuantity))))
+                              : p.minQuantity,
+                        }))
+                      }
+                      className={clsx(
+                        "h-7 rounded px-2 text-xs font-medium transition-colors",
+                        form.unit === u
+                          ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {u === "m3" ? "m³" : "Unidades"}
+                    </button>
                   ))}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">{form.unit==="m3"?"Volumen en metros cúbicos; admite decimales":"Número de piezas o unidades"}</p>
+              <p className="text-xs text-muted-foreground">
+                {form.unit === "m3"
+                  ? "Volumen en metros cúbicos; admite decimales"
+                  : "Número de piezas o unidades"}
+              </p>
             </div>
+
+            {/* PRECIO OBJETIVO */}
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between"><label htmlFor="precio-objetivo" className="text-sm font-medium text-foreground">Precio objetivo</label></div>
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="precio-objetivo"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Precio objetivo
+                </label>
+              </div>
               <div className="relative flex items-center">
-                <input id="precio-objetivo" type="text" inputMode="decimal" className="w-full h-10 bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary border-border pl-3 pr-20" placeholder="Ej. 8.50" value={form.targetPrice} onChange={e=>upd("targetPrice", normalizeTargetPriceInput(e.target.value))}/>
+                <input
+                  id="precio-objetivo"
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/60 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent pl-3 pr-20"
+                  placeholder="Ej. 8.50"
+                  value={form.targetPrice}
+                  onChange={(e) =>
+                    upd("targetPrice", normalizeTargetPriceInput(e.target.value))
+                  }
+                />
                 <div className="absolute right-1">
-                  <select value={form.targetPriceCurrency} onChange={e=>setForm(p=>({...p,targetPriceCurrency:e.target.value}))} className="h-8 rounded-md border border-border bg-white px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer pr-6">
-                    {PRICE_CURRENCIES.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+                  <select
+                    value={form.targetPriceCurrency}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        targetPriceCurrency: e.target.value,
+                      }))
+                    }
+                    className="h-8 rounded-md border border-border bg-card px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent appearance-none cursor-pointer pr-6"
+                  >
+                    {PRICE_CURRENCIES.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
                   </select>
-                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"/>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 </div>
               </div>
             </div>
-            <Select label="Incoterm" value={form.incoterm || "DDP"} onChange={e=>upd("incoterm",e.target.value)}><option value="">Seleccionar</option>{INCOTERMS.map(t=><option key={t} value={t}>{t}</option>)}</Select>
+
+            <Select
+              label="Incoterm"
+              value={form.incoterm || "DDP"}
+              onChange={(e) => upd("incoterm", e.target.value)}
+              className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+            >
+              <option value="">Seleccionar</option>
+              {INCOTERMS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+
+          <div className="rounded-lg border border-primary/20 bg-primary/5 dark:border-accent/30 dark:bg-accent/10 px-3 py-2.5">
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Importación incluida:</span>{" "}
+              <span className="font-medium text-foreground">
+                Importación incluida:
+              </span>{" "}
               El proveedor se encargará de la nacionalización de la mercancía antes de
               realizar la facturación electrónica correspondiente.
             </p>
           </div>
-          <Textarea label="Notas" placeholder="Información adicional..." rows={3} value={form.notes} onChange={e=>upd("notes",e.target.value)}/>
+          <Textarea
+            label="Notas"
+            placeholder="Información adicional..."
+            rows={3}
+            value={form.notes}
+            onChange={(e) => upd("notes", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          />
         </div>
       </Card>
-      <Card padding="md"><h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</h3>
-        <p className="text-xs text-muted-foreground mb-4">Cómo quieres que se rotulen tus cajas dentro del contenedor de la empresa importadora.</p>
+
+      {/* SHIPPING MARK */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+          <Package className="w-4 h-4 text-primary dark:text-accent" />
+          Shipping mark
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Cómo quieres que se rotulen tus cajas dentro del contenedor de la empresa
+          importadora.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
           <Input
             label="Tu identificador"
             placeholder="Prendas Control"
             maxLength={LONGITUD_MAX_SUFIJO_SHIPPING_MARK}
             value={form.shippingMarkSufijo}
-            onChange={e=>upd("shippingMarkSufijo",e.target.value)}
+            onChange={(e) => upd("shippingMarkSufijo", e.target.value)}
             hint="Opcional. El nombre con el que reconoces tu carga."
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
           />
           <div className="pt-1">
-            <p className="text-sm font-medium mb-1.5">Marca resultante</p>
-            <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
-              {componerShippingMark(importer?.shippingMarkPrefix,form.shippingMarkSufijo)||"—"}
+            <p className="text-sm font-medium mb-1.5 text-foreground">
+              Marca resultante
+            </p>
+            <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 text-foreground truncate">
+              {componerShippingMark(
+                importer?.shippingMarkPrefix,
+                form.shippingMarkSufijo
+              ) || "—"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {importer
-                ?(importer.shippingMarkPrefix
-                  ?`Prefijo de ${importer.name}: ${importer.shippingMarkPrefix}`
-                  :`${importer.name} todavía no configuró su prefijo.`)
-                :"Se completará con el prefijo de la empresa que atienda tu solicitud."}
+                ? importer.shippingMarkPrefix
+                  ? `Prefijo de ${importer.name}: ${importer.shippingMarkPrefix}`
+                  : `${importer.name} todavía no configuró su prefijo.`
+                : "Se completará con el prefijo de la empresa que atienda tu solicitud."}
             </p>
           </div>
         </div>
@@ -6365,7 +7131,7 @@ function Step3Abierta() {
     <div className="space-y-4">
       <div><h2 className="text-base font-semibold">Solicitudes abiertas</h2><p className="text-sm text-muted-foreground mt-1">Una vez envíes, los importadores comenzarán a responder.</p></div>
       <Card padding="none"><div className="py-16 flex flex-col items-center text-center gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><ClipboardList className="w-6 h-6 text-muted-foreground/40"/></div><p className="font-medium text-sm">Todavía no hay propuestas</p><p className="text-xs text-muted-foreground">Aparecerán aquí cuando los importadores respondan.</p></div></Card>
-      <Card padding="md" className="border-blue-100 bg-blue-50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-blue-900 mb-1.5">Información importante</p>{["La cotización se convierte en orden al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary text-xs mt-0.5">•</span><p className="text-xs text-blue-800 leading-relaxed">{t}</p></div>)}</div></div></Card>
+      <Card padding="md" className="border-primary dark:border-accent bg-primary/50 dark:bg-accent/50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-primary dark:text-accent mb-1.5">Información importante</p>{["La cotización se convierte en orden al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary dark:text-accent text-xs mt-0.5">•</span><p className="text-xs text-primary dark:text-accent leading-relaxed">{t}</p></div>)}</div></div></Card>
     </div>
   );
 }
@@ -6541,9 +7307,9 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2">
                   {origen&&(
-                    <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                    <div className="mb-4 rounded-xl border border-primary/20 dark:border-accent/20 bg-primary/5 dark:bg-accent/5 px-4 py-3 text-sm">
                       <p className="font-medium flex items-center gap-2">
-                        {origen.origen==="tendencias"?<Sparkles className="w-4 h-4 text-primary"/>:<LibraryBig className="w-4 h-4 text-primary"/>}
+                        {origen.origen==="tendencias"?<Sparkles className="w-4 h-4 text-primary dark:text-accent"/>:<LibraryBig className="w-4 h-4 text-primary"/>}
                         {origen.origen==="tendencias"?"Desde Tendencias":"Desde el catálogo de la empresa"}: {origen.nombre}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">Ya cargamos el producto. Completa la cantidad, la calidad y lo que haga falta.</p>
@@ -6588,28 +7354,67 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
             <div className="pt-3 mt-3 border-t border-border flex-shrink-0 bg-background z-10">
               <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>
+                  <Button variant="ghost" size="sm" onClick={onBack}>
+                    Cancelar
+                  </Button>
                   {step > 1 && (
-                    <Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ChevronLeft className="w-3.5 h-3.5" />}
+                      onClick={() => navigate(step - 1, "back")}
+                      className="hover:border-primary hover:bg-primary/10 hover:text-primary dark:hover:border-accent dark:hover:bg-accent/10 dark:hover:text-accent transition-colors"
+                    >
+                      Anterior
+                    </Button>
                   )}
                 </div>
+
                 <div className="w-full sm:w-auto">
                   {step < 3 ? (
-                    <Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext} className="w-full sm:w-auto justify-center">Continuar</Button>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      iconRight={<ChevronRight className="w-4 h-4" />}
+                      onClick={goNext}
+                      className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                    >
+                      Continuar
+                    </Button>
                   ) : (
-                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} disabled={tierBloqueado} onClick={()=>{void handleSubmit(false);}} className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={<Send className="w-4 h-4" />}
+                      loading={submitting}
+                      disabled={tierBloqueado}
+                      onClick={() => {
+                        void handleSubmit(false);
+                      }}
+                      className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                    >
                       {tierBloqueado ? "Solicitar cotización" : "Solicitar cotización"}
                     </Button>
                   )}
                 </div>
               </div>
+
               {step === 3 && tierBloqueado && creditos >= 1 && (
-                <Button variant="primary" size="md" icon={<WalletCards className="w-4 h-4"/>} loading={submitting} onClick={()=>{setDesbloquearPorCredito(true);void handleSubmit(true);}} className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<WalletCards className="w-4 h-4" />}
+                  loading={submitting}
+                  onClick={() => {
+                    setDesbloquearPorCredito(true);
+                    void handleSubmit(true);
+                  }}
+                  className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                >
                   Desbloquear y enviar cotización por 1 crédito
                 </Button>
               )}
             </div>
-
           </main>
         )}
       </div>
