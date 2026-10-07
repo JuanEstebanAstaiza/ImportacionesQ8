@@ -362,7 +362,13 @@ function FormProducto({
   const [linea, setLinea] = useState(producto?.linea_producto ?? "");
   const [pais, setPais] = useState(producto?.pais_origen ?? "China");
   const [cantidad, setCantidad] = useState(producto?.cantidad_minima != null ? String(producto.cantidad_minima) : "");
-  const [unidad, setUnidad] = useState<"unidades" | "m3">(producto?.unidad_cantidad ?? "unidades");
+  
+  const [unidad, setUnidad] = useState<"unidades" | "m3" | "ninguno">(
+    producto?.cantidad_minima == null 
+      ? "ninguno" 
+      : (producto.unidad_cantidad ?? "unidades")
+  );
+  
   const [tiempo, setTiempo] = useState(producto?.tiempo_estimado ?? "");
   const [quePedir, setQuePedir] = useState(producto?.que_pedir_en_cotizacion ?? "");
   const [orden, setOrden] = useState(String(producto?.orden ?? ordenSugerido));
@@ -380,27 +386,43 @@ function FormProducto({
     setFotos((previas) => (previas.includes(ruta) || previas.length >= MAX_FOTOS ? previas : [...previas, ruta]));
   }
 
+  // Manejar el cambio de unidad
+  const manejarCambioUnidad = (nuevaUnidad: "unidades" | "m3" | "ninguno") => {
+    setUnidad(nuevaUnidad);
+    // Si elige "ninguno", limpiamos la cantidad
+    if (nuevaUnidad === "ninguno") {
+      setCantidad("");
+    }
+  };
+
   async function guardar() {
     const limpio = nombre.trim();
     if (!limpio) return toast.error("Escribe el nombre del producto.");
+    
     let cantidadMinima: number | null = null;
-    if (cantidad.trim()) {
+    
+    // Si la unidad NO es "ninguno", validamos y asignamos la cantidad
+    if (unidad !== "ninguno" && cantidad.trim()) {
       cantidadMinima = Number(cantidad.replace(",", "."));
-      if (!Number.isFinite(cantidadMinima) || cantidadMinima <= 0) return toast.error("La cantidad mínima debe ser un número mayor que cero.");
+      if (!Number.isFinite(cantidadMinima) || cantidadMinima < 1) {
+        return toast.error("La cantidad mínima debe ser un número igual o mayor a 1.");
+      }
     }
+
     const datos: ProductoCatalogoDatos = {
       nombre: limpio,
       descripcion: descripcion.trim() || null,
       fotos,
       linea_producto: linea || null,
       pais_origen: pais.trim() || "China",
-      cantidad_minima: cantidadMinima,
-      unidad_cantidad: unidad,
+      cantidad_minima: unidad === "ninguno" ? null : cantidadMinima, // Si es ninguno, enviamos null
+      unidad_cantidad: unidad === "ninguno" ? "unidades" : unidad,   // TypeScript feliz: solo envía "unidades" o "m3"
       tiempo_estimado: tiempo.trim() || null,
       que_pedir_en_cotizacion: quePedir.trim() || null,
       orden: Number.parseInt(orden, 10) || 0,
       activo,
     };
+
     setGuardando(true);
     try {
       const resultado = producto
@@ -422,7 +444,9 @@ function FormProducto({
       onCerrar={onCerrar}
       pie={
         soloLectura ? (
-          <div className="flex justify-end"><button type="button" onClick={onCerrar} className={CLASE_BOTON_SECUNDARIO}>Cerrar</button></div>
+          <div className="flex justify-end">
+            <button type="button" onClick={onCerrar} className={CLASE_BOTON_SECUNDARIO}>Cerrar</button>
+          </div>
         ) : (
           <div className="flex gap-2 sm:justify-end">
             <button type="button" onClick={onCerrar} disabled={guardando} className={`${CLASE_BOTON_SECUNDARIO} flex-1 sm:flex-none`}>Cancelar</button>
@@ -435,7 +459,7 @@ function FormProducto({
       }
     >
       <div className="space-y-4">
-        {/* Las fotos quedan fuera del fieldset para poder abrirlas también en modo lectura. */}
+        {/* Fotos */}
         <div>
           <p className="mb-1.5 text-sm font-medium">
             Fotos <span className="text-xs font-normal text-muted-foreground">(opcional, hasta {MAX_FOTOS})</span>
@@ -488,59 +512,77 @@ function FormProducto({
         </div>
 
         <fieldset disabled={soloLectura || guardando} className="space-y-4">
-        <Campo etiqueta="Nombre" contador={[nombre.length, 120]}>
-          <input className={CLASE_INPUT} value={nombre} maxLength={120} placeholder="Ej. Lámpara LED de escritorio plegable" onChange={(e) => setNombre(e.target.value)} />
-        </Campo>
-        <Campo etiqueta="Descripción">
-          <textarea className={`${CLASE_INPUT} min-h-[80px] resize-y`} rows={3} value={descripcion} placeholder="Materiales, medidas, variantes, para qué sirve…" onChange={(e) => setDescripcion(e.target.value)} />
-        </Campo>
+          <Campo etiqueta="Nombre" contador={[nombre.length, 120]}>
+            <input className={CLASE_INPUT} value={nombre} maxLength={120} placeholder="Ej. Lámpara LED de escritorio plegable" onChange={(e) => setNombre(e.target.value)} />
+          </Campo>
+          <Campo etiqueta="Descripción">
+            <textarea className={`${CLASE_INPUT} min-h-[80px] resize-y`} rows={3} value={descripcion} placeholder="Materiales, medidas, variantes, para qué sirve…" onChange={(e) => setDescripcion(e.target.value)} />
+          </Campo>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo etiqueta="Línea de producto">
-            <select className={CLASE_INPUT} value={linea} onChange={(e) => setLinea(e.target.value)}>
-              <option value="">Sin línea</option>
-              {lineas.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </Campo>
-          <Campo etiqueta="País de origen">
-            <input className={CLASE_INPUT} list="catalogo-paises" value={pais} maxLength={100} onChange={(e) => setPais(e.target.value)} />
-            <datalist id="catalogo-paises">{PAISES.map((p) => <option key={p} value={p} />)}</datalist>
-          </Campo>
-          <div>
-            <span className="mb-1 block text-sm font-medium">Cantidad mínima</span>
-            <div className="flex gap-2">
-              <input className={`${CLASE_INPUT} min-w-0 flex-1`} inputMode="decimal" value={cantidad} placeholder="Ej. 500" onChange={(e) => setCantidad(e.target.value)} />
-              <select className={`${CLASE_INPUT} w-28`} value={unidad} onChange={(e) => setUnidad(e.target.value as "unidades" | "m3")} aria-label="Unidad">
-                <option value="unidades">unidades</option>
-                <option value="m3">m³</option>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Campo etiqueta="Línea de producto">
+              <select className={CLASE_INPUT} value={linea} onChange={(e) => setLinea(e.target.value)}>
+                <option value="">Sin línea</option>
+                {lineas.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
+            </Campo>
+            <Campo etiqueta="País de origen">
+              <input className={CLASE_INPUT} list="catalogo-paises" value={pais} maxLength={100} onChange={(e) => setPais(e.target.value)} />
+              <datalist id="catalogo-paises">{PAISES.map((p) => <option key={p} value={p} />)}</datalist>
+            </Campo>
+
+            {/* SECCIÓN ACTUALIZADA DE CANTIDAD Y UNIDAD */}
+            <div>
+              <span className="mb-1 block text-sm font-medium">Cantidad mínima</span>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  disabled={unidad === "ninguno"}
+                  className={`${CLASE_INPUT} w-1/2 min-w-0 disabled:bg-muted/50 disabled:text-muted-foreground disabled:cursor-not-allowed`}
+                  value={cantidad}
+                  placeholder={unidad === "ninguno" ? "-" : "Ej. 500"}
+                  onChange={(e) => setCantidad(e.target.value)}
+                />
+                <select
+                  className={`${CLASE_INPUT} w-1/2`}
+                  value={unidad}
+                  onChange={(e) => manejarCambioUnidad(e.target.value as "unidades" | "m3" | "ninguno")}
+                  aria-label="Unidad"
+                >
+                  <option value="unidades">unidades</option>
+                  <option value="m3">m³</option>
+                  <option value="ninguno">Ninguno</option>
+                </select>
+              </div>
             </div>
+
+            <Campo etiqueta="Tiempo estimado" ayuda="Hasta que llega a Colombia.">
+              <input className={CLASE_INPUT} value={tiempo} maxLength={80} placeholder="Ej. 45–60 días" onChange={(e) => setTiempo(e.target.value)} />
+            </Campo>
           </div>
-          <Campo etiqueta="Tiempo estimado" ayuda="Hasta que llega a Colombia.">
-            <input className={CLASE_INPUT} value={tiempo} maxLength={80} placeholder="Ej. 45–60 días" onChange={(e) => setTiempo(e.target.value)} />
-          </Campo>
-        </div>
 
-        <Campo
-          etiqueta="Qué pedir en la cotización"
-          ayuda="Se copia en la solicitud cuando el comprador pide propuesta: especificaciones, variantes, empaque o certificaciones a precisar."
-        >
-          <textarea className={`${CLASE_INPUT} min-h-[72px] resize-y`} rows={3} value={quePedir} placeholder="Ej. Indica color, voltaje (110 V) y si lo quieres con empaque individual." onChange={(e) => setQuePedir(e.target.value)} />
-        </Campo>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo etiqueta="Orden" ayuda="Los números menores salen primero.">
-            <input className={CLASE_INPUT} type="number" step={1} value={orden} onChange={(e) => setOrden(e.target.value)} />
+          <Campo
+            etiqueta="Qué pedir en la cotización"
+            ayuda="Se copia en la solicitud cuando el comprador pide propuesta: especificaciones, variantes, empaque o certificaciones a precisar."
+          >
+            <textarea className={`${CLASE_INPUT} min-h-[72px] resize-y`} rows={3} value={quePedir} placeholder="Ej. Indica color, voltaje (110 V) y si lo quieres con empaque individual." onChange={(e) => setQuePedir(e.target.value)} />
           </Campo>
-          <label className="flex cursor-pointer items-start gap-3 self-start rounded-xl border border-border bg-white p-3 sm:mt-6">
-            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#4F06EB]" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
-            <span>
-              <span className="block text-sm font-medium">Visible en el catálogo</span>
-              <span className="block text-xs text-muted-foreground">Desactívalo para ocultarlo sin borrarlo.</span>
-            </span>
-          </label>
-        </div>
-        <p className="text-xs text-muted-foreground">Los catálogos no llevan precios: el precio va en tu propuesta.</p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Campo etiqueta="Orden" ayuda="Los números menores salen primero.">
+              <input className={CLASE_INPUT} type="number" step={1} value={orden} onChange={(e) => setOrden(e.target.value)} />
+            </Campo>
+            <label className="flex cursor-pointer items-start gap-3 self-start rounded-xl border border-border bg-white p-3 sm:mt-6">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#4F06EB]" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
+              <span>
+                <span className="block text-sm font-medium">Visible en el catálogo</span>
+                <span className="block text-xs text-muted-foreground">Desactívalo para ocultarlo sin borrarlo.</span>
+              </span>
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">Los catálogos no llevan precios: el precio va en tu propuesta.</p>
         </fieldset>
       </div>
     </Modal>
