@@ -1513,16 +1513,21 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
 // ─────────────────────────────────────────────────────────────────────────────
 // APP HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string;photoUrl?:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
+function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { name: string; company: string; initials: string; photoUrl?: string }; notifCount?: number; onNotif?: () => void; onProfile?: () => void; sb?: SidebarCtrl }) {
   const { dark, toggleTheme } = useBrandTheme();
   const { user: authUser } = useAuth();
-  const count=sb?.notifCount??notifCount;
-  const handler=sb?.onNotif??onNotif;
-  const profileHandler=sb?.onProfile??onProfile;
-  const chatHandler=sb?.onChat;
-  const helpHandler=sb?.onHelp;
-  const chatCount=sb?.chatCount??0;
-  const showHelp=sb?.showHelp??true;
+  
+  // Estado para el popover de créditos
+  const [showCreditosModal, setShowCreditosModal] = useState(false);
+  const creditosRef = useRef<HTMLDivElement>(null);
+
+  const count = sb?.notifCount ?? notifCount;
+  const handler = sb?.onNotif ?? onNotif;
+  const profileHandler = sb?.onProfile ?? onProfile;
+  const chatHandler = sb?.onChat;
+  const helpHandler = sb?.onHelp;
+  const chatCount = sb?.chatCount ?? 0;
+  const showHelp = sb?.showHelp ?? true;
   const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
@@ -1530,18 +1535,71 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
   const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
   const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
+
+  // Cierre automático al hacer clic fuera del badge/popover
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (creditosRef.current && !creditosRef.current.contains(event.target as Node)) {
+        setShowCreditosModal(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
-    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
-      {/* LADO IZQUIERDO */}
+    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0 relative">
+      {/* LADO IZQUIERDO: BADGE Y POPOVER DE CRÉDITOS */}
       <div className="flex items-center">
         {authUser?.rol === "solicitante" && (
-          <span
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"
-            title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.)."
-          >
-            <WalletCards className="h-3.5 w-3.5" />
-            {creditos} créditos
-          </span>
+          <div className="relative" ref={creditosRef}>
+            <button
+              type="button"
+              onClick={() => setShowCreditosModal((prev) => !prev)}
+              onMouseEnter={() => setShowCreditosModal(true)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <WalletCards className="h-3.5 w-3.5 animate-pulse" />
+              <span>{creditos} créditos</span>
+            </button>
+
+            {/* Popover animado */}
+            {showCreditosModal && (
+              <div 
+                className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
+                    <WalletCards className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
+                        {creditos}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por solicitud
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreditosModal(false)}
+                    className="font-medium text-primary hover:underline dark:text-accent"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -2245,23 +2303,43 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;onRefreshQuotes?:()=>Promise<void>;creditos:number;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
-  const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
-  const [quoteToUnlock,setQuoteToUnlock]=useState<Quote|null>(null);
-  const [unlocking,setUnlocking]=useState(false);
-  const [unlockError,setUnlockError]=useState("");
-  const lastQ=quotes[0]??null;
+function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb, quotes, responses }: { onNewQuote: () => void; onViewDetail: (id: string) => void; onRefreshQuotes?: () => Promise<void>; creditos: number; sb: SidebarCtrl; quotes: Quote[]; responses: QuoteResponse[] }) {
+  const [search, setSearch] = useState("");
+  const [statusF, setStatusF] = useState("");
+  const [modeF, setModeF] = useState("");
+  const [respF, setRespF] = useState("");
+  const [quoteToUnlock, setQuoteToUnlock] = useState<Quote | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+
+  // Estado para controlar el popover de créditos al lado del título
+  const [showCreditosPopover, setShowCreditosPopover] = useState(false);
+  const creditosPopoverRef = useRef<HTMLDivElement>(null);
+
+  const lastQ = quotes[0] ?? null;
   const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
     acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
     return acc;
   }, {});
 
-  const filtered=quotes.filter(q=>{
-    const ms=!search||[q.code,q.product,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
-    const mst=!statusF||q.status===statusF;const mm=!modeF||q.mode===modeF;
-    const count=responseCountByQuoteId[q.id]||0;
-    const mr=!respF||(respF==="sin"?count===0:count>0);
-    return ms&&mst&&mm&&mr;
+  // Cierre automático del popover al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (creditosPopoverRef.current && !creditosPopoverRef.current.contains(event.target as Node)) {
+        setShowCreditosPopover(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = quotes.filter(q => {
+    const ms = !search || [q.code, q.product, q.importer].some(v => v.toLowerCase().includes(search.toLowerCase()));
+    const mst = !statusF || q.status === statusF;
+    const mm = !modeF || q.mode === modeF;
+    const count = responseCountByQuoteId[q.id] || 0;
+    const mr = !respF || (respF === "sin" ? count === 0 : count > 0);
+    return ms && mst && mm && mr;
   });
 
   async function unlockQuote() {
@@ -2278,42 +2356,88 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
       setUnlocking(false);
     }
   }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="quotes"/>
+      <Sidebar {...sb} active="quotes" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
+        <AppHeader user={USER} sb={sb} />
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
+            <Breadcrumb items={[{ label: "Inicio", onClick: () => sb.onNav("dashboard") }, { label: "Cotizaciones" }]} />
             <div className="flex items-center justify-between mt-3">
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles. 1 crédito te permite enviar una cotización gratuita a una empresa de mayor categoría (Plata, Oro, etc.).">
-                  <WalletCards className="h-3.5 w-3.5"/>
-                  {creditos} créditos
-                </span>
+                
+                {/* POP OVER DE CRÉDITOS ANIMADO EN EL ENCABEZADO */}
+                <div className="relative" ref={creditosPopoverRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreditosPopover((prev) => !prev)}
+                    onMouseEnter={() => setShowCreditosPopover(true)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <WalletCards className="h-3.5 w-3.5 animate-pulse" />
+                    <span>{creditos} créditos</span>
+                  </button>
+
+                  {showCreditosPopover && (
+                    <div className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
+                          <WalletCards className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
+                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
+                              {creditos}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por desbloqueo
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCreditosPopover(false)}
+                          className="font-medium text-primary hover:underline dark:text-accent"
+                        >
+                          Entendido
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
+
+              <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card padding="md">
-              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ&&<Badge variant={lastQ.status}/>}</div>
-              {lastQ?(
+              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ && <Badge variant={lastQ.status} />}</div>
+              {lastQ ? (
                 <>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                     <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
                     <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
                     <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",lastQ.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id]||0}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", lastQ.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id] || 0}</p></div>
                   </div>
-                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(lastQ.id)}>Ver detalle</Button></div>
+                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(lastQ.id)}>Ver detalle</Button></div>
                 </>
-              ):(
+              ) : (
                 <div className="py-8 text-center">
-                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/>
+                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">No hay cotizaciones registradas aún.</p>
                 </div>
               )}
@@ -2323,65 +2447,68 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Con propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) > 0).length}</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) > 0).length}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Sin propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) === 0).length}</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) === 0).length}</p>
                 </div>
               </div>
             </Card>
           </div>
+
           <div>
             <h2 className="text-base font-semibold mb-4">Historial de cotizaciones</h2>
             <Card padding="sm" className="mb-4">
               <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-                <div className="w-44"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
-                <div className="w-32"><Select value={modeF} onChange={e=>setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
-                <div className="w-44"><Select value={respF} onChange={e=>setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
-                {(search||statusF||modeF||respF)&&<Button variant="ghost" size="sm" onClick={()=>{setSearch("");setStatusF("");setModeF("");setRespF("");}}>Limpiar</Button>}
+                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} prefix={<Search className="w-4 h-4" />} /></div>
+                <div className="w-44"><Select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
+                <div className="w-32"><Select value={modeF} onChange={e => setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
+                <div className="w-44"><Select value={respF} onChange={e => setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
+                {(search || statusF || modeF || respF) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusF(""); setModeF(""); setRespF(""); }}>Limpiar</Button>}
               </div>
             </Card>
+
             <Card padding="none">
               <div className="px-5 py-3.5 border-b border-border"><p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">{filtered.length}</span> cotizaciones</p></div>
-              {filtered.length>0?(
+              {filtered.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b border-border">{["Código","Fecha","Producto","Importadora","Modalidad","Estado","Resp.","Últ. act.",""].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
-                    <tbody>{filtered.map((row,i)=>(
-                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors",i%2===0?"bg-white":"bg-slate-50/50")}>
+                    <thead><tr className="border-b border-border">{["Código", "Fecha", "Producto", "Importadora", "Modalidad", "Estado", "Resp.", "Últ. act.", ""].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
+                    <tbody>{filtered.map((row, i) => (
+                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
                         <td className="px-4 py-3 font-mono text-xs font-medium">{row.code}</td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.date}</td>
                         <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
-                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
+                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", row.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{row.mode}</span></td>
                         <td className="px-4 py-3">
                           {row.bloqueada ? (
                             <div className="flex min-w-[150px] flex-col items-start gap-1">
                               <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">Cotización bloqueada</span>
                               <span className="text-[11px] text-muted-foreground">Requiere <TierBadge tier={row.tierMinimoRequerido} /></span>
                             </div>
-                          ) : <Badge variant={row.status}/>}
+                          ) : <Badge variant={row.status} />}
                         </td>
-                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id]||0}</span></td>
+                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id] || 0}</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button>
-                            {row.bloqueada && <Button variant="primary" size="sm" onClick={()=>{setUnlockError("");setQuoteToUnlock(row);}}>Desbloquear por 1 punto</Button>}
+                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(row.id)}>Ver detalle</Button>
+                            {row.bloqueada && <Button variant="primary" size="sm" onClick={() => { setUnlockError(""); setQuoteToUnlock(row); }}>Desbloquear por 1 crédito</Button>}
                           </div>
                         </td>
                       </tr>
                     ))}</tbody>
                   </table>
                 </div>
-              ):<div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
+              ) : <div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" /><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
             </Card>
           </div>
         </main>
       </div>
-      <Modal open={Boolean(quoteToUnlock)} onClose={()=>{if(!unlocking)setQuoteToUnlock(null);}} title="Desbloquear cotización">
+
+      <Modal open={Boolean(quoteToUnlock)} onClose={() => { if (!unlocking) setQuoteToUnlock(null); }} title="Desbloquear cotización">
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <p className="text-sm font-semibold">{quoteToUnlock?.code} · {quoteToUnlock?.product}</p>
@@ -2390,12 +2517,12 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
               <span>Requerido:</span><TierBadge tier={quoteToUnlock?.tierMinimoRequerido} />
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">Se descontará 1 punto de cotización de tu saldo para habilitar esta oportunidad.</p>
-          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? 0} puntos</span></p>
+          <p className="text-sm text-muted-foreground">Se descontará 1 crédito de tu saldo para habilitar esta oportunidad.</p>
+          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? creditos} créditos</span></p>
           {unlockError && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">{unlockError}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={unlocking} onClick={()=>setQuoteToUnlock(null)}>Cancelar</Button>
-            <Button variant="primary" loading={unlocking} onClick={()=>{void unlockQuote();}}>Desbloquear por 1 punto</Button>
+            <Button variant="secondary" disabled={unlocking} onClick={() => setQuoteToUnlock(null)}>Cancelar</Button>
+            <Button variant="primary" loading={unlocking} onClick={() => { void unlockQuote(); }}>Desbloquear por 1 crédito</Button>
           </div>
         </div>
       </Modal>
