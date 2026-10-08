@@ -46,6 +46,11 @@ DIAS_SUSCRIPCION_DEFECTO = 30
 
 CONCEPTO_PAGO_SUSCRIPCION = "suscripcion_tendencias"
 
+# Acceso libre temporal: hasta esta fecha (UTC, ISO) cualquier usuario con
+# sesión ve Tendencias sin suscripción ni cortesía. Vacío o vencido: solo
+# suscriptores e invitados. Lo fija el admin desde el panel.
+CLAVE_ACCESO_LIBRE_HASTA = "tendencias.acceso_libre_hasta"
+
 
 # ── Parámetros ───────────────────────────────────────────────────────────────
 
@@ -120,12 +125,26 @@ def acceso_hasta(db: Session, usuario_id: str, ahora: Optional[datetime] = None)
     )
 
 
-def tiene_acceso(db: Session, usuario: Optional[Usuario]) -> bool:
+def acceso_libre_hasta(db: Session, ahora: Optional[datetime] = None) -> Optional[datetime]:
+    """Fin del periodo de acceso libre, si está vigente; None si no lo hay."""
+    valor = configuracion.obtener(db, CLAVE_ACCESO_LIBRE_HASTA)
+    if not valor:
+        return None
+    try:
+        hasta = datetime.fromisoformat(valor.rstrip("Z"))
+    except ValueError:
+        return None
+    return hasta if hasta > (ahora or datetime.utcnow()) else None
+
+
+def tiene_acceso(db: Session, usuario: Optional[Usuario], ahora: Optional[datetime] = None) -> bool:
     if usuario is None:
         return False
     if puede_curar(usuario):
         return True
-    return acceso_vigente(db, usuario.id) is not None
+    if acceso_libre_hasta(db, ahora) is not None:
+        return True
+    return acceso_vigente(db, usuario.id, ahora) is not None
 
 
 def otorgar_acceso(
@@ -493,7 +512,7 @@ def enviar_aviso(db: Session, edicion: EdicionTendencias) -> int:
     )
     enviados = 0
     for usuario in suscritos:
-        if not puede_curar(usuario) and acceso_vigente(db, usuario.id, ahora) is None:
+        if not tiene_acceso(db, usuario, ahora):
             continue
         mensaje = edicion.subtitulo
         if destacado is not None:

@@ -104,8 +104,11 @@ export interface TemporadaConLimites {
 export interface AccesoTendencias {
   tiene_acceso: boolean;
   es_curador: boolean;
-  origen: "pago" | "cortesia" | null;
+  /** "libre": acceso abierto a todos por un tiempo, decidido por el admin. */
+  origen: "pago" | "cortesia" | "libre" | null;
   vigente_hasta: string | null;
+  /** Fin del acceso libre para todos, si está vigente (UTC, con "Z"). */
+  acceso_libre_hasta: string | null;
   /** Precio en COP de un periodo. null: la suscripción no está a la venta. */
   precio_cop: number | null;
   dias_suscripcion: number;
@@ -235,6 +238,8 @@ export interface ParametrosTendencias {
   dias_produccion: number;
   precio_cop: number | null;
   dias_suscripcion: number;
+  /** Solo lectura: se cambia con `fijarAccesoLibre`. */
+  acceso_libre_hasta?: string | null;
 }
 
 export interface CambioTendencias {
@@ -361,6 +366,15 @@ export const tendenciasService = {
   otorgarAcceso: (datos: { email: string; dias: number; nota?: string }) =>
     apiRequest<AccesoAdmin>("/tendencias/admin/accesos", { method: "POST", body: datos }),
   revocarAcceso: (id: string) => apiRequest<AccesoAdmin>(`/tendencias/admin/accesos/${id}/revocar`, { method: "POST" }),
+  /**
+   * Abre Tendencias a todos los usuarios con sesión por `dias` días o hasta
+   * `hastaBogota` ("YYYY-MM-DDTHH:mm", hora de Bogotá). Sin ninguno, lo cierra.
+   */
+  fijarAccesoLibre: (datos: { dias?: number; hastaBogota?: string } = {}) =>
+    apiRequest<{ acceso_libre_hasta: string | null }>("/tendencias/admin/acceso-libre", {
+      method: "PUT",
+      body: { dias: datos.dias ?? null, hasta: datos.hastaBogota || null },
+    }),
   listarCuradores: () => apiRequest<CuradorItem[]>("/tendencias/admin/curadores"),
   asignarCurador: (email: string, esCurador: boolean) =>
     apiRequest<CuradorItem & { es_curador: boolean }>(

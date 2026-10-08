@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { CalendarDays, Gift, History, Loader2, Pencil, Plus, Save, Settings2, Trash2, UserPlus, Users, X } from "lucide-react";
+import { CalendarDays, Gift, History, Loader2, Pencil, Plus, Save, Settings2, Trash2, Unlock, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -16,7 +16,7 @@ import {
 type Seccion = "suscripcion" | "accesos" | "curadores" | "calendario" | "bitacora";
 
 const SECCIONES: { clave: Seccion; titulo: string; icono: typeof Settings2 }[] = [
-  { clave: "suscripcion", titulo: "Suscripción y parámetros", icono: Settings2 },
+  { clave: "suscripcion", titulo: "Acceso y parámetros", icono: Settings2 },
   { clave: "accesos", titulo: "Accesos", icono: Gift },
   { clave: "curadores", titulo: "Curadores", icono: Users },
   { clave: "calendario", titulo: "Calendario", icono: CalendarDays },
@@ -24,6 +24,107 @@ const SECCIONES: { clave: Seccion; titulo: string; icono: typeof Settings2 }[] =
 ];
 
 const ENCABEZADO = "border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground";
+
+// ── Acceso libre temporal ────────────────────────────────────────────────────
+
+const DIAS_ACCESO_LIBRE = [7, 15, 30, 60];
+
+/** Abre Tendencias a todos los usuarios con sesión durante un tiempo. */
+function AccesoLibre() {
+  const [hasta, setHasta] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [ocupado, setOcupado] = useState(false);
+  const [modo, setModo] = useState<"dias" | "fecha">("dias");
+  const [dias, setDias] = useState("15");
+  const [fecha, setFecha] = useState("");
+
+  useEffect(() => {
+    tendenciasService.getParametros()
+      .then((p) => setHasta(p.acceso_libre_hasta ?? null))
+      .catch((err) => toast.error(mensajeError(err)))
+      .finally(() => setCargando(false));
+  }, []);
+
+  async function fijar(cerrar = false) {
+    let datos: { dias?: number; hastaBogota?: string } = {};
+    if (!cerrar) {
+      if (modo === "dias") {
+        const n = numeroOpcional(dias);
+        if (n == null || n < 1 || n > 365) { toast.error("Días: entre 1 y 365."); return; }
+        datos = { dias: n };
+      } else {
+        if (!fecha) { toast.error("Elige la fecha y hora de fin."); return; }
+        datos = { hastaBogota: fecha };
+      }
+    }
+    setOcupado(true);
+    try {
+      const r = await tendenciasService.fijarAccesoLibre(datos);
+      setHasta(r.acceso_libre_hasta);
+      toast.success(r.acceso_libre_hasta
+        ? `Tendencias queda abierta a todos hasta el ${formatoBogota(r.acceso_libre_hasta)}.`
+        : "Acceso libre cerrado: Tendencias vuelve a ser solo para suscriptores e invitados.");
+    } catch (err) {
+      toast.error(mensajeError(err));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  if (cargando) return <section className={CARD}><Cargando /></section>;
+
+  return (
+    <section className={`${CARD} space-y-3`}>
+      <div>
+        <h3 className="flex items-center gap-2 text-base font-semibold"><Unlock className="h-4 w-4" />Acceso libre por tiempo limitado</h3>
+        <p className="text-sm text-muted-foreground">
+          Mientras esté activo, cualquier usuario con sesión ve Tendencias sin suscripción ni invitación. Al vencer, vuelve
+          solo a suscriptores e invitados; los accesos pagados y de cortesía no se tocan.
+        </p>
+      </div>
+      {hasta ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <span><strong>Abierto a todos</strong> hasta el {formatoBogota(hasta)} (hora de Bogotá).</span>
+          <BotonConfirmar label="Cerrar ahora" pregunta="¿Cerrar el acceso libre?" confirmar="Cerrar" peligro disabled={ocupado}
+            className="h-8 rounded-md border border-destructive/40 px-2 text-xs text-destructive hover:bg-destructive/10"
+            onConfirm={() => fijar(true)} />
+        </div>
+      ) : (
+        <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Ahora mismo Tendencias es solo para suscriptores e invitados.</p>
+      )}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex gap-1">
+          {(["dias", "fecha"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setModo(m)}
+              className={`h-9 rounded-lg border px-3 text-sm font-medium ${modo === m ? "border-primary bg-primary text-white dark:border-accent dark:bg-accent dark:text-accent-foreground" : "border-border bg-card hover:bg-muted"}`}>
+              {m === "dias" ? "Por días" : "Hasta una fecha"}
+            </button>
+          ))}
+        </div>
+        {modo === "dias" ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {DIAS_ACCESO_LIBRE.map((d) => (
+              <button key={d} type="button" onClick={() => setDias(String(d))}
+                className={`h-9 rounded-lg border px-3 text-sm ${dias === String(d) ? "border-primary font-semibold dark:border-accent" : "border-border bg-card hover:bg-muted"}`}>
+                {d} días
+              </button>
+            ))}
+            <input type="number" min={1} max={365} value={dias} onChange={(e) => setDias(e.target.value)} aria-label="Días de acceso libre" className={`${INPUT} w-24`} />
+          </div>
+        ) : (
+          <input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} aria-label="Fin del acceso libre (hora de Bogotá)" className={`${INPUT} w-auto`} />
+        )}
+        <button type="button" onClick={() => void fijar()} disabled={ocupado} className={BTN}>
+          {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlock className="h-4 w-4" />}
+          {hasta ? "Cambiar plazo" : "Abrir a todos"}
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        El nuevo plazo reemplaza al anterior. «Por días» cuenta desde este momento; la fecha se toma en hora de Bogotá.
+      </p>
+    </section>
+  );
+}
 
 // ── Suscripción y parámetros ─────────────────────────────────────────────────
 
@@ -648,7 +749,7 @@ export function CuradorAdmin() {
           </button>
         ))}
       </nav>
-      {seccion === "suscripcion" && <Parametros />}
+      {seccion === "suscripcion" && <div className="space-y-4"><AccesoLibre /><Parametros /></div>}
       {seccion === "accesos" && <Accesos />}
       {seccion === "curadores" && <Curadores />}
       {seccion === "calendario" && <div className="grid gap-4 xl:grid-cols-2"><Temporadas /><Cierres /></div>}

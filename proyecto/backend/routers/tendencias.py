@@ -73,13 +73,19 @@ def _evento(db: Session, tipo: str, usuario: Usuario, *, edicion_id=None, produc
 def mi_acceso(db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_actual)):
     vigente = svc.acceso_vigente(db, usuario.id)
     hasta = svc.acceso_hasta(db, usuario.id)
+    libre_hasta = svc.acceso_libre_hasta(db)
     precio = svc.precio_suscripcion(db)
     aviso = db.query(SuscripcionAvisoTendencias).filter(SuscripcionAvisoTendencias.usuario_id == usuario.id).first()
+    # Si el acceso libre dura más que el propio, se informa ese.
+    origen = vigente.origen if vigente else None
+    if libre_hasta and (hasta is None or libre_hasta > hasta):
+        origen, hasta = "libre", libre_hasta
     return {
         "tiene_acceso": svc.tiene_acceso(db, usuario),
         "es_curador": svc.puede_curar(usuario),
-        "origen": vigente.origen if vigente else None,
+        "origen": origen,
         "vigente_hasta": hasta.isoformat() + "Z" if hasta else None,
+        "acceso_libre_hasta": libre_hasta.isoformat() + "Z" if libre_hasta else None,
         "precio_cop": precio,
         "dias_suscripcion": svc.dias_suscripcion(db),
         "venta_habilitada": precio is not None and usuario.rol == "solicitante",
@@ -686,6 +692,7 @@ def ver_parametros(db: Session = Depends(get_db), usuario: Usuario = Depends(cur
         "dias_produccion": params.dias_produccion,
         "precio_cop": svc.precio_suscripcion(db),
         "dias_suscripcion": svc.dias_suscripcion(db),
+        "acceso_libre_hasta": (lambda h: h.isoformat() + "Z" if h else None)(svc.acceso_libre_hasta(db)),
     }
 
 
@@ -846,6 +853,30 @@ def revocar_acceso(acceso_id: str, db: Session = Depends(get_db),
         db.commit()
     usuario = db.query(Usuario).filter(Usuario.id == acceso.usuario_id).first()
     return _acceso_dict(acceso, usuario, datetime.utcnow())
+
+
+@router.put("/admin/acceso-libre")
+def fijar_acceso_libre(datos: sch.AccesoLibre, db: Session = Depends(get_db),
+                       current_user: dict = Depends(require_rol("admin"))):
+    """Abre Tendencias a todos los usuarios con sesión durante `dias` días o
+    hasta `hasta` (hora de Bogotá). Sin ninguno de los dos, lo cierra ya: vuelve
+    a ser solo para suscriptores e invitados."""
+    ahora = datetime.utcnow()
+    if datos.hasta is not None:
+        hasta = bogota_a_utc(datos.hasta.replace(tzinfo=None))
+        if hasta <= ahora:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La fecha de fin debe ser futura")
+    elif datos.dias is not None:
+        hasta = ahora + timedelta(days=datos.dias)
+    else:
+        hasta = None
+    configuracion.guardar(db, svc.CLAVE_ACCESO_LIBRE_HASTA, hasta.isoformat() if hasta else None,
+                          current_user["user_id"])
+    db.add(CambioTendencias(usuario_id=current_user["user_id"],
+                            accion="acceso_libre_abierto" if hasta else "acceso_libre_cerrado",
+                            datos={"hasta": hasta.isoformat() + "Z" if hasta else None}))
+    db.commit()
+    return {"acceso_libre_hasta": hasta.isoformat() + "Z" if hasta else None}
 
 
 @router.get("/admin/curadores")
