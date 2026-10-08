@@ -158,6 +158,19 @@ class OtorgarAcceso(BaseModel):
     nota: Optional[str] = Field(None, max_length=255)
 
 
+class AccesoLibre(BaseModel):
+    """Periodo de acceso libre. Uno de los dos, o ninguno para cerrarlo."""
+    dias: Optional[int] = Field(None, ge=1, le=365)
+    # Fecha y hora de fin, en hora de Bogotá.
+    hasta: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def uno_solo(self):
+        if self.dias is not None and self.hasta is not None:
+            raise ValueError("Indica los días o la fecha de fin, no ambos")
+        return self
+
+
 class Curador(BaseModel):
     es_curador: bool
 

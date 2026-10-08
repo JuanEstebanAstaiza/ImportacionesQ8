@@ -466,7 +466,9 @@ export function TendenciasComprador({ onPedirPropuestas, edicionInicialId = null
             {acceso.es_curador
               ? "Vista de curador"
               : acceso.vigente_hasta
-                ? `Tu acceso vence el ${fechaInstante(acceso.vigente_hasta)} · ${acceso.origen === "pago" ? "suscripción" : "cortesía del equipo de Zarpi"}`
+                ? acceso.origen === "libre"
+                  ? `Acceso libre por tiempo limitado, hasta el ${fechaInstante(acceso.vigente_hasta)}`
+                  : `Tu acceso vence el ${fechaInstante(acceso.vigente_hasta)} · ${acceso.origen === "pago" ? "suscripción" : "cortesía del equipo de Zarpi"}`
                 : "Acceso activo"}
           </p>
           <div className="flex items-center gap-2.5">

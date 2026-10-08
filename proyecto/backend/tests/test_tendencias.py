@@ -451,3 +451,52 @@ def test_quitar_un_video_lo_deja_vacio(client, db_session):
     r = client.put(f"/tendencias/curaduria/productos/{p['id']}", json={**datos, "video_vertical": "  "}, headers=admin)
     assert r.status_code == 200, r.text
     assert r.json()["video_vertical"] is None
+
+
+# ── Acceso libre temporal ────────────────────────────────────────────────────
+
+def test_acceso_libre_abre_tendencias_a_todos_hasta_que_vence(client, db_session):
+    _, admin = _admin(db_session)
+    _edicion_publicada(client, admin)
+    _, comprador = crear_usuario_con_token(db_session)
+    assert client.get("/tendencias/edicion-actual", headers=comprador).status_code == 403
+
+    r = client.put("/tendencias/admin/acceso-libre", json={"dias": 15}, headers=admin)
+    assert r.status_code == 200, r.text
+    assert client.get("/tendencias/edicion-actual", headers=comprador).status_code == 200
+    acceso = client.get("/tendencias/acceso", headers=comprador).json()
+    assert acceso["tiene_acceso"] is True and acceso["origen"] == "libre"
+    assert acceso["vigente_hasta"] == acceso["acceso_libre_hasta"]
+    # Durante el acceso libre también puede suscribirse al aviso y pedir propuestas.
+    assert client.put("/tendencias/aviso", headers=comprador).status_code == 204
+
+    # Vencido, vuelve a ser solo para suscriptores.
+    assert svc.tiene_acceso(db_session, None) is False
+    from models.usuario import Usuario
+    usuario = db_session.query(Usuario).filter(Usuario.rol == "solicitante").first()
+    assert svc.tiene_acceso(db_session, usuario, ahora=datetime.utcnow() + timedelta(days=16)) is False
+    # La configuración no se limpia entre tests: se cierra para no afectar a otros.
+    client.put("/tendencias/admin/acceso-libre", json={}, headers=admin)
+
+
+def test_acceso_libre_hasta_una_fecha_y_cierre_manual(client, db_session):
+    _, admin = _admin(db_session)
+    _, comprador = crear_usuario_con_token(db_session)
+    fin = (datetime.utcnow() + timedelta(days=3)).replace(microsecond=0).isoformat()
+    assert client.put("/tendencias/admin/acceso-libre", json={"hasta": fin}, headers=admin).status_code == 200
+    assert client.get("/tendencias/curaduria/parametros", headers=admin).json()["acceso_libre_hasta"]
+    assert client.get("/tendencias/acceso", headers=comprador).json()["tiene_acceso"] is True
+
+    assert client.put("/tendencias/admin/acceso-libre", json={}, headers=admin).json() == {"acceso_libre_hasta": None}
+    assert client.get("/tendencias/acceso", headers=comprador).json()["tiene_acceso"] is False
+
+
+def test_acceso_libre_validaciones_y_permisos(client, db_session):
+    _, admin = _admin(db_session)
+    _, comprador = crear_usuario_con_token(db_session)
+    pasado = (datetime.utcnow() - timedelta(days=1)).isoformat()
+    assert client.put("/tendencias/admin/acceso-libre", json={"hasta": pasado}, headers=admin).status_code == 400
+    assert client.put("/tendencias/admin/acceso-libre", json={"dias": 0}, headers=admin).status_code == 422
+    assert client.put("/tendencias/admin/acceso-libre", json={"dias": 5, "hasta": pasado}, headers=admin).status_code == 422
+    assert client.put("/tendencias/admin/acceso-libre", json={"dias": 5}, headers=comprador).status_code == 403
+    client.put("/tendencias/admin/acceso-libre", json={}, headers=admin)
