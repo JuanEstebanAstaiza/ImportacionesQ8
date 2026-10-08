@@ -1140,23 +1140,32 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:flex">
-          <Card className="min-w-[170px] gap-3 border-primary/15 bg-primary/5">
+          {/* Tarjeta Catálogo (mantiene fondo suave en claro y oscuro) */}
+          <Card className="min-w-[170px] gap-3 border-primary/15 bg-primary/5 dark:border-accent/30 dark:bg-accent/10">
             <CardContent className="pt-6">
-              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Catalogo</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Catálogo</p>
               <div className="mt-2 flex items-center gap-2">
-                <BookOpen className="size-4 text-primary" />
-                <span className="text-2xl font-semibold">{courses.length}</span>
+                <BookOpen className="size-4 text-primary dark:text-accent" />
+                <span className="text-2xl font-semibold text-foreground">{courses.length}</span>
               </div>
             </CardContent>
           </Card>
-          <Card className="min-w-[170px] gap-3">
+
+          {/* Tarjeta Cursos / Alumnos */}
+          <Card className="min-w-[170px] gap-3 bg-card border-border text-card-foreground">
             <CardContent className="pt-6">
               <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                 {role === "solicitante" ? "Mis cursos" : "Mis alumnos"}
               </p>
               <div className="mt-2 flex items-center gap-2">
-                {role === "solicitante" ? <GraduationCap className="size-4 text-primary" /> : <Users className="size-4 text-primary" />}
-                <span className="text-2xl font-semibold">{role === "solicitante" ? purchasedCourses.length : totalCreatorStudents}</span>
+                {role === "solicitante" ? (
+                  <GraduationCap className="size-4 text-primary dark:text-accent" />
+                ) : (
+                  <Users className="size-4 text-primary dark:text-accent" />
+                )}
+                <span className="text-2xl font-semibold text-foreground">
+                  {role === "solicitante" ? purchasedCourses.length : totalCreatorStudents}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -1283,12 +1292,34 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
 
               <TabsContent value="categories" className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button variant={categoryFilter === "Todas" ? "default" : "outline"} onClick={() => setCategoryFilter("Todas")}>Todas</Button>
-                  {CATEGORY_SHORTCUTS.map((category) => (
-                    <Button key={category} variant={categoryFilter === category ? "default" : "outline"} onClick={() => setCategoryFilter(category)}>
-                      {category}
-                    </Button>
-                  ))}
+                  <Button
+                    variant={categoryFilter === "Todas" ? "default" : "outline"}
+                    onClick={() => setCategoryFilter("Todas")}
+                    className={clsx(
+                      categoryFilter === "Todas"
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                        : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    Todas
+                  </Button>
+                  {CATEGORY_SHORTCUTS.map((category) => {
+                    const activa = categoryFilter === category;
+                    return (
+                      <Button
+                        key={category}
+                        variant={activa ? "default" : "outline"}
+                        onClick={() => setCategoryFilter(category)}
+                        className={clsx(
+                          activa
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                            : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        {category}
+                      </Button>
+                    );
+                  })}
                 </div>
                 {renderCourseGrid(filteredCourses)}
               </TabsContent>

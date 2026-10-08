@@ -116,27 +116,104 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 type BadgeVariant = "created"|"directed"|"open"|"accepted"|"active-order"|"neutral"|
   "rejected-importer"|"resp-nueva"|"resp-vista"|"resp-aceptada"|"resp-rechazada"|"info"|"warning"|"success";
 
-const BADGE_MAP: Record<BadgeVariant,{label:string;cls:string;dot:string}> = {
-  "created":        {label:"Creada",       cls:"bg-slate-100 text-slate-600",    dot:"bg-slate-400"},
-  "directed":       {label:"Dirigida",     cls:"bg-primary/10 text-primary border border-primary/20", dot:"bg-primary"},
-  "open":           {label:"Abierta",      cls:"bg-accent text-accent-foreground border border-accent/70", dot:"bg-foreground"},
-  "accepted":       {label:"Aceptada",     cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
-  "active-order":   {label:"Orden activa", cls:"bg-primary text-primary-foreground border border-primary", dot:"bg-accent"},
-  "rejected-importer": {label:"Rechazada por importadora", cls:"bg-rose-50 text-rose-700", dot:"bg-rose-500"},
-  "neutral":        {label:"",             cls:"bg-slate-100 text-slate-600",    dot:"bg-slate-400"},
-  "resp-nueva":     {label:"Nueva",        cls:"bg-accent text-accent-foreground border border-accent/70", dot:"bg-foreground"},
-  "resp-vista":     {label:"Vista",        cls:"bg-primary/10 text-primary border border-primary/20", dot:"bg-primary"},
-  "resp-aceptada":  {label:"Aceptada",     cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
-  "resp-rechazada": {label:"Rechazada",    cls:"bg-red-50 text-red-700",         dot:"bg-red-500"},
-  "info":           {label:"",             cls:"bg-primary/10 text-primary border border-primary/20", dot:"bg-primary"},
-  "warning":        {label:"",             cls:"bg-amber-50 text-amber-700",     dot:"bg-amber-500"},
-  "success":        {label:"",             cls:"bg-emerald-50 text-emerald-700", dot:"bg-emerald-500"},
+const BADGE_MAP: Record<BadgeVariant, { label: string; cls: string; dot: string }> = {
+  // --- BADGES MÁS COMUNES ---
+
+  // 1. Abierta / Nueva: Verde Accent (Neón en Dark Mode)
+  "open": {
+    label: "Abierta",
+    cls: "bg-accent/15 text-emerald-800 border border-accent/40 dark:bg-accent/20 dark:text-accent dark:border-accent/50",
+    dot: "bg-emerald-600 dark:bg-accent",
+  },
+
+  // 2. Orden activa: Destacado Neón / Glow con borde Accent
+  "active-order": {
+    label: "Orden activa",
+    cls: "bg-primary/15 text-primary border border-primary/40 dark:bg-accent/20 dark:text-accent dark:border-accent/60 dark:shadow-[0_0_8px_rgba(16,185,129,0.2)]",
+    dot: "bg-primary dark:bg-accent",
+  },
+
+  // 3. Dirigida / Vista: Morado Primary Brand
+  "directed": {
+    label: "Dirigida",
+    cls: "bg-primary/10 text-primary border border-primary/30 dark:bg-primary/20 dark:text-purple-300 dark:border-primary/50",
+    dot: "bg-primary dark:bg-purple-300",
+  },
+
+
+  // --- RESTO DE ESTADOS Y VARIANTES ---
+
+  // Creada / Neutral: Gris / Slate (Monocromático con borde)
+  "created": {
+    label: "Creada",
+    cls: "bg-slate-500/10 text-slate-700 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/40",
+    dot: "bg-slate-500 dark:bg-slate-300",
+  },
+
+  // Aceptada / Éxito: Verde Estado (Emerald)
+  "accepted": {
+    label: "Aceptada",
+    cls: "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/40",
+    dot: "bg-emerald-600 dark:bg-emerald-400",
+  },
+
+  // Rechazada: Rojo / Rosa (Rose)
+  "rejected-importer": {
+    label: "Rechazada por importadora",
+    cls: "bg-rose-500/10 text-rose-800 border border-rose-500/30 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/40",
+    dot: "bg-rose-600 dark:bg-rose-400",
+  },
+
+  "neutral": {
+    label: "",
+    cls: "bg-slate-500/10 text-slate-700 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/40",
+    dot: "bg-slate-500 dark:bg-slate-300",
+  },
+
+  // Respuestas
+  "resp-nueva": {
+    label: "Nueva",
+    cls: "bg-accent/15 text-emerald-800 border border-accent/40 dark:bg-accent/20 dark:text-accent dark:border-accent/50",
+    dot: "bg-emerald-600 dark:bg-accent",
+  },
+  "resp-vista": {
+    label: "Vista",
+    cls: "bg-primary/10 text-primary border border-primary/30 dark:bg-primary/20 dark:text-purple-300 dark:border-primary/50",
+    dot: "bg-primary dark:bg-purple-300",
+  },
+  "resp-aceptada": {
+    label: "Aceptada",
+    cls: "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/40",
+    dot: "bg-emerald-600 dark:bg-emerald-400",
+  },
+  "resp-rechazada": {
+    label: "Rechazada",
+    cls: "bg-rose-500/10 text-rose-800 border border-rose-500/30 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/40",
+    dot: "bg-rose-600 dark:bg-rose-400",
+  },
+
+  // Estados Auxiliares
+  "info": {
+    label: "",
+    cls: "bg-sky-500/10 text-sky-800 border border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-400 dark:border-sky-500/40",
+    dot: "bg-sky-600 dark:bg-sky-400",
+  },
+  "warning": {
+    label: "",
+    cls: "bg-amber-500/10 text-amber-800 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/40",
+    dot: "bg-amber-600 dark:bg-amber-400",
+  },
+  "success": {
+    label: "",
+    cls: "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/40",
+    dot: "bg-emerald-600 dark:bg-emerald-400",
+  },
 };
 
 function Badge({variant,label,className}:{variant:BadgeVariant;label?:string;className?:string}) {
   const c = BADGE_MAP[variant];
   return (
-    <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap",c.cls,className)}>
+    <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap",c.cls,className)}>
       <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0",c.dot)}/>
       {label??c.label}
     </span>
@@ -282,25 +359,60 @@ function Logo() {
 // ─── Enhanced Timeline ────────────────────────────────────────────────────────
 interface TimelineStage {label:string;icon:React.ReactNode;status:"done"|"current"|"pending";date?:string;}
 
-function Timeline({stages}:{stages:TimelineStage[]}) {
+function Timeline({ stages }: { stages: TimelineStage[] }) {
   return (
     <div className="relative">
-      <div className="absolute left-4 top-5 bottom-5 w-0.5 bg-border"/>
+      <div className="absolute left-4 top-5 bottom-5 w-0.5 bg-border" />
       <div className="space-y-0">
-        {stages.map((s,i)=>(
+        {stages.map((s, i) => (
           <div key={i} className="flex items-start gap-3 relative">
-            <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 border-2 mt-0.5",
-              s.status==="done"   ?"bg-primary border-primary text-white":
-              s.status==="current"?"bg-white border-primary text-primary ring-4 ring-primary/15":
-              "bg-white border-border text-muted-foreground/50")}>
-              {s.status==="done"?<Check className="w-3.5 h-3.5"/>:s.icon}
+            <div
+              className={clsx(
+                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 border-2 mt-0.5 transition-colors",
+                s.status === "done"
+                  ? "bg-primary border-primary text-primary-foreground dark:bg-accent dark:border-accent dark:text-accent-foreground"
+                  : s.status === "current"
+                  ? "bg-card border-primary text-primary ring-4 ring-primary/15 dark:border-accent dark:text-accent dark:ring-accent/20"
+                  : "bg-card border-border text-muted-foreground/50"
+              )}
+            >
+              {s.status === "done" ? <Check className="w-3.5 h-3.5" /> : s.icon}
             </div>
-            <div className={clsx("pb-5 min-w-0 flex-1",i===stages.length-1&&"pb-0")}>
+            <div
+              className={clsx(
+                "pb-5 min-w-0 flex-1",
+                i === stages.length - 1 && "pb-0"
+              )}
+            >
               <div className="flex items-center justify-between gap-2">
-                <p className={clsx("text-sm font-medium",s.status==="pending"?"text-muted-foreground":"text-foreground")}>{s.label}</p>
-                {s.date&&<span className={clsx("text-xs flex-shrink-0",s.status==="pending"?"text-muted-foreground/60":"text-muted-foreground")}>{s.date}</span>}
+                <p
+                  className={clsx(
+                    "text-sm font-medium",
+                    s.status === "pending"
+                      ? "text-muted-foreground"
+                      : "text-foreground"
+                  )}
+                >
+                  {s.label}
+                </p>
+                {s.date && (
+                  <span
+                    className={clsx(
+                      "text-xs flex-shrink-0",
+                      s.status === "pending"
+                        ? "text-muted-foreground/60"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {s.date}
+                  </span>
+                )}
               </div>
-              {s.status==="current"&&<p className="text-xs text-primary font-medium mt-0.5">En curso</p>}
+              {s.status === "current" && (
+                <p className="text-xs font-medium mt-0.5 text-primary dark:text-accent">
+                  En curso
+                </p>
+              )}
             </div>
           </div>
         ))}
@@ -2415,10 +2527,20 @@ function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb,
                     <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
                     <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
                     <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", lastQ.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium rounded-full dark:!text-accent dark:!bg-accent/20", lastQ.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-primary/20 text-primary")}>{lastQ.mode}</span></div>
                     <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id] || 0}</p></div>
                   </div>
-                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(lastQ.id)}>Ver detalle</Button></div>
+                  <div className="pt-3 mt-3 border-t border-border">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ExternalLink className="w-3 h-3" />}
+                      onClick={() => onViewDetail(lastQ.id)}
+                      className="hover:!bg-primary hover:!border-primary hover:!text-primary-foreground dark:hover:!bg-accent dark:hover:!border-accent dark:hover:!text-accent-foreground transition-colors"
+                    >
+                      Ver detalle
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <div className="py-8 text-center">
@@ -2444,13 +2566,78 @@ function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb,
 
           <div>
             <h2 className="text-base font-semibold mb-4">Historial de cotizaciones</h2>
-            <Card padding="sm" className="mb-4">
+            <Card padding="sm" className="mb-4 bg-card border-border text-card-foreground">
               <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} prefix={<Search className="w-4 h-4" />} /></div>
-                <div className="w-44"><Select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
-                <div className="w-32"><Select value={modeF} onChange={e => setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
-                <div className="w-44"><Select value={respF} onChange={e => setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
-                {(search || statusF || modeF || respF) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusF(""); setModeF(""); setRespF(""); }}>Limpiar</Button>}
+                {/* Campo Búsqueda */}
+                <div className="flex-1 min-w-[160px]">
+                  <Input
+                    placeholder="Buscar..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    prefix={<Search className="w-4 h-4 text-muted-foreground" />}
+                    className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+                  />
+                </div>
+
+                {/* Filtro Estado */}
+                <div className="w-44">
+                  <Select
+                    value={statusF}
+                    onChange={(e) => setStatusF(e.target.value)}
+                    className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                  >
+                    <option value="">Estado</option>
+                    <option value="created">Creada</option>
+                    <option value="directed">Dirigida</option>
+                    <option value="open">Abierta</option>
+                    <option value="accepted">Aceptada</option>
+                    <option value="active-order">Orden activa</option>
+                    <option value="rejected-importer">Rechazada por importadora</option>
+                  </Select>
+                </div>
+
+                {/* Filtro Modalidad */}
+                <div className="w-32">
+                  <Select
+                    value={modeF}
+                    onChange={(e) => setModeF(e.target.value)}
+                    className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                  >
+                    <option value="">Modalidad</option>
+                    <option value="Dirigida">Dirigida</option>
+                    <option value="Abierta">Abierta</option>
+                  </Select>
+                </div>
+
+                {/* Filtro Respuestas Recibidas */}
+                <div className="w-44">
+                  <Select
+                    value={respF}
+                    onChange={(e) => setRespF(e.target.value)}
+                    className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                  >
+                    <option value="">Respuestas recibidas</option>
+                    <option value="con">Con respuestas</option>
+                    <option value="sin">Sin respuestas</option>
+                  </Select>
+                </div>
+
+                {/* Botón Limpiar */}
+                {(search || statusF || modeF || respF) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearch("");
+                      setStatusF("");
+                      setModeF("");
+                      setRespF("");
+                    }}
+                    className="hover:text-primary dark:hover:text-accent"
+                  >
+                    Limpiar
+                  </Button>
+                )}
               </div>
             </Card>
 
@@ -2466,7 +2653,7 @@ function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb,
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.date}</td>
                         <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
-                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", row.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{row.mode}</span></td>
+                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium rounded-full dark:!text-accent dark:!bg-accent/20", row.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-primary/20 text-primary")}>{row.mode}</span></td>
                         <td className="px-4 py-3">
                           {row.bloqueada ? (
                             <div className="flex min-w-[150px] flex-col items-start gap-1">
@@ -2479,7 +2666,15 @@ function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb,
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(row.id)}>Ver detalle</Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              icon={<ExternalLink className="w-3 h-3" />}
+                              onClick={() => onViewDetail(row.id)}
+                              className="hover:!bg-primary hover:!border-primary hover:!text-primary-foreground dark:hover:!bg-accent dark:hover:!border-accent dark:hover:!text-accent-foreground transition-colors"
+                            >
+                              Ver detalle
+                            </Button>
                             {row.bloqueada && <Button variant="primary" size="sm" onClick={() => { setUnlockError(""); setQuoteToUnlock(row); }}>Desbloquear por 1 crédito</Button>}
                           </div>
                         </td>
@@ -2726,7 +2921,11 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3 flex-wrap"><span className="font-mono text-lg font-semibold">{quote.code}</span><Badge variant={quote.status}/><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",quote.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{quote.mode}</span></div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-mono text-lg font-semibold">{quote.code}</span>
+                  <Badge variant={quote.status}/>
+                  <span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium rounded-full dark:!text-accent dark:!bg-accent/20", quote.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-primary/20 text-primary")}>{quote.mode}</span>
+                </div>
                 <div className="flex gap-6 flex-wrap">{[["Fecha",quote.date],["País",quote.country],["Incoterm",quote.incoterm],...(quote.shippingMark?[["Shipping mark",quote.shippingMark]]:[])].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}{quote.mode==="Dirigida"&&<div><p className="text-xs text-muted-foreground">Empresa</p><p className="text-sm font-medium">{quote.importer}</p></div>}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -2737,16 +2936,16 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
           </Card>
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción",quote.description||"—"]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2 sm:col-span-3":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5 whitespace-pre-line">{v}</p></div>)}</div>
                 {(quote.productPhotoUrls??[]).length>0&&<div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>}
               </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información comercial</h3>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["Cantidad",cantidadConUnidad(quote.minQuantity,quote.unit)],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas",quote.notes||"—"]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
               </Card>
               <Card padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos del ciclo</h3>
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary dark:text-accent"/>Documentos del ciclo</h3>
                   <span className="text-xs text-muted-foreground">Solicitud · Propuesta · Orden</span>
                 </div>
                 <div className="space-y-2">
@@ -2772,7 +2971,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </Card>
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary"/>Ofertas recibidas{visibleProposals.length>0&&<span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">{visibleProposals.length}</span>}</h3>
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary dark:text-accent"/>Ofertas recibidas{visibleProposals.length>0&&<span className="w-5 h-5 rounded-full bg-primary dark:bg-accent text-white dark:text-black text-[10px] font-bold flex items-center justify-center">{visibleProposals.length}</span>}</h3>
                   {actionMessage&&<span className="text-xs text-emerald-600 font-medium">{actionMessage}</span>}
                 </div>
                 {loadingProposals?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><Loader2 className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2 animate-spin"/><p className="text-sm text-muted-foreground">Cargando ofertas...</p></div></Card>:visibleProposals.length===0?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sin ofertas visibles para esta cotización.</p></div></Card>:(
@@ -2902,7 +3101,6 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                 <div className="flex flex-col gap-3">
                   <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p></div></div>
                   <div className="flex flex-col gap-1.5">
-                    <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                     <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   </div>
                 </div>
