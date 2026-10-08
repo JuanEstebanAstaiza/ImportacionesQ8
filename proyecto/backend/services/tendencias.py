@@ -57,6 +57,12 @@ def puede_curar(usuario: Optional[Usuario]) -> bool:
     return bool(usuario and usuario.activo and (usuario.rol == "admin" or usuario.es_curador))
 
 
+def puede_disenar(usuario: Optional[Usuario]) -> bool:
+    """Pone portada e imágenes y publica lo aprobado: los designers de Zarpi y,
+    como respaldo, el admin."""
+    return bool(usuario and usuario.activo and usuario.rol in ("designer", "admin"))
+
+
 def _accesos_vigentes(db: Session, usuario_id: str, ahora: datetime):
     return db.query(AccesoTendencias).filter(
         AccesoTendencias.usuario_id == usuario_id,

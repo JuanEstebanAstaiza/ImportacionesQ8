@@ -1,6 +1,6 @@
 """Tendencias v2: envío de enlaces, panel del aprobador, feed y ficha públicos."""
 from datetime import date
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from models.tendencias_virales import EstadoTendencia
 from models.usuario import Usuario
 from services import tendencias_virales as svc
-from services.tendencias import puede_curar
+from services.tendencias import puede_curar, puede_disenar
 from utils.dependencies import get_current_user, get_db
 from utils.limiter import RATE_LIMIT_TENDENCIAS_ENVIO, limiter
 
@@ -39,7 +39,14 @@ class EdicionFicha(BaseModel):
 
 
 class Aprobacion(BaseModel):
-    sin_portada: bool = False
+    # Por defecto el producto pasa a diseño. `publicar` es el respaldo del
+    # admin cuando el producto ya tiene portada.
+    publicar: bool = False
+
+
+class Diseno(BaseModel):
+    portada_url: Optional[str] = Field(None, max_length=500)
+    imagenes: Optional[List[str]] = Field(None, max_length=8)
 
 
 class Rechazo(BaseModel):
@@ -60,6 +67,12 @@ def usuario_actual(db: Session = Depends(get_db), current_user: dict = Depends(g
 def aprobador(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
     if not puede_curar(usuario):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el equipo aprobador puede hacer esto")
+    return usuario
+
+
+def disenador(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
+    if not puede_disenar(usuario):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el equipo de diseño puede hacer esto")
     return usuario
 
 
@@ -96,9 +109,9 @@ def mis_envios(db: Session = Depends(get_db), usuario: Usuario = Depends(usuario
 # ── Panel del aprobador ──────────────────────────────────────────────────────
 
 @router.get("/aprobacion/cola")
-def cola(estado: Literal["pendiente", "aprobado_sin_portada"] = "pendiente",
+def cola(estado: Literal["pendiente", "en_diseno"] = "pendiente",
          db: Session = Depends(get_db), usuario: Usuario = Depends(aprobador)):
-    """Pendientes (o aprobados sin portada), los más antiguos primero."""
+    """Pendientes (o en diseño), los más antiguos primero."""
     return [svc.para_aprobador(db, i) for i in svc.cola(db, estado)]
 
 
@@ -138,7 +151,7 @@ def editar(item_id: str, datos: EdicionFicha, db: Session = Depends(get_db), usu
 @router.post("/items/{item_id}/aprobar")
 def aprobar(item_id: str, datos: Aprobacion, db: Session = Depends(get_db), usuario: Usuario = Depends(aprobador)):
     item = svc.item_o_404(db, item_id)
-    svc.aprobar(db, item, usuario, forzar_sin_portada=datos.sin_portada)
+    svc.aprobar(db, item, usuario, publicar=datos.publicar)
     db.commit()
     db.refresh(item)
     return svc.para_aprobador(db, item)
@@ -162,6 +175,64 @@ def archivar(item_id: str, db: Session = Depends(get_db), usuario: Usuario = Dep
     item.estado = EstadoTendencia.archivado.value
     db.commit()
     return svc.para_aprobador(db, item)
+
+
+# ── Diseño ───────────────────────────────────────────────────────────────────
+# El designer pone portada e imágenes con la identidad de Zarpi a lo aprobado y
+# lo publica. No aprueba ni rechaza: eso es del equipo aprobador.
+
+@router.get("/diseno/cola")
+def cola_diseno(db: Session = Depends(get_db), usuario: Usuario = Depends(disenador)):
+    return [svc.para_disenador(db, i) for i in svc.cola_diseno(db)]
+
+
+@router.get("/diseno/contadores")
+def contadores_diseno(db: Session = Depends(get_db), usuario: Usuario = Depends(disenador)):
+    return svc.contadores_diseno(db, usuario)
+
+
+@router.get("/diseno/publicados")
+def publicados_diseno(
+    filtro: Literal["todos", "sin_diseno", "mios"] = "todos",
+    q: Optional[str] = Query(None, max_length=120),
+    mios: bool = False,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(disenador),
+):
+    """Todo lo publicado, para que diseño lo retoque si no tiene la identidad
+    de Zarpi. `filtro=sin_diseno`: lo que diseño no ha revisado; `mios`: lo que
+    diseñó quien pregunta. `q` busca por nombre."""
+    if mios:
+        filtro = "mios"
+    return [svc.para_disenador(db, i) for i in svc.publicados_diseno(db, usuario, filtro, q)]
+
+
+@router.patch("/diseno/items/{item_id}")
+def guardar_diseno(item_id: str, datos: Diseno, db: Session = Depends(get_db), usuario: Usuario = Depends(disenador)):
+    item = svc.item_o_404(db, item_id)
+    svc.disenar(db, item, usuario, datos.model_dump(exclude_unset=True))
+    db.commit()
+    db.refresh(item)
+    return svc.para_disenador(db, item)
+
+
+@router.post("/diseno/items/{item_id}/revisado")
+def marcar_revisado(item_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(disenador)):
+    """Lo publicado ya tiene la identidad de Zarpi y no hace falta cambiarle nada."""
+    item = svc.item_o_404(db, item_id)
+    svc.marcar_disenado(item, usuario)
+    db.commit()
+    db.refresh(item)
+    return svc.para_disenador(db, item)
+
+
+@router.post("/diseno/items/{item_id}/publicar")
+def publicar_diseno(item_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(disenador)):
+    item = svc.item_o_404(db, item_id)
+    svc.publicar_diseno(db, item, usuario)
+    db.commit()
+    db.refresh(item)
+    return svc.para_disenador(db, item)
 
 
 # ── Público ──────────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
-  Sparkles, LibraryBig, Type, Trophy,
+  Sparkles, LibraryBig, Type, Trophy, Palette,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ import { TendenciaFicha } from "@/features/tendencias/Ficha";
 import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
 import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
+import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
 import { RetoPagina } from "@/features/reto/RetoPagina";
 import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
 import { BloqueLanding } from "@/features/landing/BloqueLanding";
@@ -789,7 +790,10 @@ const NAV_ASESOR=[
 // "soporte" es el equipo de atención al cliente de la plataforma: atiende los
 // tickets y resuelve incidentes, pero no administra (ni empresas, ni cuentas,
 // ni certificaciones, ni copias de seguridad).
-type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte";
+// "designer" es el equipo de diseño: pone portada e imágenes con la identidad de
+// Zarpi a lo aprobado en Tendencias y lo publica. Está en el canal del equipo,
+// pero no ve soporte ni clientes.
+type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte"|"designer";
 
 // Cada área del panel es una entrada del sidebar, igual que en los demás
 // perfiles: así se navega con el mismo mecanismo que el resto de la aplicación
@@ -806,6 +810,7 @@ const NAV_ADMIN=[
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
   {icon:Sparkles,      label:"Aprobación",      key:"tendencias-aprobacion"},
+  {icon:Palette,       label:"Diseño",          key:"diseno"},
   {icon:Trophy,        label:"Reto",            key:"admin-reto"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
@@ -820,7 +825,19 @@ const NAV_SOPORTE=[
   {icon:FolderOpen,    label:"Documentos",  key:"documentos"},
 ];
 
-type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin" | "soporte";
+// Diseño: su trabajo (la cola), Tendencias para ver cómo queda publicado y
+// sus archivos. El canal del equipo va en el botón de la cabecera.
+const NAV_DISENO=[
+  {icon:Palette,       label:"Diseño",      key:"diseno"},
+  {icon:Sparkles,      label:"Tendencias",  key:"tendencias"},
+  {icon:FolderOpen,    label:"Documentos",  key:"documentos"},
+];
+
+// Pantallas a las que entra un designer. Lo demás (cotizaciones, órdenes,
+// chats de clientes) no es suyo: se le devuelve a su inicio.
+const PANTALLAS_DESIGNER:Screen[]=["diseno","team-channel","user-profile","notifications","documentos","tendencias","tendencia-detalle"];
+
+type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
 
 function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
   if (!role) {
@@ -846,7 +863,7 @@ function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
     return "admin";
   }
 
-  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte") {
+  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte" || normalizedRole === "designer") {
     return normalizedRole;
   }
 
@@ -866,6 +883,9 @@ function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   if (role === "soporte") {
     // Su trabajo empieza en la bandeja de incidentes y tickets.
     return "admin-soporte";
+  }
+  if (role === "designer") {
+    return "diseno";
   }
   return "dashboard";
 }
@@ -1367,7 +1387,7 @@ interface AppNotification {
   title:string;body:string;date:string;read:boolean;
   cotizacionId?:string;conversationId?:string;approval?:boolean;
   /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
-  destino?:"tendencias-enviar"|"catalogos"|"reto";
+  destino?:"tendencias-enviar"|"catalogos"|"reto"|"diseno";
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1401,7 +1421,8 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
     cotizacionId,
     conversationId,
     approval,
-    destino: notification.tipo === "tendencias" ? "tendencias-enviar"
+    // "Para diseñar" lleva a la cola de diseño; el resto de Tendencias, a mis envíos.
+    destino: notification.tipo === "tendencias" ? (notification.data?.evento === "para_disenar" ? "diseno" : "tendencias-enviar")
       : notification.tipo === "reto" ? "reto"
       : notification.tipo === "catalogo" ? "catalogos" : undefined,
   };
@@ -4446,7 +4467,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 <div>
                   <p className="text-sm font-semibold">Canal del equipo</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Administración y soporte. Los clientes y las empresas no entran aquí.
+                    Administración, soporte y diseño. Los clientes y las empresas no entran aquí.
                   </p>
                 </div>
                 <select
@@ -4462,7 +4483,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   <option value="">Hablar en privado con…</option>
                   {miembrosEquipo.map((m)=>(
                     <option key={m.id} value={m.id}>
-                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:" · administración"}
+                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:m.rol==="designer"?" · diseño":" · administración"}
                     </option>
                   ))}
                 </select>
@@ -5025,9 +5046,10 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 </div>
                 <div className="border-t border-border"/>
                 {/* Transferir solo tiene sentido en el hilo con el cliente: el
-                    canal interno es de un asesor concreto por definición, y un
-                    ticket de soporte no se pasa a una empresa. */}
-                {conv.type!=="interno"&&conv.type!=="soporte"&&(<>
+                    canal interno es de un asesor concreto por definición, un
+                    ticket de soporte no se pasa a una empresa y el canal del
+                    equipo de Zarpi no tiene asesores a quién pasarlo. */}
+                {conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">
@@ -11934,6 +11956,7 @@ export default function App() {
   function getNavItems():NavItem[]{
     const base = userRole==="admin" ? NAV_ADMIN
       : userRole==="soporte" ? NAV_SOPORTE
+      : userRole==="designer" ? NAV_DISENO
       : userRole==="importadora" ? NAV_IMPORTADORA
       : userRole==="asesor" ? NAV_ASESOR
       : NAV_ITEMS;
@@ -12013,9 +12036,9 @@ export default function App() {
     // canal de los usuarios con la plataforma. Antes el botón seguía saliendo
     // para soporte, y al pulsarlo el backend respondía 403.
     onSoporte:()=>setSoporteAbierto(true),
-    showSoporte:userRole!=="admin"&&userRole!=="soporte",
+    showSoporte:userRole!=="admin"&&userRole!=="soporte"&&userRole!=="designer",
     onCanalEquipo:()=>{void abrirCanalEquipo();},
-    showCanalEquipo:userRole==="admin"||userRole==="soporte",
+    showCanalEquipo:userRole==="admin"||userRole==="soporte"||userRole==="designer",
     profileSubtitle:headerSubtitle,
     profilePhotoUrl:currentUserProfile?.foto_url || null,
     onLogout:()=>{void handleLogout();},
@@ -12030,7 +12053,7 @@ export default function App() {
   // Los miembros del equipo solo se piden con una sesión interna: para
   // cualquier otro rol el endpoint responde 403, y pedirlo sería ruido.
   useEffect(()=>{
-    if(userRole!=="admin"&&userRole!=="soporte"){
+    if(userRole!=="admin"&&userRole!=="soporte"&&userRole!=="designer"){
       setMiembrosEquipo([]);
       return;
     }
@@ -12526,7 +12549,7 @@ export default function App() {
     "adv-available": ["asesor"],
     "adv-my-quotes": ["asesor"],
     // Perfil personal: cualquier cuenta con sesión.
-    "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte"],
+    "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte", "designer"],
     "help-support": ["solicitante", "importadora", "asesor"],
     "admin-reto": ["admin"],
     "catalogos": ["solicitante"],
@@ -12534,7 +12557,8 @@ export default function App() {
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
     // empresa que escribiera /equipo veía el armazón de la pantalla (título y
     // selector), aunque vacío y con el backend negándole los datos.
-    "team-channel": ["admin", "soporte"],
+    "team-channel": ["admin", "soporte", "designer"],
+    "diseno": ["designer", "admin"],
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
@@ -12560,11 +12584,16 @@ export default function App() {
   }, [platformConfigLoading, moduloEducativoHabilitado, screen, userRole]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing || !appRole || !allowedRoles) {
+    if (!isAuthenticated || isInitializing || !appRole) {
       return;
     }
+    // El designer solo entra a lo suyo; para el resto de roles, una pantalla
+    // sin entrada en la tabla es de libre acceso.
+    const bloqueada = allowedRoles
+      ? !allowedRoles.includes(userRole)
+      : userRole==="designer" && !PANTALLAS_DESIGNER.includes(screen);
 
-    if (!allowedRoles.includes(userRole)) {
+    if (bloqueada) {
       const home = getHomeScreenForRole(userRole);
       if (screen !== home) {
         setScreen(home);
@@ -12670,6 +12699,7 @@ export default function App() {
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
+    if(screen==="diseno")return <PantallaPortal sb={sb} active="diseno" titulo="Diseño"><PanelDiseno/></PantallaPortal>;
     if(screen==="tendencias-aprobacion"){
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
       return <PantallaPortal sb={sb} active="tendencias-aprobacion" titulo="Tendencias · Aprobación"><PanelAprobacion esAdmin={userRole==="admin"}/></PantallaPortal>;

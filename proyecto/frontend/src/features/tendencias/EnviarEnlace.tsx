@@ -35,7 +35,7 @@ import { fechaCorta } from "./piezas";
  * obligatorio (la URL); el resto es opcional. Debajo, el historial de envíos.
  */
 
-type Props = { rol: "solicitante" | "importadora" | "asesor" | "admin" | "soporte" };
+type Props = { rol: "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" };
 
 type Resultado =
   | { tipo: "recibido"; datos: Extract<RespuestaEnvio, { estado: "recibido" }> }
@@ -47,7 +47,7 @@ const CLASE_INPUT =
 
 const ESTADOS: Record<EstadoTendencia, { texto: string; clase: string }> = {
   pendiente: { texto: "En revisión", clase: "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-400/30" },
-  aprobado_sin_portada: { texto: "Aprobado", clase: "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-400/30" },
+  en_diseno: { texto: "Aprobado · en diseño", clase: "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-400/30" },
   publicado: { texto: "Publicado", clase: "bg-primary/10 text-primary border-primary/20 dark:bg-primary/20 dark:text-violet-200 dark:border-primary/40" },
   rechazado: { texto: "No aprobado", clase: "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-400/30" },
   caido: { texto: "Video no disponible", clase: "bg-muted text-muted-foreground border-border" },

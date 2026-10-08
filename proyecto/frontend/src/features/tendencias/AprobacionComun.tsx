@@ -64,3 +64,19 @@ export const CLASE_BOTON_PRIMARIO =
 
 export const CLASE_BOTON_SECUNDARIO =
   "inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
+
+/** Tarjeta de contador de los paneles internos (aprobación, diseño). */
+export function Contador({ etiqueta, valor, icono, clase }: { etiqueta: string; valor: number | null; icono: typeof Instagram; clase: string }) {
+  const Icono = icono;
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-white p-3 shadow-sm">
+      <span className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${clase}`}>
+        <Icono className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xl font-semibold leading-none tabular-nums">{valor ?? "—"}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{etiqueta}</p>
+      </div>
+    </div>
+  );
+}

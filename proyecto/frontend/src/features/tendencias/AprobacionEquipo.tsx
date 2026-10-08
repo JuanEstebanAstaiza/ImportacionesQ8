@@ -13,6 +13,7 @@ const ROLES: Record<string, string> = {
   asesor: "Asesor",
   admin: "Admin",
   soporte: "Soporte",
+  designer: "Diseño",
 };
 
 /** Admin: quién más del equipo puede aprobar enlaces de Tendencias. */

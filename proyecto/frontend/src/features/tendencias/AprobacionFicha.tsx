@@ -33,10 +33,11 @@ export interface FormularioFicha {
   embed_html: string;
 }
 
-export type ModoCola = "pendiente" | "aprobado_sin_portada";
+/** "en_diseno": aprobados que esperan la portada del equipo de diseño. */
+export type ModoCola = "pendiente" | "en_diseno";
 
-const ACEPTA_IMAGEN = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
-const TIPOS_IMAGEN = ["image/png", "image/jpeg", "image/webp"];
+export const ACEPTA_IMAGEN = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
+export const TIPOS_IMAGEN = ["image/png", "image/jpeg", "image/webp"];
 const MAX_TEXTO = 200;
 
 export function formularioDesde(item: ItemAprobacion): FormularioFicha {
@@ -66,7 +67,7 @@ export function cambiosDe(item: ItemAprobacion, f: FormularioFicha): CambiosFich
   return cambios;
 }
 
-function rutaArchivo(archivo: BackendArchivoItem): string {
+export function rutaArchivo(archivo: BackendArchivoItem): string {
   return toApiPath(archivo.storage_url || `/documentos/archivos/${archivo.id}/descargar`);
 }
 
@@ -136,7 +137,7 @@ function ZonaPortada({
   return (
     <div>
       <p className="text-sm font-medium">
-        Portada <span className="text-rose-600">*</span>
+        Portada <span className="text-xs font-normal text-muted-foreground">(opcional: la pone el equipo de diseño)</span>
         {esPropuesta && <span className="ml-2 text-xs font-normal text-muted-foreground">Propuesta por la importadora</span>}
       </p>
       <div
@@ -234,6 +235,7 @@ export function FichaAprobacion({
   motivos,
   onCambio,
   onResuelto,
+  esAdmin = false,
 }: {
   item: ItemAprobacion;
   modo: ModoCola;
@@ -241,9 +243,11 @@ export function FichaAprobacion({
   motivos: { valor: MotivoRechazo; texto: string }[];
   onCambio: (f: FormularioFicha) => void;
   onResuelto: (item: ItemAprobacion, mensaje: string) => void;
+  /** Solo el admin puede publicar sin pasar por diseño. */
+  esAdmin?: boolean;
 }) {
   const [f, setF] = useState<FormularioFicha>(inicial);
-  const [ocupado, setOcupado] = useState<null | "aprobar" | "sin_portada" | MotivoRechazo>(null);
+  const [ocupado, setOcupado] = useState<null | "aprobar" | "publicar" | MotivoRechazo>(null);
   const [rechazando, setRechazando] = useState(false);
 
   const poner = <K extends keyof FormularioFicha>(clave: K, valor: FormularioFicha[K]) => {
@@ -288,11 +292,13 @@ export function FichaAprobacion({
     }
   };
 
-  const aprobar = (sinPortada: boolean) =>
+  // Aprobar manda el producto a diseño; publicar directo es el respaldo del
+  // admin cuando ya hay portada (por ejemplo, sin designers activos).
+  const aprobar = (publicar: boolean) =>
     void resolver(
-      sinPortada ? "sin_portada" : "aprobar",
-      () => tendenciasService.aprobar(item.id, sinPortada),
-      sinPortada ? "Aprobado. Queda en «Sin portada» hasta que le pongas una." : "Publicado en el feed.",
+      publicar ? "publicar" : "aprobar",
+      () => tendenciasService.aprobar(item.id, publicar),
+      publicar ? "Publicado en el feed." : "Aprobado. Pasa al equipo de diseño.",
     );
 
   const rechazar = (motivo: MotivoRechazo) =>
@@ -434,8 +440,8 @@ export function FichaAprobacion({
           </div>
         )}
 
-        <div className="flex gap-2">
-          {modo === "pendiente" && (
+        {modo === "pendiente" ? (
+          <div className="flex gap-2">
             <button
               type="button"
               disabled={bloqueado}
@@ -444,33 +450,36 @@ export function FichaAprobacion({
             >
               Rechazar <ChevronDown className={`h-3.5 w-3.5 transition-transform ${rechazando ? "rotate-180" : ""}`} />
             </button>
-          )}
-          <button
-            type="button"
-            disabled={bloqueado || faltaBase || !f.portada_url}
-            onClick={() => aprobar(false)}
-            title={faltaBase ? "Falta nombre o categoría" : !f.portada_url ? "Falta la portada" : undefined}
-            className={`${CLASE_BOTON_PRIMARIO} flex-1`}
-          >
-            {ocupado === "aprobar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Aprobar y publicar
-          </button>
-        </div>
-        {(faltaBase || !f.portada_url) && (
-          <p className="text-xs text-muted-foreground">
-            Para publicar falta{" "}
-            {[!f.nombre.trim() && "el nombre", !f.categoria && "la categoría", !f.portada_url && "la portada"].filter(Boolean).join(", ")}.
+            <button
+              type="button"
+              disabled={bloqueado || faltaBase}
+              onClick={() => aprobar(false)}
+              title={faltaBase ? "Falta nombre o categoría" : undefined}
+              className={`${CLASE_BOTON_PRIMARIO} flex-1`}
+            >
+              {ocupado === "aprobar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Aprobar y enviar a diseño
+            </button>
+          </div>
+        ) : (
+          <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+            Aprobado. Espera la portada del equipo de diseño, que lo publica.
           </p>
         )}
-        {modo === "pendiente" && !f.portada_url && (
+        {faltaBase && modo === "pendiente" && (
+          <p className="text-xs text-muted-foreground">
+            Para aprobar falta {[!f.nombre.trim() && "el nombre", !f.categoria && "la categoría"].filter(Boolean).join(" y ")}.
+          </p>
+        )}
+        {esAdmin && f.portada_url && (
           <button
             type="button"
             disabled={bloqueado || faltaBase}
             onClick={() => aprobar(true)}
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline dark:text-accent"
           >
-            {ocupado === "sin_portada" && <Loader2 className="h-3 w-3 animate-spin" />}
-            Aprobar sin portada
+            {ocupado === "publicar" && <Loader2 className="h-3 w-3 animate-spin" />}
+            Publicar ya, sin pasar por diseño
           </button>
         )}
       </div>

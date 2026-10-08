@@ -18,7 +18,7 @@ import { FichaAprobacion, formularioDesde, type FormularioFicha, type ModoCola }
  * siguiente sin recargar.
  */
 
-function nombreRemitente(item: ItemAprobacion): string {
+export function nombreRemitente(item: ItemAprobacion): string {
   return item.remitente?.nombre || item.remitente?.email || "Remitente desconocido";
 }
 
@@ -115,10 +115,12 @@ function VideoAprobacion({ item }: { item: ItemAprobacion }) {
 
 export function ColaAprobacion({
   modo,
+  esAdmin = false,
   motivos,
   onRevisado,
 }: {
   modo: ModoCola;
+  esAdmin?: boolean;
   motivos: { valor: MotivoRechazo; texto: string }[];
   /** Tras aprobar o rechazar: el panel refresca contadores. */
   onRevisado: () => void;
@@ -186,7 +188,7 @@ export function ColaAprobacion({
     return (
       <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-10 text-center shadow-sm">
         <Inbox className="h-8 w-8 text-muted-foreground" />
-        <p className="font-medium">{modo === "pendiente" ? "No hay enlaces por revisar" : "No hay productos aprobados sin portada"}</p>
+        <p className="font-medium">{modo === "pendiente" ? "No hay enlaces por revisar" : "No hay productos esperando diseño"}</p>
         <button type="button" onClick={() => void cargar()} className={`${CLASE_BOTON_SECUNDARIO} mt-1`}>
           <RefreshCw className="h-3.5 w-3.5" /> Buscar nuevos
         </button>
@@ -201,7 +203,7 @@ export function ColaAprobacion({
       <section className="rounded-xl border border-border bg-white p-3 shadow-sm lg:row-span-2 lg:self-start 2xl:row-span-1">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold">
-            {modo === "pendiente" ? "En cola" : "Sin portada"} <span className="font-normal text-muted-foreground">({items.length})</span>
+            {modo === "pendiente" ? "En cola" : "En diseño"} <span className="font-normal text-muted-foreground">({items.length})</span>
           </p>
           <button
             type="button"
@@ -234,6 +236,7 @@ export function ColaAprobacion({
               motivos={motivos}
               onCambio={(f) => borradores.current.set(actual.id, f)}
               onResuelto={resuelto}
+              esAdmin={esAdmin}
             />
           </section>
         </>

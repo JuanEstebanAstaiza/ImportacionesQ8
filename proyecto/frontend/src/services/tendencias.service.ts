@@ -2,9 +2,10 @@ import { apiRequest } from "@/services/api-client";
 
 /**
  * Tendencias v2: feed de productos virales para importar. Los productos llegan
- * como enlaces a TikTok, Instagram o YouTube (comunidad, importadoras, equipo),
- * una persona del equipo los aprueba y les pone portada, y se publican. La
- * ficha no muestra precio: su única acción es pedir propuestas.
+ * como enlaces a TikTok, Instagram o YouTube (comunidad, importadoras, equipo).
+ * El equipo aprobador decide si entran; un designer de Zarpi les pone portada
+ * e imágenes con la identidad de marca y los publica. La ficha no muestra
+ * precio: su única acción es pedir propuestas.
  *
  * Ver backend/routers/tendencias_virales.py y docs/Tendencias · Guía de construcción.html.
  */
@@ -15,7 +16,8 @@ export type EstadoTendencia =
   | "pendiente"
   | "duplicado"
   | "rechazado"
-  | "aprobado_sin_portada"
+  /** Aprobado: espera portada del equipo de diseño. */
+  | "en_diseno"
   | "publicado"
   | "caido"
   | "archivado";
@@ -65,6 +67,8 @@ export interface FichaTendencia extends TarjetaTendencia {
   autor_plataforma: string | null;
   por_que_tendencia: string | null;
   ojo_antes: string | null;
+  /** Imágenes extra del producto con la identidad de Zarpi (rutas de gestión documental). */
+  imagenes: string[];
   /** "El video pertenece a su autor y se reproduce desde …" */
   pie: string;
 }
@@ -119,9 +123,39 @@ export interface ItemAprobacion extends FichaTendencia {
   };
 }
 
+/** Lo que ve diseño: lo del aprobador más quién diseñó y cuándo. */
+export interface ItemDiseno extends ItemAprobacion {
+  revisado_en: string | null;
+  disenado_en: string | null;
+  disenado_por: string | null;
+  /** Diseño ya lo revisó. Un publicado sin esto puede no tener la identidad de Zarpi. */
+  con_identidad: boolean;
+}
+
+/** "sin_diseno": publicado sin revisión de diseño; "mios": lo que diseñó quien pregunta. */
+export type FiltroPublicados = "sin_diseno" | "todos" | "mios";
+
+export interface ContadoresDiseno {
+  en_cola: number;
+  publicados_hoy: number;
+  mios_total: number;
+  publicados_sin_diseno: number;
+}
+
+export const MAX_IMAGENES_DISENO = 8;
+
+export interface DisenadorItem {
+  id: string;
+  email: string;
+  nombre: string | null;
+  activo: boolean;
+  publicados: number;
+  fecha_creacion: string | null;
+}
+
 export interface ContadoresAprobacion {
   pendientes: number;
-  sin_portada: number;
+  en_diseno: number;
   aprobados_hoy: number;
   rechazados_hoy: number;
 }
@@ -162,19 +196,44 @@ export const tendenciasService = {
   misEnvios: () => apiRequest<MiEnvio[]>("/tendencias/mis-envios"),
 
   // Equipo aprobador (admin o curador)
-  cola: (estado: "pendiente" | "aprobado_sin_portada" = "pendiente") =>
+  cola: (estado: "pendiente" | "en_diseno" = "pendiente") =>
     apiRequest<ItemAprobacion[]>(`/tendencias/aprobacion/cola?estado=${estado}`),
   contadores: () => apiRequest<ContadoresAprobacion>("/tendencias/aprobacion/contadores"),
   motivos: () => apiRequest<{ valor: MotivoRechazo; texto: string }[]>("/tendencias/aprobacion/motivos"),
   publicados: () => apiRequest<ItemAprobacion[]>("/tendencias/aprobacion/publicados"),
   editar: (id: string, cambios: CambiosFicha) =>
     apiRequest<ItemAprobacion>(`/tendencias/items/${id}`, { method: "PATCH", body: cambios }),
-  /** Sin portada falla (400) salvo con `sinPortada`. */
-  aprobar: (id: string, sinPortada = false) =>
-    apiRequest<ItemAprobacion>(`/tendencias/items/${id}/aprobar`, { method: "POST", body: { sin_portada: sinPortada } }),
+  /** Pasa a diseño. `publicar` (solo admin, con portada) lo publica sin pasar por diseño. */
+  aprobar: (id: string, publicar = false) =>
+    apiRequest<ItemAprobacion>(`/tendencias/items/${id}/aprobar`, { method: "POST", body: { publicar } }),
   rechazar: (id: string, motivo: MotivoRechazo) =>
     apiRequest<ItemAprobacion>(`/tendencias/items/${id}/rechazar`, { method: "POST", body: { motivo } }),
   archivar: (id: string) => apiRequest<ItemAprobacion>(`/tendencias/items/${id}/archivar`, { method: "POST" }),
+
+  // Diseño (designer o admin)
+  colaDiseno: () => apiRequest<ItemDiseno[]>("/tendencias/diseno/cola"),
+  contadoresDiseno: () => apiRequest<ContadoresDiseno>("/tendencias/diseno/contadores"),
+  publicadosDiseno: (filtro: FiltroPublicados = "todos", q = "") => {
+    const params = new URLSearchParams({ filtro });
+    if (q.trim()) params.set("q", q.trim());
+    return apiRequest<ItemDiseno[]>(`/tendencias/diseno/publicados?${params.toString()}`);
+  },
+  /** Lo publicado ya tiene la identidad de Zarpi: se marca sin cambiarle nada. */
+  marcarRevisado: (id: string) =>
+    apiRequest<ItemDiseno>(`/tendencias/diseno/items/${id}/revisado`, { method: "POST" }),
+  /** Portada y/o imágenes. `portada_url: ""` la quita (no en un publicado). */
+  guardarDiseno: (id: string, cambios: { portada_url?: string | null; imagenes?: string[] }) =>
+    apiRequest<ItemDiseno>(`/tendencias/diseno/items/${id}`, { method: "PATCH", body: cambios }),
+  publicarDiseno: (id: string) =>
+    apiRequest<ItemDiseno>(`/tendencias/diseno/items/${id}/publicar`, { method: "POST" }),
+
+  // Admin: equipo de diseño
+  listarDisenadores: () => apiRequest<DisenadorItem[]>("/admin/disenadores"),
+  crearDisenador: (datos: { email: string; password: string; nombre: string; telefono?: string }) =>
+    apiRequest<DisenadorItem>("/admin/disenadores", { method: "POST", body: datos }),
+  /** Activa o desactiva la cuenta (endpoint general de usuarios del admin). */
+  cambiarEstadoDisenador: (id: string, activo: boolean) =>
+    apiRequest<unknown>(`/admin/usuarios/${id}/estado`, { method: "PUT", body: { activo } }),
 
   // Admin: equipo aprobador
   listarAprobadores: () => apiRequest<AprobadorItem[]>("/tendencias/admin/curadores"),

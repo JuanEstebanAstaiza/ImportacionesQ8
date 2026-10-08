@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ExternalLink,
   Flame,
+  Images,
   Loader2,
   PackageX,
   RefreshCw,
@@ -15,8 +19,10 @@ import {
   Star,
   Users,
   Video,
+  X,
 } from "lucide-react";
 
+import { resolveApiUrl } from "@/services/api-client";
 import { ETIQUETA_PLATAFORMA, tendenciasService, type EmpresaTendencia, type FichaTendencia } from "@/services/tendencias.service";
 
 import type { PrefillSolicitud } from "./prefill";
@@ -157,6 +163,130 @@ function BloqueEmpresa({ empresa }: { empresa: EmpresaTendencia }) {
   );
 }
 
+// ── Galería ──────────────────────────────────────────────────────────────────
+
+const CLASE_BOTON_VISOR =
+  "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white";
+
+/** Visor a pantalla completa: flechas para moverse, Esc para cerrar; el foco no sale del diálogo. */
+function VisorImagenes({
+  imagenes,
+  indice,
+  nombre,
+  onIndice,
+  onCerrar,
+}: {
+  imagenes: string[];
+  indice: number;
+  nombre: string;
+  onIndice: (i: number) => void;
+  onCerrar: () => void;
+}) {
+  const dialogoRef = useRef<HTMLDivElement>(null);
+  const cerrarRef = useRef<HTMLButtonElement>(null);
+  const total = imagenes.length;
+
+  useEffect(() => {
+    // Al cerrar, el foco vuelve a la miniatura que lo abrió.
+    const previo = document.activeElement as HTMLElement | null;
+    cerrarRef.current?.focus();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+      previo?.focus();
+    };
+  }, []);
+
+  const ir = (delta: number) => onIndice((indice + delta + total) % total);
+
+  const alTeclear = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onCerrar();
+    } else if (e.key === "ArrowLeft" && total > 1) {
+      ir(-1);
+    } else if (e.key === "ArrowRight" && total > 1) {
+      ir(1);
+    } else if (e.key === "Tab") {
+      const focos = Array.from(dialogoRef.current?.querySelectorAll<HTMLElement>("button") ?? []);
+      if (focos.length === 0) return;
+      const primero = focos[0];
+      const ultimo = focos[focos.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero.focus();
+      }
+    }
+  };
+
+  return createPortal(
+    <div
+      ref={dialogoRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Fotos de ${nombre}`}
+      onKeyDown={alTeclear}
+      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center gap-2 bg-black/90 p-4 sm:gap-4"
+    >
+      <button ref={cerrarRef} type="button" onClick={onCerrar} aria-label="Cerrar" className={`${CLASE_BOTON_VISOR} absolute right-3 top-3`}>
+        <X className="h-5 w-5" />
+      </button>
+      {total > 1 ? (
+        <button type="button" onClick={() => ir(-1)} aria-label="Foto anterior" className={`${CLASE_BOTON_VISOR} shrink-0`}>
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      ) : null}
+      <img
+        src={resolveApiUrl(imagenes[indice])}
+        alt={`${nombre}, foto ${indice + 1} de ${total}`}
+        className="max-h-[85vh] min-w-0 max-w-full rounded-lg object-contain"
+      />
+      {total > 1 ? (
+        <button type="button" onClick={() => ir(1)} aria-label="Foto siguiente" className={`${CLASE_BOTON_VISOR} shrink-0`}>
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      ) : null}
+      <p aria-live="polite" className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs tabular-nums text-white">
+        {indice + 1} / {total}
+      </p>
+    </div>,
+    document.body,
+  );
+}
+
+function GaleriaImagenes({ imagenes, nombre }: { imagenes: string[]; nombre: string }) {
+  const [abierta, setAbierta] = useState<number | null>(null);
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <Images className="h-4 w-4 text-primary dark:text-violet-300" /> Fotos del producto
+      </p>
+      <ul className="mt-2 grid grid-cols-4 gap-2">
+        {imagenes.map((ruta, i) => (
+          <li key={ruta}>
+            <button
+              type="button"
+              onClick={() => setAbierta(i)}
+              aria-label={`Ver foto ${i + 1} de ${imagenes.length}`}
+              className="block aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              <ImagenPublica src={ruta} alt="" className="h-full w-full" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {abierta !== null ? (
+        <VisorImagenes imagenes={imagenes} indice={abierta} nombre={nombre} onIndice={setAbierta} onCerrar={() => setAbierta(null)} />
+      ) : null}
+    </div>
+  );
+}
+
 export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas }: Props) {
   const [ficha, setFicha] = useState<FichaTendencia | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -252,6 +382,8 @@ export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas }: Props) 
             )}
             <Dato icono={Video} texto={ficha.autor_plataforma ? `${plataforma} · ${ficha.autor_plataforma}` : plataforma} />
           </div>
+
+          {(ficha.imagenes ?? []).length > 0 ? <GaleriaImagenes imagenes={ficha.imagenes} nombre={ficha.nombre} /> : null}
 
           {ficha.por_que_tendencia ? (
             <div className="rounded-xl border border-border bg-white p-4 shadow-sm">

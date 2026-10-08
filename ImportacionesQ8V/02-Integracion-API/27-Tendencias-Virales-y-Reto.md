@@ -2,7 +2,7 @@
 
 > Backend: `models/tendencias_virales.py`, `models/reto.py`, `services/enlaces_video.py`, `services/tendencias_virales.py`, `services/reto.py`, `services/origen_cotizacion.py`, `utils/cifrado.py`, `routers/tendencias_virales.py`, `routers/reto.py`.
 > Frontend: `features/tendencias/*` (feed, ficha, envío, panel de aprobación, recomendados), `features/reto/*`, `services/tendencias.service.ts`, `services/reto.service.ts`.
-> Guía de producto: `docs/Tendencias · Guía de construcción.html`. Migración `20261008_0030`. Desde el 2026-10-08.
+> Guía de producto: `docs/Tendencias · Guía de construcción.html`. Migraciones `20261008_0030` y `20261009_0034` (diseño). Desde el 2026-10-08.
 
 ## Qué es
 
@@ -11,7 +11,7 @@ Una sección con productos virales para importar, alimentada de tres lados:
 - **Las importadoras**, que recomiendan productos.
 - **La comunidad**, a la que se le paga por subir productos que terminen aprobados.
 
-Cada producto entra como un **enlace** a TikTok, Instagram o YouTube. Una persona del equipo lo aprueba, le pone una **portada propia** y ahí se publica. **Nunca se descarga ni se guarda el video** ni su miniatura. La ficha **no muestra precio**: su única acción es pedir propuestas.
+Cada producto entra como un **enlace** a TikTok, Instagram o YouTube. El equipo aprobador decide si entra (nombre, categoría, textos) y lo manda a **diseño**: un **designer** de Zarpi le pone la portada y las imágenes con la identidad de marca, y lo publica. **Nunca se descarga ni se guarda el video** ni su miniatura. La ficha **no muestra precio**: su única acción es pedir propuestas.
 
 ## Reglas que viven en el código
 
@@ -20,14 +20,22 @@ Cada producto entra como un **enlace** a TikTok, Instagram o YouTube. Una person
 | Solo TikTok, Instagram y YouTube. Los enlaces cortos se resuelven sin salir de esos dominios (evita SSRF) | `enlaces_video.normalizar` / `resolver_corto` |
 | Mismo video con o sin parámetros = una sola ficha (`url_normalizada` UNIQUE). Al repetido se le responde quién lo subió, sin decir su nombre | `tendencias_virales.enviar` |
 | El reproductor es un iframe oficial armado desde el id validado. Nunca se inyecta el HTML del oEmbed. Para Instagram, el código pegado debe ser del mismo post | `enlaces_video.embed_url`, `tendencias_virales.editar` |
-| No se publica sin portada. Se puede «aprobar sin portada» (`aprobado_sin_portada`) y publicar después | `tendencias_virales.aprobar` |
+| Aprobar no publica: pasa a `en_diseno` y se avisa a los designers. Publica el designer, con portada. El admin puede publicar directo (`publicar: true`) si ya hay portada | `tendencias_virales.aprobar` / `publicar_diseno` |
+| El designer solo usa imágenes que subió él o las que el producto ya tenía (la foto propuesta por la importadora); máximo 8 imágenes extra | `_validar_imagen_diseno` |
 | El feed no devuelve el reproductor; la ficha sí | `tarjeta` / `ficha` |
 | La solicitud nacida de una ficha queda atribuida (`cotizaciones.tendencia_item_id`) y suma `cotizaciones_count` | `origen_cotizacion` |
 | Si la ficha la recomienda una importadora, la solicitud **debe** ir dirigida a ella (si no, 400): el cliente es suyo | `origen_cotizacion.validar_origen` |
 | Las cuentas de importadora o asesor no ven el botón de cotizar | `features/tendencias/piezas.tsx::puedeCotizar` |
 | Portadas: públicas una vez publicadas; antes solo las ve el equipo aprobador. Una importadora solo puede usar sus propias fotos | `routers/documentos.py`, `validar_archivo_propio` |
 
-**Aprobadores:** el admin, y quien tenga la capacidad `usuarios.es_curador`. Se asignan en *Aprobación › Equipo aprobador*.
+**Aprobadores:** el admin y quien tenga la capacidad `usuarios.es_curador`. Se asignan en *Aprobación › Equipo*.
+
+**Designers** (`usuarios.rol = "designer"`):
+- **Alta:** las cuentas las crea el admin en *Aprobación › Equipo* (`POST /admin/disenadores`).
+- **Pantalla:** tienen su propia pantalla, *Diseño* (`/diseno`), con la cola de lo aprobado, la portada, las imágenes y el botón para publicar.
+- **Chat:** entran al canal del equipo. `ROLES_EQUIPO` = admin, soporte y designer; la bandeja de soporte sigue siendo solo `ROLES_PLATAFORMA`. No ven tickets ni conversaciones de clientes.
+- **Publicados:** pueden retocar portada e imágenes de cualquier producto publicado. Lo que salió sin pasar por diseño (`disenado_por` vacío: publicado directo por el admin o de antes del equipo) aparece como «Sin identidad Zarpi». Guardar cambios o marcarlo «revisado» lo deja con la identidad de Zarpi.
+- **Navegación:** solo entran a sus pantallas; el frontend los devuelve a *Diseño* si intentan abrir otra.
 
 ## Reto comunitario
 
@@ -66,6 +74,12 @@ Corre en un solo worker gracias a un candado en Redis:
 | GET | `/tendencias/mis-envios` | Sesión |
 | GET | `/tendencias/aprobacion/cola?estado=` · `contadores` · `motivos` · `publicados` | Aprobador |
 | PATCH | `/tendencias/items/{id}` | Aprobador |
+| GET | `/tendencias/diseno/cola` · `contadores` | Designer o admin |
+| GET | `/tendencias/diseno/publicados?filtro=sin_diseno\|todos\|mios&q=` | Designer o admin: todo lo publicado, para retocarlo |
+| POST | `/tendencias/diseno/items/{id}/revisado` | Designer o admin: ya tiene la identidad de Zarpi |
+| PATCH | `/tendencias/diseno/items/{id}` (`portada_url`, `imagenes`) | Designer o admin |
+| POST | `/tendencias/diseno/items/{id}/publicar` | Designer o admin |
+| GET · POST | `/admin/disenadores` | Admin |
 | POST | `/tendencias/items/{id}/aprobar` · `rechazar` · `archivar` | Aprobador |
 | GET | `/reto/rondas/abierta` | Público, sin caché |
 | POST | `/reto/lista-espera` | Público |

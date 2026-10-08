@@ -6,7 +6,7 @@ import secrets
 import string
 
 import config
-from models.usuario import ROLES_PLATAFORMA, Usuario
+from models.usuario import ROLES_EQUIPO, Usuario
 from models.password_reset import PasswordResetToken
 from models.organizacion import OrganizacionSolicitante, MiembroOrganizacion, RolOrganizacion
 from models.referido import CodigoReferido, ReferidoUso
@@ -296,7 +296,7 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
     # agentes desde el panel que después no podían iniciar sesión—.
     if (
         login.rol
-        and usuario.rol not in ROLES_PLATAFORMA
+        and usuario.rol not in ROLES_EQUIPO
         and _normalizar_rol_login(login.rol) != _normalizar_rol_login(usuario.rol)
     ):
         raise HTTPException(

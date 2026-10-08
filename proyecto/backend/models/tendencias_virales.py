@@ -36,7 +36,8 @@ class EstadoTendencia(str, enum.Enum):
     pendiente = "pendiente"
     duplicado = "duplicado"
     rechazado = "rechazado"
-    aprobado_sin_portada = "aprobado_sin_portada"
+    # Aprobado por el equipo; espera la portada del designer para publicarse.
+    en_diseno = "en_diseno"
     publicado = "publicado"
     caido = "caido"
     archivado = "archivado"
@@ -81,6 +82,10 @@ class TendenciaItem(Base):
     ojo_antes = Column(String(200), nullable=True)
     # Ruta de gestión documental (`/documentos/archivos/{id}/descargar`).
     portada_url = Column(String(500), nullable=True)
+    # Imágenes extra de la ficha (JSON: lista de rutas de gestión documental).
+    imagenes = Column(Text, nullable=True)
+    disenado_por = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
+    disenado_en = Column(DateTime, nullable=True)
 
     # Lunes de la semana en que se publicó (hora de Bogotá): el feed es por semana.
     semana = Column(Date, nullable=True, index=True)

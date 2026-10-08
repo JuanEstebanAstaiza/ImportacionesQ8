@@ -108,13 +108,20 @@ def _imagen(db_session, owner_id):
 
 
 def _publicar(client, db_session, aprobador_user, aprobador, item_id, **ficha):
-    portada = _imagen(db_session, aprobador_user.id)
+    """Flujo completo: el aprobador aprueba (pasa a diseño) y un designer pone
+    la portada y publica."""
     r = client.patch(f"/tendencias/items/{item_id}", json={
-        "nombre": "Mini proyector portátil", "categoria": "Tecnología", "portada_url": portada,
+        "nombre": "Mini proyector portátil", "categoria": "Tecnología",
         "por_que_tendencia": "Explotó en TikTok con los videos de cine en casa.", **ficha,
     }, headers=aprobador)
     assert r.status_code == 200, r.text
     r = client.post(f"/tendencias/items/{item_id}/aprobar", json={}, headers=aprobador)
+    assert r.status_code == 200 and r.json()["estado"] == "en_diseno", r.text
+    disenador_user, disenador = crear_usuario_con_token(db_session, rol="designer")
+    portada = _imagen(db_session, disenador_user.id)
+    r = client.patch(f"/tendencias/diseno/items/{item_id}", json={"portada_url": portada}, headers=disenador)
+    assert r.status_code == 200, r.text
+    r = client.post(f"/tendencias/diseno/items/{item_id}/publicar", headers=disenador)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -146,10 +153,13 @@ def test_no_se_publica_sin_portada_y_el_feed_no_trae_embeds(client, db_session):
 
     client.patch(f"/tendencias/items/{item_id}", json={"nombre": "Lámpara", "categoria": "Hogar"}, headers=aprobador)
     r = client.post(f"/tendencias/items/{item_id}/aprobar", json={}, headers=aprobador)
-    assert r.status_code == 400 and "portada" in r.json()["detail"]
-    r = client.post(f"/tendencias/items/{item_id}/aprobar", json={"sin_portada": True}, headers=aprobador)
-    assert r.json()["estado"] == "aprobado_sin_portada"
+    assert r.json()["estado"] == "en_diseno"
     assert client.get("/tendencias/feed").json()["items"] == []
+    _, disenador = crear_usuario_con_token(db_session, rol="designer")
+    r = client.post(f"/tendencias/diseno/items/{item_id}/publicar", headers=disenador)
+    assert r.status_code == 400 and "portada" in r.json()["detail"]
+    db_session.query(TendenciaItem).filter(TendenciaItem.id == item_id).update({"estado": "pendiente"})
+    db_session.commit()
 
     publicado = _publicar(client, db_session, aprobador_user, aprobador, item_id)
     assert publicado["estado"] == "publicado"
@@ -195,7 +205,7 @@ def test_cola_y_contadores_del_aprobador(client, db_session):
     assert cola[0]["remitente"]["rol"] == "comunidad"
     client.post(f"/tendencias/items/{cola[0]['id']}/rechazar", json={"motivo": "calidad"}, headers=aprobador)
     assert client.get("/tendencias/aprobacion/contadores", headers=aprobador).json() == {
-        "pendientes": 1, "sin_portada": 0, "aprobados_hoy": 0, "rechazados_hoy": 1}
+        "pendientes": 1, "en_diseno": 0, "aprobados_hoy": 0, "rechazados_hoy": 1}
     assert client.get("/tendencias/aprobacion/cola", headers=comprador).status_code == 403
 
 
@@ -228,7 +238,10 @@ def test_producto_de_importadora_solo_se_cotiza_con_ella(client, db_session):
 
     aprobador_user, aprobador = crear_usuario_con_token(db_session, rol="admin")
     client.patch(f"/tendencias/items/{item_id}", json={"categoria": "Hogar"}, headers=aprobador)
-    assert client.post(f"/tendencias/items/{item_id}/aprobar", json={}, headers=aprobador).json()["estado"] == "publicado"
+    assert client.post(f"/tendencias/items/{item_id}/aprobar", json={}, headers=aprobador).json()["estado"] == "en_diseno"
+    # El designer puede publicar con la foto que propuso la importadora.
+    _, disenador = crear_usuario_con_token(db_session, rol="designer")
+    assert client.post(f"/tendencias/diseno/items/{item_id}/publicar", headers=disenador).json()["estado"] == "publicado"
     ficha = client.get(f"/tendencias/items/{item_id}").json()
     assert ficha["origen"] == "importadora" and ficha["empresa"]["nombre"] == "Andes Import"
     assert [i["id"] for i in client.get(f"/tendencias/feed?importador_id={importador.id}").json()["items"]] == [item_id]

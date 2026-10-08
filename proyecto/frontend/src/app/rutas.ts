@@ -60,6 +60,7 @@ export type Screen =
   | "tendencia-detalle"
   | "tendencias-enviar"
   | "tendencias-aprobacion"
+  | "diseno"
   | "reto"
   | "admin-reto"
   | "admin-tipografia";
@@ -104,6 +105,8 @@ export const RUTAS: Ruta[] = [
   { screen: "tendencias-aprobacion", path: "/tendencias/aprobacion" },
   { screen: "tendencia-detalle", path: "/tendencias", param: "tendencia" },
   { screen: "reto", path: "/reto" },
+  // Espacio del designer: portadas e imágenes de lo aprobado en Tendencias.
+  { screen: "diseno", path: "/diseno" },
   { screen: "catalogos", path: "/catalogos" },
 
   // Comunes

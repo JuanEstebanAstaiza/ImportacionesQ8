@@ -8,7 +8,7 @@ from typing import List, Optional
 from sqlalchemy.exc import IntegrityError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, false
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
@@ -37,7 +37,7 @@ from services.documental_service import (
     create_document_file,
     ensure_folder_path,
 )
-from models.usuario import ROLES_PLATAFORMA, Usuario
+from models.usuario import ROLES_EQUIPO, ROLES_PLATAFORMA, Usuario
 from models.cotizacion import Cotizacion
 from models.propuesta import Propuesta, EstadoPropuesta
 from pydantic import BaseModel
@@ -559,12 +559,14 @@ async def iniciar_chat_interno(
 
 
 require_plataforma = require_rol_in("admin", "soporte")
+# El canal del equipo suma al diseño; la bandeja de soporte, no.
+require_miembro_equipo = require_rol_in(*ROLES_EQUIPO)
 
 
 @router.get("/equipo/miembros", response_model=List[MiembroEquipoItem])
 async def listar_miembros_equipo(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_plataforma),
+    current_user: dict = Depends(require_miembro_equipo),
 ):
     """El resto del equipo de la plataforma, para elegir con quién hablar.
 
@@ -574,7 +576,7 @@ async def listar_miembros_equipo(
     filas = (
         db.query(Usuario)
         .filter(
-            Usuario.rol.in_(ROLES_PLATAFORMA),
+            Usuario.rol.in_(ROLES_EQUIPO),
             Usuario.activo.is_(True),
             Usuario.id != current_user["user_id"],
         )
@@ -596,7 +598,7 @@ async def abrir_canal_equipo(
     # exigir un `{}` solo para eso daba un 422 desconcertante.
     datos: AbrirCanalEquipoRequest = AbrirCanalEquipoRequest(),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_plataforma),
+    current_user: dict = Depends(require_miembro_equipo),
 ):
     """Abre (o reutiliza) el canal del equipo de la plataforma.
 
@@ -612,7 +614,7 @@ async def abrir_canal_equipo(
     if datos.miembro_id:
         otro = db.query(Usuario).filter(
             Usuario.id == str(datos.miembro_id),
-            Usuario.rol.in_(ROLES_PLATAFORMA),
+            Usuario.rol.in_(ROLES_EQUIPO),
             Usuario.activo.is_(True),
         ).first()
         if not otro:
@@ -1101,6 +1103,9 @@ async def listar_mis_conversaciones(
                     canal_equipo,
                 )
             )
+        elif rol == "designer":
+            # Diseño solo coordina con el equipo: nada de tickets ni de clientes.
+            query = query.filter(canal_equipo)
         elif rol == "solicitante":
             # `solicitante_id` es NULL en las internas, así que este filtro ya
             # las deja fuera por sí solo; sus tickets de soporte sí entran,
@@ -1140,7 +1145,9 @@ async def listar_mis_conversaciones(
                 )
             )
         else:
-            query = query.limit(50)
+            # Un rol sin regla propia no ve nada. Antes caía en un `limit(50)`
+            # que devolvía conversaciones ajenas a cualquier rol nuevo.
+            query = query.filter(false())
 
         conversaciones = query.order_by(ConversacionChat.fecha_creacion.desc()).all()
 

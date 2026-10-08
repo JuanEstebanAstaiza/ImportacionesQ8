@@ -4,6 +4,7 @@ Ver models/tendencias_virales.py y docs/Tendencias · Guía de construcción.htm
 """
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime
 from typing import Dict, Iterable, List, Optional
@@ -19,7 +20,7 @@ from models.importador import Importador
 from models.tendencias_virales import EstadoTendencia, MotivoRechazo, RolRemitente, TendenciaItem
 from models.usuario import Usuario
 from services import enlaces_video, reto
-from services.tendencias import lunes_de, puede_curar
+from services.tendencias import lunes_de, puede_curar, puede_disenar
 from services.tendencias_calculo import bogota_a_utc, hoy_bogota
 
 PIE_FICHA = "Zarpi conecta, no importa ni vende la mercancía."
@@ -36,6 +37,8 @@ ETIQUETA_PLATAFORMA = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": 
 
 PATRON_ARCHIVO = re.compile(r"^/documentos/archivos/([0-9a-f-]{36})/descargar$")
 
+MAX_IMAGENES = 8
+
 
 def _error(codigo: int, mensaje: str) -> HTTPException:
     return HTTPException(status_code=codigo, detail=mensaje)
@@ -44,7 +47,7 @@ def _error(codigo: int, mensaje: str) -> HTTPException:
 def rol_remitente(usuario: Usuario) -> str:
     if usuario.importador_id and usuario.rol in ("importador", "asesor"):
         return RolRemitente.importadora.value
-    if usuario.rol in ("admin", "soporte") or usuario.es_curador:
+    if usuario.rol in ("admin", "soporte", "designer") or usuario.es_curador:
         return RolRemitente.equipo.value
     return RolRemitente.comunidad.value
 
@@ -186,25 +189,32 @@ def editar(db: Session, item: TendenciaItem, usuario: Usuario, cambios: Dict) ->
     return item
 
 
-def aprobar(db: Session, item: TendenciaItem, usuario: Usuario, forzar_sin_portada: bool = False) -> TendenciaItem:
-    """Con portada → publicado. Sin portada → aprobado_sin_portada (solo si se
-    pide explícitamente). La primera aprobación suma al reto del remitente."""
-    if item.estado not in (EstadoTendencia.pendiente.value, EstadoTendencia.aprobado_sin_portada.value):
+def aprobar(db: Session, item: TendenciaItem, usuario: Usuario, publicar: bool = False) -> TendenciaItem:
+    """El aprobador decide si el producto entra (nombre, categoría, textos) y lo
+    manda a diseño: un designer le pone la portada con la identidad de Zarpi y
+    lo publica. `publicar` es el respaldo del admin cuando ya hay portada (por
+    ejemplo, sin designers activos). La aprobación suma al reto del remitente."""
+    if item.estado not in (EstadoTendencia.pendiente.value, EstadoTendencia.en_diseno.value):
         raise _error(status.HTTP_409_CONFLICT, "Este producto ya fue revisado")
     if not item.nombre or not item.categoria:
         raise _error(status.HTTP_400_BAD_REQUEST, "Ponle nombre y categoría antes de aprobar")
-    if not item.portada_url and not forzar_sin_portada:
-        raise _error(status.HTTP_400_BAD_REQUEST, "Sube la portada para publicar, o aprueba sin portada")
+    if publicar:
+        if usuario.rol != "admin":
+            raise _error(status.HTTP_403_FORBIDDEN, "La portada la pone el equipo de diseño")
+        if not item.portada_url:
+            raise _error(status.HTTP_400_BAD_REQUEST, "Para publicar ya, sube la portada")
+    elif item.estado == EstadoTendencia.en_diseno.value:
+        raise _error(status.HTTP_409_CONFLICT, "Ya está en diseño")
 
     primera_vez = item.estado == EstadoTendencia.pendiente.value
     ahora = datetime.utcnow()
     item.aprobado_por = usuario.id
-    if item.portada_url:
+    if publicar:
         item.estado = EstadoTendencia.publicado.value
         item.publicado_en = ahora
         item.semana = lunes_de(hoy_bogota())
     else:
-        item.estado = EstadoTendencia.aprobado_sin_portada.value
+        item.estado = EstadoTendencia.en_diseno.value
     item.revisado_en = ahora
 
     if primera_vez:
@@ -212,7 +222,163 @@ def aprobar(db: Session, item: TendenciaItem, usuario: Usuario, forzar_sin_porta
         if participacion is not None:
             reto.registrar_aprobado(db, participacion)
         _notificar_revision(db, item, aprobado=True, participacion=participacion)
+    if item.estado == EstadoTendencia.en_diseno.value:
+        _avisar_disenadores(db, item)
     return item
+
+
+def _avisar_disenadores(db: Session, item: TendenciaItem) -> None:
+    from services.notificacion_service import notificar
+
+    for disenador in db.query(Usuario).filter(Usuario.rol == "designer", Usuario.activo.is_(True)).all():
+        notificar(
+            db, usuario_id=disenador.id, tipo="tendencias", titulo=f"Para diseñar: {item.nombre}",
+            mensaje="Un producto aprobado espera su portada.",
+            data={"evento": "para_disenar", "tendencia_id": item.id},
+            enlace_relativo="/diseno", whatsapp=False, email=False,
+        )
+
+
+# ── Diseño ───────────────────────────────────────────────────────────────────
+
+def imagenes_de(item: TendenciaItem) -> List[str]:
+    try:
+        valor = json.loads(item.imagenes) if item.imagenes else []
+    except (TypeError, ValueError):
+        return []
+    return [r for r in valor if isinstance(r, str)][:MAX_IMAGENES] if isinstance(valor, list) else []
+
+
+def _validar_imagen_diseno(db: Session, ruta: Optional[str], usuario: Usuario, item: TendenciaItem) -> Optional[str]:
+    """Una imagen subida por el mismo designer, o una que el producto ya tenía
+    (la foto que propuso la importadora)."""
+    ruta = (ruta or "").strip()
+    if not ruta:
+        return None
+    if ruta == item.portada_url or ruta in imagenes_de(item):
+        return ruta
+    m = PATRON_ARCHIVO.match(ruta)
+    if not m:
+        raise _error(status.HTTP_400_BAD_REQUEST, "Las imágenes deben subirse a la plataforma")
+    archivo = db.query(Archivo).filter(Archivo.id == m.group(1), Archivo.deleted_at.is_(None)).first()
+    if archivo is None or archivo.tipo_recurso != "imagen":
+        raise _error(status.HTTP_400_BAD_REQUEST, "Debe ser una imagen subida a la plataforma")
+    if archivo.owner_user_id != usuario.id:
+        raise _error(status.HTTP_403_FORBIDDEN, "Solo puedes usar imágenes que subiste tú")
+    return ruta
+
+
+def cola_diseno(db: Session, limite: int = 100) -> List[TendenciaItem]:
+    """Lo aprobado que espera portada, lo más antiguo primero."""
+    return (
+        db.query(TendenciaItem)
+        .filter(TendenciaItem.estado == EstadoTendencia.en_diseno.value)
+        .order_by(TendenciaItem.revisado_en.asc(), TendenciaItem.fecha_creacion.asc())
+        .limit(limite).all()
+    )
+
+
+def disenar(db: Session, item: TendenciaItem, usuario: Usuario, cambios: Dict) -> TendenciaItem:
+    """Guarda portada e imágenes. Vale en diseño y también ya publicado: así
+    diseño corrige lo que salió sin la identidad de Zarpi (por ejemplo, lo que
+    se publicó antes de existir el equipo de diseño). No publica."""
+    if item.estado not in (EstadoTendencia.en_diseno.value, EstadoTendencia.publicado.value):
+        raise _error(status.HTTP_409_CONFLICT, "Este producto no está en diseño")
+    if "portada_url" in cambios:
+        portada = _validar_imagen_diseno(db, cambios["portada_url"], usuario, item)
+        if portada is None and item.estado == EstadoTendencia.publicado.value:
+            raise _error(status.HTTP_400_BAD_REQUEST, "Un producto publicado no puede quedar sin portada")
+        item.portada_url = portada
+    if "imagenes" in cambios:
+        rutas = [r for r in (cambios["imagenes"] or []) if isinstance(r, str) and r.strip()]
+        if len(rutas) > MAX_IMAGENES:
+            raise _error(status.HTTP_400_BAD_REQUEST, f"Máximo {MAX_IMAGENES} imágenes")
+        validas = []
+        for ruta in rutas:
+            ruta = _validar_imagen_diseno(db, ruta, usuario, item)
+            if ruta and ruta not in validas:
+                validas.append(ruta)
+        item.imagenes = json.dumps(validas) if validas else None
+    item.fecha_actualizacion = datetime.utcnow()
+    if item.estado == EstadoTendencia.publicado.value:
+        # Retocar algo publicado lo deja con la identidad de Zarpi.
+        marcar_disenado(item, usuario)
+    return item
+
+
+def marcar_disenado(item: TendenciaItem, usuario: Usuario) -> TendenciaItem:
+    """Diseño revisó lo publicado y ya tiene la identidad de Zarpi."""
+    if item.estado != EstadoTendencia.publicado.value:
+        raise _error(status.HTTP_409_CONFLICT, "Solo se revisa un producto publicado")
+    item.disenado_por = usuario.id
+    item.disenado_en = datetime.utcnow()
+    return item
+
+
+def publicados_diseno(db: Session, usuario: Usuario, filtro: str = "todos", q: Optional[str] = None,
+                      limite: int = 200) -> List[TendenciaItem]:
+    """Lo publicado, para retocarlo. `sin_diseno`: lo que nadie de diseño ha
+    revisado (primero lo más antiguo); `mios`: lo que diseñó quien pregunta."""
+    consulta = db.query(TendenciaItem).filter(TendenciaItem.estado == EstadoTendencia.publicado.value)
+    if filtro == "sin_diseno":
+        consulta = consulta.filter(TendenciaItem.disenado_por.is_(None))
+    elif filtro == "mios":
+        consulta = consulta.filter(TendenciaItem.disenado_por == usuario.id)
+    if q and q.strip():
+        consulta = consulta.filter(TendenciaItem.nombre.ilike(f"%{q.strip()}%"))
+    orden = TendenciaItem.publicado_en.asc() if filtro == "sin_diseno" else TendenciaItem.publicado_en.desc()
+    return consulta.order_by(orden).limit(limite).all()
+
+
+def publicar_diseno(db: Session, item: TendenciaItem, usuario: Usuario) -> TendenciaItem:
+    from services.notificacion_service import notificar
+
+    if item.estado != EstadoTendencia.en_diseno.value:
+        raise _error(status.HTTP_409_CONFLICT, "Este producto no está en diseño")
+    if not item.portada_url:
+        raise _error(status.HTTP_400_BAD_REQUEST, "Sube la portada antes de publicar")
+    ahora = datetime.utcnow()
+    item.estado = EstadoTendencia.publicado.value
+    item.publicado_en = ahora
+    item.semana = lunes_de(hoy_bogota())
+    item.disenado_por = usuario.id
+    item.disenado_en = ahora
+    notificar(
+        db, usuario_id=item.enviado_por, tipo="tendencias", titulo=f"Publicado: {item.nombre}",
+        mensaje="Ya está en Tendencias, con su portada.",
+        data={"evento": "enlace_publicado", "tendencia_id": item.id},
+        enlace_relativo=f"/tendencias/{item.id}", whatsapp=False, email=False,
+    )
+    return item
+
+
+def para_disenador(db: Session, item: TendenciaItem) -> Dict:
+    datos = para_aprobador(db, item)
+    disenador = db.query(Usuario).filter(Usuario.id == item.disenado_por).first() if item.disenado_por else None
+    datos.update({
+        "revisado_en": item.revisado_en.isoformat() + "Z" if item.revisado_en else None,
+        "disenado_en": item.disenado_en.isoformat() + "Z" if item.disenado_en else None,
+        "disenado_por": (disenador.nombre or disenador.email) if disenador else None,
+        # Publicado sin que diseño lo haya revisado: puede no tener la identidad de Zarpi.
+        "con_identidad": bool(item.disenado_por),
+    })
+    return datos
+
+
+def contadores_diseno(db: Session, usuario: Usuario) -> Dict:
+    hoy = hoy_bogota()
+    inicio = bogota_a_utc(datetime.combine(hoy, datetime.min.time()))
+    return {
+        "en_cola": db.query(func.count(TendenciaItem.id)).filter(
+            TendenciaItem.estado == EstadoTendencia.en_diseno.value).scalar() or 0,
+        "publicados_hoy": db.query(func.count(TendenciaItem.id)).filter(
+            TendenciaItem.disenado_en >= inicio).scalar() or 0,
+        "mios_total": db.query(func.count(TendenciaItem.id)).filter(
+            TendenciaItem.disenado_por == usuario.id).scalar() or 0,
+        "publicados_sin_diseno": db.query(func.count(TendenciaItem.id)).filter(
+            TendenciaItem.estado == EstadoTendencia.publicado.value,
+            TendenciaItem.disenado_por.is_(None)).scalar() or 0,
+    }
 
 
 def rechazar(db: Session, item: TendenciaItem, usuario: Usuario, motivo: str) -> TendenciaItem:
@@ -238,7 +404,7 @@ def _notificar_revision(db: Session, item: TendenciaItem, *, aprobado: bool, par
     if aprobado:
         titulo = f"Aprobado: {item.nombre}"
         mensaje = ("Ya está publicado en Tendencias." if item.estado == EstadoTendencia.publicado.value
-                   else "Lo aprobamos; se publica cuando le pongamos la portada.") + progreso
+                   else "Lo aprobamos. Nuestro equipo de diseño le prepara la portada y se publica pronto.") + progreso
     else:
         titulo = "No aprobamos tu enlace"
         mensaje = f"{MOTIVOS_RECHAZO.get(item.motivo_rechazo, 'No cumple las reglas')}.{progreso}"
@@ -271,10 +437,10 @@ def contadores(db: Session) -> Dict:
     return {
         "pendientes": db.query(func.count(TendenciaItem.id)).filter(
             TendenciaItem.estado == EstadoTendencia.pendiente.value).scalar() or 0,
-        "sin_portada": db.query(func.count(TendenciaItem.id)).filter(
-            TendenciaItem.estado == EstadoTendencia.aprobado_sin_portada.value).scalar() or 0,
+        "en_diseno": db.query(func.count(TendenciaItem.id)).filter(
+            TendenciaItem.estado == EstadoTendencia.en_diseno.value).scalar() or 0,
         "aprobados_hoy": int(revisados_hoy.get(EstadoTendencia.publicado.value, 0)
-                             + revisados_hoy.get(EstadoTendencia.aprobado_sin_portada.value, 0)),
+                             + revisados_hoy.get(EstadoTendencia.en_diseno.value, 0)),
         "rechazados_hoy": int(revisados_hoy.get(EstadoTendencia.rechazado.value, 0)),
     }
 
@@ -352,6 +518,7 @@ def ficha(db: Session, item: TendenciaItem) -> Dict:
         "autor_plataforma": item.autor_plataforma,
         "por_que_tendencia": item.por_que_tendencia,
         "ojo_antes": item.ojo_antes,
+        "imagenes": imagenes_de(item),
         "pie": f"El video pertenece a su autor y se reproduce desde "
                f"{ETIQUETA_PLATAFORMA.get(item.plataforma, item.plataforma)}. {PIE_FICHA}",
     })
@@ -425,21 +592,30 @@ def categorias_publicadas(db: Session) -> List[str]:
 
 # ── Acceso a archivos ────────────────────────────────────────────────────────
 
+def _usa_archivo(archivo_id: str):
+    patron = f"%/{archivo_id}/%"
+    from sqlalchemy import or_
+
+    return or_(
+        func.cast(TendenciaItem.portada_url, String).like(patron),
+        TendenciaItem.imagenes.like(patron),
+    )
+
+
 def es_portada_publica(db: Session, archivo_id: str) -> bool:
-    """La portada de un producto publicado la ve cualquiera, con o sin sesión."""
+    """Portada e imágenes de un producto publicado: las ve cualquiera, con o sin sesión."""
     return db.query(TendenciaItem.id).filter(
         TendenciaItem.estado == EstadoTendencia.publicado.value,
-        TendenciaItem.portada_url.like(f"%/{archivo_id}/%"),
+        _usa_archivo(archivo_id),
     ).first() is not None
 
 
 def es_portada_visible(db: Session, archivo_id: str, usuario: Optional[Usuario]) -> bool:
-    """Una portada propuesta (aún sin publicar) la ve el equipo aprobador."""
-    if usuario is None or not puede_curar(usuario):
+    """Portada o imágenes aún sin publicar (la foto que propuso una importadora,
+    o lo que va subiendo diseño): las ven el equipo aprobador y diseño."""
+    if usuario is None or not (puede_curar(usuario) or puede_disenar(usuario)):
         return False
-    return db.query(TendenciaItem.id).filter(
-        func.cast(TendenciaItem.portada_url, String).like(f"%/{archivo_id}/%"),
-    ).first() is not None
+    return db.query(TendenciaItem.id).filter(_usa_archivo(archivo_id)).first() is not None
 
 
 # ── Tarea diaria ─────────────────────────────────────────────────────────────
