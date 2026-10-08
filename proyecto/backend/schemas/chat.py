@@ -129,6 +129,28 @@ class IniciarChatInternoRequest(BaseModel):
     mensaje_inicial: Optional[str] = Field(None, max_length=2000)
 
 
+class AbrirCanalEquipoRequest(BaseModel):
+    """Abre (o reutiliza) un canal del equipo de la plataforma.
+
+    Sin `miembro_id` se entra en la sala común, donde está todo el equipo. Con
+    `miembro_id` se abre el hilo privado con esa persona (administración o
+    soporte). Es el canal que sustituye al ticket para el equipo interno: un
+    agente no puede abrirse un ticket a sí mismo.
+    """
+    miembro_id: Optional[str] = None
+    mensaje_inicial: Optional[str] = Field(None, max_length=2000)
+
+
+class MiembroEquipoItem(BaseModel):
+    """Alguien del equipo de la plataforma con quien se puede abrir un hilo."""
+    id: str
+    nombre: Optional[str] = None
+    email: str
+    rol: str
+    nivel_soporte: Optional[int] = None
+    activo: bool = True
+
+
 class IniciarChatRequest(BaseModel):
     """Abre (o reutiliza) la conversación de negociación desde el lado de la empresa.
 

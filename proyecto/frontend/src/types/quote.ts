@@ -17,13 +17,15 @@ export interface Quote {
   productLine: string;
   quality: string;
   minQuantity: string;
+  /** Unidad de la cantidad: "unidades" o "m3". */
+  unit?: "unidades" | "m3";
   targetPrice: string;
   targetPriceCurrency?: string;
   incoterm: string;
   description?: string;
   notes?: string;
   referenceLink?: string;
-  productPhotoUrl?: string;
+  productPhotoUrls?: string[];
   personalizationLevel?: string;
   importMode?: string;
   /** Marca de embarque ya compuesta ("ctl-prendascontrol"), si se conoce la empresa. */

@@ -34,6 +34,14 @@ class TipoConversacion(str, enum.Enum):
     negociacion = "negociacion"  # solicitante ↔ empresa (cotización y, después, orden)
     interna = "interna"          # cuenta dueña de la empresa ↔ uno de sus asesores
     soporte = "soporte"          # cualquier usuario ↔ equipo de la plataforma
+    # Administración ↔ soporte. Es el canal propio del equipo de la plataforma:
+    # un agente no puede abrirse un ticket a sí mismo, pero sí necesita hablar
+    # con administración y con sus compañeros. Tiene dos formas, distinguidas
+    # por si lleva miembros concretos o no:
+    #   - sala común del equipo: los dos `*_usuario_id` en NULL;
+    #   - hilo entre dos personas: sus ids en `solicitante_id` e
+    #     `importador_usuario_id`, ordenados (ver `services/acceso_chat.py`).
+    equipo = "equipo"
 
 
 class UrgenciaSoporte(str, enum.Enum):

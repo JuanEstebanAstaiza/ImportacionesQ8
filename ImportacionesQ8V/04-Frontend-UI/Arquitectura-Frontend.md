@@ -79,7 +79,7 @@ El frontend venia con alta concentracion de logica en App.tsx. En esta fase se i
 ## Referencias
 
 - [[Indice-Frontend]]
-- [[09-Routing-y-Roles-Frontend]]
-- [[10-Contrato-Shell-Header-Sidebar]]
+- [[Routing-y-Roles-Frontend]]
+- [[Contrato-Shell-Header-Sidebar]]
 
 ← Volver a [[Indice-Frontend]]

@@ -1,0 +1,287 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Especificación Tendencias semanales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap">
+<style>
+/* Layout: columna editorial de ~68ch con índice navegable; tablas de datos con scroll propio en móvil. */
+:root{
+  --ink:#1d1c1a; --slate:#44474d; --rust:#a64a24; --muted:#77716a; --rule:#dcd5c9; --paper:#f5f1e9; --card:#fffdf9; --code:#efe9df;
+  --display:'Fraunces',Georgia,'Times New Roman',serif;
+  --body:Georgia,'Times New Roman',serif;
+  --mono:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --ink:#ece6db; --slate:#c4beb3; --rust:#e3946a; --muted:#9b958b; --rule:#3a3631; --paper:#191715; --card:#221f1c; --code:#2b2723; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --ink:#ece6db; --slate:#c4beb3; --rust:#e3946a; --muted:#9b958b; --rule:#3a3631; --paper:#191715; --card:#221f1c; --code:#2b2723; color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.62;margin:0}
+.wrap{max-width:46rem;margin:0 auto;padding-inline:20px;padding-block:48px 80px}
+.eyebrow{font-family:var(--display);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--rust);margin:0 0 14px;font-weight:600}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(30px,7vw,44px);line-height:1.08;letter-spacing:-.015em;margin:0 0 14px;text-wrap:balance}
+.dek{color:var(--slate);font-size:19px;margin:0}
+.meta{color:var(--muted);font-size:14px;font-style:italic;margin:16px 0 0}
+h2{font-family:var(--display);font-weight:600;font-size:25px;line-height:1.2;letter-spacing:-.01em;margin:52px 0 10px;padding-top:22px;border-top:1px solid var(--rule);text-wrap:balance}
+h2 .num{color:var(--rust);font-size:14px;display:block;margin-bottom:8px;letter-spacing:.14em}
+h3{font-family:var(--display);font-weight:600;font-size:18px;margin:28px 0 6px}
+p{margin:0 0 16px}
+ul,ol{margin:0 0 18px;padding-left:22px}
+li{margin-bottom:9px}
+code{font-family:var(--mono);font-size:.86em;background:var(--code);padding:1px 5px;border-radius:3px}
+pre{font-family:var(--mono);font-size:14px;line-height:1.55;background:var(--code);padding:16px 18px;overflow-x:auto;margin:18px 0 22px;border-radius:4px}
+nav.toc{background:var(--card);border:1px solid var(--rule);padding:20px 22px;margin:34px 0 0}
+nav.toc p{font-family:var(--display);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+nav.toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+nav.toc li{margin-bottom:7px;break-inside:avoid}
+nav.toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--rule)}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--rust);border-color:var(--rust)}
+a:focus-visible{outline:2px solid var(--rust);outline-offset:2px}
+.callout{background:var(--card);border-left:3px solid var(--rust);padding:16px 20px;margin:24px 0}
+.callout p:last-child,.callout ul:last-child{margin-bottom:0}
+.callout .label{font-family:var(--display);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--rust);display:block;margin-bottom:8px;font-weight:600}
+.stop{border-left-color:var(--ink)}
+.stop .label{color:var(--ink)}
+.tablewrap{overflow-x:auto;margin:20px 0}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{font-family:var(--display);text-align:left;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--ink);padding:0 12px 8px 0;white-space:nowrap}
+td{border-bottom:1px solid var(--rule);padding:10px 12px 10px 0;vertical-align:top}
+td code{white-space:nowrap}
+.num-col{font-variant-numeric:tabular-nums;white-space:nowrap}
+.footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--rule);color:var(--muted);font-size:14px;font-style:italic}
+@media (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding-block:30px 64px}
+  nav.toc ol{columns:1}
+}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">Especificación de producto · Zarpi</p>
+<h1>Tendencias semanales</h1>
+<p class="dek">Sección semanal de productos para cotizar, con la fecha ideal de pedido calculada y una guía de venta, administrada por un curador desde un panel propio.</p>
+<p class="meta">Versión 1 · 5 de octubre de 2026 · Para Juan Esteban (CTO) · Acompaña el mockup "Zarpi Tendencias"</p>
+
+<nav class="toc" aria-label="Índice">
+<p>Contenido</p>
+<ol>
+<li><a href="#alcance">Alcance y fases</a></li>
+<li><a href="#roles">Roles y permisos</a></li>
+<li><a href="#datos">Modelo de datos</a></li>
+<li><a href="#calculo">Cálculo de la fecha ideal</a></li>
+<li><a href="#estados">Estados del producto</a></li>
+<li><a href="#estilos">Estilos de portada</a></li>
+<li><a href="#pantallas">Pantallas</a></li>
+<li><a href="#publicacion">Publicación y avisos</a></li>
+<li><a href="#reglas">Reglas de contenido</a></li>
+<li><a href="#eventos">Eventos a medir</a></li>
+<li><a href="#fuera">Fuera de alcance</a></li>
+<li><a href="#preguntas">Lo que necesito de ti</a></li>
+</ol>
+</nav>
+
+<h2 id="alcance"><span class="num">01</span>Alcance y fases</h2>
+<p>Cada lunes se publica una <strong>edición</strong> con seis productos. Cada producto muestra por qué está en tendencia, hasta qué fecha conviene pedirlo para que llegue a tiempo a su temporada y cómo venderlo. La única acción comercial es <strong>pedir propuestas</strong>, que abre una solicitud normal de Zarpi prellenada con el producto. Zarpi no vende el producto ni muestra precios.</p>
+<p>Métrica principal de la sección: <strong>solicitudes creadas desde Tendencias por semana</strong>. Vistas y guardados son métricas de apoyo.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Fase</th><th>Qué incluye</th><th>Condición para empezar</th></tr></thead>
+<tbody>
+<tr><td>V0</td><td>Sin código. La edición se publica a mano en la comunidad de vendedores, con un formulario para pedir propuestas. Las fechas se calculan en una hoja.</td><td>Ninguna. Corre 4 semanas.</td></tr>
+<tr><td>V1</td><td>Páginas públicas, panel del curador, cálculo de fechas, calendario de pedidos, guardados, archivo de ediciones, aviso por correo y eventos.</td><td>V0 genera al menos 8 solicitudes cotizables y 1 operación cerrada en 4 semanas.</td></tr>
+<tr><td>V2</td><td>Aviso por WhatsApp, página de prueba ("Valídalo antes de importar"), tiempos de importación reales calculados con operaciones de Zarpi.</td><td>V1 en uso y validación legal de la página de prueba.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="callout">
+<span class="label">Para qué sirve este documento hoy</span>
+<p>Para que estimes V1 por bloques y señales riesgos técnicos. No es una orden de inicio. La decisión de construir se toma con los resultados de V0.</p>
+</div>
+
+<h2 id="roles"><span class="num">02</span>Roles y permisos</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Rol</th><th>Puede</th><th>No puede</th></tr></thead>
+<tbody>
+<tr><td>Visitante</td><td>Ver la edición publicada, las fichas, el calendario y el archivo.</td><td>Guardar, suscribirse al aviso ni enviar solicitudes.</td></tr>
+<tr><td>Comprador</td><td>Todo lo anterior, más guardar productos, suscribirse al aviso semanal y pedir propuestas.</td><td>Ver borradores.</td></tr>
+<tr><td>Curador</td><td>Crear y editar ediciones y productos en borrador, ver la vista previa y programar la publicación.</td><td>Asignar roles. Editar una edición ya publicada sin dejar registro.</td></tr>
+<tr><td>Administrador</td><td>Todo lo del curador, más asignar o quitar el rol de curador, retirar una edición publicada y editar parámetros de importación.</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+<p>El rol de curador se asigna a usuarios existentes desde el panel de administración. Cada cambio en una edición o producto guarda autor y fecha.</p>
+
+<h2 id="datos"><span class="num">03</span>Modelo de datos</h2>
+<p>Nombres orientativos. Ajústalos a las convenciones del repositorio.</p>
+<h3>Edicion</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Campo</th><th>Tipo</th><th>Regla</th></tr></thead>
+<tbody>
+<tr><td><code>numero</code></td><td>int</td><td>Único, consecutivo.</td></tr>
+<tr><td><code>semana_inicio</code></td><td>date</td><td>Lunes de la semana.</td></tr>
+<tr><td><code>titulo_linea1</code></td><td>varchar(40)</td><td>Obligatorio.</td></tr>
+<tr><td><code>titulo_linea2</code></td><td>varchar(40)</td><td>Obligatorio. Se muestra en color de acento.</td></tr>
+<tr><td><code>subtitulo</code></td><td>varchar(140)</td><td>Obligatorio.</td></tr>
+<tr><td><code>preset_estilo</code></td><td>enum</td><td><code>lavanda</code> · <code>violeta</code> · <code>amarillo</code> · <code>noche</code>.</td></tr>
+<tr><td><code>estado</code></td><td>enum</td><td><code>borrador</code> · <code>programada</code> · <code>publicada</code> · <code>archivada</code>.</td></tr>
+<tr><td><code>publicar_en</code></td><td>datetime</td><td>Zona America/Bogota. Por defecto, lunes 7:00 a. m.</td></tr>
+</tbody>
+</table>
+</div>
+<h3>Producto</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Campo</th><th>Tipo</th><th>Regla</th></tr></thead>
+<tbody>
+<tr><td><code>nombre</code></td><td>varchar(80)</td><td>Nombre genérico, sin marcas.</td></tr>
+<tr><td><code>categoria_visible</code></td><td>varchar(40)</td><td>Ej.: "Fitness · Año nuevo".</td></tr>
+<tr><td><code>fotos</code></td><td>lista de archivos</td><td>De 1 a 5. Cuadradas, mínimo 1200 px.</td></tr>
+<tr><td><code>por_que_ahora</code></td><td>varchar(220)</td><td>Obligatorio.</td></tr>
+<tr><td><code>temporada_id</code></td><td>FK, nullable</td><td>Nulo significa "Todo el año".</td></tr>
+<tr><td><code>fecha_en_bodega</code></td><td>date, nullable</td><td>Si es nula y hay temporada: fecha de la temporada menos 21 días.</td></tr>
+<tr><td><code>transporte_sugerido</code></td><td>enum</td><td><code>mar</code> · <code>aereo</code>.</td></tr>
+<tr><td><code>dias_mar</code>, <code>dias_aereo</code></td><td>int, nullable</td><td>Si son nulos, se usan los parámetros globales.</td></tr>
+<tr><td><code>revisar_requisitos</code></td><td>bool</td><td>Muestra la etiqueta y el aviso en la solicitud.</td></tr>
+<tr><td><code>para_negocio</code></td><td>bool</td><td>Filtro "Para tu negocio".</td></tr>
+<tr><td><code>guia_para_quien</code></td><td>text</td><td>Opcional.</td></tr>
+<tr><td><code>guia_angulos</code></td><td>lista de varchar(80)</td><td>Máximo 3.</td></tr>
+<tr><td><code>guia_donde</code>, <code>guia_contenido</code></td><td>text</td><td>Opcionales.</td></tr>
+<tr><td><code>que_pedir_en_cotizacion</code></td><td>text</td><td>Se copia a la descripción de la solicitud prellenada.</td></tr>
+<tr><td><code>pagina_prueba</code></td><td>bool</td><td>Siempre <code>false</code> en V1. Se habilita en V2.</td></tr>
+</tbody>
+</table>
+</div>
+<h3>Relaciones y tablas de apoyo</h3>
+<ul>
+<li><strong>EdicionProducto:</strong> <code>edicion_id</code>, <code>producto_id</code>, <code>orden</code>, <code>destacado</code>. Exactamente un destacado por edición y máximo seis productos. Un producto puede repetirse en otra edición.</li>
+<li><strong>Temporada:</strong> <code>nombre</code>, <code>fecha</code> (día de la temporada), <code>ejemplos</code> (texto corto). La carga el administrador por año.</li>
+<li><strong>ParametrosImportacion</strong> (una fila): <code>dias_mar</code> = 75, <code>dias_aereo</code> = 35, <code>dias_produccion</code> = 20.</li>
+<li><strong>CierreFabricas:</strong> <code>inicio</code>, <code>fin</code>, <code>fin_produccion_previa</code>. Para 2027: 20 de enero, 28 de febrero y 15 de enero.</li>
+<li><strong>Guardado:</strong> <code>usuario_id</code>, <code>producto_id</code>, <code>edicion_id</code>, fecha.</li>
+<li><strong>SuscripcionAviso:</strong> <code>usuario_id</code>, canal (<code>email</code> en V1), fecha de autorización.</li>
+<li><strong>Solicitud</strong> (ya existe): agregar <code>origen</code> (<code>tendencias</code> o <code>directa</code>), <code>edicion_id</code> y <code>producto_id</code>, nulos si no vienen de Tendencias.</li>
+</ul>
+
+<h2 id="calculo"><span class="num">04</span>Cálculo de la fecha ideal</h2>
+<p><strong>Días puerta a puerta:</strong> desde que el comprador confirma el pedido con la nacionalizadora hasta que la mercancía está en su bodega, con margen incluido. Valores por defecto: 75 por mar y 35 por aéreo. Por mar se desglosan así: 20 de producción y alistamiento, 5 hasta el zarpe, 30 de tránsito, 10 de nacionalización y transporte nacional, y 10 de margen.</p>
+<pre>fecha_limite = fecha_en_bodega − dias_puerta_a_puerta
+fin_produccion = fecha_limite + dias_produccion
+
+si CierreFabricas.inicio ≤ fin_produccion ≤ CierreFabricas.fin:
+    fecha_limite = CierreFabricas.fin_produccion_previa − dias_produccion
+    marcar aviso_cierre_fabricas = true</pre>
+<p>Se calcula para los dos modos (<code>limite_mar</code> y <code>limite_aereo</code>). Fechas sin hora, en America/Bogota.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Caso</th><th>En bodega</th><th>Mar</th><th>Aéreo</th></tr></thead>
+<tbody>
+<tr><td>Bandas · año nuevo</td><td class="num-col">26 dic 2026</td><td class="num-col">12 oct 2026</td><td class="num-col">21 nov 2026</td></tr>
+<tr><td>Lonchera · regreso a clases</td><td class="num-col">5 ene 2027</td><td class="num-col">22 oct 2026</td><td class="num-col">1 dic 2026</td></tr>
+<tr><td>Luces · Navidad</td><td class="num-col">20 nov 2026</td><td class="num-col">6 sep 2026</td><td class="num-col">16 oct 2026</td></tr>
+<tr><td>Día de la Madre (9 may)</td><td class="num-col">18 abr 2027</td><td class="num-col">26 dic 2026 *</td><td class="num-col">14 mar 2027</td></tr>
+</tbody>
+</table>
+</div>
+<p>* Sin la regla, la fecha por mar sería el 2 de febrero y la producción terminaría el 22 de febrero, dentro del cierre de fábricas. La regla la adelanta al 26 de diciembre. Usa estos cuatro casos como pruebas unitarias.</p>
+<div class="callout">
+<span class="label">Cómo se muestra</span>
+<p>Siempre como estimado: "Pídelo antes del 12 de octubre (estimado con 75 días por mar)". El tiempo real lo da cada nacionalizadora en su propuesta. En V2, los días por defecto se reemplazan por el promedio real de las operaciones de Zarpi por categoría y modo.</p>
+</div>
+
+<h2 id="estados"><span class="num">05</span>Estados del producto</h2>
+<p>Para el comprador se evalúan contra la fecha de hoy. En el panel del curador, contra <code>publicar_en</code>. Se aplica la primera regla que se cumpla.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Estado</th><th>Regla</th><th>Texto</th></tr></thead>
+<tbody>
+<tr><td><code>todo_el_anio</code></td><td>Sin temporada.</td><td>Todo el año</td></tr>
+<tr><td><code>pidelo_ya</code></td><td>0 ≤ limite_mar − hoy ≤ 7</td><td>Pídelo esta semana</td></tr>
+<tr><td><code>ventana_abierta</code></td><td>8 ≤ limite_mar − hoy ≤ 30</td><td>Ventana abierta · quedan N días</td></tr>
+<tr><td><code>futura</code></td><td>limite_mar − hoy &gt; 30</td><td>Pídelo desde (limite_mar − 21 días)</td></tr>
+<tr><td><code>solo_aereo</code></td><td>limite_mar &lt; hoy ≤ limite_aereo</td><td>Solo aéreo</td></tr>
+<tr><td><code>fuera_de_tiempo</code></td><td>limite_aereo &lt; hoy</td><td>No se muestra al comprador. El panel avisa al curador.</td></tr>
+</tbody>
+</table>
+</div>
+<p>El filtro "Pídelo ya" incluye <code>pidelo_ya</code>, <code>ventana_abierta</code> y <code>solo_aereo</code>.</p>
+
+<h2 id="estilos"><span class="num">06</span>Estilos de portada</h2>
+<p>El curador elige uno de cuatro presets. No hay editor libre de colores ni de CSS, para que la marca no se rompa.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Preset</th><th>Fondo</th><th>Texto</th><th>Acento (línea 2)</th><th>Manchas</th></tr></thead>
+<tbody>
+<tr><td>Lavanda</td><td><code>#CFC8F6</code></td><td><code>#16151B</code></td><td><code>#EDF953</code></td><td><code>#5A2BF2</code> · <code>#EDF953</code> · <code>#4A35B8</code></td></tr>
+<tr><td>Violeta</td><td><code>#4F06EB</code></td><td><code>#FFFFFF</code></td><td><code>#EDF953</code></td><td><code>#8A6CF5</code> · <code>#EDF953</code> · <code>#2A0A8F</code></td></tr>
+<tr><td>Amarillo</td><td><code>#EDF953</code></td><td><code>#16151B</code></td><td><code>#4F06EB</code></td><td><code>#4F06EB</code> · <code>#FFFFFF</code> · <code>#CFC8F6</code></td></tr>
+<tr><td>Noche</td><td><code>#111113</code></td><td><code>#FFFFFF</code></td><td><code>#EDF953</code></td><td><code>#4F06EB</code> · <code>#EDF953</code> · <code>#2A2930</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Las manchas son tres formas desenfocadas en posiciones fijas por preset, como en la home de zarpi.co. El resto de la página (sección negra, tarjetas, botones amarillos) no cambia entre ediciones.</p>
+
+<h2 id="pantallas"><span class="num">07</span>Pantallas</h2>
+<p>Los nombres coinciden con los tableros del mockup.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Pantalla</th><th>Tablero</th><th>Notas</th></tr></thead>
+<tbody>
+<tr><td>Tendencias</td><td>Tendencias · móvil y escritorio</td><td>Portada de la edición, "Pide a tiempo" (próximas 4 temporadas con fecha límite), filtros, destacado y cinco productos.</td></tr>
+<tr><td>Ficha de producto</td><td>Ficha de producto · móvil</td><td>Cuándo pedirlo con selector mar/aéreo y línea de tiempo, cómo venderlo, qué pedir en la cotización, bloque "Próximamente" de la página de prueba.</td></tr>
+<tr><td>Calendario de pedidos</td><td>Calendario de pedidos · escritorio</td><td>Temporadas de los próximos 14 meses con ventana por mar, tramo solo aéreo, fecha de temporada, línea de hoy y franja de cierre de fábricas. En móvil, scroll horizontal dentro del bloque.</td></tr>
+<tr><td>Solicitud prellenada</td><td>Pedir propuestas · móvil</td><td>Producto, tipo "Que me consigan el producto" y descripción ya llenos. El comprador completa cantidad, ciudad y fecha.</td></tr>
+<tr><td>Panel del curador</td><td>Panel del curador · escritorio</td><td>Portada con presets, lista ordenable de productos, editor de producto con cálculo en vivo y vista previa móvil.</td></tr>
+<tr><td>Guardados y archivo</td><td>Sin tablero aún</td><td>Lista simple. El archivo muestra ediciones pasadas en solo lectura.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="publicacion"><span class="num">08</span>Publicación y avisos</h2>
+<ul>
+<li>El curador programa la edición. A la hora de <code>publicar_en</code>, un job la pasa a <code>publicada</code> y la anterior a <code>archivada</code>.</li>
+<li>Solo puede haber una edición publicada a la vez.</li>
+<li>Al publicar se envía el aviso semanal por correo a los suscritos, con portada, destacado y link. En V2 se suma WhatsApp.</li>
+<li>Editar una edición publicada crea un registro de cambio visible para el administrador.</li>
+</ul>
+
+<h2 id="reglas"><span class="num">09</span>Reglas de contenido</h2>
+<ul>
+<li>No existen campos de precio, margen ni rentabilidad, ni en el modelo ni en la interfaz.</li>
+<li>El botón comercial siempre lleva a pedir propuestas. No hay carrito ni "comprar".</li>
+<li>Toda ficha y toda página de Tendencias muestran el pie fijo: "Selección informativa del equipo de Zarpi. Las fechas son estimados; el tiempo real lo da cada nacionalizadora en su propuesta. No es una recomendación de inversión ni garantiza ventas."</li>
+<li>Si <code>revisar_requisitos</code> es verdadero, la etiqueta aparece en la tarjeta y el aviso en la solicitud.</li>
+<li>Los nombres y fotos se revisan a mano: nada de marcas de terceros ni réplicas.</li>
+</ul>
+
+<h2 id="eventos"><span class="num">10</span>Eventos a medir</h2>
+<p>Todos llevan <code>usuario_id</code> si existe, <code>edicion_id</code> y, cuando aplica, <code>producto_id</code>.</p>
+<p><code>edicion_vista</code> · <code>producto_visto</code> · <code>modo_cambiado</code> · <code>producto_guardado</code> · <code>guardado_quitado</code> · <code>pedir_propuestas_clic</code> · <code>solicitud_creada</code> · <code>aviso_suscrito</code> · <code>aviso_abierto</code> · <code>calendario_visto</code></p>
+<p>Necesitamos poder responder cada semana: cuántas solicitudes salieron de cada edición y de cada producto, y cuántas terminaron en operación.</p>
+
+<h2 id="fuera"><span class="num">11</span>Fuera de alcance de V1</h2>
+<div class="callout stop">
+<span class="label">No construir en V1</span>
+<ul>
+<li>Suscripción o muro de pago.</li>
+<li>Página de prueba ("Valídalo antes de importar"). En V1 solo aparece como "Próximamente".</li>
+<li>Aviso por WhatsApp.</li>
+<li>Editor libre de estilos.</li>
+<li>Tiempos reales calculados con operaciones. En V1 son parámetros fijos.</li>
+<li>Comentarios o reseñas de productos.</li>
+</ul>
+</div>
+
+<h2 id="preguntas"><span class="num">12</span>Lo que necesito de ti</h2>
+<ol>
+<li>Estimación de V1 en días por bloque: modelo de datos y cálculo, páginas públicas, panel del curador, publicación programada y aviso por correo, eventos.</li>
+<li>Si el stack actual cubre la publicación programada y el envío de correos, o qué servicio propones.</li>
+<li>Riesgos que veas en el modelo o en el cálculo.</li>
+</ol>
+
+<p class="footer">Zarpi conecta compradores con empresas nacionalizadoras. No importa, no nacionaliza y no vende mercancía.</p>
+
+</div>
+
+</body></html>

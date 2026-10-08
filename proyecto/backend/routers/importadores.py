@@ -22,7 +22,7 @@ from schemas.campo_personalizado import (
     FormularioImportadorResponse
 )
 from schemas.features import EvidenciaImportadorCreate, EvidenciaImportadorResponse
-from schemas.metricas_empresa import MetricasImportadorResponse
+from schemas.metricas_empresa import MetricasImportadorResponse, PanelEmpresaResponse
 from models.importador import Importador
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
@@ -508,6 +508,33 @@ async def cupo_diario_importador(
     return estado_cupo(db, importador)
 
 
+@router.get("/panel", response_model=PanelEmpresaResponse)
+async def panel_de_la_empresa(
+    dias: int = Query(90, ge=0, le=3650, description="Periodo en días hacia atrás; 0 = todo"),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+    db: Session = Depends(get_db),
+):
+    """Panel comercial de la empresa en pesos colombianos (dashboard de la empresa).
+
+    - Solicitudes recibidas, propuestas enviadas, aceptadas y descartadas.
+    - Propuesta a pedido (aceptadas ÷ enviadas) y "cierras 1 de cada X".
+    - Tasa de respuesta (propuestas enviadas ÷ solicitudes recibidas).
+    - Valor promedio de lo cerrado y valor de lo que espera respuesta del comprador.
+    - Pedidos en proceso por etapa y motivos por los que se perdieron propuestas.
+    - Pendientes de responder con su tiempo de espera.
+
+    Sale de la bitácora de eventos (`services/panel_empresa.py`).
+    """
+    from services.panel_empresa import panel_empresa
+
+    importador_id = current_user.get("importador_id")
+    if not importador_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cuenta no está asociada a ninguna empresa importadora")
+    datos = panel_empresa(db, str(importador_id), dias=dias)
+    db.commit()  # por si la TRM se acaba de consultar
+    return datos
+
+
 @router.get("/metricas", response_model=MetricasImportadorResponse)
 async def metricas_importador(
     db: Session = Depends(get_db),
@@ -964,7 +991,7 @@ async def listar_solicitudes_abiertas(
     current_user: dict = Depends(require_rol("importador"))
 ):
     """
-    Listar cotizaciones abiertas que aplican al importador (usando el motor de matching).
+    Listar las cotizaciones abiertas asignadas a la empresa.
     
     - **importador_id**: ID del importador (UUID)
     """
@@ -989,14 +1016,13 @@ async def listar_solicitudes_abiertas(
         Cotizacion.estado.in_([EstadoCotizacion.abierta.value, EstadoCotizacion.propuestas_recibidas.value])
     ).order_by(Cotizacion.fecha_creacion.desc()).all()
     
-    # Índice Redis por importador (SET) — sin KEYS O(N). Si Redis no está
-    # disponible, se degrada a "sin resultados" en vez de un error 500.
-    from services.matching_service import listar_cotizaciones_matching_importador
-    matching_ids = listar_cotizaciones_matching_importador(importador_id_str)
+    # Solo las que tiene asignadas (services/asignacion.py).
+    from services.asignacion import cotizaciones_asignadas
+    asignadas = cotizaciones_asignadas(db, importador_id_str)
 
     resultados = []
     for c in cotizaciones:
-        if config.redis_client and str(c.id) not in matching_ids:
+        if str(c.id) not in asignadas:
             continue
         
         # Verificar si el importador ya envió una propuesta a esta cotización
@@ -1012,9 +1038,12 @@ async def listar_solicitudes_abiertas(
             "nombre_producto": c.nombre_producto,
             "descripcion_cliente": c.descripcion_cliente,
             "cantidad_minima": c.cantidad_minima,
+            "unidad_cantidad": c.unidad_cantidad or "unidades",
             "precio_objetivo_usd": c.precio_objetivo_usd,
             "incoterm": c.incoterm,
-            "estado": c.estado.value if isinstance(c.estado, EstadoCotizacion) else c.estado,
+            "estado": EstadoCotizacion.abierta.value if not propuesta_enviada else (
+                c.estado.value if isinstance(c.estado, EstadoCotizacion) else c.estado
+            ),
             "fecha_creacion": c.fecha_creacion.isoformat() if hasattr(c.fecha_creacion, 'isoformat') else str(c.fecha_creacion),
             "propuesta_enviada": propuesta_enviada
         })

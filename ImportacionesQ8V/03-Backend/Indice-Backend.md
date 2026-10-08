@@ -1,5 +1,7 @@
 # Backend — índice técnico
 
+> **Última actualización:** 2026-10-01
+
 Diseño e implementación del servidor (`proyecto/backend/`).  
 Si solo necesitas **llamar la API desde el cliente**, usa [[Indice-Integracion-API]] (más práctico para frontend).
 
@@ -16,6 +18,7 @@ Si solo necesitas **llamar la API desde el cliente**, usa [[Indice-Integracion-A
 | [[Seguridad]] | Blindaje consolidado (IDOR, rate limits, ACID, etc.) |
 | [[Features-Valor-Jul-2026]] | Evidencias, orgs, disputas, referidos, traducción |
 | [[Backups-y-Restauracion]] | Backups automáticos, restauración, actualizaciones con `down -v` y migración a nativo |
+| [[Despliegue-y-Operacion]] | Producción (Caddy + HTTPS en DigitalOcean), primer despliegue, actualizaciones, scripts y problemas conocidos |
 
 ## Orden recomendado (backend dev)
 

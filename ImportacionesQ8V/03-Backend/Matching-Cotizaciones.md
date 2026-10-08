@@ -1,5 +1,19 @@
 # Motor de Matching — ImportacionesQ8
 
+
+> **Actualización 2026-10-03: asignación en lugar de difusión.** Cada abierta llega como mucho a `cupo_por_solicitud` empresas (3 por defecto), elegidas por encaje:
+> - **Modo manual (piloto):** el matching no reparte nada; avisa a los admins y la solicitud espera a que la asignen en **Admin › Asignación**.
+> - **Modo automático:** reparte a las de mejor encaje hasta el cupo.
+> - **Fuente de verdad:** `recepciones_cotizacion`, ya no Redis. Redis solo lleva el contador de respuestas.
+> - **Propuestas selladas:** ninguna empresa ve a la competencia.
+>
+> Detalle en [[23-Asignacion-de-Solicitudes]]. El diagrama de abajo describe la difusión original de julio de 2026.
+
+> **Actualización 2026-10-01** (detalle en [[#Cupo diario y reconstrucción del reparto (2026-09-30 → 10-01)|Cupo diario y reconstrucción del reparto]]):
+> - el matching salta a las empresas que agotaron su **límite diario de cotizaciones**;
+> - cada entrega queda registrada en la tabla `recepciones_cotizacion`;
+> - el reparto en Redis se puede **reconstruir desde la base** tras restaurar una copia.
+
 ## Descripción general
 
 Motor de **"matching" simple** para cotizaciones abiertas: reglas por país de importación y categoría de producto son suficientes para el MVP. Un modelo de recomendación más sofisticado puede quedar para fases posteriores. Redis también permite implementar de forma económica la ventana de tiempo de las cotizaciones abiertas (ej. expirar automáticamente una cotización abierta tras 48-72 horas).
@@ -13,7 +27,7 @@ Motor de **"matching" simple** para cotizaciones abiertas: reglas por país de i
 ```mermaid
 sequenceDiagram
     participant S as Solicitante
-    participant F as Frontend React/Next.js
+    participant F as Frontend (Vite + React)
     participant API as FastAPI
     participant M as Motor Matching
     participant R as Redis Cache
@@ -215,7 +229,7 @@ sequenceDiagram
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET | `/cotizaciones/{id}/estado-abierta` | Estado de la cotización abierta en Redis |
+| GET | `/cotizaciones/{id}/matching-status` | Estado del reparto de la cotización abierta (el diseño original lo llamaba `/estado-abierta`) |
 
 **Response:**
 ```json
@@ -240,3 +254,24 @@ sequenceDiagram
 - **Índice SET por importador (2026-07-13):** pool e inbox usan `SMEMBERS` sobre `indice:importador:{id}:abiertas`. **Prohibido** `KEYS` en hot path.
 - **Notificaciones push:** Para MVP, las notificaciones se envían vía WebSocket/SSE cuando el importador tiene la aplicación abierta. WhatsApp Business API puede evaluarse en fase 2.
 - **Escalabilidad futura:** Si el número de importadores crece significativamente, el matching puede migrar a un motor basado en Elasticsearch para búsquedas más eficientes sobre campos JSON.
+
+---
+
+## Cupo diario y reconstrucción del reparto (2026-09-30 → 10-01)
+
+**Cupo diario por empresa** (`services/cupo_cotizaciones.py`, migración `0024`, guía [[19-Limite-Diario-Cotizaciones]]):
+
+- `matching_cotizacion_abierta` calcula los candidatos por país y categoría y descarta los que ya tienen el cupo del día agotado (`Importador.limite_cotizaciones_diarias`).
+- Cada empresa a la que se reparte la cotización queda en `recepciones_cotizacion` con `entregada=True`, y eso cuenta para su cupo. Las que se saltaron por cupo quedan con `entregada=False`: no les aparece en la bandeja y no pueden reclamarla ni responderla.
+- Las cotizaciones dirigidas registran la recepción al crearse. Si el cupo está agotado, `POST /cotizaciones` responde 409.
+- El día se cuenta desde la medianoche de Colombia (`CUPO_COTIZACIONES_UTC_OFFSET_HORAS=-5`).
+
+**Reconstrucción del reparto** (`reconstruir_matching_abiertas`):
+
+- Tras restaurar una copia desde el panel, Redis guarda el reparto de los datos anteriores.
+- La función borra ese estado (`SCAN`, sin `KEYS`) y lo rehace para las abiertas de las últimas 72 h:
+  - destinatarios según `recepciones_cotizacion` o, en copias anteriores a esa tabla, según el criterio de país y categoría;
+  - "respondido" para quien ya envió propuesta;
+  - el TTL restante de cada cotización.
+- Ver [[Backups-y-Restauracion]].
+

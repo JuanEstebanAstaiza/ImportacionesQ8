@@ -21,10 +21,11 @@ import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
 import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
 import { AdminEmailCampaign } from "@/features/admin/AdminEmailCampaign";
 import { RestaurarBackup } from "@/features/admin/RestaurarBackup";
+import { AsignacionSolicitudes } from "@/features/admin/AsignacionSolicitudes";
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
-type AdminTab = "metricas" | "empresas" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "respaldos" | "landing" | "correos";
+type AdminTab = "metricas" | "empresas" | "asignacion" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "respaldos" | "landing" | "correos";
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
 
 type CompanyUiDetails = {
@@ -84,6 +85,7 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   soporte: { label: "Soporte", hint: "Incidentes y dudas" },
   certificaciones: { label: "Certificaciones", hint: "Sellos de la plataforma" },
   respaldos: { label: "Respaldos", hint: "Copias de seguridad y restauración" },
+  asignacion: { label: "Asignación", hint: "A qué empresas llega cada solicitud abierta" },
   landing: { label: "Landing", hint: "Contenido publico por bloques" },
   correos: { label: "Correos", hint: "Campañas y avisos a usuarios" },
 };
@@ -1701,6 +1703,8 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         </div>
       </section>
       ) : null}
+
+      {tab === "asignacion" ? <AsignacionSolicitudes /> : null}
 
       {tab === "respaldos" ? (
       <section className="space-y-4">

@@ -43,8 +43,39 @@ async function descargarComoBlob(destino: string, token: string): Promise<Blob> 
   return respuesta.blob();
 }
 
+function escaparHtml(valor: string): string {
+  return valor.replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string
+  ));
+}
+
+/**
+ * Pinta el archivo dentro de la pestaña ya abierta, enmarcándolo.
+ *
+ * `pestana.location.replace(blobUrl)` NO sirve: Chrome bloquea la navegación de
+ * primer nivel a una `blob:` URL, así que la pestaña se quedaba en `about:blank`
+ * —en blanco o con la página de inicio del navegador— y el archivo no aparecía
+ * nunca. Dentro de un `<iframe>` sí se muestra, que es lo mismo que ya hacía la
+ * previsualización del chat.
+ */
+function mostrarEnPestana(pestana: Window, urlObjeto: string, nombre: string): void {
+  const titulo = escaparHtml(nombre || "Archivo");
+  pestana.document.open();
+  pestana.document.write(
+    `<!doctype html><html lang="es"><head><meta charset="utf-8">`
+    + `<title>${titulo}</title>`
+    + `<style>html,body{margin:0;height:100%;background:#1b1b1b}`
+    + `iframe{border:0;display:block;width:100%;height:100%}</style>`
+    + `</head><body><iframe src="${urlObjeto}" title="${titulo}"></iframe></body></html>`,
+  );
+  pestana.document.close();
+}
+
 /** Abre el archivo en una pestaña nueva, autenticando la petición. */
-export async function abrirArchivoEnPestana(valor: string | null | undefined): Promise<ResultadoArchivo> {
+export async function abrirArchivoEnPestana(
+  valor: string | null | undefined,
+  nombreSugerido?: string,
+): Promise<ResultadoArchivo> {
   const canonica = toApiPath(valor);
   if (!canonica) {
     return { ok: false, motivo: "El archivo no tiene una dirección válida." };
@@ -61,15 +92,23 @@ export async function abrirArchivoEnPestana(valor: string | null | undefined): P
   // La pestaña se abre ANTES del await: si se abriera después, el bloqueador de
   // ventanas emergentes la trataría como no provocada por el usuario.
   const pestana = window.open("about:blank", "_blank");
+  const nombre = nombreSugerido || canonica.split("/").filter(Boolean).pop() || "Archivo";
 
   try {
     const blob = await descargarComoBlob(destino, token);
     const urlObjeto = window.URL.createObjectURL(blob);
 
     if (pestana) {
-      pestana.location.replace(urlObjeto);
+      mostrarEnPestana(pestana, urlObjeto, nombre);
     } else {
-      window.open(urlObjeto, "_blank", "noopener,noreferrer");
+      // Sin pestaña (bloqueador de emergentes): un enlace temporal. Sin
+      // `noopener`, porque con él el navegador descarta la `blob:` URL.
+      const enlace = document.createElement("a");
+      enlace.href = urlObjeto;
+      enlace.target = "_blank";
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
     }
 
     // Se revoca con retraso: hacerlo de inmediato deja la pestaña en blanco.
@@ -113,4 +152,26 @@ export async function descargarArchivo(
   } catch (error) {
     return { ok: false, motivo: error instanceof Error ? error.message : "No se pudo descargar el archivo." };
   }
+}
+
+/**
+ * Dirección local (`blob:`) de un archivo, para pintarlo en un `<img>`.
+ *
+ * Un `<img src>` tampoco manda el token, así que las fotos alojadas en el
+ * backend se descargan con `fetch` igual que al abrirlas. Quien la pide debe
+ * revocarla con `URL.revokeObjectURL` cuando deje de mostrarla. Los recursos
+ * externos se devuelven tal cual.
+ */
+export async function obtenerUrlLocalArchivo(valor: string | null | undefined): Promise<string> {
+  const canonica = toApiPath(valor);
+  if (!canonica) {
+    throw new Error("El archivo no tiene una dirección válida.");
+  }
+  const destino = resolveApiUrl(canonica);
+  const token = getStoredToken();
+  if (!esRecursoDelBackend(canonica) || !token) {
+    return destino;
+  }
+  const blob = await descargarComoBlob(destino, token);
+  return window.URL.createObjectURL(blob);
 }

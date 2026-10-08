@@ -18,7 +18,7 @@ export interface BtnProps extends ComponentPropsWithoutRef<"button"> {
   iconRight?: ReactNode;
 }
 
-export type ContactType = "whatsapp" | "chat" | "email" | "phone";
+export type ContactType = "chat" | "email";
 
 export interface InputProps extends Omit<ComponentPropsWithoutRef<"input">, "prefix"> {
   label?: string;

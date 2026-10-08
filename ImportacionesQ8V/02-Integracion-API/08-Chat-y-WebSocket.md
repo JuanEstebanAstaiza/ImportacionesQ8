@@ -68,6 +68,49 @@ Si el WebSocket no está disponible, usa:
 `POST /chat/iniciar` es la vía recomendada para asesores: reutiliza la
 conversación existente si ya la hay, en vez de crear duplicados.
 
+### `POST /chat/calculadora/calcular`
+
+- **Resumen:** Calcular Estimacion Precio
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+
+**Body (`EstimacionPrecioRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `moneda` | `string` | no |  |
+| `cantidad` | `integer` | sí |  |
+| `precio_unitario` | `number` | sí |  |
+| `flete_internacional` | `number` | no |  |
+| `seguro_pct` | `number` | no | Sobre mercancía + flete |
+| `arancel_pct` | `number` | no | Sobre el valor CIF |
+| `iva_pct` | `number` | no | Sobre CIF + arancel |
+| `gastos_destino` | `number` | no | Agenciamiento, bodegaje, transporte local |
+| `margen_pct` | `number` | no | Sobre CIF + arancel + gastos en destino |
+| `rango_pct` | `number` | no | ± % para dar un rango de precios posibles |
+| `tasa_cambio_cop` | `Optional[number]` | no | Para mostrar el total en COP |
+| `incoterm` | `Optional[string]` | no |  |
+| `tiempo_entrega` | `Optional[string]` | no |  |
+| `validez_dias` | `Optional[integer]` | no |  |
+| `notas` | `Optional[string]` | no |  |
+
+```json
+{
+  "cantidad": 0,
+  "precio_unitario": 0
+}
+```
+
+**Respuesta (`EstimacionPrecioResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `entrada` | `EstimacionPrecioRequest` | sí |  |
+| `desglose` | `DesgloseEstimacion` | sí |  |
+| `resumen` | `string` | sí |  |
+
+---
+
 ### `GET /chat/conversaciones`
 
 - **Resumen:** Listar Mis Conversaciones
@@ -81,12 +124,90 @@ Array de `ConversacionChatResponse`:
 | Campo | Tipo | Req | Descripción |
 |-------|------|-----|-------------|
 | `id` | `string` | sí |  |
-| `cotizacion_id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
 | `orden_id` | `Optional[string]` | no |  |
-| `solicitante_id` | `string` | sí |  |
-| `importador_usuario_id` | `string` | sí |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
 | `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `POST /chat/conversaciones/{conversacion_id}/estimaciones`
+
+- **Resumen:** Enviar Estimacion Precio
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+- **Path params:** `conversacion_id`
+
+**Body (`EstimacionPrecioRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `moneda` | `string` | no |  |
+| `cantidad` | `integer` | sí |  |
+| `precio_unitario` | `number` | sí |  |
+| `flete_internacional` | `number` | no |  |
+| `seguro_pct` | `number` | no | Sobre mercancía + flete |
+| `arancel_pct` | `number` | no | Sobre el valor CIF |
+| `iva_pct` | `number` | no | Sobre CIF + arancel |
+| `gastos_destino` | `number` | no | Agenciamiento, bodegaje, transporte local |
+| `margen_pct` | `number` | no | Sobre CIF + arancel + gastos en destino |
+| `rango_pct` | `number` | no | ± % para dar un rango de precios posibles |
+| `tasa_cambio_cop` | `Optional[number]` | no | Para mostrar el total en COP |
+| `incoterm` | `Optional[string]` | no |  |
+| `tiempo_entrega` | `Optional[string]` | no |  |
+| `validez_dias` | `Optional[integer]` | no |  |
+| `notas` | `Optional[string]` | no |  |
+
+```json
+{
+  "cantidad": 0,
+  "precio_unitario": 0
+}
+```
+
+**Respuesta (`MensajeChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `conversacion_id` | `string` | sí |  |
+| `remitente_id` | `string` | sí |  |
+| `contenido` | `string` | sí |  |
+| `tipo` | `string` | sí |  |
+| `fecha_envio` | `string` | sí |  |
+| `metadata` | `Optional[object]` | no |  |
+
+---
+
+### `POST /chat/conversaciones/{conversacion_id}/leida`
+
+- **Resumen:** Marcar Conversacion Leida
+- **Auth:** Bearer JWT
+- **Códigos:** 204, 422
+- **Path params:** `conversacion_id`
 
 ---
 
@@ -175,10 +296,86 @@ Array de `MensajeChatResponse`:
 | Campo | Tipo | Req | Descripción |
 |-------|------|-----|-------------|
 | `id` | `string` | sí |  |
-| `cotizacion_id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
 | `orden_id` | `Optional[string]` | no |  |
-| `solicitante_id` | `string` | sí |  |
-| `importador_usuario_id` | `string` | sí |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `POST /chat/interno`
+
+- **Resumen:** Iniciar Chat Interno
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+
+**Body (`IniciarChatInternoRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `asesor_id` | `Optional[string]` | no |  |
+| `mensaje_inicial` | `Optional[string]` | no |  |
+
+```json
+{
+  "asesor_id": "<asesor_id>",
+  "mensaje_inicial": "<mensaje_inicial>"
+}
+```
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
 | `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
 
@@ -212,6 +409,267 @@ Array de `MensajeChatResponse`:
 | `traducido` | `string` | sí |  |
 | `idioma_origen_detectado` | `string` | sí |  |
 | `idioma_destino` | `string` | sí |  |
+
+---
+
+### `POST /chat/soporte`
+
+- **Resumen:** Abrir Ticket Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 201, 422
+
+**Body (`AbrirSoporteRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `asunto` | `string` | sí |  |
+| `urgencia` | `string` | no |  |
+| `mensaje` | `Optional[string]` | no |  |
+
+```json
+{
+  "asunto": "<asunto>"
+}
+```
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `POST /chat/soporte/{conversacion_id}/calificar`
+
+- **Resumen:** Calificar Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `conversacion_id`
+
+**Body (`CalificarSoporteRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `calificacion` | `integer` | sí |  |
+| `comentario` | `Optional[string]` | no |  |
+
+```json
+{
+  "calificacion": 0
+}
+```
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `POST /chat/soporte/{conversacion_id}/cerrar`
+
+- **Resumen:** Cerrar Ticket Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `conversacion_id`
+
+**Body (`CerrarTicketRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `resolucion` | `string` | sí |  |
+
+```json
+{
+  "resolucion": "<resolucion>"
+}
+```
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `POST /chat/soporte/{conversacion_id}/escalar`
+
+- **Resumen:** Escalar Ticket Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `conversacion_id`
+
+**Body (`EscalarTicketRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nivel` | `integer` | sí |  |
+| `motivo` | `Optional[string]` | no |  |
+
+```json
+{
+  "nivel": 0
+}
+```
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `POST /chat/soporte/{conversacion_id}/reabrir`
+
+- **Resumen:** Reabrir Ticket Soporte
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `conversacion_id`
+
+**Respuesta (`ConversacionChatResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `tipo` | `string` | no |  |
+| `cotizacion_id` | `Optional[string]` | no |  |
+| `orden_id` | `Optional[string]` | no |  |
+| `solicitante_id` | `Optional[string]` | no |  |
+| `importador_usuario_id` | `Optional[string]` | no |  |
+| `importador_id` | `Optional[string]` | no |  |
+| `contraparte_nombre` | `Optional[string]` | no |  |
+| `contraparte_id` | `Optional[string]` | no |  |
+| `contraparte_rol` | `Optional[string]` | no |  |
+| `contraparte_empresa` | `Optional[string]` | no |  |
+| `contraparte_foto_url` | `Optional[string]` | no |  |
+| `asunto` | `Optional[string]` | no |  |
+| `urgencia` | `Optional[string]` | no |  |
+| `solicitante_rol` | `Optional[string]` | no |  |
+| `no_leidos` | `integer` | no |  |
+| `cerrada` | `boolean` | no |  |
+| `resolucion` | `Optional[string]` | no |  |
+| `cerrada_por_nombre` | `Optional[string]` | no |  |
+| `fecha_cierre` | `Optional[string]` | no |  |
+| `nivel` | `Optional[integer]` | no |  |
+| `agente_asignado_id` | `Optional[string]` | no |  |
+| `agente_nombre` | `Optional[string]` | no |  |
+| `agente_nivel` | `Optional[integer]` | no |  |
+| `calificacion` | `Optional[integer]` | no |  |
+| `comentario_calificacion` | `Optional[string]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
 
 ---
 

@@ -1,4 +1,6 @@
-# Base de Datos — ImportacionesQ8
+# Base de Datos — Zarpi (ImportacionesQ8)
+
+> **Última actualización:** 2026-10-03 · 25 migraciones, 54 tablas. Las secciones por tabla describen el núcleo de julio de 2026; lo añadido después está en [[#Migraciones y esquema inicial]].
 
 ## Descripción general
 
@@ -312,22 +314,72 @@ erDiagram
 
 ## Migraciones y esquema inicial
 
-### Alembic (estado actual — 2026-07-13)
+### Alembic (estado actual — 2026-10-03)
 
-El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`:
+El esquema se gestiona con **Alembic** en `proyecto/backend/alembic/`. Hay **25 revisiones** y 54 tablas.
 
 | Pieza | Rol |
 |-------|-----|
-| `alembic.ini` + `alembic/env.py` | Configuración y URL desde settings |
-| Revisión inicial `20260713_0001` | Baseline del esquema |
-| Arranque (`main.py` lifespan) | `alembic upgrade head`; si hace falta, fallback `init_db()` (`create_all`) + stamp |
+| `alembic.ini` + `alembic/env.py` | Configuración; la URL sale de `DATABASE_URL` |
+| `entrypoint.sh` (contenedor del backend) | Base vacía: `create_all` de los modelos + `alembic stamp head` (`database.bootstrap_si_vacia`). Base existente: `alembic upgrade head`. Si la migración falla, el contenedor no arranca |
+| `scripts/restaurar_backup.py --crear-esquema` | Mismo bootstrap para restaurar una copia sobre una base vacía |
+
+> La cadena de migraciones **no sirve para partir de cero**: la `0001` hace `create_all` con los modelos actuales. Para una base nueva se usa el bootstrap de arriba. Alembic sirve para llevar hacia adelante una base existente.
+
+#### Revisiones
+
+| Revisión | Fecha | Qué añade |
+|----------|-------|-----------|
+| `0001` | 2026-07-13 | Esquema inicial (`create_all`) |
+| `0002` | 2026-07-13 | Evidencias de importador, organizaciones, disputas, referidos, caché de traducciones; `mensajes_chat.metadata` |
+| `0003` | 2026-07-13 | Códigos OTP, verificación de email, `usuarios.ultimo_login_at` |
+| `0004` | 2026-07-14 | Endurecimiento OWASP: `jwt_blacklist`, compra única por pago |
+| `0005` | 2026-07-28 | Cursos (LMS) y notificaciones |
+| `0006` | 2026-08-04 | Gestión documental: carpetas, archivos, etiquetas, favoritos, `orden_documentos`, `mensajes_adjuntos`, `curso_recursos`, borrado lógico (`deleted_at`) |
+| `0007` | 2026-08-05 | `importadores.perfil_publico` |
+| `0008` | 2026-08-06 | `certificados_curso` |
+| `0009` | 2026-08-06 | `certificaciones` y `certificaciones_importador` |
+| `0010` | 2026-08-07 | Shipping mark (importadores, cotizaciones, órdenes) |
+| `0011` | 2026-08-08 | `resenas_importador` |
+| `0012` | 2026-08-09 | Chat interno empresa–asesor (`conversaciones_chat.tipo`, `importador_id`) |
+| `0013` | 2026-08-09 | Tickets de soporte (asunto, urgencia) y `lecturas_conversacion` |
+| `0014` | 2026-08-09 | Fechas del chat con microsegundos |
+| `0015` | 2026-08-09 | Cierre de tickets (resolución, quién y cuándo) |
+| `0016` | 2026-08-09 | Mesa de soporte por niveles (`usuarios.nivel_soporte`; nivel, agente, calificación del ticket) |
+| `0017` | 2026-08-10 | `articulos_ayuda` |
+| `0018` | 2026-08-31 | `cotizaciones.moneda_precio_objetivo` e incoterm DDP por defecto |
+| `0019` | 2026-09-08 | `landing_blocks`, `landing_allies`, `landing_news` |
+| `0020` | 2026-09-08 | `landing_blocks.fuente` |
+| `0021` | 2026-09-21 | `usuarios.tier`, `puntos_cotizacion`; `cotizaciones.tier_minimo_requerido`, `desbloqueada_por_puntos` |
+| `0022` | 2026-09-21 | `usuarios.tier_manual`, `umbrales_tier_cotizante`, `movimientos_puntos_cotizacion` |
+| `0023` | 2026-09-29 | `importadores.tier_minimo_requerido`; `notificaciones.cotizacion_id` y `conversacion_id`; `usuarios.importaciones_fuera_plataforma`; `cotizaciones.tier_solicitante_creacion` |
+| `0024` | 2026-09-30 | `importadores.limite_cotizaciones_diarias` y `recepciones_cotizacion` (cupo diario) |
+| `0025` | 2026-10-03 | Bitácora `eventos` (rellenada con el histórico) y `configuracion_plataforma`. Cambios en columnas: `cotizaciones.unidad_cantidad`, `motivo_eleccion(_detalle)` y `cantidad_minima` a decimal; `propuestas.cantidad`, `motivo_descarte(_detalle)`, `fecha_descarte`; `recepciones_cotizacion.origen`, `asignado_por`; `importadores.pedido_minimo(_unidad)` |
+
+#### Tablas añadidas después del esquema documentado arriba
+
+Las secciones de tabla de esta nota describen el núcleo (julio de 2026). Estas otras tablas se añadieron después. El detalle de columnas está en `proyecto/backend/models/`.
+
+| Dominio | Tablas | Guía |
+|---------|--------|------|
+| Seguridad y acceso | `codigos_otp`, `jwt_blacklist` | [[Autenticacion]] |
+| Organizaciones, referidos, traducción | `organizaciones_solicitantes`, `miembros_organizacion`, `codigos_referido`, `referidos_uso`, `traducciones_cache` | [[Features-Valor-Jul-2026]] |
+| Reputación | `evidencias_importador`, `certificaciones`, `certificaciones_importador`, `resenas_importador` | [[04-Importadores]] |
+| Disputas | `disputas`, `evidencias_disputa`, `mensajes_disputa` | [[10-Disputas]] |
+| Documentos | `carpetas`, `archivos`, `etiquetas`, `archivo_etiquetas`, `favoritos`, `orden_documentos`, `mensajes_adjuntos`, `curso_recursos` | [[17-Documentos-y-Multimedia]] |
+| Cursos | `cursos`, `modulos_curso`, `lecciones_curso`, `recursos_leccion`, `compras_curso`, `progreso_lecciones`, `certificados_curso` | [[15-Cursos-LMS]] |
+| Chat y soporte | `lecturas_conversacion` (+ columnas de soporte en `conversaciones_chat`) | [[Chat-WebSocket]] |
+| Ayuda y landing | `articulos_ayuda`, `landing_blocks`, `landing_allies`, `landing_news` | [[21-Ayuda-y-Soporte]] · [[22-Landing-CMS]] |
+| Tiers | `umbrales_tier_cotizante`, `movimientos_puntos_cotizacion` | [[18-Tiers-y-Perfil-Cotizante]] |
+| Cupo diario y asignación | `recepciones_cotizacion` (fuente de verdad de qué abiertas tiene cada empresa) | [[19-Limite-Diario-Cotizaciones]] · [[23-Asignacion-de-Solicitudes]] |
+| Bitácora y ajustes | `eventos` (cada cambio de estado con montos en COP), `configuracion_plataforma` (modo y cupo de asignación, TRM) | [[24-Eventos-y-Panel-Empresa]] |
 
 Comandos típicos:
 
 ```bash
 cd proyecto/backend
 alembic upgrade head
-alembic revision --autogenerate -m "descripcion"
+alembic revision --autogenerate -m "descripcion"   # revisar el resultado: las migraciones del repo son idempotentes (comprueban columnas antes de añadirlas)
 ```
 
 > **Importante:** no usar solo `create_all` al importar módulos: la metadata debe estar cargada (modelos importados) antes de crear tablas. Detalle en [[Remediaciones-Backend-Jul-2026]] y [[Auditoria-Backend-2026-07-13]].

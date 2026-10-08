@@ -1,58 +1,40 @@
-import { useEffect, useMemo, useState } from "react";
-import { Moon, Sun, ChevronLeft, FileText } from "lucide-react";
+import { useEffect } from "react";
+import { Moon, Sun, ChevronLeft } from "lucide-react";
 
-import { legalService } from "@/services/legal.service";
+import { DOCUMENTOS_LEGALES, ORDEN_DOCUMENTOS } from "@/features/legal/documentos";
+import { EMPRESA } from "@/features/legal/empresa";
 import type { LegalPage } from "@/features/legal/types";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 
 type LegalPolicyScreenProps = {
   page: LegalPage;
   onBack: () => void;
+  onOpen: (page: LegalPage) => void;
 };
 
-const FALLBACK_MESSAGE = "Este documento se encuentra en construccion y sera publicado proximamente.";
+/** Nombre corto de cada documento para las pestañas. */
+const ETIQUETA: Record<LegalPage, string> = {
+  terms: "Términos y Condiciones",
+  data: "Tratamiento de Datos",
+  payments: "Pagos y Reembolsos",
+};
 
-export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
+function idSeccion(indice: number) {
+  return `seccion-${indice + 1}`;
+}
+
+export function LegalPolicyScreen({ page, onBack, onOpen }: LegalPolicyScreenProps) {
   const { dark, toggleTheme } = useBrandTheme();
-  const [apiMessage, setApiMessage] = useState("");
-  const [loadError, setLoadError] = useState("");
+  const documento = DOCUMENTOS_LEGALES[page];
 
+  // Al cambiar de documento desde las pestañas, empezar a leerlo desde arriba.
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadPolicy() {
-      setLoadError("");
-
-      try {
-        const response = await legalService.getPolicy(page);
-        if (!cancelled) {
-          setApiMessage(response.apiMessage || "");
-        }
-      } catch (error) {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : "No se pudo cargar el documento legal.";
-          setLoadError(message);
-        }
-      } finally {
-        // No-op: kept for symmetry and future telemetry hooks.
-      }
-    }
-
-    void loadPolicy();
-    return () => {
-      cancelled = true;
-    };
+    window.scrollTo({ top: 0 });
   }, [page]);
 
-  const isData = page === "data";
-  const heading = isData ? "Politica de Tratamiento de Datos" : "Terminos y Condiciones";
-
-  const description = useMemo(() => {
-    if (apiMessage.trim()) {
-      return apiMessage.trim();
-    }
-    return FALLBACK_MESSAGE;
-  }, [apiMessage]);
+  function irASeccion(indice: number) {
+    document.getElementById(idSeccion(indice))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -77,40 +59,82 @@ export function LegalPolicyScreen({ page, onBack }: LegalPolicyScreenProps) {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-16">
-        <div className="flex flex-col items-center text-center gap-5 mb-12">
-          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">
-            <FileText className="w-8 h-8 text-amber-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">{heading}</h1>
-            <p className="text-muted-foreground mt-2 text-sm">Zarpi - Version 1.0</p>
-          </div>
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+        <nav aria-label="Documentos legales" className="flex flex-wrap gap-2 mb-10">
+          {ORDEN_DOCUMENTOS.map(otro => (
+            <button
+              key={otro}
+              onClick={() => onOpen(otro)}
+              aria-current={otro === page ? "page" : undefined}
+              className={
+                otro === page
+                  ? "h-8 px-3 rounded-full text-xs font-semibold bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
+                  : "h-8 px-3 rounded-full text-xs font-medium border border-border text-muted-foreground transition-colors hover:text-foreground hover:bg-muted"
+              }
+            >
+              {ETIQUETA[otro]}
+            </button>
+          ))}
+        </nav>
 
-          <p className="text-sm text-muted-foreground max-w-2xl">{description}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{documento.titulo}</h1>
+        {documento.resumen && <p className="text-muted-foreground mt-3">{documento.resumen}</p>}
+        <p className="text-xs text-muted-foreground mt-3">
+          Versión {documento.version} · Vigente desde el {documento.vigenteDesde}
+        </p>
+
+        <div className="mt-8 p-5 bg-muted rounded-xl border border-border">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground mb-3">Contenido</p>
+          <ol className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+            {documento.secciones.map((seccion, i) => (
+              <li key={seccion.titulo}>
+                <button
+                  onClick={() => irASeccion(i)}
+                  className="text-left text-muted-foreground transition-colors hover:text-primary dark:hover:text-accent"
+                >
+                  {i + 1}. {seccion.titulo}
+                </button>
+              </li>
+            ))}
+          </ol>
         </div>
 
-        <div className="space-y-6 text-sm text-muted-foreground leading-relaxed">
-          <div className="p-6 bg-muted rounded-xl border border-border">
-            <p className="font-semibold text-foreground mb-2">Aviso importante</p>
-            <p>
-              La {isData ? "Politica de Tratamiento de Datos Personales" : "politica de Terminos y Condiciones"} de Zarpi esta siendo redactada por nuestro equipo legal y estara disponible antes del lanzamiento oficial de la plataforma.
-            </p>
-          </div>
+        <div className="mt-10 space-y-10 text-sm leading-relaxed text-muted-foreground">
+          {documento.secciones.map((seccion, i) => (
+            <section key={seccion.titulo} id={idSeccion(i)} className="scroll-mt-20">
+              <h2 className="text-base font-semibold text-foreground mb-3">
+                {i + 1}. {seccion.titulo}
+              </h2>
+              <div className="space-y-3">
+                {seccion.bloques.map((bloque, j) =>
+                  Array.isArray(bloque) ? (
+                    <ul key={j} className="list-disc pl-5 space-y-2 marker:text-primary dark:marker:text-accent">
+                      {bloque.map(item => <li key={item}>{item}</li>)}
+                    </ul>
+                  ) : (
+                    <p key={j}>{bloque}</p>
+                  ),
+                )}
+              </div>
+            </section>
+          ))}
+        </div>
 
-          <p>
-            En ella se detallara: {isData ? "el tratamiento, almacenamiento y proteccion de tus datos personales segun la legislacion colombiana vigente (Ley 1581 de 2012 y sus decretos reglamentarios)." : "las condiciones de uso de la plataforma, responsabilidades de las partes, propiedad intelectual y resolucion de controversias."}
-          </p>
-
-          {loadError && (
-            <p className="text-xs text-red-700">
-              No fue posible cargar temporalmente el texto legal desde el backend: {loadError}
-            </p>
-          )}
-
-          <p>
-            Si tienes preguntas, puedes contactarnos a <span className="text-primary font-medium">legal@zarpi.com</span>
-          </p>
+        <div className="mt-14 p-6 rounded-xl border border-border text-sm">
+          <p className="font-semibold text-foreground mb-3">{documento.tituloDatos}</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-muted-foreground">
+            <dt>Razón social</dt><dd className="text-foreground">{EMPRESA.razonSocial}</dd>
+            <dt>NIT</dt><dd className="text-foreground">{EMPRESA.nit}</dd>
+            {documento.mostrarMatricula && (
+              <><dt>Matrícula mercantil</dt><dd className="text-foreground">{EMPRESA.matricula}, {EMPRESA.camaraComercio}</dd></>
+            )}
+            <dt>Domicilio</dt><dd className="text-foreground">{EMPRESA.domicilio}</dd>
+            <dt>Teléfono</dt><dd className="text-foreground">{EMPRESA.telefono}</dd>
+            <dt>Correo</dt>
+            <dd>
+              <a href={`mailto:${EMPRESA.correo}`} className="text-primary dark:text-accent font-medium hover:underline">{EMPRESA.correo}</a>
+            </dd>
+          </dl>
         </div>
       </main>
 

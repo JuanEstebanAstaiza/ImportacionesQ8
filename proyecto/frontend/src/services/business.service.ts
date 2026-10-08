@@ -35,7 +35,13 @@ export interface BackendImporter {
   tier_minimo_requerido?: string;
   /** Máximo de cotizaciones que la empresa acepta recibir por día; null = sin límite. */
   limite_cotizaciones_diarias?: number | null;
+  /** Pedido mínimo que acepta la empresa y su unidad (criterio de asignación). */
+  pedido_minimo?: number | null;
+  pedido_minimo_unidad?: UnidadCantidad | null;
 }
+
+/** "unidades" o "m3" (metros cúbicos). */
+export type UnidadCantidad = "unidades" | "m3";
 
 /** Uso del cupo diario de cotizaciones de la empresa (`GET /importadores/cupo-diario`). */
 export interface BackendCupoDiario {
@@ -59,6 +65,7 @@ export interface BackendCotizacion {
   solicitante_puntos_cotizacion?: number;
   bloqueada?: boolean;
   foto_producto?: string | null;
+  fotos_producto?: string[];
   pais_importacion: string;
   nivel_personalizacion?: string | null;
   nombre_producto: string;
@@ -68,6 +75,7 @@ export interface BackendCotizacion {
   tipo_calidad: string;
   modalidad_importacion?: string | null;
   cantidad_minima: number;
+  unidad_cantidad?: UnidadCantidad;
   precio_objetivo_usd: number | null;
   precio_objetivo_moneda?: string | null;
   moneda_precio_objetivo?: string | null;
@@ -88,7 +96,13 @@ export interface BackendCotizacion {
 export interface CreateCotizacionPayload {
   modalidad: "dirigida" | "abierta";
   importador_id?: string;
-  foto_producto?: string;
+  /** Fotos del producto en orden; la primera es la portada. Máximo 10. */
+  fotos_producto?: string[];
+  /** De dónde sale la solicitud; el backend valida que el comprador tenga acceso. */
+  origen?: "directa" | "tendencias" | "catalogo";
+  tendencia_edicion_id?: string | null;
+  tendencia_producto_id?: string;
+  catalogo_producto_id?: string;
   pais_importacion: string;
   nombre_producto: string;
   descripcion_cliente: string;
@@ -98,6 +112,7 @@ export interface CreateCotizacionPayload {
   nivel_personalizacion?: string;
   modalidad_importacion?: string;
   cantidad_minima: number;
+  unidad_cantidad?: UnidadCantidad;
   precio_objetivo_usd?: number;
   precio_objetivo_moneda?: string;
   moneda_precio_objetivo?: string;
@@ -155,7 +170,6 @@ export interface BackendContactoAsesor {
   usuario_id: string;
   nombre: string | null;
   foto_url: string | null;
-  whatsapp: string | null;
 }
 
 export interface BackendPropuesta {
@@ -170,7 +184,87 @@ export interface BackendPropuesta {
   creado_por_usuario_id: string | null;
   preaceptada_por_solicitante: boolean;
   preaceptada_por_empresa: boolean;
+  /** Cantidad que cubre el precio (null = la pedida en la cotización). */
+  cantidad?: number | null;
+  fecha_envio?: string | null;
+  /**
+   * Veces que la empresa reescribió la propuesta DESPUÉS de enviarla, y cuándo
+   * fue el último cambio. El comprador tiene que verlo: lo que compara ya no
+   * es la oferta que llegó. La versión que se muestra es `revisiones + 1`.
+   */
+  revisiones?: number;
+  fecha_modificacion?: string | null;
+  /** Si el cliente eligió otra propuesta: por qué (precio, tiempo, condiciones, otro). */
+  motivo_descarte?: string | null;
+  motivo_descarte_detalle?: string | null;
+  /** Solo para el comprador: la empresa y cómo cumple. */
+  empresa?: BackendEmpresaPropuesta | null;
   contacto_asesor: BackendContactoAsesor | null;
+}
+
+export interface BackendEmpresaPropuesta {
+  importador_id: string;
+  nombre_empresa: string;
+  logo_url: string | null;
+  verificado: boolean;
+  calificacion_promedio: number;
+  total_resenas: number;
+  pedidos_entregados: number;
+  pedidos_en_curso: number;
+}
+
+export type MotivoEleccion = "precio" | "tiempo" | "condiciones" | "otro";
+
+/** Una solicitud que la empresa todavía no responde, con su tiempo de espera. */
+export interface BackendPendienteResponder {
+  cotizacion_id: string;
+  nombre_producto: string;
+  linea_producto: string;
+  modalidad: string;
+  cantidad: number;
+  unidad: UnidadCantidad;
+  recibida: string;
+  horas_esperando: number;
+  /** a_tiempo (< 24 h) · atencion (24–48 h) · urgente (> 48 h) */
+  nivel: "a_tiempo" | "atencion" | "urgente";
+  con_borrador: boolean;
+}
+
+export type EtapaPedido = "compra" | "embarque" | "transito" | "nacionalizacion" | "entrega";
+export type MotivoPerdida = MotivoEleccion | "sin_motivo";
+
+/** Panel comercial de la empresa (`GET /importadores/panel`), montos en COP. */
+export interface BackendPanelEmpresa {
+  importador_id: string;
+  desde: string | null;
+  moneda: "COP";
+  trm: number;
+  trm_fuente: string;
+  solicitudes_recibidas: number;
+  propuestas_enviadas: number;
+  propuestas_aceptadas: number;
+  propuestas_descartadas: number;
+  propuestas_esperando: number;
+  conversion_pct: number | null;
+  cierre_uno_de_cada: number | null;
+  tasa_respuesta_pct: number | null;
+  tiempo_promedio_respuesta_horas: number | null;
+  valor_cerrado_cop: number;
+  valor_promedio_cerrado_cop: number | null;
+  valor_esperando_cop: number;
+  pedidos_por_etapa: Record<EtapaPedido, number>;
+  pedidos_entregados: number;
+  motivos_perdida: Record<MotivoPerdida, number>;
+  pendientes_responder: BackendPendienteResponder[];
+  total_pendientes_responder: number;
+}
+
+/** TRM que usa la plataforma hoy (`GET /trm`). */
+export interface BackendTrm {
+  valor: number;
+  fuente: string;
+  vigencia: string | null;
+  fecha_consulta: string | null;
 }
 
 export interface CreatePropuestaPayload {
@@ -179,10 +273,13 @@ export interface CreatePropuestaPayload {
   tiempo_estimado_entrega: string;
   incoterm: string;
   condiciones_adicionales?: string;
+  cantidad?: number;
 }
 
 export interface PreAceptarPropuestaPayload {
   aceptar: boolean;
+  motivo_eleccion?: MotivoEleccion;
+  motivo_detalle?: string;
 }
 
 export interface StartNegotiationPayload {
@@ -197,12 +294,13 @@ export interface BackendUserProfile {
   nombre: string | null;
   telefono: string | null;
   foto_url: string | null;
-  whatsapp: string | null;
   activo: boolean;
   perfil_completo: boolean;
   fecha_creacion: string;
   tier?: string;
   puntos_cotizacion?: number;
+  /** Curador de Tendencias (capacidad aparte del rol). */
+  es_curador?: boolean;
 }
 
 export interface BackendCotizantePerfilPublico {
@@ -230,7 +328,6 @@ export interface UpdateUserProfilePayload {
   nombre?: string;
   telefono?: string;
   foto_url?: string;
-  whatsapp?: string;
 }
 
 export interface UpdateImporterPayload {
@@ -245,6 +342,9 @@ export interface UpdateImporterPayload {
   shipping_mark_prefijo?: string;
   /** null quita el límite; omitirlo lo deja como está. */
   limite_cotizaciones_diarias?: number | null;
+  /** null quita el pedido mínimo; omitirlo lo deja como está. */
+  pedido_minimo?: number | null;
+  pedido_minimo_unidad?: UnidadCantidad | null;
 }
 
 /**
@@ -372,6 +472,7 @@ export interface BackendOrder {
   importador_id: string;
   solicitante_id: string;
   asesor_asignado_id: string | null;
+  asesor_nombre: string | null;
   estado: string;
   precio_acordado_usd: number;
   tiempo_estimado_entrega: string | null;
@@ -455,6 +556,16 @@ export interface EstimacionEnMensaje {
   desglose: DesgloseEstimacion;
   cotizacion_id?: string | null;
   orden_id?: string | null;
+}
+
+/** Alguien del equipo de la plataforma, para el canal interno. */
+export interface BackendMiembroEquipo {
+  id: string;
+  nombre: string | null;
+  email: string;
+  rol: string;
+  nivel_soporte: number | null;
+  activo: boolean;
 }
 
 export interface BackendChatConversation {
@@ -623,6 +734,11 @@ export const businessService = {
     return apiRequest<BackendCotizacion[]>("/cotizaciones", { method: "GET" });
   },
 
+  /** La empresa abrió la solicitud (evento `solicitud_vista`; solo cuenta la primera vez). */
+  markQuoteViewed(cotizacionId: string): Promise<void> {
+    return apiRequest<void>(`/cotizaciones/${cotizacionId}/vista`, { method: "POST" });
+  },
+
   getQuoteById(cotizacionId: string): Promise<BackendCotizacion> {
     return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}`, {
       method: "GET",
@@ -746,6 +862,25 @@ export const businessService = {
       method: "POST",
       body: { asesor_id: asesorId ?? null, mensaje_inicial: mensajeInicial ?? null },
     });
+  },
+
+  /**
+   * Canal interno del equipo de la plataforma (administración ↔ soporte).
+   *
+   * Sin `miembroId` entra en la sala común, donde está todo el equipo; con él,
+   * abre el hilo privado con esa persona. Es lo que usa el equipo en vez de
+   * abrirse un ticket, que el backend le niega.
+   */
+  openTeamChannel(miembroId?: string, mensajeInicial?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/equipo", {
+      method: "POST",
+      body: { miembro_id: miembroId ?? null, mensaje_inicial: mensajeInicial ?? null },
+    });
+  },
+
+  /** El resto del equipo de la plataforma, para elegir con quién abrir un hilo. */
+  listTeamMembers(): Promise<BackendMiembroEquipo[]> {
+    return apiRequest<BackendMiembroEquipo[]>("/chat/equipo/miembros", { method: "GET" });
   },
 
   /** Pide ayuda al equipo de la plataforma. Cada llamada abre un ticket propio. */
@@ -954,11 +1089,23 @@ export const businessService = {
     });
   },
 
-  preAcceptProposal(propuestaId: string, aceptar: boolean): Promise<BackendPropuesta> {
+  preAcceptProposal(
+    propuestaId: string,
+    aceptar: boolean,
+    motivo?: { motivo_eleccion: MotivoEleccion; motivo_detalle?: string },
+  ): Promise<BackendPropuesta> {
     return apiRequest<BackendPropuesta>(`/propuestas/${propuestaId}/pre-aceptar`, {
       method: "POST",
-      body: { aceptar } satisfies PreAceptarPropuestaPayload,
+      body: { aceptar, ...(motivo ?? {}) } satisfies PreAceptarPropuestaPayload,
     });
+  },
+
+  getCompanyPanel(dias = 90): Promise<BackendPanelEmpresa> {
+    return apiRequest<BackendPanelEmpresa>(`/importadores/panel?dias=${dias}`, { method: "GET" });
+  },
+
+  getTrm(): Promise<BackendTrm> {
+    return apiRequest<BackendTrm>("/trm", { method: "GET" });
   },
 
   startProposalNegotiation(cotizacionId: string, importadorId: string): Promise<BackendCotizacion> {

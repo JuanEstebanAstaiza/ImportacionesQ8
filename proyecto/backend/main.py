@@ -19,6 +19,7 @@ from routers.pagos import router as pagos_router, creditos_router
 from routers.usuarios import router as usuarios_router, asesores_router, cotizantes_router
 from routers.chat import router as chat_router, ws_router as chat_ws_router
 from routers.admin import router as admin_router
+from routers.asignacion import router as asignacion_router, trm_router
 from routers.legal import router as legal_router
 from routers.organizaciones import router as organizaciones_router
 from routers.disputas import router as disputas_router
@@ -29,6 +30,9 @@ from routers.notificaciones import router as notificaciones_router
 from routers.documentos import router as documentos_router
 from routers.ayuda import router as ayuda_router
 from routers.landing import router as landing_router
+from routers.tendencias import router as tendencias_router
+from routers.catalogos import router as catalogos_router
+from routers.tipografia import router as tipografia_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -61,6 +65,30 @@ async def _recalcular_tiers_periodicamente(intervalo_minutos: int) -> None:
         await asyncio.sleep(intervalo_minutos * 60)
 
 
+async def _publicar_tendencias_periodicamente(intervalo_minutos: int) -> None:
+    """Publica las ediciones de Tendencias cuya hora programada ya llegó. Corre
+    en cada worker; la transición es un UPDATE condicionado, así que solo uno
+    publica cada edición y envía su aviso."""
+    from database import SessionLocal
+    from services.tendencias import publicar_pendientes
+
+    def _pasada() -> None:
+        db = SessionLocal()
+        try:
+            publicadas = publicar_pendientes(db)
+            if publicadas:
+                logger.info("Ediciones de Tendencias publicadas: %s", publicadas)
+        except Exception:
+            db.rollback()
+            logger.exception("Falló la publicación programada de Tendencias")
+        finally:
+            db.close()
+
+    while True:
+        await asyncio.to_thread(_pasada)
+        await asyncio.sleep(intervalo_minutos * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestiona el inicio y parada de la aplicación"""
@@ -77,10 +105,18 @@ async def lifespan(app: FastAPI):
     if config.TIER_RECALCULO_MINUTOS > 0:
         tarea_tiers = asyncio.create_task(_recalcular_tiers_periodicamente(config.TIER_RECALCULO_MINUTOS))
 
+    tarea_tendencias = None
+    if config.TENDENCIAS_PUBLICACION_MINUTOS > 0:
+        tarea_tendencias = asyncio.create_task(
+            _publicar_tendencias_periodicamente(config.TENDENCIAS_PUBLICACION_MINUTOS)
+        )
+
     yield
 
     if tarea_tiers:
         tarea_tiers.cancel()
+    if tarea_tendencias:
+        tarea_tendencias.cancel()
     print("Apagando servidor Zarpi...")
 
 # Crear la aplicación FastAPI
@@ -216,6 +252,8 @@ app.include_router(cotizantes_router)
 app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.include_router(admin_router)
+app.include_router(asignacion_router)
+app.include_router(trm_router)
 app.include_router(legal_router)
 app.include_router(organizaciones_router)
 app.include_router(disputas_router)
@@ -226,6 +264,9 @@ app.include_router(notificaciones_router)
 app.include_router(documentos_router)
 app.include_router(ayuda_router)
 app.include_router(landing_router)
+app.include_router(tendencias_router)
+app.include_router(catalogos_router)
+app.include_router(tipografia_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

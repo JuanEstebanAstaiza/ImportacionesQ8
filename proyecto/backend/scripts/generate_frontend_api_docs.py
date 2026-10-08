@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]  # Zarpi
@@ -21,6 +22,10 @@ TAGS_CON_GUIA_MANUAL = {
     "Cursos",                # 15-Cursos-LMS.md
     "Notificaciones",        # 16-Notificaciones.md
     "Gestión Documental",    # 17-Documentos-y-Multimedia.md
+    "Cotizantes",            # 18-Tiers-y-Perfil-Cotizante.md
+    "Tendencias",            # 25-Tendencias-y-Catalogos.md
+    "Catálogos de empresas", # 25-Tendencias-y-Catalogos.md
+    "Tipografía",            # 26-Tipografia-y-Videos-Landing.md
 }
 
 TAG_FILES = {
@@ -43,6 +48,8 @@ TAG_FILES = {
     # porque es lo que ordena y explica el catálogo.
     "Reseñas": "04-Importadores.md",
     "Administración": "12-Admin.md",
+    "Ayuda y soporte": "21-Ayuda-y-Soporte.md",
+    "Landing CMS": "22-Landing-CMS.md",
 }
 
 PUBLIC_PATHS = {
@@ -138,7 +145,14 @@ def response_schema_name(op: dict) -> str | None:
     return None
 
 
-def is_public(method: str, path: str) -> bool:
+def is_public(method: str, path: str, op: dict | None = None) -> bool:
+    # FastAPI marca con `security` las operaciones que exigen token: sin ese
+    # campo, la ruta es pública. La lista fija queda como respaldo para
+    # snapshots antiguos que no traigan el campo.
+    if op is not None and "security" not in op:
+        return True
+    if op is not None and op.get("security"):
+        return False
     if (method, path) in PUBLIC_PATHS:
         return True
     # list paths without trailing slash variants
@@ -235,7 +249,7 @@ def example_json_from_schema(schemas: dict, name: str | None) -> str | None:
 def render_endpoint(method: str, path: str, op: dict, schemas: dict) -> str:
     summary = op.get("summary") or op.get("description") or ""
     summary = summary.strip().split("\n")[0]
-    auth = "Público" if is_public(method, path) else "Bearer JWT"
+    auth = "Público" if is_public(method, path, op) else "Bearer JWT"
     params = op.get("parameters") or []
     path_params = [p for p in params if p.get("in") == "path"]
     query_params = [p for p in params if p.get("in") == "query"]
@@ -326,7 +340,7 @@ def main() -> None:
             m = method.upper()
             tags = op.get("tags") or ["Otros"]
             tag = tags[0]
-            auth = "Público" if is_public(m, path) else "JWT"
+            auth = "Público" if is_public(m, path, op) else "JWT"
             summary = (op.get("summary") or "").replace("|", "\\|").replace("\n", " ")[:100]
             catalog_rows.append((m, path, tag, auth, summary))
 
@@ -367,6 +381,8 @@ def main() -> None:
         "11-Referidos.md": "APIs — Referidos",
         "12-Admin.md": "APIs — Administración",
         "13-Legal-y-Salud.md": "APIs — Legal y salud",
+        "21-Ayuda-y-Soporte.md": "APIs — Centro de ayuda",
+        "22-Landing-CMS.md": "APIs — Landing (CMS por bloques)",
         "99-Otros.md": "APIs — Otros",
     }
 
@@ -380,7 +396,9 @@ def main() -> None:
     cat = [
         "# Catálogo completo de endpoints",
         "",
-        f"Total: **{len(catalog_rows)}** operaciones REST exportadas desde OpenAPI.",
+        f"Total: **{len(catalog_rows)}** operaciones REST exportadas desde OpenAPI "
+        f"(generado el {date.today().isoformat()} con `scripts/generate_frontend_api_docs.py`). "
+        "El WebSocket `/ws/chat/{conversacion_id}` no aparece en OpenAPI: ver [[08-Chat-y-WebSocket]].",
         "",
         "| Método | Ruta | Tag | Auth | Resumen |",
         "|--------|------|-----|------|---------|",
@@ -407,6 +425,10 @@ def main() -> None:
         ("15-Cursos-LMS", "APIs — Cursos / LMS"),
         ("16-Notificaciones", "APIs — Notificaciones in-app"),
         ("17-Documentos-y-Multimedia", "APIs — Gestión documental y multimedia"),
+        ("19-Limite-Diario-Cotizaciones", "APIs — Límite diario de cotizaciones"),
+        ("20-Calculadora-Precios-Chat", "APIs — Calculadora de precios en el chat"),
+        ("23-Asignacion-de-Solicitudes", "APIs — Asignación de solicitudes abiertas"),
+        ("24-Eventos-y-Panel-Empresa", "APIs — Bitácora de eventos y panel de la empresa"),
     ):
         if (OUT / f"{note}.md").exists():
             cat.append(f"- [[{note}|{title}]]")

@@ -1,5 +1,7 @@
 # Cómo navegar este vault
 
+> **Última actualización:** 2026-10-01 · El producto se llama **Zarpi**. El repositorio y este vault conservan el nombre técnico **ImportacionesQ8**, igual que las notas históricas.
+
 ## Orden de las carpetas
 
 Las carpetas van **numeradas de 00 a 06** a propósito: se leen de arriba abajo en el explorador de Obsidian.

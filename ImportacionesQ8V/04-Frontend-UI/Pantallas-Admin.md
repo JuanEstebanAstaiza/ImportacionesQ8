@@ -1,8 +1,32 @@
-# Pantallas del Admin — ImportacionesQ8
+# Pantallas del Admin — Zarpi
+
+> **Última actualización:** 2026-10-01
 
 ## Descripción general
 
-Documentación de las pantallas P0 y P1 para el administrador (equipo interno que gestiona la plataforma). Construidas con **React/Next.js** con TypeScript.
+Documentación de las pantallas P0 y P1 para el administrador (equipo interno que gestiona la plataforma). Construidas con **Vite + React** con TypeScript.
+
+---
+
+## Estado actual (2026-10-03)
+
+> Las secciones de abajo ("Pantalla 10") son el diseño original del MVP. El panel real está en `src/pages/admin/AdminDashboard.tsx`; cada sección tiene su entrada en el menú lateral y su URL ([[Routing-y-Roles-Frontend]]).
+
+| Sección (menú) | URL | Qué permite | Componente | API |
+|----------------|-----|-------------|------------|-----|
+| Resumen | `/admin` | Empresas activas y verificadas, cotizaciones, órdenes en disputa, cotizaciones abiertas recientes | `AdminDashboard` | `GET /admin/metricas` |
+| Empresas | `/admin/empresas` | Alta de empresa con cuenta dueña, datos de contacto, verificación con expediente, retirar verificación, activar/desactivar | `AdminDashboard` | [[12-Admin]] |
+| **Asignación** | `/admin/asignacion` | Solicitudes abiertas por asignar (con cuánto llevan esperando), botón **«Asignar a»** con el encaje y desempeño de cada empresa, quitar asignaciones; modo manual o automático, cupo de empresas por solicitud y TRM de respaldo | `features/admin/AsignacionSolicitudes.tsx` | [[23-Asignacion-de-Solicitudes]] |
+| Usuarios | `/admin/usuarios` | Buscar por rol y estado, activar/desactivar, invitar | `AdminDashboard` | [[12-Admin]] |
+| Cotizantes | `/admin/cotizantes` | Tier de cada cotizante (manual o automático), umbrales, puntos y su historial, recalcular tiers | `features/admin/GestionCotizantes.tsx` | [[18-Tiers-y-Perfil-Cotizante]] |
+| Correos | `/admin/correos` | Campañas a usuarios por rol, por usuario o por correo (hasta 500 destinatarios) | `features/admin/AdminEmailCampaign.tsx` | `POST /admin/correos/masivo` |
+| Soporte | `/admin/soporte` | Bandeja de tickets por urgencia y nivel, equipo de soporte, supervisión de chats, disputas, editor del centro de ayuda | `AdminDashboard`, `features/help/EditorDocumentacion.tsx` | [[21-Ayuda-y-Soporte]] · [[12-Admin]] |
+| Certificaciones | `/admin/certificaciones` | Crear sellos de la plataforma (logo, descripción, peso publicitario), otorgarlos y retirarlos | `AdminDashboard` | [[12-Admin]] |
+| **Respaldos** | `/admin/respaldos` | Descargar copia ZIP; **arrastrar un ZIP para restaurar** con vista previa y confirmación; volver a estados anteriores | `features/admin/RestaurarBackup.tsx` | [[Backups-y-Restauracion]] |
+| Landing | `/admin/landing` | Editar los bloques de la landing pública, aliados y noticias | `features/admin/LandingCmsEditor.tsx` | [[22-Landing-CMS]] |
+| Chats / Documentos | `/chats`, `/documentos` | Lectura de conversaciones y módulo documental | — | [[08-Chat-y-WebSocket]] · [[17-Documentos-y-Multimedia]] |
+
+El rol **soporte** ve solo Bandeja (`/admin/soporte`), Tickets (`/chats`) y Documentos.
 
 ---
 

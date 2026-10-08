@@ -1,4 +1,6 @@
-# Seguridad del Backend — ImportacionesQ8
+# Seguridad del Backend — Zarpi (ImportacionesQ8)
+
+> **Última actualización:** 2026-10-01 · Los controles añadidos después de julio están en [[#Controles añadidos (agosto → octubre 2026)]].
 
 ## Descripción general
 
@@ -123,7 +125,7 @@ Ver [[Pagos-Wompi]] para el detalle completo.
 ## 8. CORS y transporte
 
 - **CORS restringido** a los orígenes configurados en `config.CORS_ORIGINS` (por entorno), en vez de `*`.
-- **HTTPS en producción:** pendiente de la capa de despliegue (reverse proxy / proveedor de hosting); no aplica en desarrollo local/Docker.
+- **HTTPS en producción:** ✅ desde el 2026-09-29/10-01. Caddy termina TLS con certificados de Let's Encrypt renovados solos, añade HSTS y es el único servicio expuesto. Ver [[Despliegue-y-Operacion]].
 
 ---
 
@@ -164,10 +166,10 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 | **Autenticación con Google (OAuth 2.0)** | 🔜 Pendiente | Requiere registro de la app en Google Cloud Console y flujo OAuth adicional; se prioriza completar el flujo de credenciales propio primero |
 | **Migración de hashing de contraseñas a Argon2** | 🔜 Pendiente | El backend usa `bcrypt` (`passlib`) actualmente, que sigue siendo seguro; la migración a Argon2 (ganador del Password Hashing Competition) se documenta como mejora incremental, no una vulnerabilidad activa |
 | **Auditoría/logging estructurado de acciones administrativas** | 🔜 Pendiente | Ya señalado como pendiente desde la Semana 3 |
-| **HTTPS en producción** | 🔜 Pendiente | Depende de la capa de despliegue, fuera del alcance del código del backend |
+| **HTTPS en producción** | ✅ Hecho (2026-10-01) | Caddy + Let's Encrypt + HSTS; backend, MySQL y Redis sin puertos públicos |
 | **Revocación real de JWT en logout** | ✅ Hecho (2026-07-14) | `jti` + tabla `jwt_blacklist` (+ Redis opcional); refresh rota el token |
 | **JWT de WebSocket fuera del query string** | ✅ Parcial (2026-07-14) | `POST /chat/ws-ticket` + `?ticket=`; `?token=` deprecado por compatibilidad |
-| **Rate limits en escritura de negocio** | 🔜 Pendiente | Hoy el rate limiting cubre auth; cotizaciones/chat bajo abuso quedan abiertos |
+| **Rate limits en escritura de negocio** | ✅ Parcial | Cubiertos: auth, mensajes y estimaciones del chat (`RATE_LIMIT_CHAT_MESSAGE`), cursos, contacto de la landing, notificaciones y lecturas públicas. **Pendiente:** `POST /cotizaciones` (lo mitiga en parte el cupo diario por empresa) |
 
 ---
 
@@ -189,11 +191,31 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [x] Sistema de créditos con descuento/acreditación atómica y trazabilidad completa (`movimientos_credito`)
 - [x] Recreación de cotizaciones mediada por admin (ninguna parte se auto-exime del costo)
 - [x] Congruencia de categoría al enviar propuestas (evita respuestas fuera de especialidad)
-- [ ] HTTPS en producción — depende del despliegue, fuera del alcance del código del backend
+- [x] HTTPS en producción con HSTS (Caddy + Let's Encrypt) — 2026-10-01
 - [ ] Auditoría/logging estructurado de acciones administrativas críticas (activar/desactivar cuentas, resolver disputas) — recomendado para una futura iteración, no implementado aún
-- [ ] Revocación real de JWT / WS token fuera del query string / rate limits de negocio — ver sección 11 y [[Indice-Calidad]]
+- [x] Revocación real de JWT y ticket de un solo uso para WebSocket (2026-07-14); ticket también para el stream SSE de notificaciones (2026-09-29)
+- [ ] Rate limit en `POST /cotizaciones` — el resto de escrituras de negocio ya está limitado (ver sección 11)
 - [ ] Autenticación con Google (OAuth 2.0) — roadmap, ver sección 11
 - [ ] Migración de hashing de contraseñas a Argon2 — roadmap, ver sección 11
+
+---
+
+## Controles añadidos (agosto → octubre 2026)
+
+| Fecha | Control | Dónde |
+|-------|---------|-------|
+| 2026-08-05 | URLs canónicas: solo se guardan rutas internas, nunca hosts ajenos ni URLs absolutas de otro entorno | `utils/urls.py` |
+| 2026-08-07 | Límite de tamaño por ruta (2 MiB JSON, 300 MB subidas) con 413 legible a través de CORS | `utils/security_middleware.py` |
+| 2026-08-09 | Rol `soporte` aislado: solo ve tickets; el hilo interno empresa–asesor nunca es visible para el cliente | `routers/chat.py` (`_verificar_acceso_conversacion`) |
+| 2026-09-11 | El rol elegido en el login debe coincidir con el de la cuenta (403 si no) | `services/auth_service.py` |
+| 2026-09-29 | El tier exigido sale de la empresa, nunca del payload; descuento de puntos con UPDATE condicional | `routers/cotizaciones.py`, `services/tier_service.py` |
+| 2026-09-29 | Ticket de un solo uso para el stream SSE de notificaciones (sin JWT en la URL) | `routers/notificaciones.py` |
+| 2026-09-29 | Correos con HTML escapado en la plantilla común | `utils/email.py` |
+| 2026-09-30 | El WebSocket solo acepta mensajes `texto` y `archivo`: nadie puede forjar un mensaje `sistema` ni una estimación de precio | `routers/chat.py` |
+| 2026-09-30 | Las estimaciones de precio se recalculan siempre en el servidor | `services/calculadora_precios.py` |
+| 2026-09-30 | Cupo diario con bloqueo de fila al crear cotizaciones dirigidas | `services/cupo_cotizaciones.py` |
+| 2026-10-01 | Restauración desde el panel: solo admin, confirmación escrita, verificación SHA-256/CRC/conteos, rechazo de rutas fuera de `uploads/` y `generated_docs/` (zip slip), copia previa automática | `routers/admin.py`, `services/backup_service.py` |
+| 2026-10-01 | Modo mantenimiento (503 en todos los workers) mientras se restaura | `services/mantenimiento.py` |
 
 ---
 
@@ -202,6 +224,8 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 - [[Autenticacion]] — JWT, claims, roles, rate limiting, registro extendido, recuperación de contraseña con OTP
 - [[Pagos-Wompi]] — verificación de firma de webhooks, idempotencia, sistema de créditos
 - [[Base-Datos]] — restricciones `UNIQUE` y claves foráneas que sustentan varias de estas protecciones
+- [[Despliegue-y-Operacion]] — HTTPS, exposición de puertos y firewall en producción
+- [[Backups-y-Restauracion]] — seguridad de las copias y de la restauración
 - [[Indice-Calidad]] · [[Auditoria-Backend-2026-07-13]] · [[Remediaciones-Backend-Jul-2026]] — campaña de auditoría y fixes
 - [[Tareas-Semana-3]] — Tarea 3.13 (refactor de identidad y cierre de auto-registro)
 - [[Tareas-Semana-4]] — detalle de las fases de Semana 4

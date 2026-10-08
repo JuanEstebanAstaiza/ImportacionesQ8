@@ -18,6 +18,9 @@ from schemas.pago import (
 )
 from utils.dependencies import get_db, get_current_user, require_rol
 from services.credito_wallet import obtener_wallet, acreditar, debitar_atomico
+from services.tendencias import (
+    CONCEPTO_PAGO_SUSCRIPCION, activar_suscripcion_pagada, revocar_por_reembolso,
+)
 
 router = APIRouter(prefix="/pagos", tags=["Pagos"])
 creditos_router = APIRouter(prefix="/creditos", tags=["Créditos"])
@@ -202,7 +205,7 @@ def _notificar_pago(db: Session, *, pago: Pago, titulo: str, mensaje: str) -> No
         titulo=titulo,
         mensaje=mensaje,
         data={"pago_id": str(pago.id), "wompi_payment_id": pago.wompi_payment_id},
-        enlace_relativo="/creditos",
+        enlace_relativo="/tendencias" if pago.concepto == CONCEPTO_PAGO_SUSCRIPCION else "/creditos",
     )
 
 
@@ -253,23 +256,32 @@ async def webhook_wompi(
             db.rollback()
             return {"success": True}
 
-        usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
-        if usuario:
-            wallet = obtener_wallet(db, usuario)
-            acreditar(
+        if pago.concepto == CONCEPTO_PAGO_SUSCRIPCION:
+            acceso = activar_suscripcion_pagada(db, pago)
+            _notificar_pago(
                 db,
-                wallet,
-                pago.creditos_comprados,
-                tipo=TipoMovimientoCredito.compra.value,
-                pago_id=pago.id,
-                descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})",
+                pago=pago,
+                titulo="Suscripción a Tendencias activa",
+                mensaje=f"Tienes acceso a Tendencias hasta el {acceso.fin:%d/%m/%Y}.",
             )
-        _notificar_pago(
-            db,
-            pago=pago,
-            titulo="Pago confirmado",
-            mensaje=f"Se acreditaron {pago.creditos_comprados} créditos a tu cuenta.",
-        )
+        else:
+            usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()
+            if usuario:
+                wallet = obtener_wallet(db, usuario)
+                acreditar(
+                    db,
+                    wallet,
+                    pago.creditos_comprados,
+                    tipo=TipoMovimientoCredito.compra.value,
+                    pago_id=pago.id,
+                    descripcion=f"Compra de créditos vía Wompi ({pago.wompi_payment_id})",
+                )
+            _notificar_pago(
+                db,
+                pago=pago,
+                titulo="Pago confirmado",
+                mensaje=f"Se acreditaron {pago.creditos_comprados} créditos a tu cuenta.",
+            )
         try:
             db.commit()
         except IntegrityError:
@@ -303,6 +315,11 @@ async def webhook_wompi(
         )
         if ganado != 1:
             db.rollback()
+            return {"success": True}
+
+        if pago.concepto == CONCEPTO_PAGO_SUSCRIPCION:
+            revocar_por_reembolso(db, pago)
+            db.commit()
             return {"success": True}
 
         usuario = db.query(Usuario).filter(Usuario.id == pago.usuario_id).first()

@@ -47,7 +47,12 @@ class Cotizacion(Base):
     # momento: si luego el recálculo lo baja de nivel, lo ya enviado no puede
     # volver a quedar bloqueado. NULL en cotizaciones anteriores a esta columna.
     tier_solicitante_creacion = Column(String(10), nullable=True)
+    # Portada: la primera de `fotos_producto`. Se conserva aparte porque es lo
+    # que leen los listados y los clientes anteriores a la galería.
     foto_producto = Column(String(500), nullable=True)
+    # Galería del producto, en el orden en que el cliente la subió (máx.
+    # MAX_FOTOS_PRODUCTO). NULL en cotizaciones anteriores a la galería.
+    fotos_producto = Column(JSON, nullable=True)
     pais_importacion = Column(String(100), nullable=False)
     nivel_personalizacion = Column(String(50), nullable=True)
     nombre_producto = Column(String(255), nullable=False)
@@ -56,7 +61,10 @@ class Cotizacion(Base):
     linea_producto = Column(String(100), nullable=False)
     tipo_calidad = Column(String(20), nullable=False)
     modalidad_importacion = Column(String(20), nullable=True)
-    cantidad_minima = Column(Integer, nullable=False)
+    # Float: en metros cúbicos se piden fracciones (2,5 m³). En unidades el
+    # esquema de entrada exige un entero.
+    cantidad_minima = Column(Float, nullable=False)
+    unidad_cantidad = Column(String(10), nullable=False, default="unidades", server_default="unidades")  # "unidades" o "m3"
     precio_objetivo_usd = Column(Float, nullable=True)
     moneda_precio_objetivo = Column(String(10), nullable=False, default="USD", server_default="USD")
     incoterm = Column(String(50), nullable=False, default="DDP", server_default="DDP")
@@ -65,6 +73,12 @@ class Cotizacion(Base):
     # combina con el prefijo de la empresa importadora para rotular las cajas.
     # Ver `utils/shipping_mark.py`.
     shipping_mark_sufijo = Column(String(40), nullable=True)
+    # De dónde salió la solicitud: "directa" (formulario), "tendencias" o
+    # "catalogo". Permite medir cuántas solicitudes trae cada edición y producto.
+    origen = Column(String(20), nullable=False, default="directa", server_default="directa")
+    tendencia_edicion_id = Column(String(36), nullable=True, index=True)
+    tendencia_producto_id = Column(String(36), nullable=True, index=True)
+    catalogo_producto_id = Column(String(36), nullable=True, index=True)
     # Valores de los campos personalizados definidos por el importador (solo aplica
     # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.
     campos_personalizados_valores = Column(JSON, nullable=True)
@@ -81,6 +95,13 @@ class Cotizacion(Base):
     cotizacion_origen_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=True)
     cancelada_por_error = Column(String(20), nullable=True)  # NULL, o quien fue responsable: "solicitante"/"importador"
     motivo_cancelacion = Column(Text, nullable=True)
+
+    # --- Por qué el cliente eligió una propuesta sobre las demás ---
+    # Lo indica al aceptar ("precio", "tiempo", "condiciones" u "otro"). Al
+    # cerrarse la orden se copia como motivo de descarte a las propuestas que
+    # perdieron y queda en sus eventos `propuesta_descartada`.
+    motivo_eleccion = Column(String(20), nullable=True)
+    motivo_eleccion_detalle = Column(Text, nullable=True)
 
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -107,8 +107,21 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
     Tampoco entran las que ya agotaron su cupo diario
     (`limite_cotizaciones_diarias`); quedan registradas como omitidas para que
     no les aparezca después en la bandeja. Ver `services/cupo_cotizaciones.py`.
+
+    Con la asignación en modo "manual" (piloto) no reparte nada: avisa a los
+    admins y la solicitud espera a que la asignen desde el panel. En modo
+    automático llega solo a las `cupo_por_solicitud` empresas de mejor encaje.
+    Ver `services/asignacion.py`.
     """
+    from models.cotizacion import Cotizacion
+    from services.asignacion import elegir_automaticamente
+    from services.configuracion import modo_asignacion
     from services.cupo_cotizaciones import cupo_agotado, recibidas_hoy, registrar_reparto_abierta
+
+    if modo_asignacion(db) == "manual":
+        # Piloto: la solicitud espera a que el admin la asigne desde el panel.
+        _avisar_admins_solicitud_por_asignar(db, cotizacion_id)
+        return []
 
     importadores = _candidatos_por_criterio(db, pais_importacion, linea_producto)
 
@@ -119,6 +132,13 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
         if cupo_agotado(imp.limite_cotizaciones_diarias, conteo.get(str(imp.id), 0))
     ]
     importadores = [imp for imp in importadores if imp not in omitidos]
+
+    # Cada solicitud llega como mucho a `cupo_por_solicitud` empresas: las de
+    # mejor encaje (ver services/asignacion.py).
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == str(cotizacion_id)).first()
+    if cotizacion is not None:
+        importadores = elegir_automaticamente(db, cotizacion, importadores)
+
     registrar_reparto_abierta(
         db,
         cotizacion_id=cotizacion_id,
@@ -141,6 +161,32 @@ def matching_cotizacion_abierta(cotizacion_id: str, pais_importacion: str, linea
         _indexar_matching(client, cotizacion_id, importador_ids)
 
     return importadores
+
+
+def _avisar_admins_solicitud_por_asignar(db: Session, cotizacion_id: str) -> None:
+    """Aviso in-app a los admins: hay una abierta esperando asignación."""
+    from models.cotizacion import Cotizacion
+    from models.usuario import Usuario
+    from services.notificacion_service import notificar
+
+    try:
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == str(cotizacion_id)).first()
+        if cotizacion is None:
+            return
+        for admin in db.query(Usuario).filter(Usuario.rol == "admin", Usuario.activo.is_(True)).all():
+            notificar(
+                db,
+                usuario_id=str(admin.id),
+                tipo="cotizacion",
+                titulo="Solicitud abierta por asignar",
+                mensaje=f"{cotizacion.nombre_producto} ({cotizacion.linea_producto}, {cotizacion.pais_importacion}).",
+                data={"cotizacion_id": str(cotizacion.id)},
+                enlace_relativo="/admin/asignacion",
+                whatsapp=False,
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
 
 def obtener_importadores_matching(cotizacion_id: str) -> dict:
     if not _redis_available():

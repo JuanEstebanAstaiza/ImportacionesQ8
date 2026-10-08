@@ -32,6 +32,7 @@ class OrdenResponse(BaseModel):
     importador_id: str
     solicitante_id: str
     asesor_asignado_id: Optional[str]
+    asesor_nombre: Optional[str] = None
     estado: str  # "cotizacion_aceptada", "en_produccion", etc.
     precio_acordado_usd: float
     tiempo_estimado_entrega: Optional[str]

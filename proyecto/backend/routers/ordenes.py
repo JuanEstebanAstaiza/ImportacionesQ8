@@ -14,11 +14,21 @@ from schemas.orden import (
     ReportarProblemaRequest, ResolverDisputaRequest
 )
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
+from models.usuario import Usuario
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
 
 logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/ordenes", tags=["Órdenes"])
+
+
+def _nombre_asesor(db: Session, asesor_id: str | None) -> str | None:
+    if not asesor_id:
+        return None
+    asesor = db.query(Usuario).filter(Usuario.id == str(asesor_id)).first()
+    if not asesor:
+        return None
+    return " ".join(parte for parte in (asesor.nombre, asesor.apellido) if parte).strip() or asesor.email
 
 # Transiciones de estado válidas para órdenes
 ESTADOS_VALIDOS = {
@@ -125,6 +135,7 @@ async def listar_ordenes(
             importador_id=o.importador_id,
             solicitante_id=o.solicitante_id,
             asesor_asignado_id=o.asesor_asignado_id,
+            asesor_nombre=_nombre_asesor(db, o.asesor_asignado_id),
             estado=o.estado.value if isinstance(o.estado, EstadoOrden) else o.estado,
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
@@ -197,6 +208,7 @@ async def listar_ordenes_activas_importador(
             importador_id=o.importador_id,
             solicitante_id=o.solicitante_id,
             asesor_asignado_id=o.asesor_asignado_id,
+            asesor_nombre=_nombre_asesor(db, o.asesor_asignado_id),
             estado=o.estado.value if isinstance(o.estado, EstadoOrden) else o.estado,
             precio_acordado_usd=o.precio_acordado_usd,
             tiempo_estimado_entrega=o.tiempo_estimado_entrega,
@@ -280,6 +292,7 @@ async def obtener_orden(
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
         asesor_asignado_id=orden.asesor_asignado_id,
+        asesor_nombre=_nombre_asesor(db, orden.asesor_asignado_id),
         estado=orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,
@@ -382,6 +395,12 @@ async def actualizar_estado_orden(
         fecha_cambio=get_db_now(db)
     )
     db.add(nuevo_historial)
+
+    from services.eventos import evento_pedido
+
+    evento_pedido(
+        db, orden, estado_anterior=estado_actual, estado_nuevo=nuevo_estado_valor, usuario=current_user,
+    )
 
     # El hilo de la cotización pasó a ser el del seguimiento al crearse la orden:
     # dejar ahí el cambio de estado evita que el cliente tenga que ir a otra
@@ -546,6 +565,7 @@ async def obtener_orden_por_cotizacion(
         importador_id=orden.importador_id,
         solicitante_id=orden.solicitante_id,
         asesor_asignado_id=orden.asesor_asignado_id,
+        asesor_nombre=_nombre_asesor(db, orden.asesor_asignado_id),
         estado=orden.estado.value if isinstance(orden.estado, EstadoOrden) else orden.estado,
         precio_acordado_usd=orden.precio_acordado_usd,
         tiempo_estimado_entrega=orden.tiempo_estimado_entrega,

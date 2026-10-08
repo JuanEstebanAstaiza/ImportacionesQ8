@@ -86,7 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           nombre: null,
           telefono: null,
           foto_url: null,
-          whatsapp: null,
           activo: true,
           perfil_completo: Boolean(loginResponse.perfil_completo),
           fecha_creacion: new Date().toISOString(),

@@ -85,7 +85,6 @@ export interface CurrentUserResponse {
 	nombre: string | null;
 	telefono: string | null;
 	foto_url: string | null;
-	whatsapp: string | null;
 	activo: boolean;
 	perfil_completo: boolean;
 	fecha_creacion: string;

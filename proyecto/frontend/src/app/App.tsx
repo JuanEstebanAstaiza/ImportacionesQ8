@@ -18,6 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
+  Sparkles, LibraryBig, Type,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -31,9 +32,18 @@ import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
+import type { LegalPage } from "@/features/legal/types";
+import { EMPRESA } from "@/features/legal/empresa";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { TendenciasComprador } from "@/features/tendencias/TendenciasComprador";
+import { PanelCurador } from "@/features/tendencias/PanelCurador";
+import type { PrefillSolicitud } from "@/features/tendencias/prefill";
+import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
+import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
+import { TipografiaPlataforma } from "@/features/admin/TipografiaPlataforma";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -51,12 +61,15 @@ import {
   type BackendAsesor,
   type BackendChatAttachmentItem,
   type BackendChatConversation,
+  type BackendMiembroEquipo,
   type BackendCotizacion,
   type BackendCupoDiario,
   type BackendExplorerResponse,
   type BackendImporter,
   type BackendOrder,
   type BackendPropuesta,
+  type MotivoEleccion,
+  type UnidadCantidad,
   type BackendUserProfile,
   type CreateAsesorPayload,
   type CreateCotizacionPayload,
@@ -66,7 +79,8 @@ import {
 } from "@/services/business.service";
 import { CalculadoraPreciosChat, TarjetaEstimacion, propuestaDesdeEstimacion, type PropuestaDesdeEstimacion } from "@/features/chat/CalculadoraPrecios";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
-import { landingService, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
+import { landingService, leerVideosQuienesSomos, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
+import { CarruselVideos } from "@/app/components/media/CarruselVideos";
 import { safeHttpUrl } from "@/utils/safe-url";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
@@ -76,6 +90,7 @@ import { PresentacionPublica, EditorPresentacion } from "@/features/importador/P
 import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
 import { TierBadge } from "@/features/cotizante/TierBadge";
 import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
+import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
 import {
   componerShippingMark,
   LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
@@ -87,6 +102,12 @@ import type { UrgenciaSoporte } from "@/services/business.service";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 const SHOW_PAYMENTS_MODULE = false;
+/** Pantalla (y por tanto URL) de cada documento legal. */
+const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
+  data: "policy-data",
+  terms: "policy-terms",
+  payments: "policy-payments",
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN SYSTEM COMPONENTS
@@ -144,44 +165,24 @@ function Button({variant="primary",size="md",loading=false,fullWidth=false,icon,
 }
 
 // ─── Unified contact action button ───────────────────────────────────────────
-type ContactType="whatsapp"|"chat"|"email"|"phone";
+type ContactType="chat"|"email";
 function ContactBtn({type,size="sm",label,className,onClick,disabled,title}:{type:ContactType;size?:"sm"|"md";label?:string;className?:string;onClick?:()=>void;disabled?:boolean;title?:string}) {
   const cfg:Record<ContactType,{icon:React.FC<{className?:string}>;defaultLabel:string;cls:string}>={
-    whatsapp:{icon:Phone,         defaultLabel:"WhatsApp",cls:"border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"},
     chat:    {icon:MessageCircle, defaultLabel:"Chat",    cls:"border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"},
     email:   {icon:MailIcon,      defaultLabel:"Correo",  cls:"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"},
-    phone:   {icon:Phone,         defaultLabel:"Llamar",  cls:"border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"},
   };
   const c=cfg[type];const Icon=c.icon;
   const iconSize=size==="sm"?"w-3.5 h-3.5":"w-4 h-4";
   return <Button variant="secondary" size={size} icon={<Icon className={iconSize}/>} className={clsx(c.cls,className)} onClick={onClick} disabled={disabled} title={title}>{label??c.defaultLabel}</Button>;
 }
 
-function normalizePhoneForWa(value:string|undefined|null):string{
-  const digits=String(value||"").replace(/\D+/g,"");
-  if(!digits)return "";
-  if(digits.length>=10&&digits.length<=15)return digits;
-  return "";
-}
-
-function openSmartContact({type,whatsapp,email,onOpenChat}:{type:ContactType;whatsapp?:string|null;email?:string|null;onOpenChat?:()=>void}){
+function openSmartContact({type,email,onOpenChat}:{type:ContactType;email?:string|null;onOpenChat?:()=>void}){
   if(type==="chat"){
     if(onOpenChat){
       onOpenChat();
       return;
     }
     toast.error("No hay chat disponible para esta conversación.");
-    return;
-  }
-
-  const wa=normalizePhoneForWa(whatsapp);
-  if((type==="whatsapp"||type==="phone")&&wa){
-    window.open(`https://wa.me/${wa}`, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  if(type==="whatsapp"||type==="phone"){
-    toast.error("No hay número de WhatsApp disponible.");
     return;
   }
 
@@ -394,6 +395,7 @@ interface Order {
   quoteCode:string;
   product:string;
   importerId:string;
+  advisorName?:string;
   created:string;
   estimated:string;
   quantity:string;
@@ -487,7 +489,7 @@ function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
 // "interno" es el canal de la empresa con su asesor (coordinación del equipo);
 // "soporte" es un ticket con el equipo de la plataforma. Ninguno de los dos
 // cuelga de una cotización o una orden.
-type ChatType="orden"|"cotizacion"|"interno"|"soporte";
+type ChatType="orden"|"cotizacion"|"interno"|"soporte"|"equipo";
 
 const URGENCIA_SOPORTE:Record<string,{label:string;clase:string;peso:number}>={
   critica:{label:"Crítica", clase:"bg-red-100 text-red-800 border-red-200",       peso:4},
@@ -629,6 +631,8 @@ function FormatFileIcon({ extension, mimeType, compact = false }: { extension: s
 const NAV_ITEMS=[
   {icon:LayoutGrid,   label:"Dashboard",    key:"dashboard"},
   {icon:FileText,     label:"Cotizaciones", key:"quotes"},
+  {icon:Sparkles,     label:"Tendencias",   key:"tendencias"},
+  {icon:LibraryBig,   label:"Catálogos",    key:"catalogos"},
   {icon:ClipboardList,label:"Respuestas",   key:"responses"},
   {icon:MessageSquare,label:"Chats",        key:"chats"},
   {icon:ShoppingCart, label:"Órdenes",      key:"orders"},
@@ -639,9 +643,10 @@ const NAV_ITEMS=[
 
 const NAV_IMPORTADORA=[
   {icon:LayoutGrid,    label:"Dashboard",    key:"imp-dashboard"},
-  {icon:FileText,      label:"Cotizaciones", key:"imp-quotes"},
+  {icon:FileText,      label:"Solicitudes",  key:"imp-quotes"},
   {icon:Users,         label:"Asesores",     key:"imp-advisors"},
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
+  {icon:LibraryBig,    label:"Catálogos",    key:"imp-catalogos"},
   {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
   {icon:BookOpen,      label:"Cursos",       key:"courses"},
@@ -652,6 +657,7 @@ const NAV_ASESOR=[
   {icon:LayoutGrid,    label:"Dashboard",       key:"adv-dashboard"},
   {icon:Zap,           label:"Disponibles",     key:"adv-available"},
   {icon:ClipboardList, label:"Mis cotizaciones",key:"adv-my-quotes"},
+  {icon:LibraryBig,    label:"Catálogos",       key:"imp-catalogos"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
 ];
 
@@ -667,6 +673,7 @@ type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte";
 const NAV_ADMIN=[
   {icon:LayoutGrid,    label:"Resumen",         key:"admin-dashboard"},
   {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
+  {icon:GitCompare,    label:"Asignación",      key:"admin-asignacion"},
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
   {icon:WalletCards,   label:"Cotizantes",      key:"admin-cotizantes"},
   {icon:Mail,          label:"Correos",         key:"admin-correos"},
@@ -674,6 +681,8 @@ const NAV_ADMIN=[
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
+  {icon:Sparkles,      label:"Tendencias",      key:"curaduria"},
+  {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
@@ -825,7 +834,7 @@ function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | 
     readPerfilPublicoString(perfil, "advisor_role", "asesor_rol", "cargo_contacto", "contact_role") ||
     "Asesor";
   const advisorEmail = readPerfilPublicoString(perfil, "advisor_email", "asesor_email", "email", "correo");
-  const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono", "whatsapp");
+  const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono");
 
   return {
     advisorName,
@@ -852,7 +861,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     // pero nadie los leía, así que no aparecían en ninguna pantalla pública.
     website: readPerfilPublicoString(perfil, "website", "sitio_web", "web"),
     email: readPerfilPublicoString(perfil, "email", "correo", "email_contacto"),
-    phone: readPerfilPublicoString(perfil, "phone", "telefono", "whatsapp"),
+    phone: readPerfilPublicoString(perfil, "phone", "telefono"),
     address: readPerfilPublicoString(perfil, "address", "direccion"),
     foundedYear: readPerfilPublicoString(perfil, "year", "anio_fundacion", "fundacion"),
     industries: readPerfilPublicoStringArray(perfil, "industries", "industrias", "sectores"),
@@ -929,13 +938,14 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     productLine: cot.linea_producto,
     quality: cot.tipo_calidad,
     minQuantity: String(cot.cantidad_minima),
+    unit: cot.unidad_cantidad === "m3" ? "m3" : "unidades",
     targetPrice: targetPriceValue !== null ? `${targetPriceValue} ${currency}` : "N/A",
     targetPriceCurrency: currency,
     incoterm: cot.incoterm || "DDP",
     description: cot.descripcion_cliente,
     notes: cot.notas_adicionales ?? "",
     referenceLink: cot.link_referencia ?? "",
-    productPhotoUrl: cot.foto_producto ?? "",
+    productPhotoUrls: cot.fotos_producto?.length ? cot.fotos_producto : (cot.foto_producto ? [cot.foto_producto] : []),
     personalizationLevel: cot.nivel_personalizacion ?? "",
     importMode: cot.modalidad_importacion ?? "",
     shippingMark: cot.shipping_mark ?? null,
@@ -998,6 +1008,22 @@ function findCustomFieldValue(customFields: Record<string, unknown> | null | und
   return "";
 }
 
+/** Miniaturas de las fotos del producto; al pulsar una se abre completa. */
+function GaleriaFotosProducto({fotos}:{fotos:string[]}) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-2">Fotos del producto ({fotos.length})</p>
+      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+        {fotos.map((url,i)=>(
+          <button key={url} type="button" onClick={()=>{void abrirArchivoEnPestana(url).then(r=>{if(!r.ok)toast.error(r.motivo||"No se pudo abrir la foto.");});}} className="aspect-square rounded-lg overflow-hidden border border-border hover:ring-2 hover:ring-primary/40 transition" title={`Ver foto ${i+1}`}>
+            <ImagenArchivo src={url} alt={`Foto ${i+1} del producto`} className="w-full h-full"/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function getQuoteAttachmentLinks(quote: Quote): string[] {
   const links = new Set<string>();
   const maybePushLink = (value: unknown) => {
@@ -1010,7 +1036,7 @@ function getQuoteAttachmentLinks(quote: Quote): string[] {
     }
   };
 
-  maybePushLink(quote.productPhotoUrl);
+  (quote.productPhotoUrls ?? []).forEach(maybePushLink);
   maybePushLink(quote.referenceLink);
 
   const custom = quote.customFields;
@@ -1167,9 +1193,10 @@ function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
     quoteCode: quote?.code || `COT-${order.cotizacion_id.slice(0, 8).toUpperCase()}`,
     product: quote?.product || "Producto no disponible",
     importerId: order.importador_id,
+    advisorName: order.asesor_nombre || undefined,
     created: formatShortDate(history[0]?.fecha || new Date().toISOString()),
     estimated: order.tiempo_estimado_entrega || "N/D",
-    quantity: quote?.minQuantity ? `${quote.minQuantity} unidades` : "N/D",
+    quantity: quote?.minQuantity ? cantidadConUnidad(quote.minQuantity, quote.unit, true) : "N/D",
     unitPrice: `${order.precio_acordado_usd} USD/u`,
     totalValue: `${order.precio_acordado_usd} USD`,
     incoterm: quote?.incoterm || "N/D",
@@ -1214,6 +1241,8 @@ interface AppNotification {
   id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
   title:string;body:string;date:string;read:boolean;
   cotizacionId?:string;conversationId?:string;approval?:boolean;
+  /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
+  destino?:"tendencias"|"catalogos";
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1247,12 +1276,13 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
     cotizacionId,
     conversationId,
     approval,
+    destino: notification.tipo === "tendencias" ? "tendencias" : notification.tipo === "catalogo" ? "catalogos" : undefined,
   };
 }
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
-function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte}:SidebarCtrl) {
+function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
@@ -1323,6 +1353,24 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
               <LifeBuoy className="w-4 h-4 flex-shrink-0"/>
               <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
                 <span className="whitespace-nowrap">Soporte técnico</span>
+              </div>
+            </button>
+          )}
+          {/* El equipo de la plataforma no se abre tickets a sí mismo: su vía
+              es el canal interno con administración y con sus compañeros. */}
+          {showCanalEquipo&&(
+            <button
+              onClick={onCanalEquipo}
+              className={clsx(
+                "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full mb-1",
+                "text-muted-foreground hover:text-foreground hover:bg-muted",
+                isExpanded ? "gap-2.5" : "justify-center gap-0",
+              )}
+              title={!isExpanded ? "Canal del equipo" : undefined}
+            >
+              <Users className="w-4 h-4 flex-shrink-0"/>
+              <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                <span className="whitespace-nowrap">Canal del equipo</span>
               </div>
             </button>
           )}
@@ -1450,16 +1498,21 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
 // ─────────────────────────────────────────────────────────────────────────────
 // APP HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;company:string;initials:string;photoUrl?:string};notifCount?:number;onNotif?:()=>void;onProfile?:()=>void;sb?:SidebarCtrl}) {
+function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { name: string; company: string; initials: string; photoUrl?: string }; notifCount?: number; onNotif?: () => void; onProfile?: () => void; sb?: SidebarCtrl }) {
   const { dark, toggleTheme } = useBrandTheme();
   const { user: authUser } = useAuth();
-  const count=sb?.notifCount??notifCount;
-  const handler=sb?.onNotif??onNotif;
-  const profileHandler=sb?.onProfile??onProfile;
-  const chatHandler=sb?.onChat;
-  const helpHandler=sb?.onHelp;
-  const chatCount=sb?.chatCount??0;
-  const showHelp=sb?.showHelp??true;
+  
+  // Estado para el popover de créditos
+  const [showCreditosModal, setShowCreditosModal] = useState(false);
+  const creditosRef = useRef<HTMLDivElement>(null);
+
+  const count = sb?.notifCount ?? notifCount;
+  const handler = sb?.onNotif ?? onNotif;
+  const profileHandler = sb?.onProfile ?? onProfile;
+  const chatHandler = sb?.onChat;
+  const helpHandler = sb?.onHelp;
+  const chatCount = sb?.chatCount ?? 0;
+  const showHelp = sb?.showHelp ?? true;
   const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
@@ -1467,23 +1520,91 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
   const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
   const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
+
+  // Cierre automático al hacer clic fuera del badge/popover
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (creditosRef.current && !creditosRef.current.contains(event.target as Node)) {
+        setShowCreditosModal(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
-    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0">
-      <div/>
+    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0 relative">
+      {/* LADO IZQUIERDO: BADGE Y POPOVER DE CRÉDITOS */}
+      <div className="flex items-center">
+        {authUser?.rol === "solicitante" && (
+          <div className="relative" ref={creditosRef}>
+            <button
+              type="button"
+              onClick={() => setShowCreditosModal((prev) => !prev)}
+              onMouseEnter={() => setShowCreditosModal(true)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <WalletCards className="h-3.5 w-3.5 animate-pulse" />
+              <span>{creditos} créditos</span>
+            </button>
+
+            {/* Popover animado */}
+            {showCreditosModal && (
+              <div 
+                className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
+                    <WalletCards className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
+                        {creditos}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por solicitud
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreditosModal(false)}
+                    className="font-medium text-primary hover:underline dark:text-accent"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* LADO DERECHO */}
       <div className="flex items-center gap-1">
         <div className="relative">
           <button onClick={handler} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <Bell className="w-4 h-4"/>
           </button>
-          {count>0&&<span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">{count>9?"9+":count}</span>}
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">
+              {count > 9 ? "9+" : count}
+            </span>
+          )}
         </div>
+
         <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
-        {authUser?.rol === "solicitante" && (
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent" title="Créditos disponibles">
-            <WalletCards className="h-3.5 w-3.5" />{creditos}
-          </span>
-        )}
-        {showHelp&&<NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
+
+        {showHelp && <NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
+
         <button
           onClick={toggleTheme}
           title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
@@ -1492,13 +1613,17 @@ function AppHeader({user,notifCount=0,onNotif,onProfile,sb}:{user:{name:string;c
         >
           {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
         </button>
+
         <div className="w-px h-5 bg-border mx-2"/>
+
         <div className="flex items-center gap-2.5">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-medium text-foreground leading-tight">{displayName}</p>
             <p className="text-xs text-muted-foreground leading-tight">{displayCompany}</p>
           </div>
-          <button onClick={profileHandler} title="Editar perfil"><Avatar initials={displayInitials} size="md" src={displayPhotoUrl?resolveApiUrl(displayPhotoUrl):undefined}/></button>
+          <button onClick={profileHandler} title="Editar perfil">
+            <Avatar initials={displayInitials} size="md" src={displayPhotoUrl ? resolveApiUrl(displayPhotoUrl) : undefined}/>
+          </button>
         </div>
       </div>
     </header>
@@ -2016,7 +2141,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp.advisor.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                 <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
               </div>
@@ -2109,7 +2234,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                         <p className="text-xs text-primary mt-0.5">{adv.email}</p>
                       </div>
                       <div className="flex gap-1.5">
-                        <ContactBtn type="whatsapp" label="WA" size="sm" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:adv.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                        <ContactBtn type="chat" size="sm" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                         <ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                       </div>
                     </div>
@@ -2148,7 +2273,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 <h3 className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Acciones rápidas</h3>
                 <div className="flex flex-col gap-2">
                   <Button variant="primary" size="sm" fullWidth icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
-                  <ContactBtn type="whatsapp" size="sm" label="Contactar por WhatsApp" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp.advisor.phone,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                  <ContactBtn type="chat" size="sm" label="Contactar por chat" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
                   {relChats.length>0&&<Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChats[0].id)}>Abrir chat</Button>}
                 </div>
               </Card>
@@ -2163,23 +2288,43 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quotes,responses}:{onNewQuote:()=>void;onViewDetail:(id:string)=>void;onRefreshQuotes?:()=>Promise<void>;creditos:number;sb:SidebarCtrl;quotes:Quote[];responses:QuoteResponse[]}) {
-  const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[modeF,setModeF]=useState("");const[respF,setRespF]=useState("");
-  const [quoteToUnlock,setQuoteToUnlock]=useState<Quote|null>(null);
-  const [unlocking,setUnlocking]=useState(false);
-  const [unlockError,setUnlockError]=useState("");
-  const lastQ=quotes[0]??null;
+function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb, quotes, responses }: { onNewQuote: () => void; onViewDetail: (id: string) => void; onRefreshQuotes?: () => Promise<void>; creditos: number; sb: SidebarCtrl; quotes: Quote[]; responses: QuoteResponse[] }) {
+  const [search, setSearch] = useState("");
+  const [statusF, setStatusF] = useState("");
+  const [modeF, setModeF] = useState("");
+  const [respF, setRespF] = useState("");
+  const [quoteToUnlock, setQuoteToUnlock] = useState<Quote | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+
+  // Estado para controlar el popover de créditos al lado del título
+  const [showCreditosPopover, setShowCreditosPopover] = useState(false);
+  const creditosPopoverRef = useRef<HTMLDivElement>(null);
+
+  const lastQ = quotes[0] ?? null;
   const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
     acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
     return acc;
   }, {});
 
-  const filtered=quotes.filter(q=>{
-    const ms=!search||[q.code,q.product,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
-    const mst=!statusF||q.status===statusF;const mm=!modeF||q.mode===modeF;
-    const count=responseCountByQuoteId[q.id]||0;
-    const mr=!respF||(respF==="sin"?count===0:count>0);
-    return ms&&mst&&mm&&mr;
+  // Cierre automático del popover al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (creditosPopoverRef.current && !creditosPopoverRef.current.contains(event.target as Node)) {
+        setShowCreditosPopover(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = quotes.filter(q => {
+    const ms = !search || [q.code, q.product, q.importer].some(v => v.toLowerCase().includes(search.toLowerCase()));
+    const mst = !statusF || q.status === statusF;
+    const mm = !modeF || q.mode === modeF;
+    const count = responseCountByQuoteId[q.id] || 0;
+    const mr = !respF || (respF === "sin" ? count === 0 : count > 0);
+    return ms && mst && mm && mr;
   });
 
   async function unlockQuote() {
@@ -2196,36 +2341,88 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
       setUnlocking(false);
     }
   }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="quotes"/>
+      <Sidebar {...sb} active="quotes" />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
+        <AppHeader user={USER} sb={sb} />
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Cotizaciones"}]}/>
+            <Breadcrumb items={[{ label: "Inicio", onClick: () => sb.onNav("dashboard") }, { label: "Cotizaciones" }]} />
             <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-3"><h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1><span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-primary dark:border-accent/30 dark:text-accent"><WalletCards className="h-3.5 w-3.5" />{creditos} créditos</span></div>
-              <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={onNewQuote}>Nueva cotización</Button>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
+                
+                {/* POP OVER DE CRÉDITOS ANIMADO EN EL ENCABEZADO */}
+                <div className="relative" ref={creditosPopoverRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreditosPopover((prev) => !prev)}
+                    onMouseEnter={() => setShowCreditosPopover(true)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <WalletCards className="h-3.5 w-3.5 animate-pulse" />
+                    <span>{creditos} créditos</span>
+                  </button>
+
+                  {showCreditosPopover && (
+                    <div className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
+                          <WalletCards className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
+                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
+                              {creditos}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por desbloqueo
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCreditosPopover(false)}
+                          className="font-medium text-primary hover:underline dark:text-accent"
+                        >
+                          Entendido
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card padding="md">
-              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ&&<Badge variant={lastQ.status}/>}</div>
-              {lastQ?(
+              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ && <Badge variant={lastQ.status} />}</div>
+              {lastQ ? (
                 <>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                     <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
                     <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
                     <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",lastQ.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id]||0}</p></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", lastQ.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{lastQ.mode}</span></div>
+                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id] || 0}</p></div>
                   </div>
-                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(lastQ.id)}>Ver detalle</Button></div>
+                  <div className="pt-3 mt-3 border-t border-border"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(lastQ.id)}>Ver detalle</Button></div>
                 </>
-              ):(
+              ) : (
                 <div className="py-8 text-center">
-                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/>
+                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">No hay cotizaciones registradas aún.</p>
                 </div>
               )}
@@ -2235,65 +2432,68 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Con propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) > 0).length}</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) > 0).length}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Sin propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote)=> (responseCountByQuoteId[quote.id]||0) === 0).length}</p>
+                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) === 0).length}</p>
                 </div>
               </div>
             </Card>
           </div>
+
           <div>
             <h2 className="text-base font-semibold mb-4">Historial de cotizaciones</h2>
             <Card padding="sm" className="mb-4">
               <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-                <div className="w-44"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
-                <div className="w-32"><Select value={modeF} onChange={e=>setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
-                <div className="w-44"><Select value={respF} onChange={e=>setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
-                {(search||statusF||modeF||respF)&&<Button variant="ghost" size="sm" onClick={()=>{setSearch("");setStatusF("");setModeF("");setRespF("");}}>Limpiar</Button>}
+                <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} prefix={<Search className="w-4 h-4" />} /></div>
+                <div className="w-44"><Select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">Estado</option><option value="created">Creada</option><option value="directed">Dirigida</option><option value="open">Abierta</option><option value="accepted">Aceptada</option><option value="active-order">Orden activa</option><option value="rejected-importer">Rechazada por importadora</option></Select></div>
+                <div className="w-32"><Select value={modeF} onChange={e => setModeF(e.target.value)}><option value="">Modalidad</option><option value="Dirigida">Dirigida</option><option value="Abierta">Abierta</option></Select></div>
+                <div className="w-44"><Select value={respF} onChange={e => setRespF(e.target.value)}><option value="">Respuestas recibidas</option><option value="con">Con respuestas</option><option value="sin">Sin respuestas</option></Select></div>
+                {(search || statusF || modeF || respF) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusF(""); setModeF(""); setRespF(""); }}>Limpiar</Button>}
               </div>
             </Card>
+
             <Card padding="none">
               <div className="px-5 py-3.5 border-b border-border"><p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">{filtered.length}</span> cotizaciones</p></div>
-              {filtered.length>0?(
+              {filtered.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b border-border">{["Código","Fecha","Producto","Importadora","Modalidad","Estado","Resp.","Últ. act.",""].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
-                    <tbody>{filtered.map((row,i)=>(
-                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors",i%2===0?"bg-white":"bg-slate-50/50")}>
+                    <thead><tr className="border-b border-border">{["Código", "Fecha", "Producto", "Importadora", "Modalidad", "Estado", "Resp.", "Últ. act.", ""].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
+                    <tbody>{filtered.map((row, i) => (
+                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
                         <td className="px-4 py-3 font-mono text-xs font-medium">{row.code}</td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.date}</td>
                         <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
-                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",row.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{row.mode}</span></td>
+                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", row.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700")}>{row.mode}</span></td>
                         <td className="px-4 py-3">
                           {row.bloqueada ? (
                             <div className="flex min-w-[150px] flex-col items-start gap-1">
                               <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">Cotización bloqueada</span>
                               <span className="text-[11px] text-muted-foreground">Requiere <TierBadge tier={row.tierMinimoRequerido} /></span>
                             </div>
-                          ) : <Badge variant={row.status}/>}
+                          ) : <Badge variant={row.status} />}
                         </td>
-                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id]||0}</span></td>
+                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id] || 0}</span></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(row.id)}>Ver detalle</Button>
-                            {row.bloqueada && <Button variant="primary" size="sm" onClick={()=>{setUnlockError("");setQuoteToUnlock(row);}}>Desbloquear por 1 punto</Button>}
+                            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => onViewDetail(row.id)}>Ver detalle</Button>
+                            {row.bloqueada && <Button variant="primary" size="sm" onClick={() => { setUnlockError(""); setQuoteToUnlock(row); }}>Desbloquear por 1 crédito</Button>}
                           </div>
                         </td>
                       </tr>
                     ))}</tbody>
                   </table>
                 </div>
-              ):<div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2"/><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
+              ) : <div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" /><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
             </Card>
           </div>
         </main>
       </div>
-      <Modal open={Boolean(quoteToUnlock)} onClose={()=>{if(!unlocking)setQuoteToUnlock(null);}} title="Desbloquear cotización">
+
+      <Modal open={Boolean(quoteToUnlock)} onClose={() => { if (!unlocking) setQuoteToUnlock(null); }} title="Desbloquear cotización">
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <p className="text-sm font-semibold">{quoteToUnlock?.code} · {quoteToUnlock?.product}</p>
@@ -2302,17 +2502,73 @@ function QuotesScreen({onNewQuote,onViewDetail,onRefreshQuotes,creditos,sb,quote
               <span>Requerido:</span><TierBadge tier={quoteToUnlock?.tierMinimoRequerido} />
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">Se descontará 1 punto de cotización de tu saldo para habilitar esta oportunidad.</p>
-          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? 0} puntos</span></p>
+          <p className="text-sm text-muted-foreground">Se descontará 1 crédito de tu saldo para habilitar esta oportunidad.</p>
+          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? creditos} créditos</span></p>
           {unlockError && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">{unlockError}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={unlocking} onClick={()=>setQuoteToUnlock(null)}>Cancelar</Button>
-            <Button variant="primary" loading={unlocking} onClick={()=>{void unlockQuote();}}>Desbloquear por 1 punto</Button>
+            <Button variant="secondary" disabled={unlocking} onClick={() => setQuoteToUnlock(null)}>Cancelar</Button>
+            <Button variant="primary" loading={unlocking} onClick={() => { void unlockQuote(); }}>Desbloquear por 1 crédito</Button>
           </div>
         </div>
       </Modal>
     </div>
   );
+}
+
+// Qué cubre el precio según el incoterm, en palabras del comprador.
+const INCOTERM_INCLUYE: Record<string,string> = {
+  EXW:"Mercancía en fábrica; tú pones el transporte",
+  FCA:"Entregada al transportista en origen",
+  FOB:"Puesta en el barco en origen; flete y seguro aparte",
+  CFR:"Flete hasta el puerto de destino; seguro aparte",
+  CIF:"Flete y seguro hasta el puerto de destino",
+  CPT:"Transporte pagado hasta destino; seguro aparte",
+  CIP:"Transporte y seguro pagados hasta destino",
+  DAP:"Hasta tu puerta, sin impuestos de importación",
+  DPU:"Descargada en destino, sin impuestos",
+  DDP:"Puerta a puerta con impuestos y nacionalización",
+};
+
+/** Las observaciones de una propuesta: texto libre o el JSON del formulario de respuesta. */
+function leerCondicionesPropuesta(texto: string | null | undefined): { descripcion: string; ventajas: string; detalles: string[] } {
+  const vacio = { descripcion: "", ventajas: "", detalles: [] as string[] };
+  if (!texto) return vacio;
+  try {
+    const datos = JSON.parse(texto) as Record<string, unknown>;
+    if (datos && typeof datos === "object" && datos.schema === "create-response-v1") {
+      const campo = (clave: string) => (typeof datos[clave] === "string" ? String(datos[clave]).trim() : "");
+      const detalles = [
+        campo("moq") && `MOQ ${campo("moq")}`,
+        campo("port") && `Puerto ${campo("port")}`,
+        campo("productionTime") && `Producción ${campo("productionTime")}`,
+        campo("shippingTime") && `Envío ${campo("shippingTime")}`,
+      ].filter(Boolean) as string[];
+      return { descripcion: campo("description"), ventajas: campo("advantages"), detalles };
+    }
+  } catch {
+    // Texto libre.
+  }
+  return { ...vacio, descripcion: texto };
+}
+
+const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string }[] = [
+  { clave: "precio", etiqueta: "Precio", ayuda: "Me salió mejor en costo" },
+  { clave: "tiempo", etiqueta: "Tiempo de entrega", ayuda: "Llega antes" },
+  { clave: "condiciones", etiqueta: "Condiciones", ayuda: "Lo que incluye, pagos, garantías" },
+  { clave: "otro", etiqueta: "Otro motivo", ayuda: "Confianza, atención, recomendación..." },
+];
+
+/** "500 u" o "2,5 m³". */
+function cantidadConUnidad(cantidad: string | number | null | undefined, unidad?: string | null, largo = false): string {
+  if (cantidad === null || cantidad === undefined || cantidad === "") return "—";
+  const numero = Number(cantidad);
+  const texto = Number.isFinite(numero) ? numero.toLocaleString("es-CO", { maximumFractionDigits: 2 }) : String(cantidad);
+  if (unidad === "m3") return `${texto} m³`;
+  return `${texto} ${largo ? "unidades" : "u"}`;
+}
+
+function formatoPesos(valor: number): string {
+  return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2323,6 +2579,18 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
   const [loadingProposals,setLoadingProposals]=useState(true);
   const [actionMessage,setActionMessage]=useState("");
+  const [trm,setTrm]=useState<number|null>(null);
+  // Aceptar habiendo otras propuestas: antes se pregunta qué decidió la elección.
+  const [eligiendo,setEligiendo]=useState<BackendPropuesta|null>(null);
+  const [motivoEleccion,setMotivoEleccion]=useState<MotivoEleccion|null>(null);
+  const [motivoDetalle,setMotivoDetalle]=useState("");
+  const [decisionError,setDecisionError]=useState("");
+
+  useEffect(()=>{
+    let vigente=true;
+    businessService.getTrm().then((r)=>{if(vigente)setTrm(r.valor);}).catch(()=>{});
+    return ()=>{vigente=false;};
+  },[]);
 
   const loadProposals=useCallback(async()=>{
     if(!quote){
@@ -2341,7 +2609,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
 
   useEffect(()=>{void loadProposals();},[loadProposals]);
 
-  const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean)=>{
+  const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean,motivo?:{motivo_eleccion:MotivoEleccion;motivo_detalle?:string})=>{
     setActionMessage("");
     const targetProposal = proposals.find((proposal) => proposal.id === propuestaId);
     if (!targetProposal) {
@@ -2352,7 +2620,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
       await businessService.startProposalNegotiation(targetProposal.cotizacion_id, targetProposal.importador_id);
     }
 
-    await businessService.preAcceptProposal(propuestaId,aceptar);
+    await businessService.preAcceptProposal(propuestaId,aceptar,motivo);
     await loadProposals();
     if(onRefreshQuotes){
       await onRefreshQuotes();
@@ -2382,9 +2650,29 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const visibleProposals = quote.mode === "Dirigida"
     ? proposals.filter((proposal) => !quote.importadorId || proposal.importador_id === quote.importadorId)
     : proposals;
+  const otrasPendientes=(id:string)=>visibleProposals.filter(p=>p.id!==id&&p.estado==="pendiente").length;
+  const aceptarPropuesta=(p:BackendPropuesta)=>{
+    setDecisionError("");
+    if(otrasPendientes(p.id)>0){
+      setMotivoEleccion(null);
+      setMotivoDetalle("");
+      setEligiendo(p);
+      return;
+    }
+    void handleDecision(p.id,true).catch((e)=>setDecisionError(e instanceof Error?e.message:"No se pudo aceptar la propuesta."));
+  };
+  const confirmarEleccion=async()=>{
+    if(!eligiendo||!motivoEleccion)return;
+    try{
+      await handleDecision(eligiendo.id,true,{motivo_eleccion:motivoEleccion,motivo_detalle:motivoDetalle.trim()||undefined});
+      setEligiendo(null);
+    }catch(e){
+      setDecisionError(e instanceof Error?e.message:"No se pudo aceptar la propuesta.");
+    }
+  };
+  const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
   const activeProposal=visibleProposals[0]??null;
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
-  const contactAsesorWhatsapp = contactAsesor?.whatsapp || "";
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
   const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
   const quoteLifecycleIndex = relatedOrder
@@ -2450,10 +2738,11 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción","Producto de alta demanda, especificaciones estándar."]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción",quote.description||"—"]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2 sm:col-span-3":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5 whitespace-pre-line">{v}</p></div>)}</div>
+                {(quote.productPhotoUrls??[]).length>0&&<div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>}
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Información comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["MOQ",quote.minQuantity+" u"],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas","Entrega en destino final preferida."]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["Cantidad",cantidadConUnidad(quote.minQuantity,quote.unit)],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas",quote.notes||"—"]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
               </Card>
               <Card padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
@@ -2490,36 +2779,60 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                   <>
                     {quote.mode === "Abierta" && visibleProposals.length > 1 && (
                       <Card padding="md" className="mb-3">
-                        <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Comparador rápido de multi-ofertas</h4>
+                        <h4 className="text-sm font-semibold flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Comparador de propuestas</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 mb-3">En el orden en que llegaron. Mira precio, tiempo, lo que incluye y cómo cumple cada empresa: lo más barato no siempre es lo que más conviene.</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                <th className="text-left py-2 pr-3">Empresa</th>
-                                <th className="text-left py-2 pr-3">Precio</th>
-                                <th className="text-left py-2 pr-3">Entrega</th>
-                                <th className="text-left py-2 pr-3">Incoterm</th>
-                                <th className="text-left py-2">Estado</th>
+                                <th className="text-left py-2 pr-3 font-medium">Empresa</th>
+                                <th className="text-left py-2 pr-3 font-medium">Precio</th>
+                                <th className="text-left py-2 pr-3 font-medium">Tiempo</th>
+                                <th className="text-left py-2 pr-3 font-medium">Qué incluye</th>
+                                <th className="text-left py-2 font-medium">Cumplimiento</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-border/60">
-                              {visibleProposals.map((proposal) => (
+                            <tbody className="divide-y divide-border/60 align-top">
+                              {visibleProposals.map((proposal) => {
+                                const condiciones=leerCondicionesPropuesta(proposal.condiciones_adicionales);
+                                const empresa=proposal.empresa;
+                                return (
                                 <tr key={`cmp-${proposal.id}`}>
-                                  <td className="py-2 pr-3 text-xs">{proposal.importador_id.slice(0, 8).toUpperCase()}</td>
-                                  <td className="py-2 pr-3 font-semibold">{proposal.precio_ofrecido_usd} USD</td>
-                                  <td className="py-2 pr-3">{proposal.tiempo_estimado_entrega}</td>
-                                  <td className="py-2 pr-3">{proposal.incoterm}</td>
-                                  <td className="py-2">{proposal.estado}</td>
+                                  <td className="py-2.5 pr-3">
+                                    <p className="font-medium flex items-center gap-1">{nombreEmpresa(proposal)}{empresa?.verificado&&<BadgeCheck className="w-3.5 h-3.5 text-primary" aria-label="Verificada"/>}</p>
+                                    <p className="text-[11px] text-muted-foreground">{proposal.estado==="pendiente"?(proposal.preaceptada_por_solicitante?"Aceptaste; falta que la empresa confirme":"Esperando tu respuesta"):proposal.estado==="aceptada"?"Elegida":proposal.estado==="rechazada"?"No elegida":proposal.estado}</p>
+                                  </td>
+                                  <td className="py-2.5 pr-3">
+                                    <p className="font-medium">US${proposal.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
+                                    {trm&&<p className="text-[11px] text-muted-foreground">≈ {formatoPesos(proposal.precio_ofrecido_usd*trm)}</p>}
+                                    {proposal.cantidad?<p className="text-[11px] text-muted-foreground">por {cantidadConUnidad(proposal.cantidad,quote.unit)}</p>:null}
+                                  </td>
+                                  <td className="py-2.5 pr-3 font-medium">{proposal.tiempo_estimado_entrega}</td>
+                                  <td className="py-2.5 pr-3 max-w-[260px]">
+                                    <p className="font-medium">{proposal.incoterm}</p>
+                                    <p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(proposal.incoterm||"").toUpperCase()]??"Según lo acordado"}</p>
+                                    {condiciones.ventajas&&<p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{condiciones.ventajas}</p>}
+                                  </td>
+                                  <td className="py-2.5">
+                                    {empresa?(
+                                      <>
+                                        <p className="font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{empresa.calificacion_promedio.toFixed(1)}<span className="text-[11px] font-normal text-muted-foreground">({empresa.total_resenas} {empresa.total_resenas===1?"reseña":"reseñas"})</span></p>
+                                        <p className="text-[11px] text-muted-foreground">{empresa.pedidos_entregados} {empresa.pedidos_entregados===1?"pedido entregado":"pedidos entregados"} · {empresa.pedidos_en_curso} en curso</p>
+                                      </>
+                                    ):<span className="text-xs text-muted-foreground">—</span>}
+                                  </td>
                                 </tr>
-                              ))}
+                              );})}
                             </tbody>
                           </table>
                         </div>
                       </Card>
                     )}
+                  {decisionError&&<p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{decisionError}</p>}
                   <div className="space-y-3">{visibleProposals.map(p=>{
                     const contactName=p.contacto_asesor?.nombre||"Asesor de la empresa";
-                    const companyName=quote.importer;
+                    const companyName=nombreEmpresa(p);
+                    const condiciones=leerCondicionesPropuesta(p.condiciones_adicionales);
                     return(
                       <Card key={p.id} padding="md" className="hover:shadow-md transition-shadow">
                         <div className="flex flex-col gap-3">
@@ -2528,20 +2841,44 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-semibold text-sm">{companyName}</p>
                                 <span className={clsx("px-2 py-0.5 rounded text-xs font-medium",p.estado==="aceptada"?"bg-emerald-50 text-emerald-700":p.estado==="rechazada"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-700")}>{p.estado}</span>
+                                {/* La empresa puede ajustar su propuesta tras enviarla para reflejar
+                                    lo negociado por chat. Se avisa de forma visible: lo que se está
+                                    comparando ya no es la oferta que llegó. */}
+                                {(p.revisiones??0)>0&&(
+                                  <span
+                                    className="px-2 py-0.5 rounded text-xs font-medium bg-sky-50 text-sky-700"
+                                    title={p.fecha_modificacion?`Última modificación: ${new Date(p.fecha_modificacion).toLocaleString("es-CO")}`:undefined}
+                                  >
+                                    Versión {(p.revisiones??0)+1}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{contactName}</p>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><p className="text-sm font-semibold">{p.precio_ofrecido_usd} USD</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Entrega</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Incoterm</p><p className="text-sm font-semibold">{p.incoterm}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Contacto</p><p className="text-sm font-semibold">{p.contacto_asesor?.whatsapp||"—"}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><p className="text-sm font-semibold">US${p.precio_ofrecido_usd.toLocaleString("es-CO")}</p>{trm&&<p className="text-[11px] text-muted-foreground">≈ {formatoPesos(p.precio_ofrecido_usd*trm)}</p>}</div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Tiempo</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Incluye</p><p className="text-sm font-semibold">{p.incoterm}</p><p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(p.incoterm||"").toUpperCase()]??"Según lo acordado"}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Cumplimiento</p>{p.empresa?<><p className="text-sm font-semibold flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{p.empresa.calificacion_promedio.toFixed(1)}</p><p className="text-[11px] text-muted-foreground">{p.empresa.pedidos_entregados} entregados</p></>:<p className="text-sm font-semibold">—</p>}</div>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">{p.condiciones_adicionales||"Sin observaciones adicionales."}</p>
+                              {(condiciones.descripcion||condiciones.ventajas||condiciones.detalles.length>0)?(
+                                <div className="text-xs text-muted-foreground mt-3 leading-relaxed space-y-1">
+                                  {condiciones.descripcion&&<p>{condiciones.descripcion}</p>}
+                                  {condiciones.ventajas&&<p><span className="font-medium text-foreground">Ventajas:</span> {condiciones.ventajas}</p>}
+                                  {condiciones.detalles.length>0&&<p>{condiciones.detalles.join(" · ")}</p>}
+                                </div>
+                              ):<p className="text-xs text-muted-foreground mt-3">Sin observaciones adicionales.</p>}
+                              {(p.revisiones??0)>0&&p.fecha_modificacion&&(
+                                <p className="text-[11px] text-sky-700 mt-2">
+                                  La empresa modificó esta propuesta el {new Date(p.fecha_modificacion).toLocaleString("es-CO",{dateStyle:"medium",timeStyle:"short"})}
+                                  {(p.revisiones??0)>1?` (${p.revisiones} cambios desde que la envió)`:""}.
+                                </p>
+                              )}
+                              {p.estado==="rechazada"&&p.motivo_descarte&&<p className="text-[11px] text-muted-foreground mt-2">Elegiste otra propuesta por: {MOTIVOS_ELECCION.find(m=>m.clave===p.motivo_descarte)?.etiqueta??p.motivo_descarte}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
                               {p.estado==="pendiente"?(
                                 <>
-                                  <Button variant="primary" size="sm" onClick={()=>void handleDecision(p.id,true)}>Aceptar</Button>
+                                  <Button variant="primary" size="sm" onClick={()=>aceptarPropuesta(p)}>Aceptar</Button>
                                   <Button variant="secondary" size="sm" onClick={()=>void handleDecision(p.id,false)}>Rechazar</Button>
                                 </>
                               ):(
@@ -2563,10 +2900,10 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               {contactAsesor?<Card padding="md">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor asignado</h3>
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p><p className="text-xs text-muted-foreground">{contactAsesor.whatsapp||"Sin WhatsApp"}</p></div></div>
+                  <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p></div></div>
                   <div className="flex flex-col gap-1.5">
                     <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
-                    <ContactBtn type="whatsapp" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:contactAsesorWhatsapp,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
+                    <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   </div>
                 </div>
               </Card>:<Card padding="md" className="border-dashed"><div className="py-4 text-center"><p className="text-xs text-muted-foreground">Sin contacto de asesor todavía</p></div></Card>}
@@ -2575,6 +2912,34 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
           </div>
         </main>
       </div>
+      <Modal open={Boolean(eligiendo)} onClose={()=>setEligiendo(null)} title="¿Qué te hizo elegir esta propuesta?">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Elegiste la de <span className="font-medium text-foreground">{eligiendo?nombreEmpresa(eligiendo):""}</span>. Tu respuesta ayuda a las demás empresas a mejorar sus próximas propuestas; no ven quién ganó ni a qué precio.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Motivo de la elección">
+            {MOTIVOS_ELECCION.map(m=>(
+              <button
+                key={m.clave}
+                type="button"
+                role="radio"
+                aria-checked={motivoEleccion===m.clave}
+                onClick={()=>setMotivoEleccion(m.clave)}
+                className={clsx("rounded-xl border p-3 text-left transition-all",motivoEleccion===m.clave?"border-primary bg-primary/5":"border-border hover:border-primary/40")}
+              >
+                <p className="text-sm font-semibold">{m.etiqueta}</p>
+                <p className="text-xs text-muted-foreground">{m.ayuda}</p>
+              </button>
+            ))}
+          </div>
+          <Textarea label="Detalle (opcional)" placeholder="Cuéntanos en una frase" value={motivoDetalle} maxLength={500} onChange={e=>setMotivoDetalle(e.target.value)}/>
+          {decisionError&&<p role="alert" className="text-sm text-rose-700">{decisionError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={()=>setEligiendo(null)}>Cancelar</Button>
+            <Button variant="primary" disabled={!motivoEleccion} onClick={()=>{void confirmarEleccion();}}>Aceptar propuesta</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -2632,7 +2997,7 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
 
   const compRows=[
     {label:"Precio objetivo",target:quote.targetPrice,offer:resp.price,         result:"worse" as const},
-    {label:"MOQ solicitado", target:quote.minQuantity+" u",offer:resp.moq,       result:"better"as const},
+    {label:"Cantidad solicitada", target:cantidadConUnidad(quote.minQuantity,quote.unit),offer:resp.moq,       result:"better"as const},
     {label:"Incoterm",       target:quote.incoterm,   offer:resp.incoterm,       result:(quote.incoterm===resp.incoterm?"equal":"worse")as"equal"|"worse"},
     {label:"Plazo estimado", target:"30 días",        offer:resp.deliveryTime,   result:"equal" as const},
   ];
@@ -2686,7 +3051,6 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
                 <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
                 <div className="flex gap-2">
-                  <ContactBtn type="whatsapp" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:imp?.advisor.phone,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                   <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
                 </div>
@@ -2837,7 +3201,7 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onViewImporterProfile,canManageOrder,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
+function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advisorName,onViewImporterProfile,canManageOrder,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];advisorName?:string;onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
   const [isAdvancing,setIsAdvancing]=useState(false);
   const [advanceMessage,setAdvanceMessage]=useState("");
   const [advanceError,setAdvanceError]=useState("");
@@ -2872,7 +3236,10 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
   }
 
   const imp=importers.find(i=>i.id===order.importerId);
-  const advisor=imp?.advisor;
+  const resolvedAdvisorName = order.advisorName || advisorName;
+  const advisor=resolvedAdvisorName
+    ? {...(imp?.advisor || {initials: initialsFromName(resolvedAdvisorName), color: "bg-slate-500", role: "Asesor", email: ""}), name: resolvedAdvisorName}
+    : imp?.advisor;
   const relChatId = order.conversationId;
   const history = order.history;
   const documents = order.documents;
@@ -2928,7 +3295,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
                 <div className="flex gap-6 flex-wrap">{[["Empresa",imp?.name || "Empresa importadora"],["Asesor",advisor?.name || "Asesor"],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="whatsapp" label="Contactar asesor" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:advisor?.phone,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
+                <ContactBtn type="chat" label="Contactar asesor" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>irA(documentosRef)}>Ver documentos</Button>
                 {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
                 <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>} onClick={()=>irA(seguimientoRef)}>Ver seguimiento</Button>
@@ -3010,7 +3377,6 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,onVie
               <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
                 <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
                 <div className="flex gap-1.5">
-                  <ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:advisor?.phone,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                   <ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                   <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 </div>
@@ -3107,7 +3473,7 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
   return Boolean(tier) && esCotizante && esRolAutorizado;
 }
 
-function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<void>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
@@ -3202,7 +3568,6 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   const chatAdvisorName = conv?.advisorName || imp?.advisor.name || "Asesor";
   const chatAdvisorRole = conv?.advisorRole || imp?.advisor.role || "Asesor";
   const chatAdvisorEmail = conv?.advisorEmail || imp?.advisor.email || "";
-  const chatAdvisorWhatsapp = conv?.advisorPhone || imp?.advisor.phone || "";
   const chatAdvisorInitials = conv?.advisorInitials || imp?.advisor.initials || "AS";
   const chatAdvisorColor = conv?.advisorColor || imp?.advisor.color || "bg-slate-500";
 
@@ -3568,35 +3933,13 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
     }
   }
 
+  // Delega en el helper compartido: abrirlo aqui con
+  // `popup.location.replace(blobUrl)` dejaba la pestana en `about:blank`,
+  // porque el navegador no permite navegar de primer nivel a una `blob:` URL.
   async function handleOpenResource(url: string | null, fileName: string) {
-    const popup = window.open("about:blank", "_blank");
-    if (popup) {
-      popup.document.title = `Abriendo ${fileName}...`;
-      popup.document.body.innerHTML = "<p style=\"font-family: 'AT Avenor', sans-serif; padding: 16px;\">Cargando recurso...</p>";
-    }
-
-    try {
-      const blob = await fetchProtectedBlob(url);
-      if (!blob) {
-        popup?.close();
-        toast.error("No hay recurso disponible para abrir");
-        return;
-      }
-
-      const objectUrl = window.URL.createObjectURL(blob);
-      if (popup) {
-        popup.location.replace(objectUrl);
-      } else {
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
-      }
-
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(objectUrl);
-      }, 120000);
-    } catch (error) {
-      popup?.close();
-      console.error("Error abriendo recurso desde chat:", error);
-      toast.error(`No se pudo abrir ${fileName}`);
+    const resultado = await abrirArchivoEnPestana(url, fileName);
+    if (!resultado.ok) {
+      toast.error(resultado.motivo || `No se pudo abrir ${fileName}`);
     }
   }
 
@@ -3685,7 +4028,12 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
   // Para el equipo de la plataforma esto es una bandeja de soporte: filtrar por
   // órdenes o cotizaciones no significa nada ahí, y lo que importa es la
   // urgencia con la que el usuario pidió ayuda.
-  const FILTERS = esEquipoPlataforma
+  const FILTERS = modoEquipo
+    ? [
+        {k:"all",label:"Todas"},
+        {k:"no-leidas",label:"No leídas"},
+      ]
+    : esEquipoPlataforma
     ? [
         {k:"all",label:"Abiertos"},
         {k:"no-leidas",label:"No leídas"},
@@ -3868,15 +4216,42 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="chats"/>
+      <Sidebar {...sb} active={modoEquipo?"team-channel":"chats"}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <div className="flex-1 flex overflow-hidden">
 
           {/* ── Left: conversation list ─────────────────────────────────── */}
           <div className="w-72 flex-shrink-0 border-r border-border bg-white flex flex-col">
+            {modoEquipo&&(
+              <div className="px-3 pt-3 pb-2 border-b border-border space-y-2">
+                <div>
+                  <p className="text-sm font-semibold">Canal del equipo</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Administración y soporte. Los clientes y las empresas no entran aquí.
+                  </p>
+                </div>
+                <select
+                  aria-label="Abrir un hilo con alguien del equipo"
+                  className="w-full rounded-lg border border-border bg-white px-2 py-1.5 text-xs"
+                  value=""
+                  onChange={(e)=>{
+                    const id=e.target.value;
+                    if(id&&onAbrirHiloEquipo){void onAbrirHiloEquipo(id);}
+                    e.target.value="";
+                  }}
+                >
+                  <option value="">Hablar en privado con…</option>
+                  {miembrosEquipo.map((m)=>(
+                    <option key={m.id} value={m.id}>
+                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:" · administración"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="px-3 pt-3 pb-2 border-b border-border">
-              <Input placeholder="Buscar por código, empresa, asesor..." value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
+              <Input placeholder={modoEquipo?"Buscar en el canal...":"Buscar por código, empresa, asesor..."} value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
             </div>
             <div className="flex gap-1 px-3 py-2 border-b border-border overflow-x-auto">
               {FILTERS.map(f=>(
@@ -4399,9 +4774,8 @@ function ChatsScreen({onViewQuote,onViewOrder,sb,initialConvId,conversations,mes
                         <div className="flex items-center gap-2"><Avatar initials={imp?.initials || initialsFromName(contraparte.empresa)} size="sm" color={imp?.color || "bg-slate-500"} variant="logo" src={imp?.logoUrl?resolveApiUrl(imp.logoUrl):undefined}/><div><p className="text-xs font-semibold">{contraparte.empresa}</p></div></div>
                       </div>
                     )}
-                    {contraparte.empresa&&(chatAdvisorWhatsapp||chatAdvisorEmail)&&(
+                    {contraparte.empresa&&chatAdvisorEmail&&(
                       <div className="flex gap-1">
-                        <ContactBtn type="whatsapp" size="sm" label="WA" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:chatAdvisorWhatsapp,onOpenChat:()=>setShowCtx(true)})}/>
                         <ContactBtn type="email" size="sm" label="Email" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:chatAdvisorEmail,onOpenChat:()=>setShowCtx(true)})}/>
                       </div>
                     )}
@@ -5101,44 +5475,9 @@ function DocumentosScreen({
   }
 
   async function handleOpenResource(url: string | null, fileName: string) {
-    const popup = window.open("about:blank", "_blank");
-    if (popup) {
-      popup.document.title = `Abriendo ${fileName}...`;
-      popup.document.body.innerHTML =
-        '<p style="font-family: \'AT Avenor\', sans-serif; padding: 16px;">Cargando recurso...</p>';
-    }
-    try {
-      const blob = await fetchProtectedBlob(url);
-      if (!blob) {
-        popup?.close();
-        return;
-      }
-      const objectUrl = window.URL.createObjectURL(blob);
-      if (popup) {
-        popup.location.replace(objectUrl);
-      } else {
-        const fallback = document.createElement("a");
-        fallback.href = objectUrl;
-        fallback.target = "_blank";
-        fallback.rel = "noopener noreferrer";
-        document.body.appendChild(fallback);
-        fallback.click();
-        fallback.remove();
-      }
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(objectUrl);
-      }, 120000);
-    } catch (error) {
-      popup?.close();
-      console.error(`Error abriendo archivo ${fileName}:`, error);
-      const message = error instanceof Error ? error.message : "Error desconocido";
-      if (message.includes("(404)")) {
-        toast.error(`No se encontró el archivo en el servidor: ${fileName}`);
-      } else {
-        toast.error(`No se pudo abrir ${fileName}`);
-      }
-    } finally {
-      setMenuState(null);
+    const resultado = await abrirArchivoEnPestana(url, fileName);
+    if (!resultado.ok) {
+      toast.error(resultado.motivo || `No se pudo abrir ${fileName}`);
     }
   }
 
@@ -5814,6 +6153,22 @@ function DocumentosScreen({
   );
 }
 
+/** Armazón común (sidebar, cabecera, migas) para las pantallas que viven en `features/`. */
+function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:string;titulo:string;children:React.ReactNode}) {
+  return (
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Sidebar {...sb} active={active}/>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <AppHeader user={USER} sb={sb}/>
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+          <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key||"dashboard")},{label:titulo}]}/>
+          <div className="mt-3">{children}</div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
 function PagosScreen({sb}:{sb:SidebarCtrl}) {
   if (!SHOW_PAYMENTS_MODULE) {
     return (
@@ -5837,7 +6192,7 @@ function PagosScreen({sb}:{sb:SidebarCtrl}) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración Wompi pendiente</span></div></div>
+          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración de pagos pendiente</span></div></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{[["Total pagado","$16,700 USD","text-emerald-600"],["Pendiente","$3,200 USD","text-orange-600"],["En liberación parcial","$8,900 USD","text-blue-600"]].map(([l,v,c])=><Card key={l as string} padding="md"><p className="text-xs text-muted-foreground">{l as string}</p><p className={clsx("text-2xl font-semibold mt-1",c as string)}>{v as string}</p></Card>)}</div>
           <Card padding="none"><div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><p className="text-sm font-semibold">Historial de pagos</p><span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">Visual mockup</span></div>
             <table className="w-full text-sm"><thead><tr className="border-b border-border">{["ID","Concepto","Fecha","Estado","Monto"].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>)}</tr></thead>
@@ -5860,17 +6215,19 @@ function Stepper({current}:{current:number}) {
       const step=i+1;const done=step<current;const active=step===current;
       return (<div key={step} className="flex items-center flex-1 last:flex-none">
         <div className="flex flex-col items-center gap-1.5">
-          <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",done?"bg-primary text-white":active?"bg-primary text-white ring-4 ring-primary/20":"bg-muted text-muted-foreground border border-border")}>{done?<Check className="w-4 h-4"/>:step}</div>
-          <span className={clsx("text-xs font-medium whitespace-nowrap hidden sm:block",active?"text-primary":done?"text-foreground":"text-muted-foreground")}>{label}</span>
+          <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",done?"bg-primary dark:bg-accent text-white dark:text-black":active?"bg-primary dark:bg-accent text-white dark:text-black ring-4 ring-primary/20 dark:ring-accent/20":"bg-muted text-muted-foreground border border-border")}>{done?<Check className="w-4 h-4"/>:step}</div>
+          <span className={clsx("text-xs font-medium whitespace-nowrap hidden sm:block",active?"text-primary dark:text-accent":done?"text-foreground":"text-muted-foreground")}>{label}</span>
         </div>
-        {i<STEPS.length-1&&<div className={clsx("flex-1 h-0.5 mx-2 mb-4 transition-all duration-300",step<current?"bg-primary":"bg-border")}/>}
+        {i<STEPS.length-1&&<div className={clsx("flex-1 h-0.5 mx-2 mb-4 transition-all duration-300",step<current?"bg-primary dark:bg-accent":"bg-border")}/>}
       </div>);
     })}</div>
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrl:string;country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrl:"",country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrls:string[];country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
+/** Igual que `MAX_FOTOS_PRODUCTO` en backend/schemas/cotizacion.py. */
+const MAX_FOTOS_PRODUCTO=10;
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrls:[],country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
 const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
 const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
 const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
@@ -5887,53 +6244,216 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
 
   return (
     <div className="space-y-6">
+      {/* SELECCIÓN DE MODALIDAD */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[{m:"dirigida" as const,icon:Building2,title:"Cotización dirigida",desc:"Elige una empresa importadora específica para enviar directamente tu solicitud."},{m:"abierta" as const,icon:Globe,title:"Cotización abierta",desc:"La solicitud se distribuirá automáticamente entre importadores compatibles."}].map(({m,icon:Icon,title,desc})=>(
-          <button key={m} onClick={()=>{setModalidad(m);if(m==="abierta")setSelectedId(null);}} className={clsx("p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",modalidad===m?"border-primary bg-primary/5 shadow-md":"border-border bg-white hover:border-primary/40")}>
-            <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center mb-2.5",modalidad===m?"bg-primary":"bg-muted")}><Icon className={clsx("w-5 h-5",modalidad===m?"text-white":"text-muted-foreground")}/></div>
-            <h3 className="font-semibold text-sm mb-1.5">{title}</h3><p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-            {modalidad===m&&<div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium"><Check className="w-3.5 h-3.5"/>Seleccionada</div>}
-          </button>
-        ))}
+        {[
+          {
+            m: "dirigida" as const,
+            icon: Building2,
+            title: "Cotización dirigida",
+            desc: "Elige una empresa importadora específica para enviar directamente tu solicitud.",
+          },
+          {
+            m: "abierta" as const,
+            icon: Globe,
+            title: "Cotización abierta",
+            desc: "La solicitud se distribuirá automáticamente entre importadores compatibles.",
+          },
+        ].map(({ m, icon: Icon, title, desc }) => {
+          const seleccionada = modalidad === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setModalidad(m);
+                if (m === "abierta") setSelectedId(null);
+              }}
+              className={clsx(
+                "p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",
+                seleccionada
+                  ? "border-primary dark:border-accent bg-primary/5 dark:bg-accent/10 shadow-md text-foreground"
+                  : "border-border bg-card hover:border-primary/40 dark:hover:border-accent/50 text-foreground"
+              )}
+            >
+              <div
+                className={clsx(
+                  "w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-colors",
+                  seleccionada
+                    ? "bg-primary dark:bg-accent"
+                    : "bg-muted group-hover:bg-primary/10 dark:group-hover:bg-accent/10"
+                )}
+              >
+                <Icon
+                  className={clsx(
+                    "w-5 h-5 transition-colors",
+                    seleccionada
+                      ? "text-primary-foreground dark:text-accent-foreground"
+                      : "text-muted-foreground"
+                  )}
+                />
+              </div>
+
+              <h3 className="font-semibold text-sm mb-1.5">{title}</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+
+              {seleccionada && (
+                <div className="mt-3 flex items-center gap-1 text-xs font-medium text-primary dark:text-accent">
+                  <Check className="w-3.5 h-3.5" />
+                  Seleccionada
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {modalidad==="dirigida"&& (
+      {/* SECCIÓN DE IMPORTADORAS */}
+      {modalidad === "dirigida" && (
         <div>
-          <h3 className="text-sm font-semibold mb-3">Selecciona una importadora</h3>
-          <Card padding="sm" className="mb-4">
+          <h3 className="text-sm font-semibold mb-3 text-foreground">Selecciona una importadora</h3>
+
+          {/* FILTROS Y BÚSQUEDA */}
+          <Card padding="sm" className="mb-4 bg-card border-border">
             <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[140px]"><Input placeholder="Buscar empresa..." value={cs} onChange={e=>setCs(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-              <div className="w-32"><Select value={cc} onChange={e=>setCc(e.target.value)}><option value="">País</option>{[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}</Select></div>
-              <div className="w-36"><Select value={ccat} onChange={e=>setCcat(e.target.value)}><option value="">Categoría</option>{[...new Set(importers.flatMap(i=>i.categories))].map(c=><option key={c}>{c}</option>)}</Select></div>
-              <div className="w-44"><Select value={cr} onChange={e=>setCr(e.target.value)}><option value="">Certificación</option><option value="certificadas">Con certificaciones</option></Select></div>
-              {hasF&&<Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setCs("");setCc("");setCcat("");setCr("");}}>Limpiar</Button>}
+              <div className="flex-1 min-w-[140px]">
+                <Input
+                  placeholder="Buscar empresa..."
+                  value={cs}
+                  onChange={(e) => setCs(e.target.value)}
+                  prefix={<Search className="w-4 h-4 text-muted-foreground" />}
+                  className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+                />
+              </div>
+              <div className="w-32">
+                <Select
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                >
+                  <option value="">País</option>
+                  {[...new Set(importers.map((i) => i.country))].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="w-36">
+                <Select
+                  value={ccat}
+                  onChange={(e) => setCcat(e.target.value)}
+                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                >
+                  <option value="">Categoría</option>
+                  {[...new Set(importers.flatMap((i) => i.categories))].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="w-44">
+                <Select
+                  value={cr}
+                  onChange={(e) => setCr(e.target.value)}
+                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
+                >
+                  <option value="">Certificación</option>
+                  <option value="certificadas">Con certificaciones</option>
+                </Select>
+              </div>
+              {hasF && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    setCs("");
+                    setCc("");
+                    setCcat("");
+                    setCr("");
+                  }}
+                  className="hover:text-primary dark:hover:text-accent"
+                >
+                  Limpiar
+                </Button>
+              )}
             </div>
           </Card>
 
-          {fi.length===0 ? (
-            <Card padding="lg" className="border-dashed">
-              <div className="py-6 text-center"><p className="text-sm text-muted-foreground">No se encontraron empresas</p></div>
+          {/* TARJETAS DE IMPORTADORAS */}
+          {fi.length === 0 ? (
+            <Card padding="lg" className="border-dashed border-border bg-card">
+              <div className="py-6 text-center">
+                <p className="text-sm text-muted-foreground">No se encontraron empresas</p>
+              </div>
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {fi.map(imp=>{
-                const sel=selectedId===imp.id;
-                return(
-                  <div key={imp.id} onClick={()=>setSelectedId(sel?null:imp.id)} className={clsx("relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200",sel?"border-primary shadow-lg bg-white":"border-border bg-white hover:border-primary/40 hover:shadow-md")}>
-                    {sel&&<div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-white"/></div>}
+              {fi.map((imp) => {
+                const sel = selectedId === imp.id;
+                return (
+                  <div
+                    key={imp.id}
+                    onClick={() => setSelectedId(sel ? null : imp.id)}
+                    className={clsx(
+                      "relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 bg-card text-card-foreground",
+                      sel
+                        ? "border-primary dark:border-accent shadow-lg"
+                        : "border-border hover:border-primary/40 dark:hover:border-accent/50 hover:shadow-md"
+                    )}
+                  >
+                    {/* Checkbox badge de selección */}
+                    {sel && (
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary dark:bg-accent flex items-center justify-center">
+                        <Check className="w-3 h-3 text-primary-foreground dark:text-accent-foreground" />
+                      </div>
+                    )}
+
+                    {/* Info de la empresa */}
                     <div className="flex items-start gap-3 mb-3">
-                      <Avatar initials={imp.initials} size="lg" color={imp.color}/>
+                      <Avatar initials={imp.initials} size="lg" color={imp.color} />
                       <div className="min-w-0">
-                        <div className="flex items-start gap-1"><p className="font-semibold text-sm leading-tight">{imp.name}</p>{imp.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div>
+                        <div className="flex items-start gap-1">
+                          <p className="font-semibold text-sm leading-tight text-foreground">{imp.name}</p>
+                          {imp.verified && (
+                            <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{imp.specialty}</p>
                         <p className="text-xs text-muted-foreground/70 mt-0.5">{imp.country}</p>
                       </div>
                     </div>
+
+                    {/* Métricas */}
                     <div className="flex items-center justify-between text-xs mb-3">
-                      <div className="flex items-center gap-1 text-emerald-700">{(imp.certs??[]).length>0&&(<><Shield className="w-3 h-3"/><span className="font-medium">{(imp.certs??[]).length} cert.</span></>)}</div>
-                      <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3"/><span>{imp.responseTime}</span></div>
+                      <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        {(imp.certs ?? []).length > 0 && (
+                          <>
+                            <Shield className="w-3 h-3" />
+                            <span className="font-medium">{(imp.certs ?? []).length} cert.</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        <span>{imp.responseTime}</span>
+                      </div>
                     </div>
-                    <button onClick={e=>{e.stopPropagation();setSelectedId(sel?null:imp.id);}} className={clsx("w-full h-8 rounded-lg text-xs font-medium transition-all",sel?"bg-primary text-white":"bg-muted text-foreground hover:bg-primary/10")}>{sel?"Seleccionada":"Seleccionar"}</button>
+
+                    {/* Botón de Selección */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(sel ? null : imp.id);
+                      }}
+                      className={clsx(
+                        "w-full h-8 rounded-lg text-xs font-medium transition-all",
+                        sel
+                          ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
+                          : "bg-muted text-foreground hover:bg-primary/10 dark:hover:bg-accent/10"
+                      )}
+                    >
+                      {sel ? "Seleccionada" : "Seleccionar"}
+                    </button>
                   </div>
                 );
               })}
@@ -5945,121 +6465,618 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
   );
 }
 
-function RightPanel({step,modalidad,si,form}:{step:number;modalidad:"dirigida"|"abierta"|null;si:Importer|null;form:QuoteFormState}) {
-  const Summary=()=>(<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</h3><div className="space-y-2">{[["Producto",form.productName],["País",form.country],["Calidad",form.quality],["Cantidad",form.minQuantity?`${form.minQuantity} u`:""],["Incoterm",form.incoterm]].map(([k,v])=><div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground flex-shrink-0">{k}</span><span className="text-xs font-medium text-right">{v||<span className="italic text-muted-foreground/50">—</span>}</span></div>)}</div></Card>);
-  if(modalidad==="dirigida"&&si)return(<div className="space-y-4">
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa seleccionada</h3><div className="flex items-start gap-3 mb-3"><Avatar initials={si.initials} size="xl" color={si.color}/><div><p className="font-semibold text-sm">{si.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.specialty}</p></div></div><div className="space-y-1.5 pt-3 border-t border-border">{[["Miembro desde",si.memberSince],["Proyectos",si.projects.toString()],["Respuesta",si.responseTime]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div></Card>
-    <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3><div className="flex items-start gap-2.5 mb-3"><Avatar initials={si.advisor.initials} size="lg" color={si.advisor.color}/><div><p className="font-semibold text-sm">{si.advisor.name}</p><p className="text-xs text-muted-foreground mt-0.5">{si.advisor.role}</p></div></div><div className="flex gap-2"><ContactBtn type="whatsapp" label="WA" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"whatsapp",whatsapp:si.advisor.phone})}/><ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>toast.info("El chat se habilita al enviar la cotización.")}/></div></Card>
-    {step>=2&&<Summary/>}
-    {step===3&&<Card padding="md" className="border-primary/20 bg-primary/5"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-primary animate-pulse"/><span className="text-xs font-semibold text-primary">Lista para enviar</span></div></Card>}
-  </div>);
-  if(modalidad==="abierta"){if(step===1)return(<Card padding="md"><div className="flex items-center gap-2 mb-3"><div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center"><Globe className="w-4 h-4 text-primary"/></div><h3 className="text-sm font-semibold">¿Cómo funciona?</h3></div><div className="space-y-3">{[{i:Send,t:"Tu solicitud llega a importadores activos compatibles."},{i:Users,t:"Múltiples empresas enviarán propuestas."},{i:CheckCircle2,t:"Compara y decide con cuál continuar."}].map(({i:Icon,t},idx)=><div key={idx} className="flex items-start gap-2.5"><div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5"><Icon className="w-3 h-3 text-primary"/></div><p className="text-xs text-muted-foreground leading-relaxed">{t}</p></div>)}</div></Card>);
-  return(<div className="space-y-4"><Summary/>{step===3&&<Card padding="md"><div className="space-y-2">{[["Empresas potenciales","23 activas"],["País",form.country||"—"],["Categoría",form.productLine||"—"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-semibold">{v}</span></div>)}<div className="pt-2 border-t border-border flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"/><span className="text-xs font-semibold text-orange-600">Esperando propuestas</span></div></div></Card>}</div>);}
-  return(<Card padding="md" className="border-dashed"><div className="flex flex-col items-center text-center py-4 gap-2"><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Building className="w-5 h-5 text-muted-foreground/40"/></div><p className="text-sm text-muted-foreground">Selecciona una modalidad.</p></div></Card>);
+function RightPanel({
+  step,
+  modalidad,
+  si,
+  form,
+}: {
+  step: number;
+  modalidad: "dirigida" | "abierta" | null;
+  si: Importer | null;
+  form: QuoteFormState;
+}) {
+  const Summary = () => (
+    <Card padding="md" className="bg-card border-border text-card-foreground">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+        Resumen
+      </h3>
+      <div className="space-y-2">
+        {[
+          ["Producto", form.productName],
+          ["País", form.country],
+          ["Calidad", form.quality],
+          [
+            "Cantidad",
+            form.minQuantity
+              ? cantidadConUnidad(form.minQuantity, form.unit)
+              : "",
+          ],
+          ["Incoterm", form.incoterm],
+        ].map(([k, v]) => (
+          <div key={k} className="flex justify-between items-start gap-2">
+            <span className="text-xs text-muted-foreground flex-shrink-0">
+              {k}
+            </span>
+            <span className="text-xs font-medium text-right text-foreground">
+              {v || <span className="italic text-muted-foreground/50">—</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+
+  if (modalidad === "dirigida" && si)
+    return (
+      <div className="space-y-4">
+        {/* Empresa seleccionada */}
+        <Card padding="md" className="bg-card border-border text-card-foreground">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Empresa seleccionada
+          </h3>
+          <div className="flex items-start gap-3 mb-3">
+            <Avatar initials={si.initials} size="xl" color={si.color} />
+            <div>
+              <p className="font-semibold text-sm text-foreground">{si.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {si.specialty}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-1.5 pt-3 border-t border-border">
+            {[
+              ["Miembro desde", si.memberSince],
+              ["Proyectos", si.projects.toString()],
+              ["Respuesta", si.responseTime],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-xs text-muted-foreground">{k}</span>
+                <span className="text-xs font-medium text-foreground">{v}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Asesor */}
+        <Card padding="md" className="bg-card border-border text-card-foreground">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Asesor
+          </h3>
+          <div className="flex items-start gap-2.5 mb-3">
+            <Avatar
+              initials={si.advisor.initials}
+              size="lg"
+              color={si.advisor.color}
+            />
+            <div>
+              <p className="font-semibold text-sm text-foreground">
+                {si.advisor.name}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {si.advisor.role}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <ContactBtn
+              type="chat"
+              size="sm"
+              className="flex-1 justify-center"
+              onClick={() =>
+                toast.info("El chat se habilita al enviar la cotización.")
+              }
+            />
+          </div>
+        </Card>
+
+        {step >= 2 && <Summary />}
+
+        {step === 3 && (
+          <Card
+            padding="md"
+            className="border-primary/20 bg-primary/5 dark:border-accent/30 dark:bg-accent/10"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary dark:bg-accent animate-pulse" />
+              <span className="text-xs font-semibold text-primary dark:text-accent">
+                Lista para enviar
+              </span>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+
+  if (modalidad === "abierta") {
+    if (step === 1)
+      return (
+        <Card padding="md" className="bg-card border-border text-card-foreground">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 dark:bg-accent/10 flex items-center justify-center">
+              <Globe className="w-4 h-4 text-primary dark:text-accent" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">
+              ¿Cómo funciona?
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {[
+              {
+                i: Send,
+                t: "Tu solicitud llega a importadores activos compatibles.",
+              },
+              { i: Users, t: "Múltiples empresas enviarán propuestas." },
+              {
+                i: CheckCircle2,
+                t: "Compara y decide con cuál continuar.",
+              },
+            ].map(({ i: Icon, t }, idx) => (
+              <div key={idx} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/10 dark:bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Icon className="w-3 h-3 text-primary dark:text-accent" />
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      );
+
+    return (
+      <div className="space-y-4">
+        <Summary />
+        {step === 3 && (
+          <Card padding="md" className="bg-card border-border text-card-foreground">
+            <div className="space-y-2">
+              {[
+                ["Empresas potenciales", "23 activas"],
+                ["País", form.country || "—"],
+                ["Categoría", form.productLine || "—"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between">
+                  <span className="text-xs text-muted-foreground">{k}</span>
+                  <span className="text-xs font-semibold text-foreground">
+                    {v}
+                  </span>
+                </div>
+              ))}
+              <div className="pt-2 border-t border-border flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-orange-400 dark:bg-amber-400 animate-pulse" />
+                <span className="text-xs font-semibold text-orange-600 dark:text-amber-400">
+                  Esperando propuestas
+                </span>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Card padding="md" className="border-dashed border-border bg-card">
+      <div className="flex flex-col items-center text-center py-4 gap-2">
+        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+          <Building className="w-5 h-5 text-muted-foreground/50" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Selecciona una modalidad.
+        </p>
+      </div>
+    </Card>
+  );
 }
 
-function Step2({form,setForm,onProductPhotoUploaded,importer}:{form:QuoteFormState;setForm:React.Dispatch<React.SetStateAction<QuoteFormState>>;onProductPhotoUploaded:(fileItem:BackendArchivoItem)=>void|Promise<void>;importer:Importer|null}) {
-  const [dragOver,setDragOver]=useState(false);
-  const upd=(f:keyof QuoteFormState,v:string)=>setForm(p=>({...p,[f]:v}));
+function Step2({
+  form,
+  setForm,
+  onProductPhotoUploaded,
+  importer,
+}: {
+  form: QuoteFormState;
+  setForm: React.Dispatch<React.SetStateAction<QuoteFormState>>;
+  onProductPhotoUploaded: (fileItem: BackendArchivoItem) => void | Promise<void>;
+  importer: Importer | null;
+}) {
+  const upd = (f: keyof QuoteFormState, v: string) =>
+    setForm((p) => ({ ...p, [f]: v }));
+  const fotos = form.productPhotoUrls;
+  const quitarFoto = (url: string) =>
+    setForm((p) => ({
+      ...p,
+      productPhotoUrls: p.productPhotoUrls.filter((f) => f !== url),
+    }));
+
   return (
     <div className="space-y-5">
-      <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información del producto</h3>
+      {/* INFORMACIÓN DEL PRODUCTO */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <Tag className="w-4 h-4 text-primary dark:text-accent" />
+          Información del producto
+        </h3>
         <div className="space-y-4">
-          <div><p className="text-sm font-medium mb-1.5">Foto <span className="text-xs text-muted-foreground font-normal">(opcional)</span></p>
-            <div onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} className={clsx("border-2 border-dashed rounded-xl p-8 text-center transition-all",dragOver?"border-primary bg-primary/5":"border-border hover:border-primary/40 hover:bg-muted/30")}>
-              {form.productPhotoUrl
-                ?<div className="space-y-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto"/>
-                  <p className="text-sm font-medium">Foto vinculada desde Documentos</p>
-                  <div className="flex items-center justify-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.productPhotoUrl);}}>Ver</Button>
-                    <Button variant="ghost" size="sm" onClick={()=>upd("productPhotoUrl","")}>Quitar</Button>
-                  </div>
+          <div>
+            <p className="text-sm font-medium mb-1.5 text-foreground">
+              Fotos{" "}
+              <span className="text-xs text-muted-foreground font-normal">
+                (opcional, hasta {MAX_FOTOS_PRODUCTO})
+              </span>
+            </p>
+            <div
+              className={clsx(
+                "border-2 border-dashed rounded-xl p-5 transition-all bg-card",
+                fotos.length
+                  ? "border-border"
+                  : "border-border hover:border-primary/40 dark:hover:border-accent/50 hover:bg-muted/30"
+              )}
+            >
+              {fotos.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {fotos.map((url, i) => (
+                    <div
+                      key={url}
+                      className="relative group aspect-square rounded-lg overflow-hidden border border-border bg-muted"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void abrirArchivoEnPestana(url);
+                        }}
+                        className="block w-full h-full"
+                        title="Ver foto"
+                      >
+                        <ImagenArchivo
+                          src={url}
+                          alt={`Foto ${i + 1} del producto`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                      {i === 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          Portada
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => quitarFoto(url)}
+                        aria-label={`Quitar foto ${i + 1}`}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                :<><Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sube la foto real del producto al módulo documental</p><p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG, JPEG o WebP</p></>
-              }
-              <div className="mt-3 flex justify-center">
+              ) : (
+                <div className="text-center py-3">
+                  <Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Sube fotos reales del producto: el producto, la etiqueta, el
+                    empaque, las medidas
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    PNG, JPG, JPEG o WebP · la primera será la portada
+                  </p>
+                </div>
+              )}
+              <div className="mt-3 flex items-center justify-center gap-3">
                 <DocumentUploadButton
-                  label="Subir foto"
+                  label={fotos.length ? "Agregar fotos" : "Subir fotos"}
                   accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                   origen="cotizacion"
+                  multiple
+                  maxArchivos={MAX_FOTOS_PRODUCTO - fotos.length}
+                  disabled={fotos.length >= MAX_FOTOS_PRODUCTO}
                   onUploaded={onProductPhotoUploaded}
+                  onError={(message) => toast.error(message)}
                 />
+                <span className="text-xs text-muted-foreground">
+                  {fotos.length}/{MAX_FOTOS_PRODUCTO}
+                </span>
               </div>
             </div>
           </div>
-          <Input label="Nombre del producto" placeholder="Ej. Café Verde Colombiano Premium" value={form.productName} onChange={e=>upd("productName",e.target.value)}/>
-          <Textarea label="Descripción" placeholder="Describe el producto..." rows={3} value={form.description} onChange={e=>upd("description",e.target.value)}/>
-          <Input label="Link de referencia" placeholder="https://proveedor.com/producto" type="url" value={form.referenceLink} onChange={e=>upd("referenceLink",e.target.value)} hint="URL del proveedor (opcional)"/>
+          <Input
+            label="Nombre del producto"
+            placeholder="Ej. Café Verde Colombiano Premium"
+            value={form.productName}
+            onChange={(e) => upd("productName", e.target.value)}
+            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
+          />
+          <Textarea
+            label="Descripción"
+            placeholder="Describe el producto..."
+            rows={3}
+            value={form.description}
+            onChange={(e) => upd("description", e.target.value)}
+            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
+          />
+          <Input
+            label="Link de referencia"
+            placeholder="https://proveedor.com/producto"
+            type="url"
+            value={form.referenceLink}
+            onChange={(e) => upd("referenceLink", e.target.value)}
+            hint="URL del proveedor (opcional)"
+            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
+          />
         </div>
       </Card>
-      <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Layers className="w-4 h-4 text-primary"/>Clasificación</h3>
+
+      {/* CLASIFICACIÓN */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-primary dark:text-accent" />
+          Clasificación
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select label="País de importación" value={form.country} onChange={e=>upd("country",e.target.value)}><option value="">Seleccionar</option>{COUNTRIES.map(c=><option key={c}>{c}</option>)}</Select>
-          <Select label="Línea de producto" value={form.productLine} onChange={e=>upd("productLine",e.target.value)}><option value="">Seleccionar</option>{LINES.map(l=><option key={l}>{l}</option>)}</Select>
-          <Select label="Calidad" value={form.quality} onChange={e=>upd("quality",e.target.value)}><option value="">Seleccionar</option>{["Económica","Estándar","Premium","Ultra premium"].map(q=><option key={q}>{q}</option>)}</Select>
-          <Select label="Personalización" value={form.customization} onChange={e=>upd("customization",e.target.value)}><option value="">Seleccionar</option><option>Estándar</option><option>Personalización de marca</option><option>Personalización de diseño completo</option></Select>
+          <Select
+            label="País de importación"
+            value={form.country}
+            onChange={(e) => upd("country", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            {COUNTRIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Línea de producto"
+            value={form.productLine}
+            onChange={(e) => upd("productLine", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            {LINES.map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Calidad"
+            value={form.quality}
+            onChange={(e) => upd("quality", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            {["Económica", "Estándar", "Premium", "Ultra premium"].map((q) => (
+              <option key={q}>{q}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Personalización"
+            value={form.customization}
+            onChange={(e) => upd("customization", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          >
+            <option value="">Seleccionar</option>
+            <option>Estándar</option>
+            <option>Personalización de marca</option>
+            <option>Personalización de diseño completo</option>
+          </Select>
         </div>
       </Card>
-      <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary"/>Importación</h3>
+
+      {/* IMPORTACIÓN */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-primary dark:text-accent" />
+          Importación
+        </h3>
         <div className="space-y-4">
-          <div><p className="text-sm font-medium mb-2">Propósito</p><div className="flex gap-2">{(["ecommerce","corporativo"]as const).map(opt=><button key={opt} onClick={()=>upd("purpose",opt)} className={clsx("flex-1 h-9 rounded-lg border text-sm font-medium transition-all",form.purpose===opt?"bg-primary text-white border-primary shadow-sm":"bg-white text-muted-foreground border-border hover:border-primary/40")}>{opt==="ecommerce"?"Ecommerce":"Corporativo"}</button>)}</div></div>
+          <div>
+            <p className="text-sm font-medium mb-2 text-foreground">Propósito</p>
+            <div className="flex gap-2">
+              {(["ecommerce", "corporativo"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => upd("purpose", opt)}
+                  className={clsx(
+                    "flex-1 h-9 rounded-lg border text-sm font-medium transition-all",
+                    form.purpose === opt
+                      ? "bg-primary text-primary-foreground border-primary dark:bg-accent dark:text-accent-foreground dark:border-accent shadow-sm"
+                      : "bg-card text-muted-foreground border-border hover:border-primary/40 dark:hover:border-accent/50"
+                  )}
+                >
+                  {opt === "ecommerce" ? "Ecommerce" : "Corporativo"}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Cantidad mínima"
-              placeholder="Ej. 500"
-              type="number"
-              min={0}
-              value={form.minQuantity}
-              onChange={e=>upd("minQuantity",String(Math.max(1,Number(e.target.value))))}
-              hint="En unidades"
-            />
+            {/* CANTIDAD MÍNIMA CON SELECTOR DE UNIDADES */}
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between"><label htmlFor="precio-objetivo" className="text-sm font-medium text-foreground">Precio objetivo</label></div>
+              <label
+                htmlFor="cantidad-minima"
+                className="text-sm font-medium text-foreground"
+              >
+                Cantidad mínima
+              </label>
               <div className="relative flex items-center">
-                <input id="precio-objetivo" type="text" inputMode="decimal" className="w-full h-10 bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary border-border pl-3 pr-20" placeholder="Ej. 8.50" value={form.targetPrice} onChange={e=>upd("targetPrice", normalizeTargetPriceInput(e.target.value))}/>
+                <input
+                  id="cantidad-minima"
+                  type="number"
+                  min={form.unit === "m3" ? 0.1 : 1}
+                  step={form.unit === "m3" ? 0.1 : 1}
+                  inputMode={form.unit === "m3" ? "decimal" : "numeric"}
+                  placeholder={form.unit === "m3" ? "Ej. 2.5" : "Ej. 500"}
+                  value={form.minQuantity}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    upd(
+                      "minQuantity",
+                      form.unit === "m3"
+                        ? valor
+                        : valor === ""
+                        ? ""
+                        : String(Math.max(1, Math.round(Number(valor))))
+                    );
+                  }}
+                  className="w-full h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent pl-3 pr-28 transition-colors"
+                />
+                <div
+                  className="absolute right-1 flex rounded-md border border-border bg-muted/40 p-0.5"
+                  role="radiogroup"
+                  aria-label="Unidad de la cantidad"
+                >
+                  {(["unidades", "m3"] as const).map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.unit === u}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          unit: u,
+                          minQuantity:
+                            u === "unidades" && p.minQuantity
+                              ? String(Math.max(1, Math.round(Number(p.minQuantity))))
+                              : p.minQuantity,
+                        }))
+                      }
+                      className={clsx(
+                        "h-7 rounded px-2 text-xs font-medium transition-colors",
+                        form.unit === u
+                          ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {u === "m3" ? "m³" : "Unidades"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {form.unit === "m3"
+                  ? "Volumen en metros cúbicos; admite decimales"
+                  : "Número de piezas o unidades"}
+              </p>
+            </div>
+
+            {/* PRECIO OBJETIVO */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="precio-objetivo"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Precio objetivo
+                </label>
+              </div>
+              <div className="relative flex items-center">
+                <input
+                  id="precio-objetivo"
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/60 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent pl-3 pr-20"
+                  placeholder="Ej. 8.50"
+                  value={form.targetPrice}
+                  onChange={(e) =>
+                    upd("targetPrice", normalizeTargetPriceInput(e.target.value))
+                  }
+                />
                 <div className="absolute right-1">
-                  <select value={form.targetPriceCurrency} onChange={e=>setForm(p=>({...p,targetPriceCurrency:e.target.value}))} className="h-8 rounded-md border border-border bg-white px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer pr-6">
-                    {PRICE_CURRENCIES.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+                  <select
+                    value={form.targetPriceCurrency}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        targetPriceCurrency: e.target.value,
+                      }))
+                    }
+                    className="h-8 rounded-md border border-border bg-card px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent appearance-none cursor-pointer pr-6"
+                  >
+                    {PRICE_CURRENCIES.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
                   </select>
-                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"/>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 </div>
               </div>
             </div>
-            <Select label="Incoterm" value={form.incoterm || "DDP"} onChange={e=>upd("incoterm",e.target.value)}><option value="">Seleccionar</option>{INCOTERMS.map(t=><option key={t} value={t}>{t}</option>)}</Select>
+
+            <Select
+              label="Incoterm"
+              value={form.incoterm || "DDP"}
+              onChange={(e) => upd("incoterm", e.target.value)}
+              className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+            >
+              <option value="">Seleccionar</option>
+              {INCOTERMS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+
+          <div className="rounded-lg border border-primary/20 bg-primary/5 dark:border-accent/30 dark:bg-accent/10 px-3 py-2.5">
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Importación incluida:</span>{" "}
+              <span className="font-medium text-foreground">
+                Importación incluida:
+              </span>{" "}
               El proveedor se encargará de la nacionalización de la mercancía antes de
               realizar la facturación electrónica correspondiente.
             </p>
           </div>
-          <Textarea label="Notas" placeholder="Información adicional..." rows={3} value={form.notes} onChange={e=>upd("notes",e.target.value)}/>
+          <Textarea
+            label="Notas"
+            placeholder="Información adicional..."
+            rows={3}
+            value={form.notes}
+            onChange={(e) => upd("notes", e.target.value)}
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          />
         </div>
       </Card>
-      <Card padding="md"><h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</h3>
-        <p className="text-xs text-muted-foreground mb-4">Cómo quieres que se rotulen tus cajas dentro del contenedor de la empresa importadora.</p>
+
+      {/* SHIPPING MARK */}
+      <Card padding="md" className="bg-card border-border text-card-foreground">
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+          <Package className="w-4 h-4 text-primary dark:text-accent" />
+          Shipping mark
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Cómo quieres que se rotulen tus cajas dentro del contenedor de la empresa
+          importadora.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
           <Input
             label="Tu identificador"
             placeholder="Prendas Control"
             maxLength={LONGITUD_MAX_SUFIJO_SHIPPING_MARK}
             value={form.shippingMarkSufijo}
-            onChange={e=>upd("shippingMarkSufijo",e.target.value)}
+            onChange={(e) => upd("shippingMarkSufijo", e.target.value)}
             hint="Opcional. El nombre con el que reconoces tu carga."
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
           />
           <div className="pt-1">
-            <p className="text-sm font-medium mb-1.5">Marca resultante</p>
-            <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
-              {componerShippingMark(importer?.shippingMarkPrefix,form.shippingMarkSufijo)||"—"}
+            <p className="text-sm font-medium mb-1.5 text-foreground">
+              Marca resultante
+            </p>
+            <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 text-foreground truncate">
+              {componerShippingMark(
+                importer?.shippingMarkPrefix,
+                form.shippingMarkSufijo
+              ) || "—"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {importer
-                ?(importer.shippingMarkPrefix
-                  ?`Prefijo de ${importer.name}: ${importer.shippingMarkPrefix}`
-                  :`${importer.name} todavía no configuró su prefijo.`)
-                :"Se completará con el prefijo de la empresa que atienda tu solicitud."}
+                ? importer.shippingMarkPrefix
+                  ? `Prefijo de ${importer.name}: ${importer.shippingMarkPrefix}`
+                  : `${importer.name} todavía no configuró su prefijo.`
+                : "Se completará con el prefijo de la empresa que atienda tu solicitud."}
             </p>
           </div>
         </div>
@@ -6072,7 +7089,7 @@ function Step3Dirigida({form,importer,confirmed,setConfirmed}:{form:QuoteFormSta
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2"><CheckCircle2 className="w-5 h-5 text-primary"/><h2 className="text-base font-semibold">Revisa tu solicitud</h2></div>
-      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?`${form.minQuantity} u`:"—"],["Precio objetivo",form.targetPrice ? `${form.targetPrice} ${form.targetPriceCurrency || "USD"}` : "—"],["Incoterm",form.incoterm || "DDP"]]}].map(({title,icon:Icon,rows})=>(
+      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?cantidadConUnidad(form.minQuantity,form.unit):"—"],["Precio objetivo",form.targetPrice ? `${form.targetPrice} ${form.targetPriceCurrency || "USD"}` : "—"],["Incoterm",form.incoterm || "DDP"]]}].map(({title,icon:Icon,rows})=>(
         <Card key={title} padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5"/>{title}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">{rows.map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div></Card>
       ))}
       <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"/><span className="text-sm leading-relaxed">Confirmo que la información es correcta y autorizo el envío de esta solicitud.</span></label>
@@ -6085,12 +7102,22 @@ function Step3Abierta() {
     <div className="space-y-4">
       <div><h2 className="text-base font-semibold">Solicitudes abiertas</h2><p className="text-sm text-muted-foreground mt-1">Una vez envíes, los importadores comenzarán a responder.</p></div>
       <Card padding="none"><div className="py-16 flex flex-col items-center text-center gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><ClipboardList className="w-6 h-6 text-muted-foreground/40"/></div><p className="font-medium text-sm">Todavía no hay propuestas</p><p className="text-xs text-muted-foreground">Aparecerán aquí cuando los importadores respondan.</p></div></Card>
-      <Card padding="md" className="border-blue-100 bg-blue-50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-blue-900 mb-1.5">Información importante</p>{["La cotización se convierte en orden al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary text-xs mt-0.5">•</span><p className="text-xs text-blue-800 leading-relaxed">{t}</p></div>)}</div></div></Card>
+      <Card padding="md" className="border-primary dark:border-accent bg-primary/50 dark:bg-accent/50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-primary dark:text-accent mb-1.5">Información importante</p>{["La cotización se convierte en orden al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary dark:text-accent text-xs mt-0.5">•</span><p className="text-xs text-primary dark:text-accent leading-relaxed">{t}</p></div>)}</div></div></Card>
     </div>
   );
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>}) {
+/** Producto de Tendencias o de un catálogo del que sale una solicitud. */
+interface OrigenSolicitud {
+  origen:"tendencias"|"catalogo";
+  nombre:string;
+  revisarRequisitos:boolean;
+  tendenciaEdicionId?:string|null;
+  tendenciaProductoId?:string;
+  catalogoProductoId?:string;
+}
+
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -6155,8 +7182,10 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       return;
     }
 
-    const parsedMinQuantity=Number.parseInt(form.minQuantity,10);
-    if(Number.isNaN(parsedMinQuantity)||parsedMinQuantity<1){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
+    const parsedMinQuantity=form.unit==="m3"
+      ?Number.parseFloat(String(form.minQuantity).replace(",","."))
+      :Number.parseInt(form.minQuantity,10);
+    if(!Number.isFinite(parsedMinQuantity)||parsedMinQuantity<=0||(form.unit==="unidades"&&parsedMinQuantity<1)){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
 
     const quality=String(form.quality||"").toLowerCase();
     const tipoCalidad:CreateCotizacionPayload["tipo_calidad"]=quality.includes("econ")
@@ -6172,7 +7201,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     const payload:CreateCotizacionPayload={
       modalidad,
       ...(modalidad==="dirigida"&&selectedId?{importador_id:selectedId}:{}),
-      ...(form.productPhotoUrl?{foto_producto:form.productPhotoUrl}:{}),
+      ...(form.productPhotoUrls.length?{fotos_producto:form.productPhotoUrls}:{}),
       pais_importacion:form.country,
       nombre_producto:form.productName,
       descripcion_cliente:form.description.trim(),
@@ -6182,12 +7211,24 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       nivel_personalizacion:form.customization||undefined,
       modalidad_importacion:form.purpose,
       cantidad_minima:parsedMinQuantity,
+      unidad_cantidad:form.unit,
       precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
       precio_objetivo_moneda:form.targetPriceCurrency || "USD",
       incoterm:form.incoterm || "DDP",
       notas_adicionales:form.notes||undefined,
       shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
       tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
+      ...(origen?.origen==="tendencias"?{
+        origen:"tendencias" as const,
+        tendencia_edicion_id:origen.tendenciaEdicionId??null,
+        tendencia_producto_id:origen.tendenciaProductoId,
+      }:{}),
+      // Desde un catálogo solo vale si va dirigida a la empresa dueña; si el
+      // comprador cambió de empresa, la solicitud pasa a ser directa.
+      ...(origen?.origen==="catalogo"&&modalidad==="dirigida"&&selectedId===preselectedImporterId?{
+        origen:"catalogo" as const,
+        catalogo_producto_id:origen.catalogoProductoId,
+      }:{}),
     };
 
     try{
@@ -6236,9 +7277,25 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               {/* Columna Izquierda: Formulario (Con scroll independiente) */}
               <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+                  {origen&&(
+                    <div className="mb-4 rounded-xl border border-primary/20 dark:border-accent/20 bg-primary/5 dark:bg-accent/5 px-4 py-3 text-sm">
+                      <p className="font-medium flex items-center gap-2">
+                        {origen.origen==="tendencias"?<Sparkles className="w-4 h-4 text-primary dark:text-accent"/>:<LibraryBig className="w-4 h-4 text-primary"/>}
+                        {origen.origen==="tendencias"?"Desde Tendencias":"Desde el catálogo de la empresa"}: {origen.nombre}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Ya cargamos el producto. Completa la cantidad, la calidad y lo que haga falta.</p>
+                      {origen.revisarRequisitos&&(
+                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la nacionalizadora que lo revise en su propuesta.</p>
+                      )}
+                    </div>
+                  )}
                   <div style={slideStyle}>
                     {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
-                    {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>({...prev,productPhotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}/>}
+                    {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>{
+                      const url=toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
+                      if(prev.productPhotoUrls.length>=MAX_FOTOS_PRODUCTO||prev.productPhotoUrls.includes(url))return prev;
+                      return {...prev,productPhotoUrls:[...prev.productPhotoUrls,url]};
+                    })}/>}
                     {step===3 && modalidad==="dirigida" && si && <Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}
                     {step===3 && modalidad==="abierta" && <Step3Abierta/>}
                   </div>
@@ -6268,28 +7325,67 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
             <div className="pt-3 mt-3 border-t border-border flex-shrink-0 bg-background z-10">
               <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="ghost" size="sm" onClick={onBack}>Cancelar</Button>
+                  <Button variant="ghost" size="sm" onClick={onBack}>
+                    Cancelar
+                  </Button>
                   {step > 1 && (
-                    <Button variant="secondary" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={()=>navigate(step-1,"back")}>Anterior</Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ChevronLeft className="w-3.5 h-3.5" />}
+                      onClick={() => navigate(step - 1, "back")}
+                      className="hover:border-primary hover:bg-primary/10 hover:text-primary dark:hover:border-accent dark:hover:bg-accent/10 dark:hover:text-accent transition-colors"
+                    >
+                      Anterior
+                    </Button>
                   )}
                 </div>
+
                 <div className="w-full sm:w-auto">
                   {step < 3 ? (
-                    <Button variant="primary" size="md" iconRight={<ChevronRight className="w-4 h-4"/>} onClick={goNext} className="w-full sm:w-auto justify-center">Continuar</Button>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      iconRight={<ChevronRight className="w-4 h-4" />}
+                      onClick={goNext}
+                      className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                    >
+                      Continuar
+                    </Button>
                   ) : (
-                    <Button variant="primary" size="md" icon={<Send className="w-4 h-4"/>} loading={submitting} disabled={tierBloqueado} onClick={()=>{void handleSubmit(false);}} className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={<Send className="w-4 h-4" />}
+                      loading={submitting}
+                      disabled={tierBloqueado}
+                      onClick={() => {
+                        void handleSubmit(false);
+                      }}
+                      className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                    >
                       {tierBloqueado ? "Solicitar cotización" : "Solicitar cotización"}
                     </Button>
                   )}
                 </div>
               </div>
+
               {step === 3 && tierBloqueado && creditos >= 1 && (
-                <Button variant="primary" size="md" icon={<WalletCards className="w-4 h-4"/>} loading={submitting} onClick={()=>{setDesbloquearPorCredito(true);void handleSubmit(true);}} className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90">
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={<WalletCards className="w-4 h-4" />}
+                  loading={submitting}
+                  onClick={() => {
+                    setDesbloquearPorCredito(true);
+                    void handleSubmit(true);
+                  }}
+                  className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                >
                   Desbloquear y enviar cotización por 1 crédito
                 </Button>
               )}
             </div>
-
           </main>
         )}
       </div>
@@ -6372,26 +7468,9 @@ function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notificati
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,averageResponseHours}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];orders:Order[];chats:ChatConv[];companyName:string;averageResponseHours:number}) {
-  const activeQuotesCount = quotes.filter(q=>q.status!=="active-order").length;
-  const assignedQuotesCount = quotes.filter(q=>q.mode==="Dirigida").length;
-  const sentResponsesCount = quotes.filter(q=>q.status==="accepted"||q.status==="active-order").length;
-  const activeOrdersCount = orders.filter((order)=>{
-    const normalizedStatus = String(order.status ?? "").trim().toLowerCase();
-    return !["entregada","completada","cancelada","cerrada","finalizada"].includes(normalizedStatus);
-  }).length;
+function ImporterDashboardScreen({sb,quotes,advisors,chats,companyName}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];companyName:string}) {
   const activeChatsCount = chats.filter(c=>c.status==="activa").length;
   const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
-  const metrics=[
-    {label:"Cotizaciones pendientes",value:String(activeQuotesCount),icon:<FileText className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Cotizaciones asignadas",value:String(assignedQuotesCount),icon:<Users className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Respuestas enviadas",value:String(sentResponsesCount),icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Órdenes activas",value:String(activeOrdersCount),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
-    {label:"Chats activos",value:String(activeChatsCount),icon:<MessageSquare className="w-5 h-5"/>,color:"text-rose-600",bg:"bg-rose-50"},
-    {label:"Tiempo prom. respuesta (h)",value:String(averageResponseHours),icon:<Clock className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
-    {label:"Asesores conectados",value:String(activeAdvisors),icon:<Zap className="w-5 h-5"/>,color:"text-lime-600",bg:"bg-lime-50"},
-  ];
-  const recentActivity: {text:string;time:string;icon:React.ReactNode}[] = [];
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="imp-dashboard"/>
@@ -6403,22 +7482,17 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
             <h1 className="text-xl font-semibold mt-3">Panel de la empresa</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{companyName ? `${companyName} - Resumen de actividad` : "Resumen de actividad"}</p>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {metrics.map((m,i)=>(
-              <Card key={i} padding="md" className="metric-card flex items-start gap-3">
-                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
-                <div className="min-w-0">
-                  <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <PanelEmpresa
+            asesoresConectados={activeAdvisors}
+            chatsActivos={activeChatsCount}
+            onAbrirSolicitudes={()=>sb.onNav("imp-quotes")}
+            onAbrirPedidos={()=>sb.onNav("orders")}
+          />
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <Card padding="none">
                 <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                  <h2 className="font-semibold text-sm">Cotizaciones recientes</h2>
+                  <h2 className="font-semibold text-sm">Solicitudes recientes</h2>
                   <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver todas</Button>
                 </div>
                 <div className="divide-y divide-border">
@@ -6431,31 +7505,16 @@ function ImporterDashboardScreen({sb,quotes,advisors,orders,chats,companyName,av
                       <Badge variant={q.status as BadgeVariant}/>
                     </div>
                   ))}
-                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin cotizaciones disponibles.</div>}
+                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin solicitudes todavía.</div>}
                 </div>
               </Card>
             </div>
             <div className="space-y-4">
-              <Card padding="none">
-                <div className="px-5 py-4 border-b border-border"><h2 className="font-semibold text-sm">Actividad reciente</h2></div>
-                <div className="px-5 py-3 space-y-3">
-                  {recentActivity.map((a,i)=>(
-                    <div key={i} className="flex items-start gap-2.5">
-                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">{a.icon}</div>
-                      <div>
-                        <p className="text-xs text-foreground leading-relaxed">{a.text}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{a.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {recentActivity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente.</p>}
-                </div>
-              </Card>
               <Card padding="md">
                 <p className="text-sm font-semibold mb-3">Accesos rápidos</p>
                 <div className="space-y-2">
                   <Button variant="secondary" size="sm" fullWidth icon={<Users className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-advisors")}>Gestionar asesores</Button>
-                  <Button variant="secondary" size="sm" fullWidth icon={<FileText className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver cotizaciones</Button>
+                  <Button variant="secondary" size="sm" fullWidth icon={<FileText className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver solicitudes</Button>
                   <Button variant="secondary" size="sm" fullWidth icon={<Building2 className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-profile")}>Editar perfil</Button>
                 </div>
               </Card>
@@ -6507,7 +7566,18 @@ type FormularioEmpresa = {
   tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
   /** Vacío = sin límite. Texto para poder dejar el campo en blanco al editar. */
   limiteCotizacionesDiarias:string;
+  /** Pedido mínimo que acepta la empresa; vacío = sin mínimo. */
+  pedidoMinimo:string;
+  pedidoMinimoUnidad:UnidadCantidad;
 };
+
+/** Pedido mínimo para el PUT: null si está vacío, undefined si no es un número válido. */
+function leerPedidoMinimo(texto:string):number|null|undefined{
+  const limpio=texto.trim().replace(",",".");
+  if(!limpio)return null;
+  const valor=Number.parseFloat(limpio);
+  return Number.isFinite(valor)&&valor>0?valor:undefined;
+}
 
 /**
  * Convierte lo escrito en el campo de límite diario al valor del PUT: null
@@ -6533,9 +7603,11 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   shippingMarkPrefijo:"",certs:[],banner:"",
   tierMinimoRequerido:"Bronze",
   limiteCotizacionesDiarias:"",
+  pedidoMinimo:"",
+  pedidoMinimoUnidad:"unidades",
 };
 
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
   const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
   const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
@@ -6629,6 +7701,8 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       shippingMarkPrefijo:company.shipping_mark_prefijo || "",
       tierMinimoRequerido: (["Bronze", "Silver", "Gold", "Élite"].includes(getString("tier_minimo_requerido")) ? getString("tier_minimo_requerido") : "Bronze") as FormularioEmpresa["tierMinimoRequerido"],
       limiteCotizacionesDiarias:typeof company.limite_cotizaciones_diarias==="number"?String(company.limite_cotizaciones_diarias):"",
+      pedidoMinimo:typeof company.pedido_minimo==="number"?String(company.pedido_minimo):"",
+      pedidoMinimoUnidad:company.pedido_minimo_unidad==="m3"?"m3":"unidades",
     });
     cambiosSinGuardarRef.current=false;
     setRevision(0);
@@ -6689,6 +7763,8 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         },
         solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
         limite_cotizaciones_diarias:leerLimiteDiario(actual.limiteCotizacionesDiarias),
+        pedido_minimo:leerPedidoMinimo(actual.pedidoMinimo),
+        pedido_minimo_unidad:actual.pedidoMinimoUnidad,
       });
       setEstadoGuardado(prev=>prev==="guardando"?"guardado":prev);
       void cargarCupo();
@@ -6832,7 +7908,18 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                   <Input label="Correo de contacto" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<MailIcon className="w-4 h-4"/>}/>
                   <Input label="Teléfono" value={form.phone} onChange={e=>f("phone",e.target.value)} prefix={<Phone className="w-4 h-4"/>}/>
                   <Input label="Dirección" value={form.address} onChange={e=>f("address",e.target.value)} prefix={<MapPin className="w-4 h-4"/>}/>
-                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Opcional"/>
+                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Lo máximo que manejas por pedido. Opcional"/>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="pedido-minimo" className="text-sm font-medium text-foreground">Pedido mínimo</label>
+                    <div className="flex gap-2">
+                      <input id="pedido-minimo" inputMode="decimal" placeholder="Sin mínimo" value={form.pedidoMinimo} onChange={e=>f("pedidoMinimo",e.target.value)} className="w-full h-10 bg-white border rounded-lg text-sm px-3 border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"/>
+                      <select aria-label="Unidad del pedido mínimo" value={form.pedidoMinimoUnidad} onChange={e=>editar({pedidoMinimoUnidad:e.target.value==="m3"?"m3":"unidades"})} className="h-10 rounded-lg border border-border bg-white px-2 text-sm">
+                        <option value="unidades">Unidades</option>
+                        <option value="m3">m³</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Zarpi lo usa para asignarte solicitudes que encajen contigo</p>
+                  </div>
                 </div>
                 <div className="mt-4">
                   <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
@@ -7485,6 +8572,12 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
           </div>
         )}
 
+        {(quote.productPhotoUrls??[]).length>0&&(
+          <Card padding="md">
+            <GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/>
+          </Card>
+        )}
+
         <Card padding="md">
           <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
           {adjuntos.length===0 ? (
@@ -7805,6 +8898,12 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   }
 
   const quote=quotes.find(q=>q.id===quoteId)??null;
+
+  // Abrir la solicitud es el "vista" de la bitácora; el backend solo cuenta la primera.
+  useEffect(()=>{
+    if(!quoteId)return;
+    void businessService.markQuoteViewed(quoteId).catch(()=>undefined);
+  },[quoteId]);
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
   const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
@@ -7821,6 +8920,13 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 
   // Solo la cuenta dueña envía; el asesor guarda y deja el borrador listo.
   const esBorradorPendienteDeEnvio = userRole==="importadora" && existingProposal?.estado==="borrador";
+
+  // No es lo mismo responder por primera vez que reescribir algo que el
+  // comprador ya tiene delante: la pantalla se llamaba "Responder cotización"
+  // en los dos casos, y parecía que se podía responder varias veces.
+  const esPropuestaYaVista = existingProposal?.estado==="pendiente";
+  const revisionesPrevias = existingProposal?.revisiones ?? 0;
+  const tituloPantalla = esPropuestaYaVista ? "Editar mi propuesta" : "Responder cotización";
 
   // El formulario se hidrata una sola vez por propuesta: el refresco automático
   // trae un objeto nuevo cada pocos segundos y volver a copiarlo pisaba lo que
@@ -7997,9 +9103,20 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
           </div>
-          <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:"Responder cotización"}]}/>
-          <h1 className="text-xl font-semibold mt-3">Responder cotización</h1>
+          <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:tituloPantalla}]}/>
+          <h1 className="text-xl font-semibold mt-3">{tituloPantalla}</h1>
           <p className="text-sm text-muted-foreground mt-0.5 mb-6">{quote.product} · {quote.code}</p>
+          {esPropuestaYaVista&&(
+            <div className="mb-6 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sm text-sky-900 flex items-start gap-2">
+              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+              <span>
+                No estás respondiendo de nuevo: estás <strong>modificando la propuesta que ya enviaste</strong>.
+                El comprador la tiene delante y verá que la cambiaste, con la fecha.
+                {revisionesPrevias>0&&<> Ya la has cambiado {revisionesPrevias===1?"una vez":`${revisionesPrevias} veces`}.</>}
+                {" "}Guardar también anula la aceptación que hubiera de cualquiera de las dos partes.
+              </span>
+            </div>
+          )}
           {esBorradorPendienteDeEnvio&&(
             <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
@@ -8175,7 +9292,11 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                       onClick={submit}
                       className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
                     >
-                      {userRole === "asesor" ? "Guardar borrador" : "Enviar propuesta"}
+                      {userRole === "asesor"
+                        ? "Guardar borrador"
+                        : esPropuestaYaVista
+                          ? "Guardar cambios"
+                          : "Enviar propuesta"}
                     </Button>
                   )}
                 </div>
@@ -8229,7 +9350,7 @@ const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"contact",label:"Contacto"},
 ];
 
-function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:"data"|"terms")=>void;importers:Importer[]}) {
+function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[]}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [activeTab,setActiveTab]=useState<LandingSection>("home");
@@ -8238,7 +9359,8 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
   const [dynamicContentError,setDynamicContentError]=useState("");
 
   useEffect(()=>{
-    if(activeTab!=="news"||dynamicContent)return;
+    // "Quiénes somos" también lo usa: su carrusel de videos vive en el CMS.
+    if((activeTab!=="news"&&activeTab!=="about")||dynamicContent)return;
     landingService.getDynamicContent()
       .then(setDynamicContent)
       .catch(()=>setDynamicContentError("No se pudo cargar el contenido de novedades y aliados."));
@@ -8556,7 +9678,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       </>
       )}
 
-      {activeTab==="about" && <LandingAboutSection/>}
+      {activeTab==="about" && <LandingAboutSection content={dynamicContent}/>}
       {activeTab==="how-it-works" && <LandingHowItWorksSection/>}
       {activeTab==="news" && (
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
@@ -8612,11 +9734,14 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             <div className="flex flex-col sm:flex-row gap-4 text-xs text-white/70">
               <button onClick={()=>onPolicy("data")} className="hover:text-accent transition-colors text-left">Política de Tratamiento de Datos</button>
               <button onClick={()=>onPolicy("terms")} className="hover:text-accent transition-colors text-left">Términos y Condiciones</button>
+              <button onClick={()=>onPolicy("payments")} className="hover:text-accent transition-colors text-left">Pagos y Reembolsos</button>
               <button onClick={onLogin} className="hover:text-accent transition-colors text-left">Iniciar sesión</button>
             </div>
           </div>
-          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center">
-            © 2026 Zarpi. Todos los derechos reservados.
+          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center space-y-1">
+            <p>{EMPRESA.razonSocial} · NIT {EMPRESA.nit} · {EMPRESA.domicilio}</p>
+            <p>{EMPRESA.telefono} · <a href={`mailto:${EMPRESA.correo}`} className="hover:text-accent transition-colors">{EMPRESA.correo}</a></p>
+            <p>© 2026 Zarpi. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>
@@ -8732,7 +9857,8 @@ function LandingBackground() {
 }
 
 /** "Quiénes somos": los tres principios del negocio (Zarpi_Modelo_de_Monetizacion). */
-function LandingAboutSection() {
+function LandingAboutSection({content}:{content:LandingDynamicContent|null}) {
+  const carrusel=leerVideosQuienesSomos(content?.blocks);
   const principios=[
     {title:"No somos importadores de registro",desc:"Conectamos solicitantes con empresas nacionalizadoras verificadas; no figuramos como importador de registro en ninguna operación."},
     {title:"No custodiamos dinero de terceros",desc:"El pago del servicio se acuerda y se ejecuta entre el solicitante y la nacionalizadora; la plataforma no retiene ni administra esos fondos."},
@@ -8748,6 +9874,9 @@ function LandingAboutSection() {
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Un modelo claro, desde el primer día</h1>
           <p className="text-muted-foreground mt-3 max-w-xl mx-auto">Zarpi conecta, no custodia ni interviene como importador. Así protegemos tanto al solicitante como a la empresa importadora.</p>
         </div>
+        {carrusel.activo&&carrusel.videos.length>0&&(
+          <CarruselVideos className="mb-12" videos={carrusel.videos} intervaloSegundos={carrusel.intervalo_segundos}/>
+        )}
         <div className="grid sm:grid-cols-1 gap-5">
           {principios.map((principio,i)=>(
             <Card key={principio.title} padding="lg" className="border-primary/15">
@@ -8874,7 +10003,8 @@ function LandingDynamicBlock({block,onLogin,onRegister}:{block:LandingBlock;onLo
 }
 
 function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:LandingDynamicContent|null;error:string;onLogin:()=>void;onRegister:()=>void}) {
-  const dynamicBlocks=(content?.blocks??[]).filter(b=>b.tipo!=="allies_grid").sort((a,b)=>a.orden-b.orden);
+  // El carrusel de videos es de "Quiénes somos", no de esta sección.
+  const dynamicBlocks=(content?.blocks??[]).filter(b=>b.tipo!=="allies_grid"&&b.tipo!=="video_rotativo").sort((a,b)=>a.orden-b.orden);
   return (
     <section className="pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
@@ -9105,7 +10235,7 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
-function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:"data"|"terms")=>void}) {
+function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:LegalPage)=>void}) {
   const [userType,setUserType]=useState<RegUserType>("solicitante");
   const [personType,setPersonType]=useState<RegPersonType>("natural");
   const [accepted,setAccepted]=useState(false);
@@ -9299,7 +10429,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
         {/* Fondo con z-0 */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <img
-            src={dark ? "brand/fondo-1.png" : "brand/fondo-4.png"}
+            src={dark ? "/brand/fondo-1.png" : "/brand/fondo-4.png"}
             alt="Fondo de registro"
             className="auth-background w-full h-full object-cover object-center transition-all duration-300"
           />
@@ -9480,6 +10610,9 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
         <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
           Términos
         </button>
+        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
+          Pagos y Reembolsos
+        </button>
       </footer>
     </div>
   );
@@ -9488,7 +10621,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────────────────────────────────────────
-function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:"data"|"terms")=>void;initialEmail?:string}) {
+function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:LegalPage)=>void;initialEmail?:string}) {
   return (
     <AuthScreen
       onLogin={onLogin}
@@ -9526,6 +10659,7 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-soporte": "soporte",
   "admin-certificaciones": "certificaciones",
   "admin-respaldos": "respaldos",
+  "admin-asignacion": "asignacion",
   "admin-landing": "landing",
   "admin-correos": "correos",
 } as const;
@@ -9760,7 +10894,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   );
 }
 
-function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;whatsapp:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;whatsapp:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
+function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
   const [form,setForm]=useState(profile);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
@@ -9777,7 +10911,6 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
       await onSave({
         nombre:form.nombre,
         telefono:form.telefono,
-        whatsapp:form.whatsapp,
         foto_url:form.fotoUrl?.trim()||undefined,
       });
       setSaved(true);
@@ -9811,7 +10944,6 @@ function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl
               <Input label="Nombre" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>
               <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))}/>
               <Input label="Email" value={form.email} disabled/>
-              <Input label="WhatsApp" value={form.whatsapp} onChange={e=>setForm(p=>({...p,whatsapp:e.target.value}))}/>
               <div className="sm:col-span-2">
                 <Input label="Foto de perfil" value={form.fotoUrl} onChange={e=>setForm(p=>({...p,fotoUrl:e.target.value}))} placeholder="URL del archivo"/>
                 <div className="mt-2 flex gap-2">
@@ -9872,6 +11004,8 @@ export default function App() {
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
+  // Producto de Tendencias o de un catálogo del que sale la solicitud en curso.
+  const [origenSolicitud,setOrigenSolicitud]=useState<OrigenSolicitud|null>(null);
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>(
     ()=>idInicialDe("conversation") || undefined,
   );
@@ -9898,6 +11032,8 @@ export default function App() {
   const [requesterOrders,setRequesterOrders]=useState<Order[]>([]);
   const [importerOrders,setImporterOrders]=useState<Order[]>([]);
   const [chatConversations,setChatConversations]=useState<ChatConv[]>([]);
+  // Con quién se puede abrir un hilo privado en el canal del equipo.
+  const [miembrosEquipo,setMiembrosEquipo]=useState<BackendMiembroEquipo[]>([]);
   // Conversación abierta en pantalla: es la única que necesita canal en vivo.
   const [activeChatId,setActiveChatId]=useState<string|null>(null);
   const { config: platformConfig, isLoading: platformConfigLoading } = usePlatformConfig();
@@ -10104,19 +11240,23 @@ export default function App() {
     const cotizanteTierByQuoteId = new Map(quotes.map((quote) => [quote.id, quote.solicitante_tier || "Bronze"]));
     const importerById = new Map(marketplaceImporters.map((importer) => [importer.id, importer]));
     const mappedConversations: ChatConv[] = rows.map((row) => {
-      // Ni el hilo interno ni el ticket de soporte cuelgan de una cotización.
+      // Ni el hilo interno, ni el ticket de soporte, ni el canal del equipo de
+      // la plataforma cuelgan de una cotización.
       const esInterno = row.tipo === "interna";
       const esSoporte = row.tipo === "soporte";
+      const esEquipo = row.tipo === "equipo";
       const importerId = esInterno
         ? (row.importador_id || "")
-        : esSoporte
+        : esSoporte || esEquipo
           ? ""
           : (importerByQuoteId.get(row.cotizacion_id || "") || row.importador_usuario_id || "");
       const importer = importerById.get(importerId);
       return {
         id: row.id,
-        type: esSoporte ? "soporte" : esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
-        refCode: esSoporte
+        type: esEquipo ? "equipo" : esSoporte ? "soporte" : esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
+        refCode: esEquipo
+          ? "Plataforma"
+          : esSoporte
           ? "Soporte"
           : esInterno
             ? "Equipo"
@@ -10390,9 +11530,9 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
     if (!publicScreens.includes(screen)) {
-      setScreen("login");
+      setScreen("landing");
     }
   }, [isAuthenticated, isInitializing, screen]);
 
@@ -10405,8 +11545,6 @@ export default function App() {
       "landing",
       "login",
       "register",
-      "policy-data",
-      "policy-terms",
       "reset-password",
     ];
 
@@ -10615,7 +11753,6 @@ export default function App() {
     chatConversations.reduce((acc,conversation)=>acc+(conversation.unread||0),0),
   );
   const activeChatCount = chatConversations.filter((conversation)=>conversation.status==="activa").length;
-  const importerAverageResponseHours = extractFirstNumber(companyProfile?.tiempo_respuesta_promedio);
   const headerSubtitle = resolveHeaderSubtitle({
     role: userRole,
     importerCompanyName: companyProfile?.nombre_empresa,
@@ -10654,7 +11791,12 @@ export default function App() {
       : NAV_ITEMS;
     // Con el módulo educativo apagado en el backend, "Cursos" desaparece del
     // menú: dejarlo visible llevaría a una pantalla cuya API responde 404.
-    const items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    // El curador de Tendencias es una capacidad, no un rol: se le suma la
+    // entrada del panel a su menú, sea soporte, asesor o cualquier otro.
+    if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="curaduria")){
+      items=[...items,{icon:Sparkles,label:"Curaduría",key:"curaduria"}];
+    }
     return items as NavItem[];
   }
 
@@ -10676,6 +11818,42 @@ export default function App() {
     goTo("help-support");
   }
 
+  /**
+   * Abre (o reutiliza) la sala común del equipo y lleva a SU pantalla.
+   *
+   * Es la vía que sustituye al ticket para administración y soporte: el ticket
+   * es el canal de los usuarios CON la plataforma, y un agente atendiéndose a
+   * sí mismo no significa nada.
+   *
+   * Tiene pantalla propia (`/equipo`) y no la bandeja de `/chats`: ahí están
+   * los tickets de clientes y empresas, y mezclar las dos cosas es justo lo que
+   * no debe pasar en un canal interno.
+   */
+  async function abrirCanalEquipo(){
+    try{
+      const canal=await businessService.openTeamChannel();
+      await reloadChatData();
+      setInitialChatConvId(canal.id);
+      goTo("team-channel");
+    }catch(error){
+      const mensaje=error instanceof Error?error.message:"No se pudo abrir el canal del equipo";
+      toast.error(mensaje);
+    }
+  }
+
+  /** Abre el hilo privado con una persona del equipo, dentro de la misma pantalla. */
+  async function abrirHiloEquipo(miembroId:string){
+    try{
+      const hilo=await businessService.openTeamChannel(miembroId);
+      await reloadChatData();
+      setInitialChatConvId(hilo.id);
+      goTo("team-channel");
+    }catch(error){
+      const mensaje=error instanceof Error?error.message:"No se pudo abrir el hilo";
+      toast.error(mensaje);
+    }
+  }
+
   const sb:SidebarCtrl={
     active:screen,
     onNav:handleNav,
@@ -10688,9 +11866,13 @@ export default function App() {
     chatCount:chatUnreadCount,
     onHelp:handleHelpClick,
     showHelp:userRole!=="admin",
-    // El equipo de la plataforma no se pide soporte a sí mismo.
+    // El equipo de la plataforma no se pide soporte a sí mismo: el ticket es el
+    // canal de los usuarios con la plataforma. Antes el botón seguía saliendo
+    // para soporte, y al pulsarlo el backend respondía 403.
     onSoporte:()=>setSoporteAbierto(true),
-    showSoporte:userRole!=="admin",
+    showSoporte:userRole!=="admin"&&userRole!=="soporte",
+    onCanalEquipo:()=>{void abrirCanalEquipo();},
+    showCanalEquipo:userRole==="admin"||userRole==="soporte",
     profileSubtitle:headerSubtitle,
     profilePhotoUrl:currentUserProfile?.foto_url || null,
     onLogout:()=>{void handleLogout();},
@@ -10700,6 +11882,32 @@ export default function App() {
   function openResponse(id:string,from:ResponseFrom,fromQuoteId?:string){
     setSelectedResponseId(id);setResponseFrom(from);setResponseFromQuoteId(fromQuoteId||"");goTo("response-detail");
   }
+  // El canal interno de la plataforma va en su propia pantalla: en `/chats`
+  // están los tickets de clientes y empresas, y no deben mezclarse.
+  // Los miembros del equipo solo se piden con una sesión interna: para
+  // cualquier otro rol el endpoint responde 403, y pedirlo sería ruido.
+  useEffect(()=>{
+    if(userRole!=="admin"&&userRole!=="soporte"){
+      setMiembrosEquipo([]);
+      return;
+    }
+    let cancelado=false;
+    void (async()=>{
+      try{
+        const filas=await businessService.listTeamMembers();
+        if(!cancelado) setMiembrosEquipo(filas);
+      }catch{
+        // Sin la lista solo se pierde el selector de hilos privados; la sala
+        // común sigue funcionando, así que no se molesta al usuario.
+        if(!cancelado) setMiembrosEquipo([]);
+      }
+    })();
+    return ()=>{cancelado=true;};
+  },[userRole]);
+
+  const conversacionesDelEquipo = chatConversations.filter((c)=>c.type==="equipo");
+  const conversacionesDeChats = chatConversations.filter((c)=>c.type!=="equipo");
+
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
 
   async function handleCloseTicket(conversationId: string, resolucion: string) {
@@ -10762,7 +11970,34 @@ export default function App() {
     await reloadChatData();
     openChat(conversation.id);
   }
-  function openNewQuote(importerId?:string){setQuotePrefill(undefined);setPreselectedImporterId(importerId);goTo("new-quote");}
+  function openNewQuote(importerId?:string){setQuotePrefill(undefined);setOrigenSolicitud(null);setPreselectedImporterId(importerId);goTo("new-quote");}
+
+  /**
+   * «Pedir propuestas» desde Tendencias o desde el catálogo de una empresa:
+   * abre el asistente de solicitud con el producto ya cargado. Desde un
+   * catálogo la solicitud va dirigida a la empresa dueña.
+   */
+  function pedirPropuestasDesde(p:PrefillSolicitud){
+    setQuotePrefill({
+      productName:p.nombre,
+      description:p.descripcion,
+      productPhotoUrls:p.fotos.slice(0,MAX_FOTOS_PRODUCTO),
+      country:p.pais||"",
+      productLine:p.lineaProducto||"",
+      ...(p.cantidadMinima?{minQuantity:String(p.cantidadMinima)}:{}),
+      ...(p.unidad?{unit:p.unidad}:{}),
+    });
+    setOrigenSolicitud({
+      origen:p.origen,
+      nombre:p.nombre,
+      revisarRequisitos:Boolean(p.revisarRequisitos),
+      tendenciaEdicionId:p.tendenciaEdicionId??null,
+      tendenciaProductoId:p.tendenciaProductoId,
+      catalogoProductoId:p.catalogoProductoId,
+    });
+    setPreselectedImporterId(p.importadorId);
+    goTo("new-quote");
+  }
 
   /**
    * Duplicar una cotización: se abre el formulario con sus datos copiados.
@@ -10770,17 +12005,19 @@ export default function App() {
    * envía después es una cotización nueva y corriente.
    */
   function duplicateQuote(quote:Quote){
+    setOrigenSolicitud(null);
     const extractedCurrency = parseTargetPriceCurrency(quote.targetPriceCurrency || "USD");
     setQuotePrefill({
       productName:quote.product||"",
       description:quote.description||"",
       referenceLink:quote.referenceLink||"",
-      productPhotoUrl:quote.productPhotoUrl||"",
+      productPhotoUrls:quote.productPhotoUrls??[],
       country:quote.country||"",
       productLine:quote.productLine||"",
       quality:quote.quality||"",
       customization:quote.personalizationLevel||"",
       minQuantity:quote.minQuantity||"",
+      unit:quote.unit??"unidades",
       targetPrice:quote.targetPrice ? quote.targetPrice.replace(new RegExp(`\\s*${extractedCurrency}$`, "i"), "").trim() : "",
       targetPriceCurrency: extractedCurrency,
       incoterm:quote.incoterm||"DDP",
@@ -10795,6 +12032,10 @@ export default function App() {
     void businessService.markNotificationAsRead(id).catch(() => undefined);
   }
   async function openNotification(notification: AppNotification){
+    if (notification.destino) {
+      goTo(notification.destino);
+      return;
+    }
     if (!notification.cotizacionId && !notification.conversationId) return;
     const conversations = await businessService.listChatConversations().catch(() => []);
     const conversation = notification.conversationId
@@ -10853,7 +12094,7 @@ export default function App() {
   async function handleLogout(){
     await signOut();
     setUserRole("solicitante");
-    setScreen("login");
+    goTo("landing");
   }
 
   async function handleCreateQuote(payload: CreateCotizacionPayload, desbloquear = false){
@@ -10909,7 +12150,7 @@ export default function App() {
     return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }
@@ -10918,7 +12159,7 @@ export default function App() {
     await reloadImporters();
   }
 
-  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;whatsapp:string;foto_url?:string}) {
+  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;foto_url?:string}) {
     await businessService.updateMyUserProfile(payload);
     await reloadCurrentUserProfile();
   }
@@ -11100,7 +12341,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -11112,6 +12353,13 @@ export default function App() {
     "adv-my-quotes": ["asesor"],
     "user-profile": ["solicitante", "asesor"],
     "help-support": ["solicitante", "importadora", "asesor"],
+    "tendencias": ["solicitante"],
+    "catalogos": ["solicitante"],
+    "imp-catalogos": ["importadora", "asesor"],
+    // Canal interno de la plataforma. Sin esta entrada, un cliente o una
+    // empresa que escribiera /equipo veía el armazón de la pantalla (título y
+    // selector), aunque vacío y con el backend negándole los datos.
+    "team-channel": ["admin", "soporte"],
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
@@ -11120,8 +12368,10 @@ export default function App() {
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
     "admin-respaldos": ["admin"],
+    "admin-asignacion": ["admin"],
     "admin-landing": ["admin"],
     "admin-correos": ["admin"],
+    "admin-tipografia": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -11161,7 +12411,7 @@ export default function App() {
       onLogin={handleLogin}
       onRegister={()=>goTo("register")}
       onLanding={()=>goTo("landing")}
-      onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}
+      onPolicy={page=>goTo(PANTALLA_LEGAL[page])}
       initialEmail={loginPrefillEmail}
     />
   );
@@ -11195,16 +12445,18 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} importers={marketplaceImporters}/>;
-  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters}/>;
+  if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
-  if(screen==="policy-data")return <LegalPolicyScreen page="data" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="policy-terms")return <LegalPolicyScreen page="terms" onBack={()=>goTo(prevScreen)}/>;
-  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(page==="data"?"policy-data":"policy-terms")} initialEmail={loginPrefillEmail}/>;
+  // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
+  // regrese a donde estaba el usuario antes de abrir el primero.
+  const legalPage=(Object.keys(PANTALLA_LEGAL) as LegalPage[]).find(page=>PANTALLA_LEGAL[page]===screen);
+  if(legalPage)return <LegalPolicyScreen page={legalPage} onBack={()=>goTo(prevScreen)} onOpen={page=>setScreen(PANTALLA_LEGAL[page])}/>;
+  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
     // ── Importer portal ───────────────────────────────────────────────────────
-    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} orders={importerOrders} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""} averageResponseHours={importerAverageResponseHours}/>;
+    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
     if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany}/>;
@@ -11234,16 +12486,28 @@ export default function App() {
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={quotePrefill?"duplicada":"nueva"} onBack={()=>goTo("quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaProductoId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud}/>;
+    if(screen==="tendencias"){
+      const consulta=new URLSearchParams(window.location.search);
+      return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasComprador onPedirPropuestas={pedirPropuestasDesde} edicionInicialId={consulta.get("edicion")} desdeAviso={consulta.get("src")==="aviso"}/></PantallaPortal>;
+    }
+    if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
+    if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
+    if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
+    if(screen==="curaduria"){
+      if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
+      return <PantallaPortal sb={sb} active="curaduria" titulo="Tendencias · Curaduría"><PanelCurador esAdmin={userRole==="admin"}/></PantallaPortal>;
+    }
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={chatConversations} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
-    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
+    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
-    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",whatsapp:currentUserProfile?.whatsapp||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
+    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
     return null;
   };
 

@@ -17,6 +17,8 @@ class UsuarioMeResponse(BaseModel):
     activo: bool
     perfil_completo: bool
     fecha_creacion: datetime
+    # Curador de Tendencias (capacidad aparte del rol).
+    es_curador: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -77,7 +79,7 @@ class CotizacionPoolItem(BaseModel):
     modalidad: str
     nombre_producto: str
     descripcion_cliente: str
-    cantidad_minima: int
+    cantidad_minima: float
     precio_objetivo_usd: Optional[float] = None
     incoterm: str
     estado: str

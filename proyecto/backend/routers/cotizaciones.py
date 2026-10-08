@@ -1,7 +1,8 @@
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from sqlalchemy import func, or_, and_
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
@@ -40,6 +41,7 @@ MENSAJE_CUPO_AGOTADO = (
     "{empresa} alcanzó hoy su límite de cotizaciones recibidas. Elige otra empresa, "
     "publica la cotización en modalidad abierta o inténtalo de nuevo mañana."
 )
+MENSAJE_NO_ASIGNADA = "Esta solicitud abierta no está asignada a tu empresa."
 MENSAJE_OMITIDA_POR_CUPO = (
     "Esta cotización abierta no se le entregó a tu empresa porque ese día ya había "
     "alcanzado su límite de cotizaciones diarias."
@@ -59,6 +61,46 @@ def _empresa_puede_responder_abierta(empresa: Optional[Importador], cotizacion: 
     if empresa.solo_cotizaciones_directas:
         return False
     return categoria_en(cotizacion.linea_producto, empresa.especialidad_producto)
+
+def _vista_para_empresa(cotizacion: Cotizacion, importador_id: Optional[str]) -> CotizacionResponse:
+    """La cotización tal como la puede ver una empresa: propuestas selladas.
+
+    En una abierta varias empresas compiten, y la cotización arrastra datos de
+    la que se movió primero (el asesor que la reclamó, su contacto, el chat).
+    A las demás no se les enseñan: ni quién es la competencia ni que ya hay
+    otra negociando.
+    """
+    vista = CotizacionResponse.model_validate(cotizacion)
+    if cotizacion.modalidad != "abierta" or not importador_id:
+        return vista
+
+    from models.usuario import Usuario as UsuarioModel
+
+    def es_de_mi_empresa(usuario_id: Optional[str]) -> bool:
+        if not usuario_id:
+            return False
+        session = object_session(cotizacion)
+        usuario = session.query(UsuarioModel).filter(UsuarioModel.id == str(usuario_id)).first() if session else None
+        return bool(usuario and usuario.importador_id == importador_id)
+
+    if not es_de_mi_empresa(vista.asesor_asignado_id):
+        vista.asesor_asignado_id = None
+        vista.conversacion_id = None
+    if vista.contacto_asignado and not es_de_mi_empresa(vista.contacto_asignado.usuario_id):
+        vista.contacto_asignado = None
+    if cotizacion.importador_id and cotizacion.importador_id != importador_id:
+        vista.importador_id = None
+        vista.shipping_mark = None
+    # Que ya haya propuestas de otras empresas también es información de la competencia.
+    if vista.estado == EstadoCotizacion.propuestas_recibidas.value and not any(
+        p.importador_id == importador_id and p.estado != EstadoPropuesta.borrador.value
+        for p in cotizacion.propuestas
+    ):
+        vista.estado = EstadoCotizacion.abierta.value
+    vista.motivo_eleccion = None
+    vista.motivo_eleccion_detalle = None
+    return vista
+
 
 @router.get("", response_model=List[CotizacionResponse])
 async def listar_cotizaciones(
@@ -102,17 +144,18 @@ async def listar_cotizaciones(
         # Antes se devolvían todas: la bandeja se llenaba de cotizaciones de otras
         # categorías y el botón "Responder" terminaba en un 400 de congruencia que
         # el usuario leía como un fallo de permisos.
-        # Tampoco las abiertas que el matching le saltó por tener el cupo diario
-        # agotado: si no, el límite solo quitaría el aviso, no la cotización.
-        from services.cupo_cotizaciones import cotizaciones_omitidas
+        # Y solo las que se le asignaron: cada abierta llega a un máximo de
+        # empresas elegidas por encaje (services/asignacion.py), no a toda la red.
+        from services.asignacion import cotizaciones_asignadas
 
         empresa = db.query(Importador).filter(Importador.id == importador_id_str).first()
-        omitidas = cotizaciones_omitidas(db, importador_id_str)
+        asignadas = cotizaciones_asignadas(db, importador_id_str)
         cotizaciones = [
             c for c in cotizaciones
             if c.importador_id == importador_id_str
-            or (str(c.id) not in omitidas and _empresa_puede_responder_abierta(empresa, c))
+            or (str(c.id) in asignadas and _empresa_puede_responder_abierta(empresa, c))
         ]
+        return [_vista_para_empresa(c, importador_id_str) for c in cotizaciones]
     else:
         # Admin ve todas las cotizaciones
         cotizaciones = db.query(Cotizacion).order_by(
@@ -131,8 +174,8 @@ async def listar_pool_empresa(
     current_user: dict = Depends(require_rol_in("importador", "asesor"))
 ):
     """
-    Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas donde aparece
-    en el matching) que todavía nadie ha reclamado. La cuenta dueña (representante
+    Pool de cotizaciones de la empresa (dirigidas a ella, o abiertas que tiene
+    asignadas) que todavía nadie ha reclamado. La cuenta dueña (representante
     legal) y los asesores pueden verlo; cualquiera de ellos puede reclamar
     (`POST /reclamar`) — el primero se la queda.
     """
@@ -159,16 +202,13 @@ async def listar_pool_empresa(
 
     cotizaciones_candidatas = query.order_by(Cotizacion.fecha_creacion.desc()).all()
 
-    # Índice Redis por importador (SET) — sin KEYS O(N).
-    from services.matching_service import listar_cotizaciones_matching_importador
-    matching_ids = listar_cotizaciones_matching_importador(importador_id_str)
+    from services.asignacion import cotizaciones_asignadas
 
-    resultado = [
-        c for c in cotizaciones_candidatas
-        if c.importador_id == importador_id_str or str(c.id) in matching_ids
+    asignadas = cotizaciones_asignadas(db, importador_id_str)
+    return [
+        _vista_para_empresa(c, importador_id_str) for c in cotizaciones_candidatas
+        if c.importador_id == importador_id_str or str(c.id) in asignadas
     ]
-
-    return resultado
 
 def _asegurar_chat_negociacion(
     db: Session,
@@ -249,7 +289,7 @@ async def reclamar_cotizacion(
     # en ambos casos debe seguir sin reclamar.
     if cotizacion.importador_id and cotizacion.importador_id != importador_id_str:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado - Cotización de otra empresa")
-    _validar_no_omitida_por_cupo(cotizacion, importador_id_str, db)
+    _validar_asignada(cotizacion, importador_id_str, db)
 
     user_id_str = str(UUID(current_user["user_id"]))
 
@@ -308,10 +348,42 @@ async def reclamar_cotizacion(
         enlace_relativo="/chats",
     )
 
+    # Quien reclama ya la vio, aunque haya sido desde la lista.
+    from services.eventos import registrar_vista
+
+    registrar_vista(db, cotizacion, importador_id=importador_id_str, usuario=current_user)
+
     db.commit()
     db.refresh(cotizacion)
 
-    return cotizacion
+    return _vista_para_empresa(cotizacion, importador_id_str)
+
+@router.post("/{cotizacion_id}/vista", status_code=status.HTTP_204_NO_CONTENT)
+async def marcar_cotizacion_vista(
+    cotizacion_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """La empresa abrió la solicitud. Solo cuenta la primera vez (evento
+    `solicitud_vista`); de ahí sale cuánto tarda en mirarla."""
+    from services.asignacion import esta_asignada
+    from services.eventos import registrar_vista
+
+    try:
+        cotizacion_id_str = str(UUID(cotizacion_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de cotización inválido")
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).first()
+    importador_id = current_user.get("importador_id")
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    if cotizacion.importador_id != importador_id and not (
+        cotizacion.modalidad == "abierta" and esta_asignada(db, importador_id, cotizacion.id)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes acceso a esta cotización")
+    if registrar_vista(db, cotizacion, importador_id=importador_id, usuario=current_user):
+        db.commit()
+
 
 @router.get("/{cotizacion_id}", response_model=CotizacionResponse)
 async def obtener_cotizacion(
@@ -353,13 +425,27 @@ async def obtener_cotizacion(
             detail="No tienes acceso a esta cotización"
         )
     
-    # Importador/asesor solo puede ver si es dirigida a su empresa o es abierta
-    if rol in ("importador", "asesor") and cotizacion.importador_id != current_user.get("importador_id") and cotizacion.modalidad != "abierta":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes acceso a esta cotización"
-        )
-    
+    # Importador/asesor solo puede ver si es dirigida a su empresa o es una
+    # abierta que tiene asignada.
+    if rol in ("importador", "asesor") and cotizacion.importador_id != current_user.get("importador_id"):
+        from services.asignacion import esta_asignada
+
+        if cotizacion.modalidad != "abierta" or not esta_asignada(db, current_user.get("importador_id"), cotizacion.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes acceso a esta cotización"
+            )
+
+    # Primera vez que la empresa abre la solicitud: es el "vista" de la
+    # bitácora, y de ahí sale el tiempo que tarda en mirarla.
+    if rol in ("importador", "asesor"):
+        from services.eventos import registrar_vista
+
+        if registrar_vista(db, cotizacion, importador_id=current_user.get("importador_id"), usuario=current_user):
+            db.commit()
+            db.refresh(cotizacion)
+        return _vista_para_empresa(cotizacion, current_user.get("importador_id"))
+
     return cotizacion
 
 @router.post("", response_model=CotizacionResponse, status_code=status.HTTP_201_CREATED)
@@ -417,6 +503,10 @@ async def crear_cotizacion(
     else:
         costo_creditos = 0.0
         wallet = None
+
+    from services.origen_cotizacion import validar_origen
+
+    campos_origen = validar_origen(db, solicitante, cotizacion_data)
 
     # Validar modalidad dirigida
     if cotizacion_data.modalidad == "dirigida" and not cotizacion_data.importador_id:
@@ -510,6 +600,8 @@ async def crear_cotizacion(
         tier_solicitante_creacion=solicitante.tier,
         desbloqueada_por_puntos=requiere_desbloqueo,
         foto_producto=cotizacion_data.foto_producto,
+        fotos_producto=cotizacion_data.fotos_producto or None,
+        **campos_origen,
         pais_importacion=cotizacion_data.pais_importacion,
         nivel_personalizacion=cotizacion_data.nivel_personalizacion,
         nombre_producto=cotizacion_data.nombre_producto,
@@ -519,6 +611,7 @@ async def crear_cotizacion(
         tipo_calidad=cotizacion_data.tipo_calidad,
         modalidad_importacion=cotizacion_data.modalidad_importacion,
         cantidad_minima=cotizacion_data.cantidad_minima,
+        unidad_cantidad=cotizacion_data.unidad_cantidad,
         precio_objetivo_usd=cotizacion_data.precio_objetivo_usd,
         moneda_precio_objetivo=(cotizacion_data.precio_objetivo_moneda or "USD").upper(),
         incoterm=(cotizacion_data.incoterm or "DDP").upper(),
@@ -529,11 +622,19 @@ async def crear_cotizacion(
     )
     
     db.add(nuevo_cotizacion)
+    db.flush()
+
+    from services.eventos import TiposEvento, evento_solicitud
+
+    evento_solicitud(
+        db, TiposEvento.SOLICITUD_CREADA, nuevo_cotizacion, usuario=current_user,
+        estado_nuevo=nuevo_cotizacion.estado,
+        datos={k: v for k, v in campos_origen.items() if v},
+    )
 
     if nuevo_cotizacion.modalidad == "dirigida" and nuevo_cotizacion.importador_id:
         from services.cupo_cotizaciones import registrar_recepcion
 
-        db.flush()
         registrar_recepcion(
             db,
             importador_id=str(UUID(nuevo_cotizacion.importador_id)),
@@ -596,12 +697,22 @@ async def crear_cotizacion(
 
 # ==================== Endpoints de Propuestas (Tarea 2.1) ====================
 
-def _validar_no_omitida_por_cupo(cotizacion: Cotizacion, importador_id_str: str, db: Session):
-    """Una abierta que no se le entregó a la empresa por cupo no se puede responder."""
+def _validar_asignada(cotizacion: Cotizacion, importador_id_str: str, db: Session):
+    """Una abierta solo la responde una empresa a la que se le asignó.
+
+    La fuente de verdad es `recepciones_cotizacion` (ver services/asignacion.py),
+    no Redis: así la regla es la misma en producción y en desarrollo, y no
+    depende de que Redis siga teniendo el reparto.
+    """
+    from services.asignacion import esta_asignada
     from services.cupo_cotizaciones import fue_omitida
 
-    if cotizacion.modalidad == "abierta" and fue_omitida(db, importador_id_str, str(cotizacion.id)):
+    if cotizacion.modalidad != "abierta":
+        return
+    if fue_omitida(db, importador_id_str, str(cotizacion.id)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_OMITIDA_POR_CUPO)
+    if not esta_asignada(db, importador_id_str, str(cotizacion.id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_NO_ASIGNADA)
 
 
 def _validar_congruencia_categoria(cotizacion: Cotizacion, importador_id_str: str, db: Session):
@@ -745,7 +856,7 @@ async def enviar_propuesta(
     
     Validaciones:
     1. La cotización debe existir y estar abierta a propuestas (abierta/propuestas_recibidas) o dirigida a tu empresa
-    2. Si es abierta: el importador debe estar en la lista de matching para esta cotización
+    2. Si es abierta: la solicitud debe estar asignada a tu empresa
     3. La categoría de la cotización debe ser congruente con la especialidad de tu empresa
     4. El importador no puede enviar más de una propuesta por cotización
     """
@@ -789,38 +900,10 @@ async def enviar_propuesta(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Esta cotización no está dirigida a tu empresa"
             )
-    # 2. Verificar matching Redis en cotizaciones abiertas (fail-closed).
-    elif cotizacion.modalidad == "abierta":
-        strict_matching = config.APP_ENV == "production"
-        if strict_matching:
-            if not config.redis_client:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
-                )
-            try:
-                importadores_matching = config.redis_client.hgetall(f"cotizacion_abierta:{cotizacion_id_str}")
-            except Exception:
-                logger.warning("Redis no disponible al verificar matching de cotización %s", cotizacion_id_str)
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Servicio de matching temporalmente no disponible, intenta de nuevo"
-                )
-            if importador_id_str not in importadores_matching:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="No autorizado para responder esta cotización (no está en la lista de matching)"
-                )
-        else:
-            logger.info(
-                "Matching relajado en APP_ENV=%s para cotizacion abierta %s e importador %s",
-                config.APP_ENV,
-                cotizacion_id_str,
-                importador_id_str,
-            )
-
+    # 2. En las abiertas, la solicitud tiene que estar asignada a la empresa
+    # (lo comprueba `_validar_asignada`, abajo).
     # 2.5. Congruencia de categoría: la especialidad de la empresa debe incluir la línea de producto solicitada
-    _validar_no_omitida_por_cupo(cotizacion, importador_id_str, db)
+    _validar_asignada(cotizacion, importador_id_str, db)
     _validar_congruencia_categoria(cotizacion, importador_id_str, db)
 
     # 3. Verificar que el importador no ha enviado ya una propuesta a esta cotización
@@ -863,10 +946,18 @@ async def enviar_propuesta(
         tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
         incoterm=propuesta.incoterm,
         condiciones_adicionales=propuesta.condiciones_adicionales,
+        cantidad=propuesta.cantidad,
         estado=EstadoPropuesta.pendiente,
         creado_por_usuario_id=user_id_str
     )
     db.add(nueva_propuesta)
+
+    from services.eventos import TiposEvento, evento_propuesta
+
+    evento_propuesta(
+        db, TiposEvento.PROPUESTA_ENVIADA, nueva_propuesta, cotizacion, usuario=current_user,
+        estado_nuevo=EstadoPropuesta.pendiente.value,
+    )
 
     # 5. Actualizar estado de la cotización a "propuestas_recibidas" al recibir la primera propuesta
     # (aplica a abierta Y dirigida; sin esto, negociar/aceptar falla en dirigidas).
@@ -914,6 +1005,8 @@ async def enviar_propuesta(
         condiciones_adicionales=nueva_propuesta.condiciones_adicionales,
         estado=nueva_propuesta.estado.value if isinstance(nueva_propuesta.estado, EstadoPropuesta) else nueva_propuesta.estado,
         creado_por_usuario_id=nueva_propuesta.creado_por_usuario_id,
+        cantidad=nueva_propuesta.cantidad,
+        fecha_envio=nueva_propuesta.fecha_envio,
         contacto_asesor=nueva_propuesta.contacto_asesor
     )
 
@@ -972,7 +1065,7 @@ async def crear_borrador_propuesta(
         if not cotizacion.asesor_asignado_id:
             cotizacion.asesor_asignado_id = user_id_str
 
-    _validar_no_omitida_por_cupo(cotizacion, importador_id_str, db)
+    _validar_asignada(cotizacion, importador_id_str, db)
 
     propuesta_existente = db.query(Propuesta).filter(
         Propuesta.cotizacion_id == cotizacion_id_str,
@@ -989,6 +1082,7 @@ async def crear_borrador_propuesta(
         tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
         incoterm=propuesta.incoterm,
         condiciones_adicionales=propuesta.condiciones_adicionales,
+        cantidad=propuesta.cantidad,
         estado=EstadoPropuesta.borrador,
         creado_por_usuario_id=user_id_str
     )
@@ -1036,10 +1130,29 @@ async def editar_propuesta(
     propuesta_db.tiempo_estimado_entrega = propuesta.tiempo_estimado_entrega
     propuesta_db.incoterm = propuesta.incoterm
     propuesta_db.condiciones_adicionales = propuesta.condiciones_adicionales
+    if propuesta.cantidad is not None:
+        propuesta_db.cantidad = propuesta.cantidad
     propuesta_db.creado_por_usuario_id = str(PyUUID(current_user["user_id"]))
     # Una edición reinicia la pre-aceptación mutua: cualquier cambio debe volver a confirmarse
     propuesta_db.preaceptada_por_solicitante = False
     propuesta_db.preaceptada_por_empresa = False
+
+    # Solo cuenta para la bitácora lo que ve el cliente: retocar un borrador no
+    # cambia nada del negocio todavía.
+    if propuesta_db.estado == EstadoPropuesta.pendiente.value:
+        # El comprador ya la tenía delante: se lleva la cuenta para poder
+        # decirle que lo que compara no es la oferta que llegó.
+        propuesta_db.revisiones = (propuesta_db.revisiones or 0) + 1
+        propuesta_db.fecha_modificacion = datetime.utcnow()
+
+        from services.eventos import TiposEvento, evento_propuesta
+
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == propuesta_db.cotizacion_id).first()
+        if cotizacion is not None:
+            evento_propuesta(
+                db, TiposEvento.PROPUESTA_EDITADA, propuesta_db, cotizacion, usuario=current_user,
+                estado_nuevo=EstadoPropuesta.pendiente.value,
+            )
 
     db.commit()
     db.refresh(propuesta_db)
@@ -1079,12 +1192,22 @@ async def enviar_borrador_propuesta(
     if not cotizacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
 
-    _validar_no_omitida_por_cupo(cotizacion, propuesta_db.importador_id, db)
+    _validar_asignada(cotizacion, propuesta_db.importador_id, db)
     _validar_congruencia_categoria(cotizacion, propuesta_db.importador_id, db)
 
     propuesta_db.estado = EstadoPropuesta.pendiente
+    # La fecha que cuenta es la del envío al cliente, no la del borrador.
+    propuesta_db.fecha_envio = datetime.utcnow()
     if cotizacion.estado in ("abierta", "dirigida", EstadoCotizacion.abierta.value, EstadoCotizacion.dirigida.value):
         cotizacion.estado = EstadoCotizacion.propuestas_recibidas
+
+    from services.eventos import TiposEvento, evento_propuesta
+
+    evento_propuesta(
+        db, TiposEvento.PROPUESTA_ENVIADA, propuesta_db, cotizacion, usuario=current_user,
+        estado_anterior=EstadoPropuesta.borrador.value, estado_nuevo=EstadoPropuesta.pendiente.value,
+        datos={"desde_borrador": True},
+    )
 
     _notificar_propuesta_enviada(db, cotizacion=cotizacion, importador_id=propuesta_db.importador_id)
 
@@ -1099,6 +1222,38 @@ async def enviar_borrador_propuesta(
             logger.warning("No se pudo actualizar el estado de matching en Redis para %s", cotizacion.id)
 
     return propuesta_db
+
+def _resumen_empresas(db: Session, importador_ids: List[str]) -> dict:
+    """Nombre y cumplimiento de cada empresa, para el comparador del comprador."""
+    from models.orden import Orden
+    from models.resena import ResenaImportador
+
+    ids = list({str(i) for i in importador_ids if i})
+    if not ids:
+        return {}
+    resenas = dict(db.query(ResenaImportador.importador_id, func.count(ResenaImportador.id)).filter(
+        ResenaImportador.importador_id.in_(ids)
+    ).group_by(ResenaImportador.importador_id).all())
+    entregados = dict(db.query(Orden.importador_id, func.count(Orden.id)).filter(
+        Orden.importador_id.in_(ids), Orden.estado == "entregado"
+    ).group_by(Orden.importador_id).all())
+    en_curso = dict(db.query(Orden.importador_id, func.count(Orden.id)).filter(
+        Orden.importador_id.in_(ids), Orden.estado != "entregado"
+    ).group_by(Orden.importador_id).all())
+    return {
+        str(e.id): {
+            "importador_id": str(e.id),
+            "nombre_empresa": e.nombre_empresa,
+            "logo_url": e.logo_url,
+            "verificado": bool(e.verificado),
+            "calificacion_promedio": float(e.calificacion_promedio or 0),
+            "total_resenas": int(resenas.get(str(e.id), 0)),
+            "pedidos_entregados": int(entregados.get(str(e.id), 0)),
+            "pedidos_en_curso": int(en_curso.get(str(e.id), 0)),
+        }
+        for e in db.query(Importador).filter(Importador.id.in_(ids)).all()
+    }
+
 
 @router.get("/{cotizacion_id}/propuestas", response_model=List[PropuestaResponse])
 async def listar_propuestas(
@@ -1168,7 +1323,10 @@ async def listar_propuestas(
         # Nunca se exponen las propuestas de la competencia en una cotización abierta.
         consulta = consulta.filter(Propuesta.importador_id == importador_id_str)
 
-    propuestas = consulta.order_by(Propuesta.fecha_envio.desc()).all()
+    # Orden de llegada, nunca por precio: el comparador muestra precio, plazo,
+    # lo que incluye y el cumplimiento al mismo nivel.
+    propuestas = consulta.order_by(Propuesta.fecha_envio.asc()).all()
+    empresas = _resumen_empresas(db, [p.importador_id for p in propuestas]) if rol == "solicitante" else {}
 
     return [
         PropuestaResponse(
@@ -1183,6 +1341,13 @@ async def listar_propuestas(
             creado_por_usuario_id=p.creado_por_usuario_id,
             preaceptada_por_solicitante=p.preaceptada_por_solicitante,
             preaceptada_por_empresa=p.preaceptada_por_empresa,
+            cantidad=p.cantidad,
+            fecha_envio=p.fecha_envio,
+            revisiones=p.revisiones or 0,
+            fecha_modificacion=p.fecha_modificacion,
+            motivo_descarte=p.motivo_descarte,
+            motivo_descarte_detalle=p.motivo_descarte_detalle,
+            empresa=empresas.get(p.importador_id),
             contacto_asesor=p.contacto_asesor
         )
         for p in propuestas
@@ -1378,7 +1543,17 @@ async def aceptar_propuesta(
             cotizacion=cotizacion,
             importador_usuario_id=importador_usuario_id,
         )
-        db.commit()
+
+    from services.eventos import Evento, TiposEvento, evento_propuesta
+
+    # Una vez por propuesta: el cliente puede volver a pulsar "Negociar".
+    ya_en_negociacion = db.query(Evento.id).filter(
+        Evento.tipo == TiposEvento.PROPUESTA_EN_NEGOCIACION,
+        Evento.propuesta_id == str(propuesta.id),
+    ).first()
+    if not ya_en_negociacion:
+        evento_propuesta(db, TiposEvento.PROPUESTA_EN_NEGOCIACION, propuesta, cotizacion, usuario=current_user)
+    db.commit()
 
     db.refresh(cotizacion)
     return cotizacion
@@ -1506,8 +1681,26 @@ async def pre_aceptar_propuesta(
             detail="No autorizado para pre-aceptar esta propuesta"
         )
 
+    if lado == "empresa" and (solicitud.motivo_eleccion or solicitud.motivo_detalle):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El motivo de la elección solo lo indica el solicitante"
+        )
+
+    from services.eventos import TiposEvento, evento_propuesta
+
     if lado == "solicitante":
         propuesta.preaceptada_por_solicitante = solicitud.aceptar
+        # Por qué eligió esta propuesta: se convierte en el motivo de descarte
+        # de las demás cuando la orden se cierre. Si retira la aceptación, el
+        # motivo deja de valer.
+        if solicitud.aceptar:
+            if solicitud.motivo_eleccion:
+                cotizacion.motivo_eleccion = solicitud.motivo_eleccion
+                cotizacion.motivo_eleccion_detalle = (solicitud.motivo_detalle or "").strip() or None
+        else:
+            cotizacion.motivo_eleccion = None
+            cotizacion.motivo_eleccion_detalle = None
         # La empresa se entera de que el cliente movió ficha, aunque todavía
         # falte su propia confirmación.
         # Aquí la pelota pasa a la cuenta dueña, que es la única que puede
@@ -1543,6 +1736,13 @@ async def pre_aceptar_propuesta(
             enlace_relativo="/cotizaciones",
         )
 
+    evento_propuesta(
+        db, TiposEvento.PROPUESTA_PREACEPTADA, propuesta, cotizacion, usuario=current_user,
+        datos={"lado": lado, "aceptar": solicitud.aceptar},
+        motivo=solicitud.motivo_eleccion if lado == "solicitante" and solicitud.aceptar else None,
+        motivo_detalle=(solicitud.motivo_detalle or None) if lado == "solicitante" and solicitud.aceptar else None,
+    )
+
     if propuesta.preaceptada_por_solicitante and propuesta.preaceptada_por_empresa:
         # --- Finalización: doble aceptación mutua confirmada ---
         propuesta.estado = EstadoPropuesta.aceptada
@@ -1552,8 +1752,23 @@ async def pre_aceptar_propuesta(
             Propuesta.id != propuesta.id,
             Propuesta.estado.in_([EstadoPropuesta.pendiente.value, EstadoPropuesta.borrador.value])
         ).all()
+        ahora = datetime.utcnow()
         for p in otras:
+            estado_previo = p.estado.value if isinstance(p.estado, EstadoPropuesta) else p.estado
             p.estado = EstadoPropuesta.rechazada
+            # Un borrador nunca llegó al cliente: no "perdió", solo se cierra.
+            if estado_previo != EstadoPropuesta.pendiente.value:
+                continue
+            p.motivo_descarte = cotizacion.motivo_eleccion
+            p.motivo_descarte_detalle = cotizacion.motivo_eleccion_detalle
+            p.fecha_descarte = ahora
+            evento_propuesta(
+                db, TiposEvento.PROPUESTA_DESCARTADA, p, cotizacion, usuario=current_user,
+                estado_anterior=estado_previo, estado_nuevo=EstadoPropuesta.rechazada.value,
+                motivo=cotizacion.motivo_eleccion or "sin_motivo",
+                motivo_detalle=cotizacion.motivo_eleccion_detalle,
+                datos={"propuesta_ganadora_id": str(propuesta.id)},
+            )
 
         # Orden creada en la misma transacción → estado operativo de la cotización.
         cotizacion.estado = EstadoCotizacion.orden_activa
@@ -1594,6 +1809,20 @@ async def pre_aceptar_propuesta(
                 estado_anterior=None,
                 estado_nuevo=EstadoOrden.cotizacion_aceptada.value
             ))
+            from services.eventos import evento_pedido
+
+            evento_pedido(
+                db, nueva_orden, estado_anterior=None, estado_nuevo=EstadoOrden.cotizacion_aceptada.value,
+                usuario=current_user, cotizacion=cotizacion,
+            )
+
+        evento_propuesta(
+            db, TiposEvento.PROPUESTA_ACEPTADA, propuesta, cotizacion, usuario=current_user,
+            estado_anterior=EstadoPropuesta.pendiente.value, estado_nuevo=EstadoPropuesta.aceptada.value,
+            orden_id=nueva_orden.id,
+            motivo=cotizacion.motivo_eleccion,
+            motivo_detalle=cotizacion.motivo_eleccion_detalle,
+        )
 
         try:
             generate_order_documents(

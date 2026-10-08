@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Float, Boolean, DateTime, Integer, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship, object_session
 from uuid import uuid4
 from datetime import datetime
@@ -24,6 +24,20 @@ class Propuesta(Base):
     condiciones_adicionales = Column(Text, nullable=True)
     estado = Column(String(20), default=EstadoPropuesta.pendiente)  # "borrador", "pendiente", "aceptada", "rechazada"
     fecha_envio = Column(DateTime, default=datetime.utcnow)
+    # Veces que se reescribió DESPUÉS de enviarla (retocar un borrador no
+    # cuenta: el comprador todavía no lo ha visto). La versión que ve el
+    # comprador es `revisiones + 1`, para que sepa que lo que compara ya no es
+    # la oferta que llegó.
+    revisiones = Column(Integer, nullable=False, default=0, server_default="0")
+    fecha_modificacion = Column(DateTime, nullable=True)
+    # Cantidad que cubre el precio (en la unidad de la cotización). NULL = la
+    # cantidad pedida por el cliente.
+    cantidad = Column(Float, nullable=True)
+
+    # --- Descarte: el cliente eligió otra propuesta ---
+    motivo_descarte = Column(String(20), nullable=True)  # precio, tiempo, condiciones, otro
+    motivo_descarte_detalle = Column(Text, nullable=True)
+    fecha_descarte = Column(DateTime, nullable=True)
 
     # --- Redacción por asesor / envío por dueño (Semana 4) ---
     # Cuenta (asesor o dueño) que redactó/editó por última vez esta propuesta.

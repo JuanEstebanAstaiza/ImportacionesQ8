@@ -18,6 +18,7 @@ export type Screen =
   | "reset-password"
   | "policy-data"
   | "policy-terms"
+  | "policy-payments"
   | "dashboard"
   | "importer-profile"
   | "quotes"
@@ -26,6 +27,7 @@ export type Screen =
   | "responses"
   | "response-detail"
   | "chats"
+  | "team-channel"
   | "orders"
   | "order-detail"
   | "documentos"
@@ -45,12 +47,18 @@ export type Screen =
   | "admin-soporte"
   | "admin-certificaciones"
   | "admin-respaldos"
+  | "admin-asignacion"
   | "admin-landing"
   | "admin-correos"
   | "create-response"
   | "notifications"
   | "user-profile"
-  | "help-support";
+  | "help-support"
+  | "tendencias"
+  | "catalogos"
+  | "imp-catalogos"
+  | "curaduria"
+  | "admin-tipografia";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
 export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation";
@@ -73,6 +81,7 @@ export const RUTAS: Ruta[] = [
   { screen: "reset-password", path: "/restablecer-password" },
   { screen: "policy-data", path: "/politica-de-datos" },
   { screen: "policy-terms", path: "/terminos" },
+  { screen: "policy-payments", path: "/politica-de-pagos" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },
@@ -84,10 +93,15 @@ export const RUTAS: Ruta[] = [
   { screen: "orders", path: "/ordenes" },
   { screen: "order-detail", path: "/ordenes", param: "order" },
   { screen: "importer-profile", path: "/empresas", param: "importer" },
+  { screen: "tendencias", path: "/tendencias" },
+  { screen: "catalogos", path: "/catalogos" },
 
   // Comunes
   { screen: "chats", path: "/chats" },
   { screen: "chats", path: "/chats", param: "conversation" },
+  // Canal interno de administración y soporte. Va aparte de `/chats` para que
+  // no se mezcle con los tickets de clientes y empresas.
+  { screen: "team-channel", path: "/equipo" },
   { screen: "documentos", path: "/documentos" },
   { screen: "pagos", path: "/pagos" },
   { screen: "courses", path: "/cursos" },
@@ -100,6 +114,7 @@ export const RUTAS: Ruta[] = [
   { screen: "imp-quotes", path: "/empresa/cotizaciones" },
   { screen: "imp-advisors", path: "/empresa/asesores" },
   { screen: "imp-profile", path: "/empresa/perfil" },
+  { screen: "imp-catalogos", path: "/empresa/catalogos" },
 
   // Asesor
   { screen: "adv-dashboard", path: "/asesor" },
@@ -115,8 +130,13 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-soporte", path: "/admin/soporte" },
   { screen: "admin-certificaciones", path: "/admin/certificaciones" },
   { screen: "admin-respaldos", path: "/admin/respaldos" },
+  { screen: "admin-asignacion", path: "/admin/asignacion" },
   { screen: "admin-landing", path: "/admin/landing" },
   { screen: "admin-correos", path: "/admin/correos" },
+  { screen: "admin-tipografia", path: "/admin/tipografia" },
+  // Panel del curador de Tendencias: lo usan el admin y quien tenga la
+  // capacidad de curador, sea cual sea su rol.
+  { screen: "curaduria", path: "/curaduria" },
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";

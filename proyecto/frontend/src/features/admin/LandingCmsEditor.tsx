@@ -2,11 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { clsx } from "clsx";
 import {
+  ArrowDown,
+  ArrowUp,
+  Clapperboard,
   Layers,
+  Monitor,
   Moon,
   Newspaper,
   Plus,
   Save,
+  Smartphone,
   Sun,
   Trash2,
   Upload,
@@ -26,7 +31,15 @@ import {
   type LandingButtonAction,
   type LandingFontFamily,
   type LandingNews,
+  type VideoRotativo,
+  type VideosQuienesSomos,
+  VIDEOS_QUIENES_SOMOS_VACIO,
+  leerVideosQuienesSomos,
 } from "@/services/landing.service";
+
+const MAX_VIDEOS_QUIENES_SOMOS = 10;
+const VIDEO_PESADO_BYTES = 30 * 1024 * 1024;
+const INTERVALOS_SEGUNDOS = [10, 15, 20, 30, 45, 60];
 
 // Este editor solo administra el contenido dinámico de "Novedades y aliados":
 // es la única sección de la Landing que consume el CMS por bloques.
@@ -41,6 +54,7 @@ const BLOCK_TYPE_LABEL: Record<LandingBlock["tipo"], string> = {
   video: "Video",
   button: "Boton (CTA)",
   allies_grid: "Muro de aliados",
+  video_rotativo: "Videos rotativos",
 };
 
 // Valores citados en Zarpi_Modelo_de_Monetizacion: el admin ve exactamente
@@ -115,6 +129,7 @@ function isVideoDocument(doc: BackendArchivoItem): boolean {
 type MediaTarget =
   | { kind: "block-image"; blockId: string }
   | { kind: "block-video"; blockId: string }
+  | { kind: "about-video"; videoId: string; encuadre: "horizontal" | "vertical" }
   | { kind: "ally-logo"; allyId: string }
   | { kind: "news-image"; newsId: string };
 
@@ -178,8 +193,27 @@ function ProtectedImage({ path, alt, className }: { path: string; alt: string; c
   );
 }
 
+/**
+ * Vista previa de un video privado. Se descarga solo al pedirla: con el
+ * archivo entero en un blob, un video de cien megas se bajaba en cada render y
+ * dejaba el editor congelado.
+ */
 function ProtectedVideo({ path, className }: { path: string; className?: string }) {
-  const objectUrl = useProtectedObjectUrl(path);
+  const [cargar, setCargar] = useState(false);
+  const objectUrl = useProtectedObjectUrl(cargar ? path : "");
+  useEffect(() => { setCargar(false); }, [path]);
+  if (!cargar) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCargar(true)}
+        className={clsx(className, "flex flex-col items-center justify-center gap-1 bg-slate-900 text-xs text-white/80 hover:text-white")}
+      >
+        <Video className="h-5 w-5" />
+        Video listo · Previsualizar
+      </button>
+    );
+  }
   if (!objectUrl) {
     return <div className={clsx(className, "flex items-center justify-center text-xs text-muted-foreground")}>Cargando video...</div>;
   }
@@ -269,62 +303,119 @@ function LandingLivePreview({ blocks, allies }: { blocks: LandingBlock[]; allies
   const ordered = [...blocks].filter((block) => block.activo).sort((a, b) => a.orden - b.orden);
 
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm text-foreground">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-semibold">Vista previa en vivo — Novedades y aliados</p>
         <button
           type="button"
           onClick={() => setDark((current) => !current)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-foreground"
         >
-          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} {dark ? "Ver en claro" : "Ver en oscuro"}
+          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} 
+          {dark ? "Ver en claro" : "Ver en oscuro"}
         </button>
       </div>
-      <div className={clsx(dark && "dark")}>
-        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 text-black dark:border-zinc-800 dark:bg-[#0F0F0F] dark:text-white">
-          {ordered.map((block) => (
-            <div key={block.id} className={ALIGN_CLASS[block.alineacion] || "text-left"}>
-              {block.tipo === "heading" ? (
-                <p className={clsx(HEADING_SIZE_CLASS[block.tamano_fuente] || HEADING_SIZE_CLASS.md, TOKEN_TEXT_CLASS[block.token_color], FONT_CLASS[block.fuente])}>
-                  {block.contenido || "Encabezado de ejemplo"}
-                </p>
-              ) : null}
-              {block.tipo === "paragraph" ? (
-                <p className={clsx(TEXT_SIZE_CLASS[block.tamano_fuente] || TEXT_SIZE_CLASS.md, TOKEN_TEXT_CLASS[block.token_color], FONT_CLASS[block.fuente])}>
-                  {block.contenido || "Texto de ejemplo."}
-                </p>
-              ) : null}
-              {block.tipo === "image" && block.contenido ? (
-                <ProtectedImage
-                  path={block.contenido}
-                  alt=""
-                  className="inline-block max-h-40 rounded-lg border border-slate-200 object-cover dark:border-zinc-800"
-                />
-              ) : null}
-              {block.tipo === "video" && block.contenido ? (
-                <ProtectedVideo path={block.contenido} className="inline-block max-h-40 rounded-lg border border-slate-200 dark:border-zinc-800" />
-              ) : null}
-              {block.tipo === "button" ? (
-                <span className={clsx("inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold", TOKEN_BUTTON_CLASS[block.token_color])}>
-                  {block.contenido || "Boton"}
-                </span>
-              ) : null}
-              {block.tipo === "allies_grid" ? (
-                <div className="grid grid-cols-3 gap-3">
-                  {allies.filter((a) => a.activo).slice(0, 6).map((ally) => (
-                    <div key={ally.id} className="rounded-lg border border-slate-200 p-2 text-center text-xs dark:border-zinc-800">
-                      {ally.logo_url ? (
-                        <ProtectedImage path={ally.logo_url} alt={ally.nombre} className="mx-auto h-8 object-contain" />
-                      ) : ally.nombre}
-                    </div>
-                  ))}
-                  {allies.length === 0 ? <p className="col-span-3 text-xs text-slate-500 dark:text-zinc-400">Sin aliados</p> : null}
-                </div>
-              ) : null}
-            </div>
-          ))}
-          {ordered.length === 0 ? <p className="text-sm text-slate-500 dark:text-zinc-400">Esta seccion no tiene bloques visibles.</p> : null}
-        </div>
+
+      {/* Contenedor con fondo e iluminación forzada vía style */}
+      <div 
+        style={{
+          backgroundColor: dark ? "#0F0F0F" : "#FFFFFF",
+          color: dark ? "#FFFFFF" : "#000000",
+        }}
+        className={clsx(
+          "rounded-xl border p-6 transition-colors duration-200 space-y-4",
+          dark ? "border-zinc-800" : "border-slate-200"
+        )}
+      >
+        {ordered.map((block) => (
+          <div key={block.id} className={ALIGN_CLASS[block.alineacion] || "text-left"}>
+            {block.tipo === "heading" ? (
+              <p
+                className={clsx(
+                  HEADING_SIZE_CLASS[block.tamano_fuente] || HEADING_SIZE_CLASS.md,
+                  FONT_CLASS[block.fuente],
+                  dark ? "text-accent" : "text-primary"
+                )}
+              >
+                {block.contenido || "Encabezado de ejemplo"}
+              </p>
+            ) : null}
+
+            {block.tipo === "paragraph" ? (
+              <p
+                className={clsx(
+                  TEXT_SIZE_CLASS[block.tamano_fuente] || TEXT_SIZE_CLASS.md,
+                  FONT_CLASS[block.fuente],
+                  dark ? "text-white" : "text-black"
+                )}
+              >
+                {block.contenido || "Texto de ejemplo."}
+              </p>
+            ) : null}
+
+            {block.tipo === "image" && block.contenido ? (
+              <ProtectedImage
+                path={block.contenido}
+                alt=""
+                className={clsx(
+                  "inline-block max-h-40 rounded-lg border object-cover",
+                  dark ? "border-zinc-800" : "border-slate-200"
+                )}
+              />
+            ) : null}
+
+            {block.tipo === "video" && block.contenido ? (
+              <ProtectedVideo 
+                path={block.contenido} 
+                className={clsx(
+                  "inline-block max-h-40 rounded-lg border",
+                  dark ? "border-zinc-800" : "border-slate-200"
+                )} 
+              />
+            ) : null}
+
+            {block.tipo === "button" ? (
+              <span
+                className={clsx(
+                  "inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+                  dark ? "bg-accent text-accent-foreground" : "bg-primary text-primary-foreground"
+                )}
+              >
+                {block.contenido || "Boton"}
+              </span>
+            ) : null}
+
+            {block.tipo === "allies_grid" ? (
+              <div className="grid grid-cols-3 gap-3">
+                {allies.filter((a) => a.activo).slice(0, 6).map((ally) => (
+                  <div 
+                    key={ally.id} 
+                    style={{ backgroundColor: dark ? "#171717" : "#FFFFFF" }}
+                    className={clsx(
+                      "rounded-lg border p-2 text-center text-xs",
+                      dark ? "border-zinc-800 text-white" : "border-slate-200 text-black"
+                    )}
+                  >
+                    {ally.logo_url ? (
+                      <ProtectedImage path={ally.logo_url} alt={ally.nombre} className="mx-auto h-8 object-contain" />
+                    ) : ally.nombre}
+                  </div>
+                ))}
+                {allies.length === 0 ? (
+                  <p className={clsx("col-span-3 text-xs", dark ? "text-zinc-400" : "text-slate-500")}>
+                    Sin aliados
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+
+        {ordered.length === 0 ? (
+          <p className={clsx("text-sm", dark ? "text-zinc-400" : "text-slate-500")}>
+            Esta sección no tiene bloques visibles.
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -334,6 +425,9 @@ export function LandingCmsEditor() {
   const [blocks, setBlocks] = useState<LandingBlock[]>([]);
   const [allies, setAllies] = useState<LandingAlly[]>([]);
   const [news, setNews] = useState<LandingNews[]>([]);
+  // Carrusel de "Quiénes somos": se guarda aparte de la estructura de bloques.
+  const [videosQS, setVideosQS] = useState<VideosQuienesSomos>(VIDEOS_QUIENES_SOMOS_VACIO);
+  const [guardandoVideos, setGuardandoVideos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -360,6 +454,7 @@ export function LandingCmsEditor() {
       setBlocks(data.blocks);
       setAllies(data.allies);
       setNews(data.news);
+      setVideosQS(leerVideosQuienesSomos(data.blocks));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el contenido de la Landing.");
     } finally {
@@ -427,6 +522,53 @@ export function LandingCmsEditor() {
       setError(err instanceof Error ? err.message : "No se pudo guardar la estructura de bloques.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function actualizarVideoQS(id: string, cambios: Partial<VideoRotativo>) {
+    setVideosQS((c) => ({ ...c, videos: c.videos.map((v) => (v.id === id ? { ...v, ...cambios } : v)) }));
+  }
+
+  function agregarVideoQS() {
+    setVideosQS((c) => (c.videos.length >= MAX_VIDEOS_QUIENES_SOMOS
+      ? c
+      : { ...c, videos: [...c.videos, { id: newTempId(), titulo: "", horizontal: null, vertical: null }] }));
+  }
+
+  function moverVideoQS(id: string, direccion: -1 | 1) {
+    setVideosQS((c) => {
+      const lista = [...c.videos];
+      const i = lista.findIndex((v) => v.id === id);
+      const j = i + direccion;
+      if (i < 0 || j < 0 || j >= lista.length) return c;
+      [lista[i], lista[j]] = [lista[j], lista[i]];
+      return { ...c, videos: lista };
+    });
+  }
+
+  async function guardarVideosQS() {
+    const sinArchivo = videosQS.videos.findIndex((v) => !v.horizontal && !v.vertical);
+    if (sinArchivo >= 0) {
+      setError(`El video ${sinArchivo + 1} no tiene archivo: sube la versión horizontal, la vertical o las dos, o quítalo.`);
+      return;
+    }
+    setGuardandoVideos(true);
+    setMessage("");
+    setError("");
+    try {
+      const guardado = await landingService.saveVideosQuienesSomos({
+        ...videosQS,
+        // Los ids temporales del editor no se guardan: el backend asigna los suyos.
+        videos: videosQS.videos.map((v) => ({ ...v, id: v.id && !isTempId(v.id) ? v.id : undefined })),
+      });
+      setVideosQS(leerVideosQuienesSomos([guardado]));
+      setMessage(videosQS.videos.length
+        ? "Videos de «Quiénes somos» publicados."
+        : "Sin videos: el carrusel de «Quiénes somos» queda oculto.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron guardar los videos.");
+    } finally {
+      setGuardandoVideos(false);
     }
   }
 
@@ -511,6 +653,10 @@ export function LandingCmsEditor() {
       updateBlock(target.blockId, { contenido: resolvedUrl });
       return;
     }
+    if (target.kind === "about-video") {
+      actualizarVideoQS(target.videoId, { [target.encuadre]: resolvedUrl });
+      return;
+    }
     if (target.kind === "ally-logo") {
       setAllies((prev) => prev.map((item) => (item.id === target.allyId ? { ...item, logo_url: resolvedUrl } : item)));
       return;
@@ -555,7 +701,7 @@ export function LandingCmsEditor() {
 
   function triggerUploadForTarget(target: MediaTarget): void {
     setResourceUploadTarget(target);
-    setResourceUploadAccept(target.kind === "block-video" ? "video/mp4,video/webm,video/quicktime,video/x-m4v,.mp4,.webm,.mov,.m4v" : "image/png,image/jpeg,image/webp");
+    setResourceUploadAccept(target.kind === "block-video" || target.kind === "about-video" ? "video/mp4,video/webm,video/quicktime,video/x-m4v,.mp4,.webm,.mov,.m4v" : "image/png,image/jpeg,image/webp");
     window.setTimeout(() => resourceUploadInputRef.current?.click(), 0);
   }
 
@@ -576,7 +722,7 @@ export function LandingCmsEditor() {
 
   function selectDocumentResource(doc: BackendArchivoItem): void {
     if (!resourcePickerTarget) return;
-    const isVideoTarget = resourcePickerTarget.kind === "block-video";
+    const isVideoTarget = resourcePickerTarget.kind === "block-video" || resourcePickerTarget.kind === "about-video";
     if (isVideoTarget && !isVideoDocument(doc)) {
       setError("Este bloque necesita un archivo de video.");
       return;
@@ -597,7 +743,7 @@ export function LandingCmsEditor() {
       return;
     }
 
-    const isVideoTarget = resourceUploadTarget.kind === "block-video";
+    const isVideoTarget = resourceUploadTarget.kind === "block-video" || resourceUploadTarget.kind === "about-video";
     if (isVideoTarget && !file.type.startsWith("video/")) {
       setError("Este bloque necesita un archivo de video.");
       event.target.value = "";
@@ -614,6 +760,14 @@ export function LandingCmsEditor() {
     try {
       const created = await businessService.uploadDocumentFile(file, resourceCurrentFolderId, "landing");
       applyDocumentToTarget(resourceUploadTarget, created);
+      if (isVideoTarget && file.size > VIDEO_PESADO_BYTES) {
+        // La Landing la abre cualquiera, a menudo desde el celular: un video
+        // pesado se nota en datos y en el tiempo de carga.
+        setMessage(
+          `Video subido. Pesa ${Math.round(file.size / 1024 / 1024)} MB: para la Landing conviene comprimirlo `
+          + "a menos de 30 MB (por ejemplo, 1080p en MP4).",
+        );
+      }
       await loadResourceFolder(resourceCurrentFolderId);
     } catch (err) {
       setError(err instanceof Error && err.message.trim() ? err.message : "No se pudo subir el archivo.");
@@ -623,7 +777,10 @@ export function LandingCmsEditor() {
     }
   }
 
-  function MediaControls({ target, value, kind }: { target: MediaTarget; value: string; kind: "image" | "video" }) {
+  // Se invoca como función (`mediaControls({...})`), no como <Componente/>:
+  // declarado aquí dentro, cada render sería un tipo nuevo y React remontaría la
+  // vista previa en cada tecla, volviendo a descargar el archivo.
+  function mediaControls({ target, value, kind }: { target: MediaTarget; value: string; kind: "image" | "video" }) {
     return (
       <div className="space-y-2">
         {kind === "image" ? (
@@ -706,6 +863,129 @@ export function LandingCmsEditor() {
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {message ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div> : null}
       {loading ? <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">Cargando contenido...</div> : null}
+
+      <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 text-base font-semibold">
+              <Clapperboard className="h-4 w-4 text-primary" />
+              Quiénes somos — videos
+            </p>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Videos que se turnan solos en la sección &quot;Quiénes somos&quot;. Sube por cada uno la versión horizontal
+              (computador, 16:9), la vertical (celular, 9:16) o las dos: cada visitante ve la de su pantalla y, si solo
+              hay una, esa se ve en todas. Se guardan con su propio botón.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void guardarVideosQS()}
+            disabled={guardandoVideos || loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {guardandoVideos ? "Guardando..." : "Guardar videos"}
+          </button>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={videosQS.activo}
+              onChange={(e) => setVideosQS((c) => ({ ...c, activo: e.target.checked }))}
+              className="h-4 w-4 accent-primary"
+            />
+            Mostrar en la Landing
+          </label>
+          <label className="inline-flex flex-wrap items-center gap-2">
+            Cambiar de video cada
+            <select
+              value={INTERVALOS_SEGUNDOS.includes(videosQS.intervalo_segundos) ? String(videosQS.intervalo_segundos) : "otro"}
+              onChange={(e) => {
+                if (e.target.value !== "otro") setVideosQS((c) => ({ ...c, intervalo_segundos: Number(e.target.value) }));
+              }}
+              className="rounded-lg border border-border bg-white px-2 py-1 text-sm"
+            >
+              {INTERVALOS_SEGUNDOS.map((s) => <option key={s} value={s}>{s} segundos</option>)}
+              <option value="otro">Otro…</option>
+            </select>
+            <input
+              type="number"
+              min={5}
+              max={300}
+              value={videosQS.intervalo_segundos}
+              onChange={(e) => setVideosQS((c) => ({ ...c, intervalo_segundos: Math.min(300, Math.max(5, Number(e.target.value) || 5)) }))}
+              aria-label="Segundos entre videos"
+              className="w-20 rounded-lg border border-border bg-white px-2 py-1 text-sm"
+            />
+          </label>
+          <span className="text-xs text-muted-foreground">Si un video termina antes, pasa al siguiente en ese momento.</span>
+        </div>
+
+        {videosQS.videos.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+            Todavía no hay videos. Agrega el primero.
+          </p>
+        ) : (
+          <ol className="space-y-3">
+            {videosQS.videos.map((video, i) => (
+              <li key={video.id} className="rounded-lg border border-border p-3">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
+                  <input
+                    value={video.titulo ?? ""}
+                    maxLength={120}
+                    onChange={(e) => actualizarVideoQS(video.id as string, { titulo: e.target.value })}
+                    placeholder="Título (opcional, se muestra sobre el video)"
+                    className="min-w-0 flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+                  />
+                  <button type="button" onClick={() => moverVideoQS(video.id as string, -1)} disabled={i === 0} aria-label="Subir" className="rounded-lg border border-border p-1.5 hover:bg-muted disabled:opacity-40">
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => moverVideoQS(video.id as string, 1)} disabled={i === videosQS.videos.length - 1} aria-label="Bajar" className="rounded-lg border border-border p-1.5 hover:bg-muted disabled:opacity-40">
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVideosQS((c) => ({ ...c, videos: c.videos.filter((v) => v.id !== video.id) }))}
+                    aria-label={`Quitar video ${i + 1}`}
+                    className="rounded-lg border border-red-200 p-1.5 text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium"><Monitor className="h-3.5 w-3.5" /> Horizontal · computador (16:9)</p>
+                    {mediaControls({ target: { kind: "about-video", videoId: video.id as string, encuadre: "horizontal" }, value: video.horizontal ?? "", kind: "video" })}
+                    {video.horizontal ? (
+                      <button type="button" onClick={() => actualizarVideoQS(video.id as string, { horizontal: null })} className="mt-1 text-xs text-red-600 hover:underline">Quitar versión horizontal</button>
+                    ) : null}
+                  </div>
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium"><Smartphone className="h-3.5 w-3.5" /> Vertical · celular (9:16)</p>
+                    {mediaControls({ target: { kind: "about-video", videoId: video.id as string, encuadre: "vertical" }, value: video.vertical ?? "", kind: "video" })}
+                    {video.vertical ? (
+                      <button type="button" onClick={() => actualizarVideoQS(video.id as string, { vertical: null })} className="mt-1 text-xs text-red-600 hover:underline">Quitar versión vertical</button>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <button
+          type="button"
+          onClick={agregarVideoQS}
+          disabled={videosQS.videos.length >= MAX_VIDEOS_QUIENES_SOMOS}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" /> Agregar video
+          <span className="text-xs text-muted-foreground">({videosQS.videos.length}/{MAX_VIDEOS_QUIENES_SOMOS})</span>
+        </button>
+      </div>
 
       <LandingLivePreview blocks={sectionBlocks} allies={allies} />
 
@@ -802,13 +1082,13 @@ export function LandingCmsEditor() {
 
               {block.tipo === "image" ? (
                 <div className="mt-3">
-                  <MediaControls target={{ kind: "block-image", blockId: block.id }} value={block.contenido ?? ""} kind="image" />
+                  {mediaControls({ target: { kind: "block-image", blockId: block.id }, value: block.contenido ?? "", kind: "image" })}
                 </div>
               ) : null}
 
               {block.tipo === "video" ? (
                 <div className="mt-3">
-                  <MediaControls target={{ kind: "block-video", blockId: block.id }} value={block.contenido ?? ""} kind="video" />
+                  {mediaControls({ target: { kind: "block-video", blockId: block.id }, value: block.contenido ?? "", kind: "video" })}
                 </div>
               ) : null}
 
@@ -871,7 +1151,7 @@ export function LandingCmsEditor() {
         <div className="space-y-3">
           {allies.map((ally) => (
             <div key={ally.id} className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[auto_1fr]">
-              <MediaControls target={{ kind: "ally-logo", allyId: ally.id }} value={ally.logo_url ?? ""} kind="image" />
+              {mediaControls({ target: { kind: "ally-logo", allyId: ally.id }, value: ally.logo_url ?? "", kind: "image" })}
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
                   value={ally.nombre}
@@ -922,7 +1202,7 @@ export function LandingCmsEditor() {
         <div className="space-y-3">
           {news.map((item) => (
             <div key={item.id} className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[auto_1fr]">
-              <MediaControls target={{ kind: "news-image", newsId: item.id }} value={item.imagen_url ?? ""} kind="image" />
+              {mediaControls({ target: { kind: "news-image", newsId: item.id }, value: item.imagen_url ?? "", kind: "image" })}
               <div className="space-y-2">
                 <input
                   value={item.titulo}

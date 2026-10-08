@@ -25,6 +25,10 @@ os.environ.setdefault("RATE_LIMIT_FORGOT_PASSWORD", "1000/minute")
 os.environ.setdefault("RATE_LIMIT_OTP", "1000/minute")
 os.environ.setdefault("LOGIN_TARDIO_HORAS", "72")
 os.environ.setdefault("OTP_EXPIRE_MINUTES", "15")
+# Los tests anteriores a la asignación manual esperan el reparto automático a
+# todas las empresas que encajan; los de asignación fijan el modo y el cupo.
+os.environ.setdefault("ASIGNACION_COTIZACIONES", "automatica")
+os.environ.setdefault("ASIGNACION_CUPO_POR_SOLICITUD", "1000")
 
 import pytest
 from uuid import uuid4
@@ -88,6 +92,13 @@ from models.documental import (  # noqa: F401 — registra metadata de gestión 
 from models.certificacion import Certificacion, CertificacionImportador  # noqa: F401
 from models.notificacion import Notificacion  # noqa: F401
 from models.recepcion_cotizacion import RecepcionCotizacion  # noqa: F401
+from models.evento import Evento  # noqa: F401
+from models.configuracion import ConfiguracionPlataforma  # noqa: F401
+from models.tendencias import (  # noqa: F401
+    AccesoTendencias, CambioTendencias, CierreFabricas, EdicionProducto, EdicionTendencias,
+    GuardadoTendencia, ProductoTendencia, SuscripcionAvisoTendencias, Temporada,
+)
+from models.catalogo import AccesoCatalogo, CatalogoEmpresa, ProductoCatalogo  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -313,6 +324,21 @@ def crear_usuario_con_token(db_session, *, rol="solicitante", email=None, **kwar
     db_session.commit()
     db_session.refresh(user)
     return user, auth_headers_for(user)
+
+
+def asignar_en_bd(db_session, cotizacion_id, importador_id, origen="manual"):
+    """Asigna una abierta a una empresa directamente en BD (lo que hace el admin
+    desde el panel). Para los tests que insertan cotizaciones sin pasar por la API."""
+    from models.recepcion_cotizacion import RecepcionCotizacion
+
+    db_session.add(RecepcionCotizacion(
+        importador_id=str(importador_id),
+        cotizacion_id=str(cotizacion_id),
+        modalidad="abierta",
+        entregada=True,
+        origen=origen,
+    ))
+    db_session.commit()
 
 
 def auth_headers_for(usuario):
@@ -550,6 +576,21 @@ def cleanup_test_db(db_session):
         db_session.query(ConversacionChat).delete()
         db_session.query(MovimientoCredito).delete()
         db_session.query(SolicitudRecreacion).delete()
+
+        # Tendencias y catálogos: referencian usuarios, pagos y empresas.
+        db_session.query(AccesoTendencias).delete()
+        db_session.query(GuardadoTendencia).delete()
+        db_session.query(SuscripcionAvisoTendencias).delete()
+        db_session.query(CambioTendencias).delete()
+        db_session.query(EdicionProducto).delete()
+        db_session.query(EdicionTendencias).delete()
+        db_session.query(ProductoTendencia).delete()
+        db_session.query(Temporada).delete()
+        db_session.query(CierreFabricas).delete()
+        db_session.query(AccesoCatalogo).delete()
+        db_session.query(ProductoCatalogo).delete()
+        db_session.query(CatalogoEmpresa).delete()
+
         db_session.query(Pago).delete()
         db_session.query(OrdenDocumento).delete()
         db_session.query(DocumentoOrden).delete()

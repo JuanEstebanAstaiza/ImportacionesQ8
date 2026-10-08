@@ -258,6 +258,8 @@ function isProtectedPath(pathname: string): boolean {
     "/disputas",
     "/referidos",
     "/admin",
+    "/tendencias",
+    "/catalogos",
   ];
 
   return protectedPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`));

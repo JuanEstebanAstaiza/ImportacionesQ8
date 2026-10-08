@@ -28,7 +28,7 @@ Array de `CotizacionAsignadaItem`:
 | `modalidad` | `string` | sí |  |
 | `nombre_producto` | `string` | sí |  |
 | `descripcion_cliente` | `string` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
 | `precio_objetivo_usd` | `Optional[number]` | no |  |
 | `incoterm` | `string` | sí |  |
 | `estado` | `string` | sí |  |
@@ -50,6 +50,9 @@ Array de `CotizacionAsignadaItem`:
 | `id` | `string` | sí |  |
 | `email` | `string` | sí |  |
 | `rol` | `string` | sí |  |
+| `tier` | `string` | no |  |
+| `puntos_cotizacion` | `integer` | no |  |
+| `importaciones_fuera_plataforma` | `integer` | no |  |
 | `importador_id` | `Optional[string]` | no |  |
 | `nombre` | `Optional[string]` | no |  |
 | `telefono` | `Optional[string]` | no |  |
@@ -75,13 +78,15 @@ Array de `CotizacionAsignadaItem`:
 | `telefono` | `Optional[string]` | no |  |
 | `foto_url` | `Optional[string]` | no |  |
 | `whatsapp` | `Optional[string]` | no |  |
+| `importaciones_fuera_plataforma` | `Optional[integer]` | no |  |
 
 ```json
 {
   "nombre": "<nombre>",
   "telefono": "<telefono>",
   "foto_url": "<foto_url>",
-  "whatsapp": "<whatsapp>"
+  "whatsapp": "<whatsapp>",
+  "importaciones_fuera_plataforma": 0
 }
 ```
 
@@ -92,6 +97,9 @@ Array de `CotizacionAsignadaItem`:
 | `id` | `string` | sí |  |
 | `email` | `string` | sí |  |
 | `rol` | `string` | sí |  |
+| `tier` | `string` | no |  |
+| `puntos_cotizacion` | `integer` | no |  |
+| `importaciones_fuera_plataforma` | `integer` | no |  |
 | `importador_id` | `Optional[string]` | no |  |
 | `nombre` | `Optional[string]` | no |  |
 | `telefono` | `Optional[string]` | no |  |
@@ -100,5 +108,26 @@ Array de `CotizacionAsignadaItem`:
 | `activo` | `boolean` | sí |  |
 | `perfil_completo` | `boolean` | sí |  |
 | `fecha_creacion` | `string` | sí |  |
+
+---
+
+### `GET /usuarios/{solicitante_id}/perfil-publico`
+
+- **Resumen:** Obtener Perfil Publico Cotizante
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `solicitante_id`
+
+**Respuesta (`CotizantePerfilPublicoResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `solicitante_id` | `string` | sí |  |
+| `nombre` | `string` | sí |  |
+| `tier` | `string` | no |  |
+| `volumen_total_importaciones` | `VolumenImportacionesResponse` | sí |  |
+| `cantidad_importaciones` | `CantidadImportacionesResponse` | sí |  |
+| `valor_promedio_importacion_usd` | `number` | no |  |
+| `actividad_plataforma` | `ActividadPlataformaResponse` | sí |  |
 
 ---

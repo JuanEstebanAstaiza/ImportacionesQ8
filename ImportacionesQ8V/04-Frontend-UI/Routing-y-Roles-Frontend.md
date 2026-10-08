@@ -1,72 +1,88 @@
-# 09 - Routing y roles (Frontend)
+# Routing y roles (Frontend)
 
-Reglas de navegacion por rol implementadas en frontend para controlar acceso de vistas sin tocar backend.
+> **Última actualización:** 2026-10-03 · Fuente: `proyecto/frontend/src/app/rutas.ts` y los menús `NAV_*` de `src/app/App.tsx`.
 
-## Roles soportados
+Reglas de navegación por rol del frontend de Zarpi.
 
-- solicitante
-- importadora
-- asesor
-- admin
+## Roles
 
----
+`solicitante`, `importadora` (cuenta dueña de la empresa, `importador` en el backend), `asesor`, `admin` y `soporte`.
 
-## Enfoque de navegacion
+## Cómo funciona la navegación
 
-La app usa estado interno de pantalla (screen state) con guardas por rol. Antes de navegar, se valida que la pantalla exista en el set permitido para el rol activo.
-
-## Principio clave
-
-- El frontend puede ocultar y bloquear vistas no permitidas.
-- La seguridad real de datos sigue dependiendo del backend.
+- **Cada pantalla tiene su URL.** `rutas.ts` define la tabla pantalla ↔ ruta.
+  - `rutaDe(pantalla, id)` construye la URL.
+  - `destinoDe(pathname)` resuelve la pantalla (y el id, si lo hay) a partir de la URL.
+  - `esPantalla()` valida nombres.
+- Antes de mostrar una pantalla, `App.tsx` comprueba que el rol activo la tenga permitida (`screenAllowedByRole`); si no, redirige a una permitida.
+- El frontend oculta y bloquea vistas, pero **la seguridad real de los datos la aplica el backend**.
 
 ---
 
-## Mapa resumido de accesos
+## Menú lateral por rol
 
-| Rol | Pantallas principales |
-|-----|------------------------|
-| solicitante | dashboard, cotizaciones, ordenes, chats, cursos, ayuda |
-| importadora | imp-dashboard, imp-cotizaciones, imp-propuestas, imp-ordenes, chats, cursos, ayuda |
-| asesor | adv-dashboard, adv-cotizaciones, adv-ordenes, chats, cursos, ayuda |
-| admin | admin-dashboard, usuarios, organizaciones, metricas, auditoria |
+| Rol | Entradas del menú (en orden) |
+|-----|------------------------------|
+| Solicitante | Dashboard · Cotizaciones · Respuestas · Chats · Órdenes · Cursos · Documentos · Pagos |
+| Importadora (dueño) | Dashboard · **Solicitudes** · Asesores · **Mi empresa** · Órdenes · Chats · Cursos · Documentos |
+| Asesor | Dashboard · Disponibles · Mis cotizaciones · Chats |
+| Admin | Resumen · Empresas · **Asignación** · Usuarios · Cotizantes · Correos · Soporte · Certificaciones · **Respaldos** · Landing · Chats · Documentos |
+| Soporte | Bandeja · Tickets · Documentos |
 
----
+Además, en el header: notificaciones, chats, ayuda (no-admin) y perfil.
 
-## Header y acciones globales
+## Tabla de rutas
 
-- Chat en header: redirige a pantalla de chat del rol.
-- Badge de chat: usa contador dinamico (notificaciones + no leidos por conversacion).
-- Ayuda: visible para no-admin; oculto para admin.
-
----
-
-## Caso especial de subtitulo por rol
-
-Regla actual centralizada:
-
-- solicitante: "Solicitante"
-- importadora: "<empresa> · Empresa importadora"
-- asesor: "<empresa> · Asesor"
-- admin: "Administrador del sistema"
-
-Implementado en `header-profile-subtitle.ts`.
-
----
-
-## Checklist de validacion por cambios de rutas
-
-1. Login por cada rol y landing correcta.
-2. Navegacion lateral y header sin pantallas huerfanas.
-3. Boton Chat abre vista de chat correcta por rol.
-4. Boton Ayuda visible solo en no-admin.
-5. Accesos directos invalidos son redirigidos a pantalla permitida.
+| Pantalla | Ruta | Para |
+|----------|------|------|
+| `landing` | `/` | Pública |
+| `login`, `register`, `reset-password` | `/login`, `/registro`, `/restablecer-password` | Pública |
+| `policy-data`, `policy-terms` | `/politica-de-datos`, `/terminos` | Pública |
+| `dashboard` | `/inicio` | Solicitante |
+| `quotes`, `new-quote`, `quote-detail` | `/cotizaciones`, `/cotizaciones/nueva`, `/cotizaciones/:id` | Solicitante |
+| `responses`, `response-detail` | `/respuestas`, `/respuestas/:id` | Solicitante |
+| `orders`, `order-detail` | `/ordenes`, `/ordenes/:id` | Solicitante, importadora |
+| `importer-profile` | `/empresas/:id` | Ficha pública de una empresa |
+| `chats` | `/chats`, `/chats/:conversacion` | Todos los roles con sesión |
+| `documentos` | `/documentos` | Todos los roles con sesión |
+| `pagos` | `/pagos` | Solicitante |
+| `courses` | `/cursos` | Según `MODULO_EDUCATIVO_HABILITADO` |
+| `notifications`, `user-profile`, `help-support` | `/notificaciones`, `/perfil`, `/ayuda` | Usuarios con sesión |
+| `imp-dashboard`, `imp-quotes`, `imp-advisors`, `imp-profile` | `/empresa`, `/empresa/cotizaciones`, `/empresa/asesores`, `/empresa/perfil` | Importadora |
+| `adv-dashboard`, `adv-available`, `adv-my-quotes` | `/asesor`, `/asesor/disponibles`, `/asesor/cotizaciones` | Asesor |
+| `create-response` | `/asesor/responder/:cotizacion` | Importadora y asesor (responder o convertir una estimación en propuesta) |
+| `admin-dashboard` … `admin-correos` | `/admin`, `/admin/empresas`, `/admin/asignacion`, `/admin/usuarios`, `/admin/cotizantes`, `/admin/soporte`, `/admin/certificaciones`, `/admin/respaldos`, `/admin/landing`, `/admin/correos` | Admin (`/admin/soporte` también soporte) |
 
 ---
+
+## Subtítulo del header por rol
+
+Centralizado en `header-profile-subtitle.ts`:
+
+| Rol | Subtítulo |
+|-----|-----------|
+| solicitante | "Solicitante" |
+| importadora | "<empresa> · Empresa importadora" |
+| asesor | "<empresa> · Asesor" |
+| admin | "Administrador del sistema" |
+
+## Checklist al cambiar rutas
+
+1. Login con cada rol (el rol elegido debe coincidir con el de la cuenta) y pantalla inicial correcta.
+2. Menú lateral y header sin pantallas huérfanas.
+3. Las URL directas a pantallas no permitidas redirigen a una permitida.
+4. Recargar en una URL profunda (p. ej. `/chats/<id>`) vuelve a la misma pantalla.
+5. Al añadir una pantalla, actualizar los 5 sitios:
+   - tipo `Screen` y tabla de rutas en `rutas.ts`;
+   - menú `NAV_*` en `App.tsx`;
+   - `screenAllowedByRole` en `App.tsx`;
+   - el `if(screen===…)` de render en `App.tsx`;
+   - esta nota.
 
 ## Referencias
 
-- [[08-Arquitectura-Frontend]]
-- [[10-Contrato-Shell-Header-Sidebar]]
+- [[Arquitectura-Frontend]]
+- [[Contrato-Shell-Header-Sidebar]]
+- [[Pantallas-Solicitante]] · [[Pantallas-Importador]] · [[Pantallas-Admin]]
 
 ← Volver a [[Indice-Frontend]]

@@ -12,7 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 import config
-from models.landing import LandingAlly, LandingBlock, LandingNews
+from models.landing import (
+    SECCION_QUIENES_SOMOS, TIPO_VIDEO_ROTATIVO, LandingAlly, LandingBlock, LandingNews,
+)
 from schemas.landing import (
     ContactoRequest,
     ContactoResponse,
@@ -25,6 +27,7 @@ from schemas.landing import (
     LandingNewsCreate,
     LandingNewsResponse,
     LandingNewsUpdate,
+    VideosQuienesSomos,
 )
 from utils.dependencies import get_db, require_rol_in
 from utils.email import construir_html_zarpi, enviar_correo
@@ -149,15 +152,20 @@ async def guardar_bloques(
     eliminar son todo ediciones locales hasta que se guarda), así que aquí se
     sincroniza la tabla contra esa lista en vez de aplicar diffs.
     """
-    ids_enviados = {b.id for b in datos.blocks if b.id}
-    existentes = {b.id: b for b in db.query(LandingBlock).all()}
+    # El carrusel de "Quiénes somos" tiene su propio endpoint: aquí no se
+    # borra ni se reescribe, aunque el editor mande una copia vieja.
+    bloques = [b for b in datos.blocks if b.tipo.strip() != TIPO_VIDEO_ROTATIVO]
+    ids_enviados = {b.id for b in bloques if b.id}
+    existentes = {
+        b.id: b for b in db.query(LandingBlock).filter(LandingBlock.tipo != TIPO_VIDEO_ROTATIVO).all()
+    }
 
     for id_existente in existentes:
         if id_existente not in ids_enviados:
             db.delete(existentes[id_existente])
 
     resultado: List[LandingBlock] = []
-    for bloque in datos.blocks:
+    for bloque in bloques:
         fila = existentes.get(bloque.id) if bloque.id else None
         if fila is None:
             fila = LandingBlock(id=bloque.id or str(uuid4()))
@@ -182,6 +190,45 @@ async def guardar_bloques(
 
     resultado.sort(key=lambda b: (b.seccion, b.orden))
     return [LandingBlockResponse.model_validate(b) for b in resultado]
+
+
+# ==================== Videos de "Quiénes somos" ====================
+
+@router.put("/videos-quienes-somos", response_model=LandingBlockResponse)
+async def guardar_videos_quienes_somos(
+    datos: VideosQuienesSomos,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+):
+    """Guarda el carrusel de videos de la sección "Quiénes somos".
+
+    Vive en un único bloque `video_rotativo` de la sección `about`, con la
+    configuración en JSON. Al estar activo, sus videos quedan públicos por la
+    misma regla que el resto de recursos de la Landing."""
+    import json
+
+    bloque = (
+        db.query(LandingBlock)
+        .filter(LandingBlock.tipo == TIPO_VIDEO_ROTATIVO, LandingBlock.seccion == SECCION_QUIENES_SOMOS)
+        .first()
+    )
+    if bloque is None:
+        bloque = LandingBlock(id=str(uuid4()), seccion=SECCION_QUIENES_SOMOS, tipo=TIPO_VIDEO_ROTATIVO, orden=0)
+        db.add(bloque)
+
+    videos = []
+    for video in datos.videos:
+        item = video.model_dump()
+        item["id"] = item.get("id") or str(uuid4())
+        videos.append(item)
+    bloque.contenido = json.dumps(
+        {"intervalo_segundos": datos.intervalo_segundos, "videos": videos}, ensure_ascii=False,
+    )
+    # Sin videos no hay nada que mostrar: el bloque queda inactivo.
+    bloque.activo = datos.activo and bool(videos)
+    db.commit()
+    db.refresh(bloque)
+    return LandingBlockResponse.model_validate(bloque)
 
 
 # ==================== Administración de aliados ====================

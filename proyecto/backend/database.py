@@ -86,8 +86,11 @@ def run_migrations():
 
 def _sembrar_datos_de_migraciones():
     """Filas que insertan las migraciones y `create_all` no crea: al hacer
-    `stamp` esas migraciones no corren. Hoy solo los umbrales de tier (0022)."""
+    `stamp` esas migraciones no corren. Los umbrales de tier (0022) y el
+    calendario inicial de Tendencias (0028)."""
+    from models.tendencias import CierreFabricas, Temporada
     from models.tier import UmbralTierCotizante
+    from services.tendencias_calculo import CIERRES_INICIALES, TEMPORADAS_INICIALES
     from services.tier_service import UMBRALES_POR_DEFECTO
 
     db = SessionLocal()
@@ -99,6 +102,10 @@ def _sembrar_datos_de_migraciones():
                 minimo_ordenes=ordenes,
                 minimo_valor_operaciones_usd=valor,
             ))
+        for nombre, fecha, ejemplos in TEMPORADAS_INICIALES:
+            db.add(Temporada(nombre=nombre, fecha=fecha, ejemplos=ejemplos))
+        for inicio, fin, fin_produccion_previa in CIERRES_INICIALES:
+            db.add(CierreFabricas(inicio=inicio, fin=fin, fin_produccion_previa=fin_produccion_previa))
         db.commit()
     finally:
         db.close()

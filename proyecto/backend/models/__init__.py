@@ -39,6 +39,13 @@ from .documental import (
 from .landing import LandingBlock, LandingAlly, LandingNews
 from .tier import UmbralTierCotizante, MovimientoPuntoCotizacion
 from .recepcion_cotizacion import RecepcionCotizacion
+from .evento import Evento
+from .configuracion import ConfiguracionPlataforma
+from .tendencias import (
+    EdicionTendencias, ProductoTendencia, EdicionProducto, Temporada, CierreFabricas,
+    GuardadoTendencia, SuscripcionAvisoTendencias, AccesoTendencias, CambioTendencias,
+)
+from .catalogo import CatalogoEmpresa, ProductoCatalogo, AccesoCatalogo
 
 __all__ = [
     "Usuario",
@@ -48,6 +55,8 @@ __all__ = [
     "UmbralTierCotizante",
     "MovimientoPuntoCotizacion",
     "RecepcionCotizacion",
+    "Evento",
+    "ConfiguracionPlataforma",
     "Propuesta",
     "EstadoPropuesta",
     "Orden",

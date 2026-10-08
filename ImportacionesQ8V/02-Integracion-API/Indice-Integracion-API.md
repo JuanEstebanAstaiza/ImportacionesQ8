@@ -36,7 +36,13 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[18-Tiers-y-Perfil-Cotizante]] | Tier mínimo de empresa, desbloqueo con puntos, recálculo de tiers y perfil público |
 | [[19-Limite-Diario-Cotizaciones]] | Límite diario de cotizaciones que recibe cada empresa importadora |
 | [[20-Calculadora-Precios-Chat]] | Calculadora de precios estimados que la empresa envía al cliente por el chat |
-| `ImportacionesQ8.postman_collection.json` | Importar en Postman o Insomnia |
+| [[21-Ayuda-y-Soporte]] | Centro de ayuda: artículos, categorías, votos (generado desde OpenAPI) |
+| [[22-Landing-CMS]] | Landing pública por bloques, aliados, noticias y contacto (generado desde OpenAPI) |
+| [[23-Asignacion-de-Solicitudes]] | Asignación de abiertas a máx. 3 empresas por encaje, propuestas selladas y comparador |
+| [[24-Eventos-y-Panel-Empresa]] | Bitácora de eventos con montos en COP (TRM) y panel comercial de la empresa |
+| [[25-Tendencias-y-Catalogos]] | Tendencias semanales por suscripción, panel del curador y catálogos selectos de empresas |
+| [[26-Tipografia-y-Videos-Landing]] | Tipografía de toda la plataforma (Fontsource, alojada en el servidor) y carrusel de videos de «Quiénes somos» |
+| `Zarpi.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---
 
@@ -147,7 +153,7 @@ Detalle en [[08-Chat-y-WebSocket]].
 
 ## Colección HTTP
 
-Archivo: `ImportacionesQ8V/02-Integracion-API/ImportacionesQ8.postman_collection.json`  
+Archivo: `ImportacionesQ8V/02-Integracion-API/Zarpi.postman_collection.json`  
 Guía: [[14-Postman-Insomnia]].
 
 La integración del frontend (fetch/axios, stores, etc.) la implementa el equipo de UI; esta carpeta es **solo documentación + `.env` + Postman**.

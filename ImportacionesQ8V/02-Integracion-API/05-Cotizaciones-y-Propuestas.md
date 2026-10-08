@@ -48,11 +48,33 @@ Consecuencias para quien integra:
 - `POST /cotizaciones` en modalidad **dirigida** devuelve `400` si la empresa
   destino no trabaja esa línea de producto. El aviso llega al cliente al crearla,
   no a la empresa al intentar responderla.
-- `GET /cotizaciones` para una cuenta de empresa (`importador` / `asesor`) ya
-  filtra las cotizaciones abiertas: solo devuelve las que esa empresa puede
-  responder de verdad. Las dirigidas a ella se listan siempre.
+- `GET /cotizaciones` para una cuenta de empresa (`importador` / `asesor`) solo
+  devuelve las abiertas **asignadas** a esa empresa que además puede responder
+  (ver [[23-Asignacion-de-Solicitudes]]). Las dirigidas a ella se listan siempre.
 - Una empresa **sin especialidades declaradas** no queda bloqueada al responder,
   pero tampoco entra en el reparto automático de cotizaciones abiertas.
+
+## Cantidad y unidad (desde 2026-10-03)
+
+- `cantidad_minima` admite decimales y va acompañada de `unidad_cantidad`:
+  `"unidades"` (por defecto, debe ser entera; si no, `422`) o `"m3"`.
+- La propuesta puede traer `cantidad` (la que cubre el precio). Si no la trae, se
+  entiende la pedida. `precio_ofrecido_usd` es el **total** de la propuesta.
+
+## Asignación, propuestas selladas y motivo de elección (desde 2026-10-03)
+
+- Una abierta solo la ve, reclama y responde una empresa que la tenga asignada; si
+  no, `403`.
+- Para una empresa, la cotización abierta oculta datos de la competencia:
+  responsable, contacto, chat, y que ya haya propuestas.
+- El solicitante recibe las propuestas en orden de llegada, con un campo `empresa`
+  que trae el cumplimiento de cada una. Al aceptar puede enviar `motivo_eleccion`
+  (`precio`, `tiempo`, `condiciones`, `otro`) y `motivo_detalle`, que pasan a
+  `motivo_descarte` de las propuestas perdedoras.
+- `POST /cotizaciones/{id}/vista` marca que la empresa abrió la solicitud (para la
+  bitácora).
+
+Detalle en [[23-Asignacion-de-Solicitudes]] y [[24-Eventos-y-Panel-Empresa]].
 
 ### `GET /cotizaciones`
 
@@ -70,6 +92,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -79,9 +106,12 @@ Array de `CotizacionResponse`:
 | `linea_producto` | `string` | sí |  |
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -92,6 +122,8 @@ Array de `CotizacionResponse`:
 | `cotizacion_origen_id` | `Optional[string]` | no |  |
 | `cancelada_por_error` | `Optional[string]` | no |  |
 | `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
 | `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
@@ -110,6 +142,7 @@ Array de `CotizacionResponse`:
 | Campo | Tipo | Req | Descripción |
 |-------|------|-----|-------------|
 | `modalidad` | `string` | sí | Modalidad de cotización: 'dirigida' o 'abierta' |
+| `tier_minimo_requerido` | `Optional[string]` | no | Ignorado. El tier exigido lo define la empresa (Importador.tier_minimo_requerido) |
 | `importador_id` | `Optional[string]` | no |  |
 | `foto_producto` | `Optional[string]` | no |  |
 | `pais_importacion` | `string` | sí | País desde donde se importa |
@@ -120,9 +153,11 @@ Array de `CotizacionResponse`:
 | `linea_producto` | `string` | sí | Categoría/línea del producto |
 | `tipo_calidad` | `string` | sí | Tipo de calidad: 'economica', 'estandar' o 'premium' |
 | `modalidad_importacion` | `Optional[string]` | no |  |
-| `cantidad_minima` | `integer` | sí | Cantidad mínima a importar |
-| `precio_objetivo_usd` | `Optional[number]` | no |  |
-| `incoterm` | `string` | sí | Incoterm acordado (FOB, CIF, etc.) |
+| `cantidad_minima` | `number` | sí | Cantidad mínima a importar, en `unidad_cantidad` |
+| `unidad_cantidad` | `string` | no | Unidad de la cantidad: 'unidades' o 'm3' (metros cúbicos) |
+| `precio_objetivo_usd` | `Optional[number]` | no | Precio objetivo en USD, mayor o igual a cero |
+| `precio_objetivo_moneda` | `string` | no | Moneda del precio objetivo (USD, EUR, COP, etc.) |
+| `incoterm` | `string` | no | Incoterm acordado (FOB, CIF, etc.) |
 | `notas_adicionales` | `Optional[string]` | no |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no | Tu parte de la marca de embarque (ej. 'prendas control'). Se une al prefijo de la empresa importadora para rotular tus cajas: 'ctl-prenda... |
 | `campos_personalizados_valores` | `Optional[object]` | no | Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor} |
@@ -150,6 +185,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -159,9 +199,12 @@ Array de `CotizacionResponse`:
 | `linea_producto` | `string` | sí |  |
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -172,6 +215,8 @@ Array de `CotizacionResponse`:
 | `cotizacion_origen_id` | `Optional[string]` | no |  |
 | `cancelada_por_error` | `Optional[string]` | no |  |
 | `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
 | `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
@@ -195,6 +240,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -204,9 +254,12 @@ Array de `CotizacionResponse`:
 | `linea_producto` | `string` | sí |  |
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -217,6 +270,8 @@ Array de `CotizacionResponse`:
 | `cotizacion_origen_id` | `Optional[string]` | no |  |
 | `cancelada_por_error` | `Optional[string]` | no |  |
 | `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
 | `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
@@ -239,6 +294,11 @@ Array de `CotizacionResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -248,9 +308,12 @@ Array de `CotizacionResponse`:
 | `linea_producto` | `string` | sí |  |
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -261,6 +324,62 @@ Array de `CotizacionResponse`:
 | `cotizacion_origen_id` | `Optional[string]` | no |  |
 | `cancelada_por_error` | `Optional[string]` | no |  |
 | `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
+| `conversacion_id` | `Optional[string]` | no |  |
+| `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
+| `fecha_creacion` | `string` | sí |  |
+| `fecha_actualizacion` | `string` | sí |  |
+
+---
+
+### `POST /cotizaciones/{cotizacion_id}/desbloquear`
+
+- **Resumen:** Desbloquear Cotizacion Por Punto
+- **Auth:** Bearer JWT
+- **Códigos:** 200, 422
+- **Path params:** `cotizacion_id`
+
+**Respuesta (`CotizacionResponse`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `id` | `string` | sí |  |
+| `solicitante_id` | `string` | sí |  |
+| `importador_id` | `Optional[string]` | sí |  |
+| `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
+| `foto_producto` | `Optional[string]` | sí |  |
+| `pais_importacion` | `string` | sí |  |
+| `nivel_personalizacion` | `Optional[string]` | sí |  |
+| `nombre_producto` | `string` | sí |  |
+| `descripcion_cliente` | `string` | sí |  |
+| `link_referencia` | `Optional[string]` | sí |  |
+| `linea_producto` | `string` | sí |  |
+| `tipo_calidad` | `string` | sí |  |
+| `modalidad_importacion` | `Optional[string]` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
+| `notas_adicionales` | `Optional[string]` | sí |  |
+| `shipping_mark_sufijo` | `Optional[string]` | no |  |
+| `shipping_mark` | `Optional[string]` | no |  |
+| `campos_personalizados_valores` | `Optional[object]` | no |  |
+| `asesor_asignado_id` | `Optional[string]` | no |  |
+| `estado` | `string` | sí |  |
+| `costo_creditos` | `Optional[number]` | no |  |
+| `cotizacion_origen_id` | `Optional[string]` | no |  |
+| `cancelada_por_error` | `Optional[string]` | no |  |
+| `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
 | `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
@@ -310,6 +429,11 @@ Array de `PropuestaResponse`:
 | `creado_por_usuario_id` | `Optional[string]` | no |  |
 | `preaceptada_por_solicitante` | `boolean` | no |  |
 | `preaceptada_por_empresa` | `boolean` | no |  |
+| `cantidad` | `Optional[number]` | no |  |
+| `fecha_envio` | `Optional[string]` | no |  |
+| `motivo_descarte` | `Optional[string]` | no |  |
+| `motivo_descarte_detalle` | `Optional[string]` | no |  |
+| `empresa` | `Optional[EmpresaPropuestaResumen]` | no |  |
 | `contacto_asesor` | `Optional[ContactoAsignadoResponse]` | no |  |
 
 ---
@@ -341,6 +465,11 @@ Array de `PropuestaResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -350,9 +479,12 @@ Array de `PropuestaResponse`:
 | `linea_producto` | `string` | sí |  |
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -363,6 +495,8 @@ Array de `PropuestaResponse`:
 | `cotizacion_origen_id` | `Optional[string]` | no |  |
 | `cancelada_por_error` | `Optional[string]` | no |  |
 | `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
 | `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
@@ -385,6 +519,11 @@ Array de `PropuestaResponse`:
 | `solicitante_id` | `string` | sí |  |
 | `importador_id` | `Optional[string]` | sí |  |
 | `modalidad` | `string` | sí |  |
+| `tier_minimo_requerido` | `string` | no |  |
+| `desbloqueada_por_puntos` | `boolean` | no |  |
+| `solicitante_tier` | `string` | no |  |
+| `solicitante_puntos_cotizacion` | `integer` | no |  |
+| `bloqueada` | `boolean` | no |  |
 | `foto_producto` | `Optional[string]` | sí |  |
 | `pais_importacion` | `string` | sí |  |
 | `nivel_personalizacion` | `Optional[string]` | sí |  |
@@ -394,9 +533,12 @@ Array de `PropuestaResponse`:
 | `linea_producto` | `string` | sí |  |
 | `tipo_calidad` | `string` | sí |  |
 | `modalidad_importacion` | `Optional[string]` | sí |  |
-| `cantidad_minima` | `integer` | sí |  |
-| `precio_objetivo_usd` | `Optional[number]` | sí |  |
-| `incoterm` | `string` | sí |  |
+| `cantidad_minima` | `number` | sí |  |
+| `unidad_cantidad` | `string` | no |  |
+| `precio_objetivo_usd` | `Optional[number]` | no |  |
+| `precio_objetivo_moneda` | `string` | no |  |
+| `moneda_precio_objetivo` | `Optional[string]` | no |  |
+| `incoterm` | `string` | no |  |
 | `notas_adicionales` | `Optional[string]` | sí |  |
 | `shipping_mark_sufijo` | `Optional[string]` | no |  |
 | `shipping_mark` | `Optional[string]` | no |  |
@@ -407,6 +549,8 @@ Array de `PropuestaResponse`:
 | `cotizacion_origen_id` | `Optional[string]` | no |  |
 | `cancelada_por_error` | `Optional[string]` | no |  |
 | `motivo_cancelacion` | `Optional[string]` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_eleccion_detalle` | `Optional[string]` | no |  |
 | `conversacion_id` | `Optional[string]` | no |  |
 | `contacto_asignado` | `Optional[ContactoAsignadoResponse]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
@@ -451,6 +595,15 @@ Array de `PropuestaResponse`:
 
 ---
 
+### `POST /cotizaciones/{cotizacion_id}/vista`
+
+- **Resumen:** Marcar Cotizacion Vista
+- **Auth:** Bearer JWT
+- **Códigos:** 204, 422
+- **Path params:** `cotizacion_id`
+
+---
+
 ### `POST /propuestas`
 
 - **Resumen:** Enviar Propuesta
@@ -466,6 +619,7 @@ Array de `PropuestaResponse`:
 | `tiempo_estimado_entrega` | `string` | sí | Tiempo estimado (ej: '45 días') |
 | `incoterm` | `string` | sí | Incoterm propuesto (FOB, CIF, EXW, DDP, etc.) |
 | `condiciones_adicionales` | `Optional[string]` | no |  |
+| `cantidad` | `Optional[number]` | no | Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida) |
 
 ```json
 {
@@ -492,6 +646,11 @@ Array de `PropuestaResponse`:
 | `creado_por_usuario_id` | `Optional[string]` | no |  |
 | `preaceptada_por_solicitante` | `boolean` | no |  |
 | `preaceptada_por_empresa` | `boolean` | no |  |
+| `cantidad` | `Optional[number]` | no |  |
+| `fecha_envio` | `Optional[string]` | no |  |
+| `motivo_descarte` | `Optional[string]` | no |  |
+| `motivo_descarte_detalle` | `Optional[string]` | no |  |
+| `empresa` | `Optional[EmpresaPropuestaResumen]` | no |  |
 | `contacto_asesor` | `Optional[ContactoAsignadoResponse]` | no |  |
 
 ---
@@ -511,6 +670,7 @@ Array de `PropuestaResponse`:
 | `tiempo_estimado_entrega` | `string` | sí | Tiempo estimado (ej: '45 días') |
 | `incoterm` | `string` | sí | Incoterm propuesto (FOB, CIF, EXW, DDP, etc.) |
 | `condiciones_adicionales` | `Optional[string]` | no |  |
+| `cantidad` | `Optional[number]` | no | Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida) |
 
 ```json
 {
@@ -537,6 +697,11 @@ Array de `PropuestaResponse`:
 | `creado_por_usuario_id` | `Optional[string]` | no |  |
 | `preaceptada_por_solicitante` | `boolean` | no |  |
 | `preaceptada_por_empresa` | `boolean` | no |  |
+| `cantidad` | `Optional[number]` | no |  |
+| `fecha_envio` | `Optional[string]` | no |  |
+| `motivo_descarte` | `Optional[string]` | no |  |
+| `motivo_descarte_detalle` | `Optional[string]` | no |  |
+| `empresa` | `Optional[EmpresaPropuestaResumen]` | no |  |
 | `contacto_asesor` | `Optional[ContactoAsignadoResponse]` | no |  |
 
 ---
@@ -557,6 +722,7 @@ Array de `PropuestaResponse`:
 | `tiempo_estimado_entrega` | `string` | sí | Tiempo estimado (ej: '45 días') |
 | `incoterm` | `string` | sí | Incoterm propuesto (FOB, CIF, EXW, DDP, etc.) |
 | `condiciones_adicionales` | `Optional[string]` | no |  |
+| `cantidad` | `Optional[number]` | no | Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida) |
 
 ```json
 {
@@ -583,6 +749,11 @@ Array de `PropuestaResponse`:
 | `creado_por_usuario_id` | `Optional[string]` | no |  |
 | `preaceptada_por_solicitante` | `boolean` | no |  |
 | `preaceptada_por_empresa` | `boolean` | no |  |
+| `cantidad` | `Optional[number]` | no |  |
+| `fecha_envio` | `Optional[string]` | no |  |
+| `motivo_descarte` | `Optional[string]` | no |  |
+| `motivo_descarte_detalle` | `Optional[string]` | no |  |
+| `empresa` | `Optional[EmpresaPropuestaResumen]` | no |  |
 | `contacto_asesor` | `Optional[ContactoAsignadoResponse]` | no |  |
 
 ---
@@ -609,6 +780,11 @@ Array de `PropuestaResponse`:
 | `creado_por_usuario_id` | `Optional[string]` | no |  |
 | `preaceptada_por_solicitante` | `boolean` | no |  |
 | `preaceptada_por_empresa` | `boolean` | no |  |
+| `cantidad` | `Optional[number]` | no |  |
+| `fecha_envio` | `Optional[string]` | no |  |
+| `motivo_descarte` | `Optional[string]` | no |  |
+| `motivo_descarte_detalle` | `Optional[string]` | no |  |
+| `empresa` | `Optional[EmpresaPropuestaResumen]` | no |  |
 | `contacto_asesor` | `Optional[ContactoAsignadoResponse]` | no |  |
 
 ---
@@ -625,10 +801,14 @@ Array de `PropuestaResponse`:
 | Campo | Tipo | Req | Descripción |
 |-------|------|-----|-------------|
 | `aceptar` | `boolean` | no |  |
+| `motivo_eleccion` | `Optional[string]` | no |  |
+| `motivo_detalle` | `Optional[string]` | no |  |
 
 ```json
 {
-  "aceptar": true
+  "aceptar": true,
+  "motivo_eleccion": "<motivo_eleccion>",
+  "motivo_detalle": "<motivo_detalle>"
 }
 ```
 
@@ -647,6 +827,23 @@ Array de `PropuestaResponse`:
 | `creado_por_usuario_id` | `Optional[string]` | no |  |
 | `preaceptada_por_solicitante` | `boolean` | no |  |
 | `preaceptada_por_empresa` | `boolean` | no |  |
+| `cantidad` | `Optional[number]` | no |  |
+| `fecha_envio` | `Optional[string]` | no |  |
+| `motivo_descarte` | `Optional[string]` | no |  |
+| `motivo_descarte_detalle` | `Optional[string]` | no |  |
+| `empresa` | `Optional[EmpresaPropuestaResumen]` | no |  |
 | `contacto_asesor` | `Optional[ContactoAsignadoResponse]` | no |  |
+
+---
+
+### `GET /trm`
+
+- **Resumen:** Trm Vigente
+- **Auth:** Bearer JWT
+- **Códigos:** 200
+
+**Respuesta (`object`)**
+
+_Sin campos detallados en OpenAPI._
 
 ---

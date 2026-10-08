@@ -8,7 +8,7 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.usuario import Usuario
 from utils.security import hash_password, create_access_token
-from conftest import crear_empresa_importadora, auth_headers_for
+from conftest import asignar_en_bd, crear_empresa_importadora, auth_headers_for
 
 
 @pytest.fixture()
@@ -84,6 +84,8 @@ class TestEnviarPropuesta:
         original_redis = config.redis_client
         config.redis_client = redis_mock
         
+        asignar_en_bd(db_session, test_cotizacion_abierta.id, test_importador_user.importador_id)
+
         try:
             response = client.post(
                 "/propuestas",
@@ -157,8 +159,10 @@ class TestEnviarPropuesta:
         original_redis = config.redis_client
         config.redis_client = redis_mock
         
+        asignar_en_bd(db_session, test_cotizacion_abierta.id, importador2.id)
+
         try:
-            # Crear token con el importador real (el que está en la lista de matching de Redis)
+            # Crear token con el importador real (el que tiene asignada la solicitud)
             auth_headers = auth_headers_for(importador_user)
             
             response1 = client.post(
