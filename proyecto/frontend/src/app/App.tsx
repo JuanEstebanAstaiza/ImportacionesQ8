@@ -45,6 +45,7 @@ import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
 import { RetoPagina } from "@/features/reto/RetoPagina";
 import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
+import { BloqueLanding } from "@/features/landing/BloqueLanding";
 import { RetoAdmin } from "@/features/reto/RetoAdmin";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
 import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
@@ -10195,63 +10196,26 @@ function LandingHowItWorksSection() {
 
 /** "Novedades y aliados": bloques dinámicos, miniblog y muro de aliados del CMS. */
 const LANDING_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80";
-// Tokens de marca con su variante clara/oscura resuelta vía Tailwind `dark:`,
-// nunca HEX fijo en lo renderizado (ver Zarpi_Modelo_de_Monetizacion).
-const LANDING_TOKEN_TEXT_CLASS:Record<string,string>={
-  primary:"text-[#4F06EB] dark:text-[#EDF953]",
-  surface:"text-black dark:text-white",
-  border:"text-slate-400 dark:text-zinc-500",
-  foreground:"text-black dark:text-white",
-  muted:"text-slate-500 dark:text-zinc-400",
-};
-const LANDING_TOKEN_BUTTON_CLASS:Record<string,string>={
-  primary:"bg-[#4F06EB] text-white dark:bg-[#EDF953] dark:text-black",
-  surface:"bg-white text-black dark:bg-[#0F0F0F] dark:text-white",
-  border:"bg-transparent border border-slate-200 dark:border-zinc-800",
-  foreground:"bg-black text-white dark:bg-white dark:text-black",
-  muted:"bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300",
-};
-const LANDING_FONT_CLASS:Record<string,string>={elvellon:"font-elvellon",avenor:"font-avenor"};
-const LANDING_HEADING_SIZE_CLASS:Record<string,string>={xl:"text-3xl font-bold",lg:"text-2xl font-bold",md:"text-xl font-semibold",sm:"text-lg font-semibold"};
-const LANDING_TEXT_SIZE_CLASS:Record<string,string>={lg:"text-base",md:"text-sm",sm:"text-xs"};
-const LANDING_ALIGN_CLASS:Record<string,string>={left:"text-left",center:"text-center",right:"text-right"};
-
-/** Un bloque del CMS renderizado con las mismas reglas que la previsualización del admin. */
+/** Un bloque del CMS: mismas reglas que la vista previa del editor (features/landing/BloqueLanding). */
 function LandingDynamicBlock({block,onLogin,onRegister}:{block:LandingBlock;onLogin:()=>void;onRegister:()=>void}) {
-  const alignClass=LANDING_ALIGN_CLASS[block.alineacion]||"text-left";
-  const tokenTextClass=LANDING_TOKEN_TEXT_CLASS[block.token_color]||LANDING_TOKEN_TEXT_CLASS.foreground;
-  const tokenButtonClass=LANDING_TOKEN_BUTTON_CLASS[block.token_color]||LANDING_TOKEN_BUTTON_CLASS.primary;
-  const fontClass=LANDING_FONT_CLASS[block.fuente]||LANDING_FONT_CLASS.avenor;
-
-  if(block.tipo==="heading"){
-    return <p className={clsx(alignClass,tokenTextClass,fontClass,LANDING_HEADING_SIZE_CLASS[block.tamano_fuente]||LANDING_HEADING_SIZE_CLASS.md)}>{block.contenido}</p>;
-  }
-  if(block.tipo==="paragraph"){
-    return <p className={clsx(alignClass,tokenTextClass,fontClass,LANDING_TEXT_SIZE_CLASS[block.tamano_fuente]||LANDING_TEXT_SIZE_CLASS.md)}>{block.contenido}</p>;
-  }
-  if(block.tipo==="image"){
-    if(!block.contenido)return null;
-    return (
-      <div className={alignClass}>
+  const onBoton=block.accion_boton==="open_register"?onRegister
+    :block.accion_boton==="external_link"&&block.accion_url?()=>window.open(block.accion_url as string,"_blank","noopener,noreferrer")
+    :onLogin;
+  return (
+    <BloqueLanding
+      block={block}
+      onBoton={onBoton}
+      imagen={(ruta,className)=>(
         <img
-          src={safeHttpUrl(resolveApiUrl(block.contenido),LANDING_IMAGE_FALLBACK)}
+          src={safeHttpUrl(resolveApiUrl(ruta),LANDING_IMAGE_FALLBACK)}
           alt=""
-          className="inline-block max-h-80 rounded-xl border border-slate-200 dark:border-zinc-800 object-cover"
+          className={className}
           onError={(event)=>{event.currentTarget.src=LANDING_IMAGE_FALLBACK;}}
         />
-      </div>
-    );
-  }
-  if(block.tipo==="video"){
-    return block.contenido?<div className={alignClass}><video src={resolveApiUrl(block.contenido)} controls className="inline-block max-h-80 w-full max-w-2xl rounded-xl border border-slate-200 dark:border-zinc-800"/></div>:null;
-  }
-  if(block.tipo==="button"){
-    const handleClick=block.accion_boton==="open_register"?onRegister
-      :block.accion_boton==="external_link"&&block.accion_url?()=>window.open(block.accion_url as string,"_blank","noopener,noreferrer")
-      :onLogin;
-    return <div className={alignClass}><button type="button" onClick={handleClick} className={clsx("inline-flex items-center rounded-lg px-6 py-3 text-sm font-semibold",tokenButtonClass)}>{block.contenido||"Continuar"}</button></div>;
-  }
-  return null;
+      )}
+      video={(ruta,className)=><video src={resolveApiUrl(ruta)} controls className={className}/>}
+    />
+  );
 }
 
 function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:LandingDynamicContent|null;error:string;onLogin:()=>void;onRegister:()=>void}) {
@@ -12701,7 +12665,7 @@ export default function App() {
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
     if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
-    if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPerfil={()=>goTo("user-profile")}/></PantallaPortal>;
+    if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
     if(screen==="admin-reto")return <PantallaPortal sb={sb} active="admin-reto" titulo="Reto · Rondas y pagos"><RetoAdmin/></PantallaPortal>;
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;

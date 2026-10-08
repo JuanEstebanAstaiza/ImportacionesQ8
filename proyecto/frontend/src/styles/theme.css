@@ -636,3 +636,16 @@
     line-height: 1.5;
   }
 }
+
+/*
+ * Fuentes de los bloques de la landing (features/landing/BloqueLanding.tsx).
+ * "titulos" y "texto" siguen a la tipografía de la plataforma: la hoja del
+ * gestor (/tipografia/activa.css) redefine --font-display y --font-avenor.
+ * Las de marca son fijas: el gestor solo pisa .font-elvellon/.font-avenor.
+ */
+@layer components {
+  .fuente-titulos { font-family: var(--font-display, "Elvellon"), sans-serif; }
+  .fuente-texto { font-family: var(--font-avenor, "AT Avenor"), sans-serif; }
+  .fuente-marca-elvellon { font-family: "Elvellon", sans-serif; }
+  .fuente-marca-avenor { font-family: "AT Avenor", sans-serif; }
+}

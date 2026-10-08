@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  Banknote,
   Building2,
   CheckCircle2,
   Eye,
   EyeOff,
   KeyRound,
   Loader2,
-  Pencil,
   Ticket,
   Trash2,
   UserRound,
@@ -16,9 +14,8 @@ import {
 
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
 import { resolveApiUrl } from "@/services/api-client";
-import { perfilService, type CambiosPerfil, type CuentaPagoResumen, type MiPerfil } from "@/services/perfil.service";
+import { perfilService, type CambiosPerfil, type MiPerfil } from "@/services/perfil.service";
 import { CLASE_BOTON_PRIMARIO, CLASE_BOTON_SECUNDARIO, CLASE_INPUT, CLASE_TARJETA, fechaBogota, mensajeError } from "@/features/reto/comun";
-import { FormCuentaBancaria } from "./FormCuentaBancaria";
 
 const INDICATIVOS = ["+57", "+1", "+52", "+34", "+44", "+49", "+55", "+54", "+56", "+51", "+593", "+507", "+58", "+86"];
 
@@ -290,97 +287,12 @@ function CambiarContrasena() {
   );
 }
 
-// ── Cuenta para pagos ────────────────────────────────────────────────────────
-
-function CuentaParaPagos() {
-  const [cuenta, setCuenta] = useState<CuentaPagoResumen | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [editando, setEditando] = useState(false);
-  const [borrando, setBorrando] = useState(false);
-  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
-
-  const cargar = useCallback(async () => {
-    try {
-      setCuenta((await perfilService.cuentaPago()).cuenta);
-    } catch (err) {
-      toast.error(mensajeError(err, "No pudimos cargar tu cuenta bancaria."));
-    } finally {
-      setCargando(false);
-    }
-  }, []);
-  useEffect(() => { void cargar(); }, [cargar]);
-
-  if (cargando) {
-    return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</p>;
-  }
-
-  if (!cuenta || editando) {
-    return (
-      <FormCuentaBancaria
-        key={cuenta?.fecha_actualizacion ?? "nueva"}
-        inicial={cuenta ? { banco: cuenta.banco, tipo_cuenta: cuenta.tipo_cuenta, titular: cuenta.titular } : undefined}
-        textoBoton={cuenta ? "Guardar la nueva cuenta" : "Guardar cuenta"}
-        onCancelar={cuenta ? () => setEditando(false) : undefined}
-        onGuardar={async (datos) => {
-          const r = await perfilService.guardarCuentaPago(datos);
-          setCuenta(r.cuenta);
-          setEditando(false);
-          toast.success("Guardamos tu cuenta bancaria.");
-        }}
-      />
-    );
-  }
-
-  const borrar = async () => {
-    setBorrando(true);
-    try {
-      await perfilService.borrarCuentaPago();
-      setCuenta(null);
-      toast.success("Borramos tu cuenta bancaria.");
-    } catch (err) {
-      toast.error(mensajeError(err, "No pudimos borrar la cuenta."));
-    } finally {
-      setBorrando(false);
-      setConfirmarBorrado(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 p-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:text-accent"><Banknote className="h-5 w-5" /></span>
-        <div className="min-w-0 text-sm">
-          <p className="font-semibold">{cuenta.banco} · {cuenta.tipo_cuenta === "ahorros" ? "Ahorros" : "Corriente"} ···{cuenta.ultimos_digitos}</p>
-          <p className="truncate text-muted-foreground">{cuenta.titular}{cuenta.documento ? ` · Doc. ${cuenta.documento}` : ""}</p>
-          {cuenta.fecha_actualizacion ? <p className="text-xs text-muted-foreground">Actualizada el {fechaBogota(cuenta.fecha_actualizacion, false)}</p> : null}
-        </div>
-      </div>
-      {confirmarBorrado ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between">
-          <p>¿Borrar esta cuenta? Tendrás que cargarla de nuevo para recibir pagos.</p>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => void borrar()} disabled={borrando} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60">
-              {borrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Sí, borrar
-            </button>
-            <button type="button" onClick={() => setConfirmarBorrado(false)} className={CLASE_BOTON_SECUNDARIO}>No</button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setEditando(true)} className={CLASE_BOTON_SECUNDARIO}><Pencil className="h-4 w-4" /> Cambiar cuenta</button>
-          <button type="button" onClick={() => setConfirmarBorrado(true)} className={CLASE_BOTON_SECUNDARIO}><Trash2 className="h-4 w-4" /> Borrar</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Pantalla ─────────────────────────────────────────────────────────────────
 
 /**
- * Editor de perfil para cualquier cuenta. El cotizante además carga la cuenta
- * bancaria donde le transferimos las recompensas del reto; la empresa
- * importadora enlaza a los datos de su empresa, que se editan aparte.
+ * Editor de perfil para cualquier cuenta. La empresa importadora enlaza a los
+ * datos de su empresa, que se editan aparte. Los datos bancarios no se guardan
+ * aquí: se piden solo al reclamar una recompensa del reto en efectivo.
  */
 export function PerfilUsuario({
   onActualizado,
@@ -456,16 +368,13 @@ export function PerfilUsuario({
 
       {esCotizante ? (
         <Seccion
-          icono={Banknote}
-          titulo="Cuenta para recibir pagos"
-          descripcion="Bancolombia, otro banco o billetera (Nequi, Daviplata). Aquí te transferimos las recompensas del reto de Tendencias."
-          accion={(perfil.cotizaciones_gratis ?? 0) > 0 ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-xs font-semibold text-foreground">
-              <Ticket className="h-3.5 w-3.5" /> {perfil.cotizaciones_gratis} cotizaciones gratis
-            </span>
-          ) : undefined}
+          icono={Ticket}
+          titulo="Recompensas del reto"
+          descripcion="Si eliges efectivo al llegar a la meta, te pedimos los datos bancarios en ese momento. No los guardamos en tu perfil y los borramos apenas te pagamos."
         >
-          <CuentaParaPagos />
+          <p className="text-sm">
+            Cotizaciones gratis disponibles: <strong className="font-semibold">{perfil.cotizaciones_gratis ?? 0}</strong>
+          </p>
         </Seccion>
       ) : null}
 

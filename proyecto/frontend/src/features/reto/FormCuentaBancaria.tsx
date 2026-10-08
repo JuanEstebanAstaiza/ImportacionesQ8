@@ -2,14 +2,14 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 
 import { BANCOS_COLOMBIA, type CuentaPagoDatos } from "@/services/reto.service";
-import { CLASE_BOTON_PRIMARIO, CLASE_BOTON_SECUNDARIO, CLASE_INPUT, mensajeError } from "@/features/reto/comun";
+import { CLASE_BOTON_PRIMARIO, CLASE_BOTON_SECUNDARIO, CLASE_INPUT, mensajeError } from "./comun";
 
 const CUENTA_VACIA: CuentaPagoDatos = { banco: "Bancolombia", tipo_cuenta: "ahorros", numero_cuenta: "", titular: "", documento_titular: "" };
 
 /**
- * Datos bancarios para recibir pagos. Lo usan el perfil y el reclamo de la
- * recompensa del reto; las dos vías guardan la misma cuenta. El número y el
- * documento se escriben siempre de nuevo: nunca vuelven completos al navegador.
+ * Datos bancarios para pagar una recompensa del reto en efectivo. No se guardan
+ * en el perfil: se piden al reclamar y el backend los borra al marcar el pago.
+ * El número y el documento nunca vuelven completos al navegador.
  */
 export function FormCuentaBancaria({
   titulo,
@@ -19,7 +19,7 @@ export function FormCuentaBancaria({
   onCancelar,
 }: {
   titulo?: ReactNode;
-  /** Banco, tipo y titular de la cuenta guardada, para no reescribirlos al cambiarla. */
+  /** Banco, tipo y titular ya cargados, para no reescribirlos al corregir. */
   inicial?: Partial<Pick<CuentaPagoDatos, "banco" | "tipo_cuenta" | "titular">>;
   textoBoton?: string;
   onGuardar: (datos: CuentaPagoDatos) => Promise<void>;
@@ -58,7 +58,7 @@ export function FormCuentaBancaria({
     <form onSubmit={guardar} className="space-y-3" noValidate>
       {titulo ? <div>{titulo}</div> : null}
       <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Guardamos el número y el documento cifrados. Solo los ve el equipo que hace la transferencia.
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Guardamos el número y el documento cifrados, solo los ve el equipo que hace la transferencia y los borramos apenas te pagamos.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">

@@ -4,7 +4,8 @@ export type LandingBlockType = "heading" | "paragraph" | "image" | "video" | "bu
 export type LandingBlockAlign = "left" | "center" | "right";
 export type LandingButtonAction = "open_login" | "open_register" | "external_link";
 export type LandingBrandToken = "primary" | "surface" | "border" | "foreground" | "muted";
-export type LandingFontFamily = "elvellon" | "avenor";
+/** "titulos"/"texto" siguen a la tipografía de la plataforma; "elvellon"/"avenor" son las de marca fijas. */
+export type LandingFontFamily = "titulos" | "texto" | "elvellon" | "avenor";
 export type LandingSection = "home" | "about" | "how-it-works" | "news" | "contact";
 
 export interface LandingBlock {

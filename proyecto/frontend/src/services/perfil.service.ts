@@ -1,9 +1,9 @@
 import { apiRequest } from "@/services/api-client";
-import type { CuentaPagoDatos } from "@/services/reto.service";
 
 /**
  * Perfil personal de cualquier cuenta (cliente, dueño o asesor de empresa,
- * admin): datos, foto, contraseña y cuenta bancaria para recibir pagos.
+ * admin): datos, foto y contraseña. Los datos bancarios no viven aquí: se
+ * piden al reclamar una recompensa del reto en efectivo y se borran al pagar.
  * Ver backend/routers/usuarios.py.
  */
 
@@ -39,24 +39,9 @@ export interface CambiosPerfil {
   foto_url?: string;
 }
 
-/** Lo que vuelve al dueño: el número nunca completo. */
-export interface CuentaPagoResumen {
-  banco: string;
-  tipo_cuenta: "ahorros" | "corriente";
-  ultimos_digitos: string;
-  titular: string;
-  /** Enmascarado: «•••••••050». */
-  documento: string | null;
-  fecha_actualizacion: string | null;
-}
-
 export const perfilService = {
   obtener: () => apiRequest<MiPerfil>("/usuarios/me"),
   guardar: (cambios: CambiosPerfil) => apiRequest<MiPerfil>("/usuarios/me", { method: "PUT", body: cambios }),
   cambiarContrasena: (actual: string, nueva: string) =>
     apiRequest<void>("/usuarios/me/contrasena", { method: "POST", body: { actual, nueva } }),
-  cuentaPago: () => apiRequest<{ cuenta: CuentaPagoResumen | null }>("/usuarios/me/cuenta-pago"),
-  guardarCuentaPago: (datos: CuentaPagoDatos) =>
-    apiRequest<{ cuenta: CuentaPagoResumen }>("/usuarios/me/cuenta-pago", { method: "PUT", body: datos }),
-  borrarCuentaPago: () => apiRequest<void>("/usuarios/me/cuenta-pago", { method: "DELETE" }),
 };

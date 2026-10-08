@@ -35,7 +35,7 @@ import {
   fechaBogota,
   mensajeError,
 } from "./comun";
-import { FormCuentaBancaria } from "@/features/perfil/FormCuentaBancaria";
+import { FormCuentaBancaria } from "./FormCuentaBancaria";
 
 /**
  * Reto comunitario de Tendencias: página pública de inscripción con contador
@@ -164,8 +164,8 @@ function AvisameProxima() {
 
 // ── Reclamo de la recompensa ─────────────────────────────────────────────────
 
-function ElegirRecompensa({ participacion, onCambio, onIrAPerfil }: { participacion: Participacion; onCambio: () => void; onIrAPerfil?: () => void }) {
-  const { ronda, cuenta } = participacion;
+function ElegirRecompensa({ participacion, onCambio }: { participacion: Participacion; onCambio: () => void }) {
+  const { ronda } = participacion;
   const [eleccion, setEleccion] = useState<Eleccion | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -174,9 +174,7 @@ function ElegirRecompensa({ participacion, onCambio, onIrAPerfil }: { participac
       clave: "efectivo",
       icono: Banknote,
       titulo: pesos(ronda.recompensa_cop),
-      detalle: cuenta
-        ? `Por transferencia a tu cuenta ${cuenta.banco} terminada en ${cuenta.ultimos_digitos}.`
-        : "Por transferencia a tu cuenta. En el siguiente paso te pedimos los datos bancarios.",
+      detalle: "Por transferencia a tu cuenta. En el siguiente paso te pedimos los datos bancarios.",
     },
     {
       clave: "cotizaciones",
@@ -192,7 +190,7 @@ function ElegirRecompensa({ participacion, onCambio, onIrAPerfil }: { participac
     try {
       await retoService.reclamar(participacion.id, eleccion);
       toast.success(eleccion === "efectivo"
-        ? (cuenta ? "Listo. El pago sale en máximo 5 días hábiles." : "Listo. Ahora contanos a qué cuenta te transferimos.")
+        ? "Listo. Ahora contanos a qué cuenta te transferimos."
         : "Te acreditamos tus cotizaciones gratis.");
       onCambio();
     } catch (err) {
@@ -208,11 +206,6 @@ function ElegirRecompensa({ participacion, onCambio, onIrAPerfil }: { participac
       <div>
         <p className="flex items-center gap-2 text-base font-semibold"><Trophy className="h-5 w-5 text-primary dark:text-accent" /> Llegaste a {participacion.umbral}. Elegí tu recompensa</p>
         <p className="mt-0.5 text-sm text-muted-foreground">Es una sola por ronda y la elección es definitiva.</p>
-        {cuenta && onIrAPerfil ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            ¿Otra cuenta? <button type="button" onClick={onIrAPerfil} className="font-medium text-primary underline-offset-2 hover:underline dark:text-accent">Cámbiala en tu perfil</button> antes de reclamar.
-          </p>
-        ) : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Recompensa">
         {opciones.map(({ clave, icono: Icono, titulo, detalle }) => {
@@ -243,17 +236,44 @@ function ElegirRecompensa({ participacion, onCambio, onIrAPerfil }: { participac
   );
 }
 
-function FormCuenta({ participacion, onCambio }: { participacion: Participacion; onCambio: () => void }) {
+function FormCuenta({ participacion, onCambio, onCancelar }: { participacion: Participacion; onCambio: () => void; onCancelar?: () => void }) {
+  const corrigiendo = Boolean(participacion.cuenta);
   return (
     <FormCuentaBancaria
-      titulo={<p className="flex items-center gap-2 text-base font-semibold"><Banknote className="h-5 w-5 text-primary dark:text-accent" /> ¿A qué cuenta te transferimos {pesos(participacion.ronda.recompensa_cop)}?</p>}
-      textoBoton="Guardar datos de pago"
+      titulo={<p className="flex items-center gap-2 text-base font-semibold"><Banknote className="h-5 w-5 text-primary dark:text-accent" /> {corrigiendo ? "Corregí tus datos bancarios" : `¿A qué cuenta te transferimos ${pesos(participacion.ronda.recompensa_cop)}?`}</p>}
+      textoBoton={corrigiendo ? "Guardar corrección" : "Guardar datos de pago"}
+      onCancelar={onCancelar}
       onGuardar={async (datos) => {
         await retoService.guardarCuenta(participacion.id, datos);
-        toast.success("Recibimos tus datos. El pago sale en máximo 5 días hábiles.");
+        toast.success(corrigiendo ? "Corregimos tus datos de pago." : "Recibimos tus datos. El pago sale en máximo 5 días hábiles.");
         onCambio();
       }}
     />
+  );
+}
+
+/** Pago en camino: los datos se pueden corregir hasta que el admin lo marque pagado. */
+function PagoEnCamino({ participacion, onCambio }: { participacion: Participacion; onCambio: () => void }) {
+  const [corrigiendo, setCorrigiendo] = useState(false);
+  const { ronda, cuenta } = participacion;
+  if (!cuenta || corrigiendo) {
+    return (
+      <FormCuenta
+        participacion={participacion}
+        onCambio={() => { setCorrigiendo(false); onCambio(); }}
+        onCancelar={cuenta ? () => setCorrigiendo(false) : undefined}
+      />
+    );
+  }
+  return (
+    <Aviso tono="espera" icono={Clock}>
+      <p className="font-semibold">Recibimos tus datos. El pago sale en máximo 5 días hábiles.</p>
+      <p>Te vamos a transferir {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} ({cuenta.tipo_cuenta}) terminada en {cuenta.ultimos_digitos}. Te avisamos con la referencia apenas salga.</p>
+      <p className="text-xs">
+        Borramos tus datos bancarios apenas te transferimos.{" "}
+        <button type="button" onClick={() => setCorrigiendo(true)} className="font-medium underline underline-offset-2">¿Hay un error? Corrígelos</button>
+      </p>
+    </Aviso>
   );
 }
 
@@ -269,22 +289,13 @@ function Aviso({ tono, icono: Icono, children }: { tono: "exito" | "espera"; ico
   );
 }
 
-function EstadoRecompensa({ participacion, cotizacionesGratis, onCambio, onIrAPerfil }: { participacion: Participacion; cotizacionesGratis: number; onCambio: () => void; onIrAPerfil?: () => void }) {
+function EstadoRecompensa({ participacion, cotizacionesGratis, onCambio }: { participacion: Participacion; cotizacionesGratis: number; onCambio: () => void }) {
   const { ronda, cuenta } = participacion;
   switch (participacion.estado_recompensa) {
     case "reclamable":
-      return <ElegirRecompensa participacion={participacion} onCambio={onCambio} onIrAPerfil={onIrAPerfil} />;
+      return <ElegirRecompensa participacion={participacion} onCambio={onCambio} />;
     case "solicitada":
-      if (!cuenta) return <FormCuenta participacion={participacion} onCambio={onCambio} />;
-      return (
-        <Aviso tono="espera" icono={Clock}>
-          <p className="font-semibold">Recibimos tus datos. El pago sale en máximo 5 días hábiles.</p>
-          <p>Te vamos a transferir {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} ({cuenta.tipo_cuenta}) terminada en {cuenta.ultimos_digitos}. Te avisamos con la referencia apenas salga.</p>
-          {onIrAPerfil ? (
-            <p className="text-xs">¿Cambió tu cuenta? <button type="button" onClick={onIrAPerfil} className="font-medium underline underline-offset-2">Actualízala en tu perfil</button>.</p>
-          ) : null}
-        </Aviso>
-      );
+      return <PagoEnCamino participacion={participacion} onCambio={onCambio} />;
     case "pagada":
       if (participacion.eleccion === "cotizaciones") {
         return (
@@ -320,14 +331,12 @@ function PanelParticipante({
   exclusiones,
   onEnviarEnlace,
   onCambio,
-  onIrAPerfil,
 }: {
   participacion: Participacion;
   cotizacionesGratis: number;
   exclusiones: string;
   onEnviarEnlace: () => void;
   onCambio: () => void;
-  onIrAPerfil?: () => void;
 }) {
   const { ronda } = participacion;
   const activa = ronda.estado !== "cerrada" && !vencida(ronda);
@@ -367,7 +376,7 @@ function PanelParticipante({
         <p className="mt-1.5 text-xs text-muted-foreground">Solo cuentan los productos aprobados. Te avisamos cada vez que revisamos uno.</p>
       </div>
 
-      <EstadoRecompensa participacion={participacion} cotizacionesGratis={cotizacionesGratis} onCambio={onCambio} onIrAPerfil={onIrAPerfil} />
+      <EstadoRecompensa participacion={participacion} cotizacionesGratis={cotizacionesGratis} onCambio={onCambio} />
 
       {activa && exclusiones ? (
         <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
@@ -390,13 +399,10 @@ export function RetoPagina({
   autenticado,
   onIrARegistro,
   onEnviarEnlace,
-  onIrAPerfil,
 }: {
   autenticado: boolean;
   onIrARegistro: () => void;
   onEnviarEnlace: () => void;
-  /** Donde se cambia la cuenta bancaria guardada. */
-  onIrAPerfil?: () => void;
 }) {
   const [ronda, setRonda] = useState<Ronda | null>(null);
   const [exclusiones, setExclusiones] = useState("");
@@ -545,7 +551,6 @@ export function RetoPagina({
           exclusiones={exclusiones}
           onEnviarEnlace={onEnviarEnlace}
           onCambio={refrescarTodo}
-          onIrAPerfil={onIrAPerfil}
         />
       ) : null}
 
