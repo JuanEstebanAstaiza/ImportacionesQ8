@@ -42,6 +42,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[24-Eventos-y-Panel-Empresa]] | Bitácora de eventos con montos en COP (TRM) y panel comercial de la empresa |
 | [[25-Tendencias-y-Catalogos]] | Tendencias semanales por suscripción, panel del curador y catálogos selectos de empresas |
 | [[26-Tipografia-y-Videos-Landing]] | Tipografía de toda la plataforma (Fontsource, alojada en el servidor) y carrusel de videos de «Quiénes somos» |
+| [[27-Tendencias-Virales-y-Reto]] | Tendencias v2: productos virales (comunidad, importadoras, equipo), aprobación con portada, solicitudes atribuidas y reto con recompensa |
 | `Zarpi.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---

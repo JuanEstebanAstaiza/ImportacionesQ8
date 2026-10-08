@@ -30,6 +30,8 @@ from schemas.admin import (
     MensajeAdminItem,
     MensajeSoporteRequest,
     CrearAgenteSoporteRequest,
+    CrearDisenadorRequest,
+    DisenadorItem,
     NivelAgenteRequest,
     AgenteSoporteItem,
     ExpedienteVerificacion,
@@ -426,6 +428,51 @@ async def cambiar_nivel_agente(
         activo=bool(agente.activo),
         nivel=agente.nivel_soporte,
     )
+
+
+# ==================== Equipo de diseño ====================
+
+@router.post("/disenadores", response_model=DisenadorItem, status_code=status.HTTP_201_CREATED)
+async def crear_disenador(
+    datos: CrearDisenadorRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Da de alta un designer: pone portada e imágenes con la identidad de
+    Zarpi a los productos de Tendencias ya aprobados y los publica. Entra al
+    canal del equipo, pero no ve soporte ni administra la plataforma."""
+    if db.query(Usuario).filter(Usuario.email == datos.email).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email ya está registrado")
+    disenador = Usuario(
+        id=str(uuid4()), email=datos.email, password_hash=hash_password(datos.password), rol="designer",
+        nombre=datos.nombre, telefono=datos.telefono, activo=True, email_verificado=True, perfil_completo=True,
+    )
+    db.add(disenador)
+    db.commit()
+    db.refresh(disenador)
+    return DisenadorItem(id=str(disenador.id), email=disenador.email, nombre=disenador.nombre,
+                         activo=bool(disenador.activo), publicados=0, fecha_creacion=disenador.fecha_creacion)
+
+
+@router.get("/disenadores", response_model=List[DisenadorItem])
+async def listar_disenadores(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """El equipo de diseño con cuántos productos publicó cada uno."""
+    from models.tendencias_virales import TendenciaItem
+
+    conteo = dict(
+        db.query(TendenciaItem.disenado_por, func.count(TendenciaItem.id))
+        .filter(TendenciaItem.disenado_por.isnot(None))
+        .group_by(TendenciaItem.disenado_por).all()
+    )
+    filas = db.query(Usuario).filter(Usuario.rol == "designer").order_by(Usuario.activo.desc(), Usuario.nombre).all()
+    return [
+        DisenadorItem(id=str(u.id), email=u.email, nombre=u.nombre, activo=bool(u.activo),
+                      publicados=int(conteo.get(u.id, 0)), fecha_creacion=u.fecha_creacion)
+        for u in filas
+    ]
 
 
 @router.get("/importadores/{importador_id}/expediente", response_model=ExpedienteVerificacion)

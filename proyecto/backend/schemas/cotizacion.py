@@ -92,8 +92,7 @@ class CotizacionCreate(BaseModel):
     origen: Literal["directa", "tendencias", "catalogo"] = Field(
         default="directa", description="De dónde sale la solicitud: formulario, Tendencias o catálogo de una empresa"
     )
-    tendencia_edicion_id: Optional[str] = None
-    tendencia_producto_id: Optional[str] = None
+    tendencia_item_id: Optional[str] = None
     catalogo_producto_id: Optional[str] = None
 
     @field_validator("fotos_producto")
@@ -172,8 +171,7 @@ class CotizacionResponse(BaseModel):
     foto_producto: Optional[str]
     fotos_producto: List[str] = Field(default_factory=list, validate_default=True)
     origen: str = "directa"
-    tendencia_edicion_id: Optional[str] = None
-    tendencia_producto_id: Optional[str] = None
+    tendencia_item_id: Optional[str] = None
     catalogo_producto_id: Optional[str] = None
 
     @field_validator("fotos_producto", mode="before")

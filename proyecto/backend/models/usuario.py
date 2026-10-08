@@ -14,12 +14,20 @@ from database import Base
 # - "soporte": agente de atención al cliente de la plataforma, creado por un admin. Atiende los
 #   tickets de soporte y resuelve incidentes de órdenes, pero NO administra la plataforma: no da
 #   de alta empresas ni usuarios, no toca certificaciones ni copias de seguridad.
-ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin", "soporte")
+# - "designer": diseñador de Zarpi, creado por un admin. Pone la portada y las imágenes con la
+#   identidad de marca a los productos de Tendencias ya aprobados y los publica. Está en el canal
+#   del equipo, pero no atiende soporte ni administra nada.
+ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin", "soporte", "designer")
 
 # Cuentas del equipo de la plataforma: comparten la bandeja de soporte y las
 # acciones de resolución. Se agrupan aquí para no repetir la pareja por todo el
 # código y que añadir un rol interno mañana sea un solo cambio.
 ROLES_PLATAFORMA = ("admin", "soporte")
+
+# Cuentas internas de Zarpi: entran al canal del equipo y no eligen rol al
+# iniciar sesión. Más amplio que ROLES_PLATAFORMA: el designer está aquí pero
+# no en la bandeja de soporte (ahí hay datos de operación de los usuarios).
+ROLES_EQUIPO = ROLES_PLATAFORMA + ("designer",)
 
 # Mesa de soporte por niveles: 1 atiende lo corriente, 3 lo que requiere más
 # experiencia. Un agente puede atender su nivel y todos los inferiores; nunca
@@ -99,6 +107,9 @@ class Usuario(Base):
     # Curador de Tendencias: arma y programa las ediciones semanales. Es una
     # capacidad extra, no un rol: la asigna el admin a usuarios existentes.
     es_curador = Column(Boolean, nullable=False, default=False, server_default="0")
+    # Cotizaciones gratis ganadas en el reto de Tendencias. Se descuentan cuando
+    # se active el cobro por cotización (hoy crear cotizaciones no se cobra).
+    cotizaciones_gratis = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva

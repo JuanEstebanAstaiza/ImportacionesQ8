@@ -86,9 +86,10 @@ TIER_RECALCULO_MINUTOS = int(os.getenv("TIER_RECALCULO_MINUTOS", "0" if APP_ENV 
 
 COBRO_A_SOLICITANTES = os.getenv("COBRO_A_SOLICITANTES", "false").lower() == "true"
 
-# Cada cuántos minutos se revisan las ediciones de Tendencias programadas para
-# publicarlas. 0 lo desactiva (los tests publican llamando al servicio).
-TENDENCIAS_PUBLICACION_MINUTOS = int(os.getenv("TENDENCIAS_PUBLICACION_MINUTOS", "0" if APP_ENV == "test" else "1"))
+# Cada cuántas horas corre la tarea de Tendencias: revisa que los videos
+# publicados sigan disponibles, avisa a los inactivos del reto y cierra las
+# rondas vencidas. 0 la desactiva (los tests llaman a los servicios).
+TENDENCIAS_TAREA_HORAS = int(os.getenv("TENDENCIAS_TAREA_HORAS", "0" if APP_ENV == "test" else "24"))
 
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))
 CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DIRIGIDA", "5"))

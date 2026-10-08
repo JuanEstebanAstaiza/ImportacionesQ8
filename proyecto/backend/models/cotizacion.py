@@ -76,8 +76,11 @@ class Cotizacion(Base):
     # De dónde salió la solicitud: "directa" (formulario), "tendencias" o
     # "catalogo". Permite medir cuántas solicitudes trae cada edición y producto.
     origen = Column(String(20), nullable=False, default="directa", server_default="directa")
+    # Tendencias v1 (ediciones semanales, retirada): se conservan por historia.
     tendencia_edicion_id = Column(String(36), nullable=True, index=True)
     tendencia_producto_id = Column(String(36), nullable=True, index=True)
+    # Tendencias v2: ficha de la que nace la solicitud.
+    tendencia_item_id = Column(String(36), nullable=True, index=True)
     catalogo_producto_id = Column(String(36), nullable=True, index=True)
     # Valores de los campos personalizados definidos por el importador (solo aplica
     # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.

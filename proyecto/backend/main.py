@@ -33,6 +33,8 @@ from routers.landing import router as landing_router
 from routers.tendencias import router as tendencias_router
 from routers.catalogos import router as catalogos_router
 from routers.tipografia import router as tipografia_router
+from routers.tendencias_virales import router as tendencias_virales_router
+from routers.reto import router as reto_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -65,28 +67,32 @@ async def _recalcular_tiers_periodicamente(intervalo_minutos: int) -> None:
         await asyncio.sleep(intervalo_minutos * 60)
 
 
-async def _publicar_tendencias_periodicamente(intervalo_minutos: int) -> None:
-    """Publica las ediciones de Tendencias cuya hora programada ya llegó. Corre
-    en cada worker; la transición es un UPDATE condicionado, así que solo uno
-    publica cada edición y envía su aviso."""
+async def _tarea_tendencias_periodica(intervalo_horas: int) -> None:
+    """Tarea diaria de Tendencias. Corre en cada worker, pero un candado en
+    Redis deja que solo uno la ejecute en cada vuelta."""
+    import config
     from database import SessionLocal
-    from services.tendencias import publicar_pendientes
+    from services.tendencias_virales import tarea_diaria
 
     def _pasada() -> None:
+        try:
+            if config.redis_client is not None and not config.redis_client.set(
+                    "lock:tendencias_tarea", "1", nx=True, ex=max(intervalo_horas * 3600 - 60, 60)):
+                return
+        except Exception:
+            logger.warning("Sin Redis para el candado de la tarea de Tendencias; se ejecuta igual")
         db = SessionLocal()
         try:
-            publicadas = publicar_pendientes(db)
-            if publicadas:
-                logger.info("Ediciones de Tendencias publicadas: %s", publicadas)
+            logger.info("Tarea de Tendencias: %s", tarea_diaria(db))
         except Exception:
             db.rollback()
-            logger.exception("Falló la publicación programada de Tendencias")
+            logger.exception("Falló la tarea diaria de Tendencias")
         finally:
             db.close()
 
     while True:
         await asyncio.to_thread(_pasada)
-        await asyncio.sleep(intervalo_minutos * 60)
+        await asyncio.sleep(intervalo_horas * 3600)
 
 
 @asynccontextmanager
@@ -106,10 +112,8 @@ async def lifespan(app: FastAPI):
         tarea_tiers = asyncio.create_task(_recalcular_tiers_periodicamente(config.TIER_RECALCULO_MINUTOS))
 
     tarea_tendencias = None
-    if config.TENDENCIAS_PUBLICACION_MINUTOS > 0:
-        tarea_tendencias = asyncio.create_task(
-            _publicar_tendencias_periodicamente(config.TENDENCIAS_PUBLICACION_MINUTOS)
-        )
+    if config.TENDENCIAS_TAREA_HORAS > 0:
+        tarea_tendencias = asyncio.create_task(_tarea_tendencias_periodica(config.TENDENCIAS_TAREA_HORAS))
 
     yield
 
@@ -267,6 +271,8 @@ app.include_router(landing_router)
 app.include_router(tendencias_router)
 app.include_router(catalogos_router)
 app.include_router(tipografia_router)
+app.include_router(tendencias_virales_router)
+app.include_router(reto_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

@@ -1,3 +1,5 @@
+> **Tendencias v1 (ediciones semanales) se retiró el 2026-10-08.** La reemplazó el feed de productos virales: ver [[27-Tendencias-Virales-y-Reto]]. De esta página siguen vigentes los catálogos de empresas, y el acceso por suscripción, la cortesía y el acceso libre, que quedan dormidos para cobrar más adelante.
+
 # APIs — Tendencias semanales y catálogos de empresas
 
 > Backend: `models/tendencias.py`, `models/catalogo.py`, `services/tendencias.py`, `services/tendencias_calculo.py`, `services/catalogos.py`, `services/origen_cotizacion.py`, `routers/tendencias.py`, `routers/catalogos.py`.
@@ -12,6 +14,7 @@
   - **pagado:** suscripción por un precio en COP y una duración que fija el admin; se cobra con Wompi;
   - **de cortesía:** el admin se lo regala a un usuario por X días.
   Sin acceso, el comprador solo ve la portada y cuántos productos trae la edición. El admin y los curadores siempre tienen acceso.
+- **Acceso libre por tiempo limitado:** el admin puede abrir Tendencias a todos los usuarios con sesión por N días o hasta una fecha (`PUT /tendencias/admin/acceso-libre {dias}` o `{hasta}` en hora de Bogotá; `{}` lo cierra). Se guarda en `configuracion_plataforma` (`tendencias.acceso_libre_hasta`, UTC) y vence solo; los accesos pagados y de cortesía no se tocan. `GET /tendencias/acceso` informa `origen: "libre"` y `acceso_libre_hasta`.
 - **Catálogos de empresas:** cada empresa importadora arma catálogos selectos de productos que ofrece importar. Son **gratuitos** para el comprador; la empresa decide a quién se los desbloquea.
 
 ---

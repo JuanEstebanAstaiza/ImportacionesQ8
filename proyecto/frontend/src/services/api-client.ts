@@ -260,7 +260,14 @@ function isProtectedPath(pathname: string): boolean {
     "/admin",
     "/tendencias",
     "/catalogos",
+    "/reto",
   ];
+  // Excepciones públicas dentro de prefijos protegidos: el feed y la ficha de
+  // Tendencias y la página del reto se ven sin sesión.
+  const publicPrefixes = ["/tendencias/feed", "/tendencias/items/", "/reto/rondas/abierta", "/reto/lista-espera"];
+  if (publicPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix))) {
+    return false;
+  }
 
   return protectedPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`));
 }

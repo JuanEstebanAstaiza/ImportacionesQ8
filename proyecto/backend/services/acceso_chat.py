@@ -16,7 +16,7 @@ from typing import Optional, Set
 from sqlalchemy.orm import Session
 
 from models.chat import ConversacionChat, TipoConversacion
-from models.usuario import ROLES_PLATAFORMA, Usuario
+from models.usuario import ROLES_EQUIPO, ROLES_PLATAFORMA, Usuario
 
 
 def es_equipo_plataforma(rol: str) -> bool:
@@ -27,6 +27,12 @@ def es_equipo_plataforma(rol: str) -> bool:
     endpoints, no aquí.
     """
     return rol in ROLES_PLATAFORMA
+
+
+def es_miembro_equipo(rol: str) -> bool:
+    """¿Entra al canal del equipo? Administración, soporte y diseño. Solo eso:
+    el designer no ve tickets ni conversaciones de clientes y empresas."""
+    return rol in ROLES_EQUIPO
 
 
 def tipo_de(conversacion: ConversacionChat) -> str:
@@ -78,7 +84,7 @@ def participantes(db: Session, conversacion: ConversacionChat) -> Set[str]:
             ids |= {
                 fila[0]
                 for fila in db.query(Usuario.id).filter(
-                    Usuario.rol.in_(ROLES_PLATAFORMA),
+                    Usuario.rol.in_(ROLES_EQUIPO),
                     Usuario.activo.is_(True),
                 )
             }
@@ -124,7 +130,7 @@ def puede_acceder(
         # Canal del equipo: fuera de la plataforma nadie entra, ni siquiera el
         # usuario del que se esté hablando. La sala común la ve todo el equipo;
         # un hilo entre dos personas, solo esas dos.
-        if not es_equipo_plataforma(rol):
+        if not es_miembro_equipo(rol):
             return False
         if es_sala_del_equipo(conversacion):
             return True

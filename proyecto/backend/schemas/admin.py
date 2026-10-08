@@ -102,6 +102,23 @@ class CrearAgenteSoporteRequest(BaseModel):
     nivel: int = Field(1, ge=1, le=3)
 
 
+class CrearDisenadorRequest(BaseModel):
+    """Alta de un designer de Zarpi (portadas de Tendencias)."""
+    email: EmailStr
+    password: str = Field(..., min_length=9, max_length=128)
+    nombre: str = Field(..., min_length=2, max_length=255)
+    telefono: Optional[str] = Field(None, max_length=30)
+
+
+class DisenadorItem(BaseModel):
+    id: str
+    email: str
+    nombre: Optional[str] = None
+    activo: bool
+    publicados: int = 0
+    fecha_creacion: Optional[datetime] = None
+
+
 class RequisitoVerificacion(BaseModel):
     """Un punto comprobable del expediente de una empresa."""
     clave: str

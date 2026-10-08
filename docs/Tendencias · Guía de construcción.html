@@ -1,0 +1,211 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tendencias · Guía de construcción</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&display=swap">
+<style>
+:root{--ink:#1a1a1a;--slate:#3d4a55;--rust:#b4472b;--muted:#6b6b6b;--rule:#d8d4cc;--paper:#faf8f3;--tint:#f0ece3}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#ebe7df;--slate:#b8c2cc;--rust:#e0744f;--muted:#9a9a9a;--rule:#3a3a3a;--paper:#161616;--tint:#222}}
+:root[data-theme="dark"]{--ink:#ebe7df;--slate:#b8c2cc;--rust:#e0744f;--muted:#9a9a9a;--rule:#3a3a3a;--paper:#161616;--tint:#222}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Fraunces,Georgia,serif;line-height:1.5;font-size:16px}
+.wrap{max-width:820px;margin:0 auto;padding:40px 16px 80px}
+header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:28px}
+.kicker{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--rust);font-weight:600}
+h1{font-size:34px;line-height:1.1;margin:6px 0 8px;font-weight:700}
+.meta{color:var(--muted);font-size:14px}
+h2{font-size:22px;margin:36px 0 10px;padding-top:10px;border-top:1px solid var(--rule);font-weight:600}
+h2 span{color:var(--rust);margin-right:8px;font-weight:400}
+h3{font-size:17px;margin:18px 0 6px;font-weight:600}
+p{margin:0 0 12px}
+ul,ol{margin:0 0 12px;padding-left:22px}
+li{margin:3px 0}
+table{width:100%;border-collapse:collapse;margin:6px 0 16px;font-size:14px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:600;color:var(--slate);font-size:12px;letter-spacing:1px;text-transform:uppercase}
+code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--tint);padding:1px 5px;border-radius:3px}
+pre{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--tint);padding:12px 14px;overflow-x:auto;border-left:3px solid var(--slate);margin:6px 0 16px}
+.box{background:var(--tint);padding:14px 18px;margin:12px 0 16px;border-left:3px solid var(--rust)}
+.box b{color:var(--rust)}
+@media (max-width:600px){h1{font-size:28px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Zarpi · Para desarrollo</div>
+  <h1>Módulo Tendencias: guía de construcción</h1>
+  <div class="meta">V1 · 8 de octubre de 2026 · Stack actual (FastAPI, MySQL, Next.js). Una entrega, tres bloques en orden.</div>
+</header>
+
+<div class="box"><b>Qué es.</b> Una sección donde hay productos virales para importar, cada uno con su video embebido desde TikTok / Instagram / YouTube y un botón para pedir propuestas. Los productos llegan como enlaces (comunidad, importadoras, equipo), una persona del equipo los aprueba y les pone portada, y ahí se publican. Sin precios en la ficha.</div>
+
+<h2><span>1</span>Reglas que condicionan el código</h2>
+<ul>
+  <li>Nunca se descarga ni se guarda un video ni su miniatura. Solo URL y código de inserción oficial. El video se reproduce con el embed de la plataforma, autor visible.</li>
+  <li>La ficha no muestra precio. Su única acción es crear una solicitud (pública o privada a una importadora) precargada con el producto.</li>
+  <li>Nada se publica sin aprobación humana y sin portada propia.</li>
+  <li>Las solicitudes que nacen de una ficha quedan atribuidas a esa ficha. Esa es la métrica del módulo.</li>
+  <li>Las cuentas con rol importadora no ven el botón de cotizar en fichas de otras importadoras.</li>
+</ul>
+
+<h2><span>2</span>Modelo de datos</h2>
+<pre>trend_item
+  id, source_url, source_url_normalized (UNIQUE)
+  platform ENUM(tiktok, instagram, youtube)
+  platform_author, platform_thumb_url NULL, embed_html TEXT
+  submitted_by (user.id), submitter_role ENUM(community, importer, team)
+  importer_id NULL (si lo subió una importadora)
+  status ENUM(pendiente, duplicado, rechazado, aprobado_sin_portada,
+              publicado, caido, archivado)
+  rejection_reason ENUM(marca_replica, repetido, no_es_producto,
+              regulado_inviable, calidad) NULL
+  name, category (lista cerrada), is_regulated BOOL
+  why_trending VARCHAR(200), watch_out VARCHAR(200)
+  cover_image_url NULL, week_number, published_at NULL
+  quote_requests_count INT DEFAULT 0, last_checked_at NULL
+  created_at, updated_at
+
+challenge_round
+  id, name, max_participants, reward_cash, reward_free_quotes,
+  deadline, status ENUM(open, closed)
+
+challenge_participation
+  id, round_id, user_id, approved_count INT DEFAULT 0,
+  reward_choice ENUM(cash, quotes) NULL,
+  reward_status ENUM(pending, claimable, paid),
+  paid_at NULL, payment_reference NULL
+  UNIQUE(round_id, user_id)
+
+quote_request  (existente)
+  + trend_item_id NULL (FK)</pre>
+
+<h2><span>3</span>Enriquecimiento del enlace</h2>
+<ol>
+  <li>Validar dominio: tiktok.com, vm.tiktok.com, instagram.com, youtube.com, youtu.be. Resolver redirecciones de enlaces cortos.</li>
+  <li>Normalizar: quitar parámetros de tracking y fragmentos; guardar en <code>source_url_normalized</code>. Si ya existe → <code>duplicado</code>, responder quién lo subió primero.</li>
+  <li>Consultar oEmbed:
+    <ul>
+      <li><b>TikTok</b>: <code>https://www.tiktok.com/oembed?url=…</code> → <code>author_name</code>, <code>thumbnail_url</code>, <code>html</code>. Público, sin credenciales.</li>
+      <li><b>YouTube</b>: <code>https://www.youtube.com/oembed?url=…&amp;format=json</code> → igual. Público.</li>
+      <li><b>Instagram</b>: oEmbed de Meta Graph API; requiere app y revisión del permiso. <b>V1:</b> el aprobador pega el código de inserción oficial del post en un campo <code>embed_html</code>. Dejar la integración automática para después.</li>
+    </ul>
+  </li>
+  <li>Guardar <code>embed_html</code> cacheado. Siempre se puede regenerar desde la URL.</li>
+  <li><code>platform_thumb_url</code> se muestra desde la URL de la plataforma; no se copia al servidor.</li>
+</ol>
+
+<h2><span>4</span>Endpoints</h2>
+<table>
+  <tr><th>Método y ruta</th><th>Rol</th><th>Qué hace</th></tr>
+  <tr><td><code>POST /trends/submit</code></td><td>usuario registrado</td><td>Body: url, name?, category?, note?, cover_image? (solo importadora). Valida, normaliza, enriquece, crea en <code>pendiente</code>. Si el usuario está en una ronda abierta, lo asocia.</td></tr>
+  <tr><td><code>GET /trends/queue</code></td><td>approver</td><td>Pendientes, más antiguos primero, con embed y datos del remitente.</td></tr>
+  <tr><td><code>PATCH /trends/{id}</code></td><td>approver</td><td>Edita campos de la ficha. Sube portada (multipart o URL de storage).</td></tr>
+  <tr><td><code>POST /trends/{id}/approve</code></td><td>approver</td><td>Si hay portada → <code>publicado</code> y <code>published_at</code>; si no → <code>aprobado_sin_portada</code>. En ambos casos <code>approved_count += 1</code> en la participación del remitente; al llegar al umbral, <code>reward_status = claimable</code>.</td></tr>
+  <tr><td><code>POST /trends/{id}/reject</code></td><td>approver</td><td>Body: reason. Estado <code>rechazado</code>.</td></tr>
+  <tr><td><code>GET /trends?week=&amp;category=</code></td><td>público</td><td>Fichas <code>publicado</code> de la semana (por defecto la actual). Devuelve portada, nombre, categoría, origen, <code>quote_requests_count</code>, regulado. No devuelve <code>embed_html</code>.</td></tr>
+  <tr><td><code>GET /trends/{id}</code></td><td>público</td><td>Ficha completa, incluido <code>embed_html</code>.</td></tr>
+  <tr><td><code>POST /quote-requests</code></td><td>comprador</td><td>Existente. Acepta <code>trend_item_id</code>; al crear, incrementa <code>quote_requests_count</code>. Si la ficha tiene <code>importer_id</code>, la solicitud nace privada dirigida a esa importadora.</td></tr>
+  <tr><td><code>POST /challenge/rounds</code> · <code>PATCH /challenge/rounds/{id}</code></td><td>admin</td><td>Abrir y cerrar rondas.</td></tr>
+  <tr><td><code>GET /challenge/rounds/open</code></td><td>público</td><td>Ronda abierta con <code>max_participants</code> y <code>remaining_slots</code> calculado en vivo (cupos − inscritos). Sin caché.</td></tr>
+  <tr><td><code>POST /challenge/rounds/{id}/join</code></td><td>usuario</td><td>Inscribe si hay cupo (verificar con bloqueo para no pasarse). Al llenarse, la ronda pasa a <code>closed</code>. Un cupo por persona.</td></tr>
+  <tr><td><code>POST /challenge/participations/{id}/claim</code></td><td>usuario</td><td>Body: choice (cash | quotes). Solo si <code>claimable</code>. Si quotes, acredita cotizaciones gratis al usuario.</td></tr>
+  <tr><td><code>PUT /challenge/participations/{id}/payout</code></td><td>usuario</td><td>Datos bancarios para el pago: banco, tipo de cuenta, número, titular, documento del titular. Solo se piden cuando <code>reward_status = claimable</code> y <code>reward_choice = cash</code>.</td></tr>
+  <tr><td><code>PATCH /challenge/participations/{id}/paid</code></td><td>admin</td><td>Marca pagado con fecha y referencia. Dispara la notificación <code>pago_realizado</code>.</td></tr>
+  <tr><td><code>GET /notifications</code> · <code>PATCH /notifications/{id}/read</code></td><td>usuario</td><td>Bandeja del usuario y marcar leída.</td></tr>
+</table>
+
+<h3>Pago manual y datos bancarios</h3>
+<ul>
+  <li>El pago se hace por transferencia desde Bancolombia, a mano. La plataforma no mueve dinero; solo guarda a quién, cuánto y cuándo.</li>
+  <li>Los datos bancarios se piden <b>al reclamar</b>, no al subir enlaces. Así no se guardan cuentas de gente que nunca llega a 10, y el formulario de enlace sigue siendo un solo campo.</li>
+  <li>Tabla aparte <code>payout_account</code> (user_id, bank, account_type, account_number cifrado, holder_name, holder_id_number cifrado). Visible solo para rol admin, nunca en logs ni en respuestas a otros roles.</li>
+  <li>En el panel de pagos, el admin ve los datos, transfiere, y marca "Pagado" con referencia. Eso dispara la notificación al usuario.</li>
+</ul>
+
+<h3>Notificaciones</h3>
+<p>Un módulo simple: tabla <code>notification</code> (user_id, type, payload JSON, read_at, created_at), ícono de campana con contador en la barra, bandeja con las últimas 30, y copia por correo para los tipos marcados. Cada evento del reto genera una:</p>
+<table>
+  <tr><th>Tipo</th><th>Cuándo</th><th>Texto</th><th>Correo</th></tr>
+  <tr><td><code>enlace_recibido</code></td><td>Al enviar</td><td>"Recibimos tu enlace. Lo revisamos en menos de 48 horas."</td><td>No</td></tr>
+  <tr><td><code>enlace_aprobado</code></td><td>Al aprobar</td><td>"Aprobado: [producto]. Llevás 6 de 10."</td><td>No</td></tr>
+  <tr><td><code>enlace_rechazado</code></td><td>Al rechazar</td><td>"No aprobamos [enlace]: [motivo]. Llevás 6 de 10."</td><td>No</td></tr>
+  <tr><td><code>faltan_pocos</code></td><td>Al llegar a 7 aprobados</td><td>"Te faltan 3 para reclamar tu recompensa."</td><td>Sí</td></tr>
+  <tr><td><code>recompensa_lista</code></td><td>Al llegar a 10</td><td>"Llegaste a 10. Elegí: $50.000 o 5 cotizaciones gratis."</td><td>Sí</td></tr>
+  <tr><td><code>datos_pago_recibidos</code></td><td>Al guardar cuenta</td><td>"Recibimos tus datos. El pago sale en máximo 5 días hábiles."</td><td>Sí</td></tr>
+  <tr><td><code>pago_realizado</code></td><td>Admin marca pagado</td><td>"Te transferimos $50.000 a tu cuenta [banco] terminada en [4 dígitos]. Referencia [ref]."</td><td>Sí</td></tr>
+  <tr><td><code>cotizaciones_acreditadas</code></td><td>Si eligió cotizaciones</td><td>"Tenés 5 cotizaciones gratis disponibles."</td><td>Sí</td></tr>
+  <tr><td><code>inactivo</code></td><td>7 días sin enviar, con menos de 10</td><td>"Llevás 4 de 10. La ronda cierra el [fecha]."</td><td>Sí</td></tr>
+</table>
+<p>El mismo módulo sirve después para solicitudes y propuestas (nueva propuesta recibida, cambio de precio por aprobar, hito registrado). Diseñarlo genérico desde ahora; WhatsApp como canal queda para después.</p>
+
+<h2><span>5</span>Pantallas</h2>
+<h3>A. Enviar enlace (todos)</h3>
+<p>Un campo: la URL. Opcionales colapsados: nombre, categoría, nota. Respuesta inmediata: "recibido", "repetido (lo subió otra persona)", o "enlace no válido". Si está en el reto, muestra su contador.</p>
+
+<h3>B. Panel del aprobador</h3>
+<ul>
+  <li>Tres columnas: cola a la izquierda, video embebido en el centro, formulario de la ficha a la derecha.</li>
+  <li>Formulario: nombre, categoría (select), regulado (toggle), por qué está en tendencia, ojo antes de traerlo, subir portada (arrastrar, pegar o seleccionar), campo <code>embed_html</code> solo cuando la plataforma es Instagram.</li>
+  <li>Botones: <b>Rechazar</b> (abre motivos) y <b>Aprobar y publicar</b> (deshabilitado sin portada; enlace secundario "Aprobar sin portada").</li>
+  <li>Al aprobar o rechazar, carga el siguiente de la cola sin recargar.</li>
+  <li>Contadores arriba: pendientes, aprobados hoy, rechazados hoy.</li>
+</ul>
+
+<h3>C. Feed (público)</h3>
+<ul>
+  <li>Selector de semana (actual por defecto) y filtro de categoría.</li>
+  <li>Tarjeta: portada con ícono de play, nombre, categoría, origen ("Lo subió el equipo de Zarpi" / "Lo subió un comerciante" / "Lo recomienda [importadora]"), "N personas lo cotizaron esta semana", etiqueta "puede ser regulado". Botón: <b>Pedir propuestas</b> o <b>Cotizar con [importadora]</b>.</li>
+  <li>El feed no carga embeds. Solo la portada.</li>
+</ul>
+
+<h3>D. Ficha (público)</h3>
+<ul>
+  <li>Izquierda: el embed (carga aquí, con el script de la plataforma una sola vez por página) y enlace "Abrir en [plataforma]".</li>
+  <li>Derecha: nombre, descripción corta, los tres datos (vistas de referencia si vienen del oEmbed, lo cotizaron N, regulación), por qué está en tendencia, ojo antes de traerlo, bloque de la importadora si aplica con sus métricas públicas, y el botón de solicitud.</li>
+  <li>El botón abre el formulario de solicitud ya existente con producto, categoría y URL del video precargados y <code>trend_item_id</code> oculto.</li>
+  <li>Pie fijo: "El video pertenece a su autor y se reproduce desde [plataforma]. Zarpi conecta, no importa ni vende la mercancía."</li>
+</ul>
+
+<h3>E. Inscripción al reto (público)</h3>
+<ul>
+  <li>Contador en vivo: "Quedan N de M cupos". Cupos reales, uno por persona, se descuenta al inscribirse. Se refresca al cargar y cada 30 s mientras la página está abierta.</li>
+  <li>Antes del botón de inscribirse, texto fijo: "Se paga por producto aprobado, no por enviado. No cuentan: productos con registro sanitario (INVIMA, ICA), marcas o réplicas, y repetidos."</li>
+  <li>Al llenarse: el botón cambia a "Ronda cerrada. Avisame de la próxima" y guarda el correo.</li>
+</ul>
+
+<h3>F. Rondas y pagos (admin)</h3>
+<p>Tabla de rondas con cupos usados y presupuesto (cupos × recompensa). Dentro de la ronda: participantes, aprobados, elección de recompensa, botón "Pagado" con referencia.</p>
+
+<h2><span>6</span>Job diario</h2>
+<p>Para cada <code>publicado</code>: reconsultar oEmbed. Si responde 404 o "no disponible" → <code>caido</code>, sale del feed, notificación al aprobador. Instagram sin oEmbed automático: se omite en V1.</p>
+
+<h2><span>7</span>Orden de construcción</h2>
+<table>
+  <tr><th>Bloque</th><th>Entrega</th><th>Listo cuando</th></tr>
+  <tr><td>1. Núcleo</td><td>Modelo, submit, enriquecimiento TikTok/YouTube, campo manual Instagram, panel del aprobador con portada, feed, ficha, solicitud precargada con atribución.</td><td>Un enlace de TikTok pegado por un usuario termina como ficha publicada y una solicitud creada desde ella queda con <code>trend_item_id</code>.</td></tr>
+  <tr><td>2. Importadoras</td><td>Envío con foto desde cuenta importadora, ficha "Lo recomienda", solicitud privada, bloque "Recomendados" en perfil, botón oculto para otras importadoras.</td><td>Una importadora sube un producto y la solicitud que nace de ahí le llega solo a ella.</td></tr>
+  <tr><td>3. Reto</td><td>Rondas, página de inscripción con contador en vivo y exclusiones, contador de aprobados, reclamo, datos bancarios, panel de pagos, acreditación de cotizaciones gratis, lista de espera, módulo de notificaciones.</td><td>Un participante con 10 aprobados recibe la notificación, elige, carga su cuenta, el admin marca pagado y le llega la confirmación. Dos inscripciones simultáneas al último cupo no superan el máximo.</td></tr>
+</table>
+<p>Después, no ahora: oEmbed automático de Instagram, atajos de teclado, favoritos, ordenar por más cotizados, suscripción.</p>
+
+<h2><span>8</span>Criterios de aceptación del bloque 1</h2>
+<ol>
+  <li>Pegar dos veces el mismo video (con y sin parámetros) crea una sola ficha.</li>
+  <li>El feed carga sin ningún script de TikTok/Instagram/YouTube; la ficha sí los carga.</li>
+  <li>Ninguna ruta devuelve ni guarda un archivo de video.</li>
+  <li>No se puede pasar a <code>publicado</code> sin <code>cover_image_url</code>.</li>
+  <li>El aprobador despacha 20 enlaces seguidos sin recargar la página.</li>
+  <li>Crear una solicitud desde la ficha incrementa <code>quote_requests_count</code> y la solicitud muestra el producto y el enlace precargados.</li>
+  <li>Una cuenta importadora no ve el botón de cotizar en fichas de otra importadora.</li>
+</ol>
+
+</div>
+</body>
+</html>
+
+</body></html>

@@ -1,14 +1,18 @@
 import logging
+import re
 from uuid import UUID as PyUUID
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
-from schemas.usuario import UsuarioMeResponse, UsuarioMeUpdate, CotizacionAsignadaItem
+from models.documental import Archivo
+from schemas.usuario import CambioContrasena, UsuarioMeResponse, UsuarioMeUpdate, CotizacionAsignadaItem
+from utils.limiter import RATE_LIMIT_CAMBIO_CONTRASENA, limiter
+from utils.security import hash_password, verify_password
 from schemas.cotizante import CotizantePerfilPublicoResponse
 from utils.dependencies import get_db, get_current_user, require_rol_in
 
@@ -71,6 +75,53 @@ async def obtener_perfil_publico(
     return _perfil_publico(db, solicitante_id, current_user)
 
 
+_PATRON_ARCHIVO = re.compile(r"^/documentos/archivos/([0-9a-f-]{36})/descargar$")
+
+
+def _validar_foto(db: Session, ruta: Optional[str], usuario: Usuario) -> Optional[str]:
+    """La foto es una imagen que subió la misma cuenta (o una URL https de los
+    perfiles anteriores). Nada de `javascript:`, `data:` ni archivos ajenos."""
+    ruta = (ruta or "").strip()
+    if not ruta:
+        return None
+    if ruta.startswith("https://"):
+        return ruta
+    m = _PATRON_ARCHIVO.match(ruta)
+    if not m:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sube la foto desde tu perfil")
+    archivo = db.query(Archivo).filter(Archivo.id == m.group(1), Archivo.deleted_at.is_(None)).first()
+    if archivo is None or archivo.tipo_recurso != "imagen" or archivo.owner_user_id != usuario.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La foto debe ser una imagen que subiste tú")
+    return ruta
+
+
+def _yo(db: Session, current_user: dict) -> Usuario:
+    usuario = db.query(Usuario).filter(Usuario.id == str(PyUUID(current_user["user_id"]))).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    return usuario
+
+
+@router.post("/me/contrasena", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(RATE_LIMIT_CAMBIO_CONTRASENA)
+async def cambiar_mi_contrasena(
+    request: Request,
+    datos: CambioContrasena,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Cambia la contraseña con la sesión abierta; pide la actual."""
+    usuario = _yo(db, current_user)
+    if not verify_password(datos.actual, usuario.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La contraseña actual no es correcta")
+    if verify_password(datos.nueva, usuario.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La nueva contraseña debe ser distinta de la actual")
+    usuario.password_hash = hash_password(datos.nueva)
+    db.commit()
+    logger.info("Contraseña cambiada desde el perfil usuario_id=%s", usuario.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.put("/me", response_model=UsuarioMeResponse)
 async def actualizar_mi_perfil(
     datos: UsuarioMeUpdate,
@@ -89,6 +140,11 @@ async def actualizar_mi_perfil(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     datos_actualizados = datos.model_dump(exclude_unset=True)
+    if "foto_url" in datos_actualizados:
+        datos_actualizados["foto_url"] = _validar_foto(db, datos_actualizados["foto_url"], usuario)
+    for campo in ("nombre", "apellido", "telefono", "whatsapp", "indicativo_pais_telefono"):
+        if isinstance(datos_actualizados.get(campo), str):
+            datos_actualizados[campo] = datos_actualizados[campo].strip() or None
     # Columna NOT NULL: un null explícito equivale a "no lo cambies".
     if datos_actualizados.get("importaciones_fuera_plataforma") is None:
         datos_actualizados.pop("importaciones_fuera_plataforma", None)

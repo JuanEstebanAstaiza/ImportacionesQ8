@@ -46,6 +46,8 @@ from .tendencias import (
     GuardadoTendencia, SuscripcionAvisoTendencias, AccesoTendencias, CambioTendencias,
 )
 from .catalogo import CatalogoEmpresa, ProductoCatalogo, AccesoCatalogo
+from .reto import RetoRonda, RetoParticipacion, CuentaPago, RetoListaEspera
+from .tendencias_virales import TendenciaItem
 
 __all__ = [
     "Usuario",

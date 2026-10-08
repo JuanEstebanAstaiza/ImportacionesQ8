@@ -16,7 +16,7 @@ class LandingBlockResponse(BaseModel):
     accion_boton: Optional[str] = None
     accion_url: Optional[str] = None
     token_color: str = "foreground"
-    fuente: str = "avenor"
+    fuente: str = "texto"
     orden: int = 100
     activo: bool = True
 
@@ -32,9 +32,19 @@ class LandingBlockUpsert(BaseModel):
     accion_boton: Optional[str] = Field(None, max_length=20)
     accion_url: Optional[str] = Field(None, max_length=500)
     token_color: str = Field("foreground", min_length=2, max_length=20)
-    fuente: str = Field("avenor", min_length=2, max_length=20)
+    fuente: str = Field("texto", min_length=2, max_length=20)
     orden: int = Field(100, ge=0, le=10000)
     activo: bool = True
+
+    @field_validator("fuente")
+    @classmethod
+    def fuente_conocida(cls, v: str) -> str:
+        from models.landing import FUENTES_BLOQUE_LANDING
+
+        v = v.strip().lower()
+        if v not in FUENTES_BLOQUE_LANDING:
+            raise ValueError(f"fuente debe ser una de: {', '.join(FUENTES_BLOQUE_LANDING)}")
+        return v
 
 
 class LandingBlocksSaveRequest(BaseModel):
