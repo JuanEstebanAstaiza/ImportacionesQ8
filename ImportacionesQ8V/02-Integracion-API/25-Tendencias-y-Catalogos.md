@@ -1,3 +1,5 @@
+> **Tendencias v1 (ediciones semanales) se retiró el 2026-10-08.** La reemplazó el feed de productos virales: ver [[27-Tendencias-Virales-y-Reto]]. De esta página siguen vigentes los catálogos de empresas, y el acceso por suscripción, la cortesía y el acceso libre, que quedan dormidos para cobrar más adelante.
+
 # APIs — Tendencias semanales y catálogos de empresas
 
 > Backend: `models/tendencias.py`, `models/catalogo.py`, `services/tendencias.py`, `services/tendencias_calculo.py`, `services/catalogos.py`, `services/origen_cotizacion.py`, `routers/tendencias.py`, `routers/catalogos.py`.

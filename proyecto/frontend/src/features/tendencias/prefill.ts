@@ -16,9 +16,11 @@ export interface PrefillSolicitud {
   unidad?: "unidades" | "m3";
   /** Muestra en el formulario el aviso de revisar requisitos de importación. */
   revisarRequisitos?: boolean;
-  tendenciaEdicionId?: string | null;
-  tendenciaProductoId?: string;
+  /** Ficha de Tendencias de la que nace la solicitud (queda atribuida a ella). */
+  tendenciaItemId?: string;
+  /** Enlace del video de referencia (TikTok, Instagram o YouTube). */
+  urlVideo?: string;
   catalogoProductoId?: string;
-  /** Desde un catálogo la solicitud va dirigida a la empresa dueña. */
+  /** Desde un catálogo, o una ficha que recomienda una importadora, la solicitud va dirigida a ella. */
   importadorId?: string;
 }

@@ -632,6 +632,10 @@ async def crear_cotizacion(
         datos={k: v for k, v in campos_origen.items() if v},
     )
 
+    from services.origen_cotizacion import contar_solicitud
+
+    contar_solicitud(db, campos_origen)
+
     if nuevo_cotizacion.modalidad == "dirigida" and nuevo_cotizacion.importador_id:
         from services.cupo_cotizaciones import registrar_recepcion
 

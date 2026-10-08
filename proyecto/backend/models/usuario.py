@@ -99,6 +99,9 @@ class Usuario(Base):
     # Curador de Tendencias: arma y programa las ediciones semanales. Es una
     # capacidad extra, no un rol: la asigna el admin a usuarios existentes.
     es_curador = Column(Boolean, nullable=False, default=False, server_default="0")
+    # Cotizaciones gratis ganadas en el reto de Tendencias. Se descuentan cuando
+    # se active el cobro por cotización (hoy crear cotizaciones no se cobra).
+    cotizaciones_gratis = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva

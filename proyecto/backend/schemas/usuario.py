@@ -17,8 +17,9 @@ class UsuarioMeResponse(BaseModel):
     activo: bool
     perfil_completo: bool
     fecha_creacion: datetime
-    # Curador de Tendencias (capacidad aparte del rol).
+    # Curador de Tendencias (capacidad aparte del rol): aprueba las fichas.
     es_curador: bool = False
+    cotizaciones_gratis: int = 0
 
     model_config = {"from_attributes": True}
 

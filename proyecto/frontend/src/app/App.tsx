@@ -18,7 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
-  Sparkles, LibraryBig, Type,
+  Sparkles, LibraryBig, Type, Trophy,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -38,8 +38,13 @@ import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
 import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { TendenciasComprador } from "@/features/tendencias/TendenciasComprador";
-import { PanelCurador } from "@/features/tendencias/PanelCurador";
+import { TendenciasFeed } from "@/features/tendencias/Feed";
+import { TendenciaFicha } from "@/features/tendencias/Ficha";
+import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
+import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
+import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
+import { RetoPagina } from "@/features/reto/RetoPagina";
+import { RetoAdmin } from "@/features/reto/RetoAdmin";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
 import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
 import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
@@ -102,6 +107,8 @@ import type { UrgenciaSoporte } from "@/services/business.service";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 const SHOW_PAYMENTS_MODULE = false;
+/** Producto de Tendencias que un visitante quiso cotizar antes de registrarse. */
+const CLAVE_PREFILL_PENDIENTE = "zarpi:prefill-pendiente";
 /** Pantalla (y por tanto URL) de cada documento legal. */
 const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   data: "policy-data",
@@ -744,6 +751,7 @@ const NAV_ITEMS=[
   {icon:LayoutGrid,   label:"Dashboard",    key:"dashboard"},
   {icon:FileText,     label:"Cotizaciones", key:"quotes"},
   {icon:Sparkles,     label:"Tendencias",   key:"tendencias"},
+  {icon:Trophy,       label:"Reto",         key:"reto"},
   {icon:LibraryBig,   label:"Catálogos",    key:"catalogos"},
   {icon:ClipboardList,label:"Respuestas",   key:"responses"},
   {icon:MessageSquare,label:"Chats",        key:"chats"},
@@ -759,6 +767,7 @@ const NAV_IMPORTADORA=[
   {icon:Users,         label:"Asesores",     key:"imp-advisors"},
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
   {icon:LibraryBig,    label:"Catálogos",    key:"imp-catalogos"},
+  {icon:Sparkles,      label:"Tendencias",   key:"tendencias"},
   {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
   {icon:BookOpen,      label:"Cursos",       key:"courses"},
@@ -770,6 +779,7 @@ const NAV_ASESOR=[
   {icon:Zap,           label:"Disponibles",     key:"adv-available"},
   {icon:ClipboardList, label:"Mis cotizaciones",key:"adv-my-quotes"},
   {icon:LibraryBig,    label:"Catálogos",       key:"imp-catalogos"},
+  {icon:Sparkles,      label:"Tendencias",      key:"tendencias"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
 ];
 
@@ -793,7 +803,8 @@ const NAV_ADMIN=[
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
-  {icon:Sparkles,      label:"Tendencias",      key:"curaduria"},
+  {icon:Sparkles,      label:"Aprobación",      key:"tendencias-aprobacion"},
+  {icon:Trophy,        label:"Reto",            key:"admin-reto"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
@@ -1354,7 +1365,7 @@ interface AppNotification {
   title:string;body:string;date:string;read:boolean;
   cotizacionId?:string;conversationId?:string;approval?:boolean;
   /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
-  destino?:"tendencias"|"catalogos";
+  destino?:"tendencias-enviar"|"catalogos"|"reto";
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1388,7 +1399,9 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
     cotizacionId,
     conversationId,
     approval,
-    destino: notification.tipo === "tendencias" ? "tendencias" : notification.tipo === "catalogo" ? "catalogos" : undefined,
+    destino: notification.tipo === "tendencias" ? "tendencias-enviar"
+      : notification.tipo === "reto" ? "reto"
+      : notification.tipo === "catalogo" ? "catalogos" : undefined,
   };
 }
 
@@ -2192,8 +2205,8 @@ function DatosDeContactoEmpresa({imp}:{imp:Importer}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,onAbrirTendencia}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];onAbrirTendencia:(id:string)=>void;
 }) {
   const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
   // Lo que la empresa configuró en su perfil manda; los textos de ejemplo solo
@@ -2288,6 +2301,9 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
               {/* Presentacion en video y fotos que sube la propia empresa. El
                   componente no pinta nada si todavia no hay material aprobado. */}
               <PresentacionPublica importadorId={imp.id}/>
+              {/* Productos de Tendencias que recomienda la empresa: cotizarlos
+                  le llega solo a ella. No pinta nada si no tiene. */}
+              <RecomendadosEmpresa importadorId={imp.id} onAbrir={onAbrirTendencia}/>
 
               <Card padding="md">
                 <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Star className="w-4 h-4 text-primary"/>Reseñas de clientes</h3>
@@ -6351,6 +6367,28 @@ function DocumentosScreen({
   );
 }
 
+/** Armazón de las pantallas públicas (Tendencias y el reto) para quien no tiene sesión. */
+function PantallaPublica({activa,onLanding,onLogin,onRegister,onTendencias,onReto,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;children:React.ReactNode}) {
+  const pestana=(clave:"tendencias"|"reto",texto:string,onClick:()=>void)=>(
+    <button type="button" onClick={onClick} className={clsx("px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",activa===clave?"bg-primary text-white dark:bg-accent dark:text-accent-foreground":"text-muted-foreground hover:bg-foreground/10")}>{texto}</button>
+  );
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+          <button type="button" onClick={onLanding} aria-label="Ir al inicio"><Logo/></button>
+          <nav className="flex items-center gap-1">{pestana("tendencias","Tendencias",onTendencias)}{pestana("reto","Reto",onReto)}</nav>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
+            <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>Crear cuenta</Button>
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+    </div>
+  );
+}
+
 /** Armazón común (sidebar, cabecera, migas) para las pantallas que viven en `features/`. */
 function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:string;titulo:string;children:React.ReactNode}) {
   return (
@@ -7310,8 +7348,10 @@ interface OrigenSolicitud {
   origen:"tendencias"|"catalogo";
   nombre:string;
   revisarRequisitos:boolean;
-  tendenciaEdicionId?:string|null;
-  tendenciaProductoId?:string;
+  tendenciaItemId?:string;
+  /** Si la ficha la recomienda una importadora, la solicitud va solo a ella. */
+  importadorId?:string;
+  nombreEmpresa?:string;
   catalogoProductoId?:string;
 }
 
@@ -7319,6 +7359,8 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
+  // Producto recomendado por una importadora: la solicitud solo puede ir a ella.
+  const dirigidaFija=origen?.origen==="tendencias"&&!!origen.importadorId&&selectedId===origen.importadorId;
   // `prefill` llega al duplicar una cotización existente: se copian sus datos
   // y el usuario solo ajusta lo que cambie.
   const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
@@ -7418,8 +7460,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
       ...(origen?.origen==="tendencias"?{
         origen:"tendencias" as const,
-        tendencia_edicion_id:origen.tendenciaEdicionId??null,
-        tendencia_producto_id:origen.tendenciaProductoId,
+        tendencia_item_id:origen.tendenciaItemId,
       }:{}),
       // Desde un catálogo solo vale si va dirigida a la empresa dueña; si el
       // comprador cambió de empresa, la solicitud pasa a ser directa.
@@ -7482,13 +7523,19 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                         {origen.origen==="tendencias"?"Desde Tendencias":"Desde el catálogo de la empresa"}: {origen.nombre}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">Ya cargamos el producto. Completa la cantidad, la calidad y lo que haga falta.</p>
+                      {origen.origen==="tendencias"&&origen.importadorId&&(
+                        <p className="mt-1 text-xs text-muted-foreground">Lo recomienda {origen.nombreEmpresa||"una importadora"}: la solicitud va dirigida solo a ella.</p>
+                      )}
                       {origen.revisarRequisitos&&(
                         <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la nacionalizadora que lo revise en su propuesta.</p>
                       )}
                     </div>
                   )}
                   <div style={slideStyle}>
-                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
+                    {step===1 && dirigidaFija && (
+                      <Card padding="md"><div className="flex items-start gap-3"><Lock className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-sm font-semibold">Cotización dirigida a {origen?.nombreEmpresa||"la importadora que lo recomienda"}</p><p className="text-xs text-muted-foreground mt-1">Este producto lo recomendó esa importadora, así que la solicitud va solo a ella. Para pedir propuestas a otras empresas, crea una cotización nueva desde Cotizaciones.</p></div></div></Card>
+                    )}
+                    {step===1 && !dirigidaFija && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
                     {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>{
                       const url=toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
                       if(prev.productPhotoUrls.length>=MAX_FOTOS_PRODUCTO||prev.productPhotoUrls.includes(url))return prev;
@@ -9548,7 +9595,7 @@ const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"contact",label:"Contacto"},
 ];
 
-function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[]}) {
+function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onReto,onAbrirTendencia}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[];onTendencias:()=>void;onReto:()=>void;onAbrirTendencia:(id:string)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [activeTab,setActiveTab]=useState<LandingSection>("home");
@@ -9626,6 +9673,8 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
                 {section.label}
               </button>
             ))}
+            <button onClick={onTendencias} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Tendencias</button>
+            <button onClick={onReto} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Reto</button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -9949,6 +9998,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
         open={Boolean(profileModalImporter)}
         onClose={()=>setProfileModalImporter(null)}
         onLogin={onLogin}
+        onAbrirTendencia={onAbrirTendencia}
       />
     </div>
   );
@@ -9957,7 +10007,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING — Perfil de empresa (QuickView) y subpáginas públicas
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open:boolean;onClose:()=>void;onLogin:()=>void}) {
+function ImporterProfileModal({imp,open,onClose,onLogin,onAbrirTendencia}:{imp:Importer|null;open:boolean;onClose:()=>void;onLogin:()=>void;onAbrirTendencia:(id:string)=>void}) {
   if(!imp)return null;
   const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
   const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
@@ -9986,6 +10036,7 @@ function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open
           <div><p className="text-xs text-muted-foreground">Miembro desde</p><p className="font-medium">{imp.memberSince}</p></div>
           <div><p className="text-xs text-muted-foreground">Proyectos</p><p className="font-medium">{imp.projects}</p></div>
         </div>
+        <RecomendadosEmpresa importadorId={imp.id} onAbrir={onAbrirTendencia}/>
         {imp.categories.length>0&&(
           <div>
             <p className="text-xs text-muted-foreground mb-1.5">Especialidades</p>
@@ -11198,6 +11249,7 @@ export default function App() {
   const [responseFromQuoteId,setResponseFromQuoteId]=useState("");
   const [selectedOrderId,setSelectedOrderId]=useState(()=>idInicialDe("order"));
   const [selectedOrderDetail,setSelectedOrderDetail]=useState<Order|null>(null);
+  const [selectedTendenciaId,setSelectedTendenciaId]=useState(()=>idInicialDe("tendencia"));
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
@@ -11255,6 +11307,7 @@ export default function App() {
     : screen === "response-detail" ? selectedResponseId
     : screen === "order-detail" ? selectedOrderId
     : screen === "importer-profile" ? selectedImporterId
+    : screen === "tendencia-detalle" ? selectedTendenciaId
     : screen === "chats" ? (activeChatId || initialChatConvId || "")
     : "";
 
@@ -11302,6 +11355,7 @@ export default function App() {
       if (destino.param === "response") setSelectedResponseId(id);
       if (destino.param === "order") { setSelectedOrderDetail(null); setSelectedOrderId(id); }
       if (destino.param === "importer") setSelectedImporterId(id);
+      if (destino.param === "tendencia") setSelectedTendenciaId(id);
       if (destino.param === "conversation") setInitialChatConvId(id || undefined);
     }
 
@@ -11728,7 +11782,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "tendencias", "tendencia-detalle", "reto"];
     if (!publicScreens.includes(screen)) {
       setScreen("landing");
     }
@@ -11992,8 +12046,8 @@ export default function App() {
     let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
     // El curador de Tendencias es una capacidad, no un rol: se le suma la
     // entrada del panel a su menú, sea soporte, asesor o cualquier otro.
-    if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="curaduria")){
-      items=[...items,{icon:Sparkles,label:"Curaduría",key:"curaduria"}];
+    if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="tendencias-aprobacion")){
+      items=[...items,{icon:Sparkles,label:"Aprobación",key:"tendencias-aprobacion"}];
     }
     return items as NavItem[];
   }
@@ -12176,6 +12230,17 @@ export default function App() {
    * catálogo la solicitud va dirigida a la empresa dueña.
    */
   function pedirPropuestasDesde(p:PrefillSolicitud){
+    if(!isAuthenticated){
+      // Se guarda el producto y se retoma al iniciar sesión (efecto de abajo).
+      try { sessionStorage.setItem(CLAVE_PREFILL_PENDIENTE, JSON.stringify(p)); } catch { /* sin almacenamiento: se pide de nuevo */ }
+      toast.info("Crea tu cuenta gratis para pedir propuestas. Al terminar seguimos con este producto.");
+      goTo("register");
+      return;
+    }
+    if(userRole!=="solicitante"){
+      toast.info("Las propuestas las piden las cuentas de comprador.");
+      return;
+    }
     setQuotePrefill({
       productName:p.nombre,
       description:p.descripcion,
@@ -12189,13 +12254,29 @@ export default function App() {
       origen:p.origen,
       nombre:p.nombre,
       revisarRequisitos:Boolean(p.revisarRequisitos),
-      tendenciaEdicionId:p.tendenciaEdicionId??null,
-      tendenciaProductoId:p.tendenciaProductoId,
+      tendenciaItemId:p.tendenciaItemId,
+      importadorId:p.importadorId,
+      nombreEmpresa:p.importadorId?marketplaceImporters.find(i=>i.id===p.importadorId)?.name:undefined,
       catalogoProductoId:p.catalogoProductoId,
     });
     setPreselectedImporterId(p.importadorId);
     goTo("new-quote");
   }
+
+  // Al iniciar sesión como comprador, retoma el «Pedir propuestas» que quedó
+  // pendiente antes del registro.
+  const prefillRetomado=useRef(0);
+  useEffect(()=>{
+    if(!isAuthenticated||isInitializing||userRole!=="solicitante")return;
+    let pendiente:string|null=null;
+    try { pendiente=sessionStorage.getItem(CLAVE_PREFILL_PENDIENTE); sessionStorage.removeItem(CLAVE_PREFILL_PENDIENTE); } catch { pendiente=null; }
+    if(!pendiente)return;
+    try { pedirPropuestasDesde(JSON.parse(pendiente) as PrefillSolicitud); prefillRetomado.current=Date.now(); } catch { /* dato corrupto: se ignora */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[isAuthenticated,isInitializing,userRole]);
+
+  const rolPortal:UserRole|null=isAuthenticated?(userRole as UserRole):null;
+  function abrirTendencia(id:string){setSelectedTendenciaId(id);goTo("tendencia-detalle");}
 
   /**
    * Duplicar una cotización: se abre el formulario con sus datos copiados.
@@ -12286,6 +12367,15 @@ export default function App() {
 
   function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
+    // Si hay un producto de Tendencias por retomar, el efecto de arriba lleva al
+    // formulario: no se pisa esa navegación con la pantalla de inicio. Según el
+    // orden de los renders, el efecto corre antes (marca prefillRetomado hace un
+    // instante) o después (el producto sigue guardado).
+    if(role==="solicitante"){
+      let pendiente:string|null=null;
+      try { pendiente=sessionStorage.getItem(CLAVE_PREFILL_PENDIENTE); } catch { pendiente=null; }
+      if(pendiente||Date.now()-prefillRetomado.current<3000){ prefillRetomado.current=0; return; }
+    }
     goTo(getHomeScreenForRole(role));
   }
 
@@ -12539,7 +12629,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "tendencias", "tendencia-detalle", "reto"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -12551,7 +12641,7 @@ export default function App() {
     "adv-my-quotes": ["asesor"],
     "user-profile": ["solicitante", "asesor"],
     "help-support": ["solicitante", "importadora", "asesor"],
-    "tendencias": ["solicitante"],
+    "admin-reto": ["admin"],
     "catalogos": ["solicitante"],
     "imp-catalogos": ["importadora", "asesor"],
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
@@ -12643,7 +12733,7 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onAbrirTendencia={abrirTendencia}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
@@ -12682,19 +12772,20 @@ export default function App() {
 
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaProductoId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud}/>;
-    if(screen==="tendencias"){
-      const consulta=new URLSearchParams(window.location.search);
-      return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasComprador onPedirPropuestas={pedirPropuestasDesde} edicionInicialId={consulta.get("edicion")} desdeAviso={consulta.get("src")==="aviso"}/></PantallaPortal>;
-    }
+    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud}/>;
+    if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
+    if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/></PantallaPortal>;
+    if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
+    if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
+    if(screen==="admin-reto")return <PantallaPortal sb={sb} active="admin-reto" titulo="Reto · Rondas y pagos"><RetoAdmin/></PantallaPortal>;
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
-    if(screen==="curaduria"){
+    if(screen==="tendencias-aprobacion"){
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
-      return <PantallaPortal sb={sb} active="curaduria" titulo="Tendencias · Curaduría"><PanelCurador esAdmin={userRole==="admin"}/></PantallaPortal>;
+      return <PantallaPortal sb={sb} active="tendencias-aprobacion" titulo="Tendencias · Aprobación"><PanelAprobacion esAdmin={userRole==="admin"}/></PantallaPortal>;
     }
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
@@ -12708,6 +12799,16 @@ export default function App() {
     if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
     return null;
   };
+
+  if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
+    return (
+      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")}>
+        {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")}/>}
+        {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/>}
+        {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}
+      </PantallaPublica>
+    );
+  }
 
   return (
     <ProtectedRoute
