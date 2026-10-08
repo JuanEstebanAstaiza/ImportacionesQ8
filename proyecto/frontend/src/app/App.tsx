@@ -1803,7 +1803,7 @@ function ImporterCard({
       className={clsx(
         "bg-white border rounded-xl p-4 flex flex-col min-h-[420px] hover:shadow-md transition-all duration-200 group",
         featured
-          ? "border-primary/20 shadow-sm ring-1 ring-primary/10 landing-glow"
+          ? "border-primary/20 dark:border-accent/20 shadow-sm ring-1 ring-primary/20 dark:ring-accent/20 landing-glow"
           : "border-border"
       )}
     >
@@ -1858,7 +1858,7 @@ function ImporterCard({
               )}
 
               {featured && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[10px] font-semibold">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-60 dark:bg-accent/20 text-amber-700 dark:text-accent rounded-full text-[10px] font-semibold">
                   <Award className="w-2.5 h-2.5" />
                   Destacada
                 </span>
@@ -1902,7 +1902,7 @@ function ImporterCard({
           {imp.categories.map((c) => (
             <span
               key={c}
-              className="px-2 py-0.5 bg-muted rounded-md text-[10px] font-medium text-muted-foreground"
+              className="px-2 py-0.5 bg-muted rounded-full text-[10px] font-medium text-muted-foreground"
             >
               {c}
             </span>
@@ -1912,7 +1912,7 @@ function ImporterCard({
             <span
               key={c.id}
               title={c.descripcion || `Respaldado por Zarpi`}
-              className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-semibold text-primary flex items-center gap-1"
+              className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-full text-[10px] font-semibold text-primary flex items-center gap-1"
             >
               {c.logoUrl ? (
                 <img
@@ -1931,7 +1931,7 @@ function ImporterCard({
           {certs.map((c) => (
             <span
               key={c}
-              className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md text-[10px] font-medium text-emerald-700 flex items-center gap-1"
+              className="px-2 py-0.5 bg-primary/20 dark:bg-accent/20 border border-primary/0 dark:border-accent/0 rounded-full text-[10px] font-medium text-primary dark:text-accent flex items-center gap-1"
             >
               <Shield className="w-2.5 h-2.5" />
               {c}
@@ -1966,6 +1966,7 @@ function ImporterCard({
             size="sm"
             fullWidth
             onClick={() => onViewProfile(imp.id)}
+            className="hover:bg-primary dark:hover:bg-accent"
           >
             Ver perfil
           </Button>
@@ -1976,6 +1977,7 @@ function ImporterCard({
             fullWidth
             icon={<Plus className="w-3.5 h-3.5" />}
             onClick={() => onCreateQuote(imp.id)}
+            className="dark:bg-accent dark:hover:bg-accent"
           >
             Cotizar
           </Button>
@@ -2066,7 +2068,7 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
           {!search&&catFilter==="Todas"&&!certFilter&&!countryFilter&&(
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <Award className="w-4 h-4 text-amber-500"/>
+                <Award className="w-4 h-4 text-amber-500 dark:text-accent"/>
                 <h2 className="text-sm font-semibold">Empresas destacadas</h2>
                 <span className="text-xs text-muted-foreground">· Con mayor respaldo de Zarpi</span>
               </div>
@@ -5936,7 +5938,7 @@ function DocumentosScreen({
                   className={clsx(
                     "text-xs px-2 py-1 rounded-md border transition-colors",
                     index === folderTrail.length - 1
-                      ? "bg-primary/10 text-primary border-primary/20 font-medium"
+                      ? "bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent border-primary/20 dark:border-primary/20 font-medium"
                       : "bg-white text-muted-foreground border-border hover:text-foreground"
                   )}
                 >
@@ -6161,7 +6163,7 @@ function DocumentosScreen({
                           onClick={() => {
                             void handleOpenResource(file.storage_url, file.nombre);
                           }}
-                          className="text-xs text-primary hover:underline whitespace-nowrap"
+                          className="text-xs text-primary dark:text-accent hover:underline whitespace-nowrap"
                         >
                           Abrir
                         </button>
