@@ -18,3 +18,5 @@ RATE_LIMIT_NOTIFICACIONES = os.getenv("RATE_LIMIT_NOTIFICACIONES", "90/minute")
 _EN_PRUEBAS = os.getenv("APP_ENV", "").lower() == "test"
 RATE_LIMIT_TENDENCIAS_ENVIO = os.getenv("RATE_LIMIT_TENDENCIAS_ENVIO", "1000/minute" if _EN_PRUEBAS else "20/minute")
 RATE_LIMIT_RETO_LISTA = os.getenv("RATE_LIMIT_RETO_LISTA", "1000/minute" if _EN_PRUEBAS else "10/minute")
+# Cambio de contraseña con sesión: frena el adivinar la actual con un token robado.
+RATE_LIMIT_CAMBIO_CONTRASENA = os.getenv("RATE_LIMIT_CAMBIO_CONTRASENA", "1000/minute" if _EN_PRUEBAS else "10/minute")

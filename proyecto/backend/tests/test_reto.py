@@ -141,7 +141,9 @@ def test_efectivo_con_cuenta_cifrada_y_pago_del_admin(client, db_session):
     assert "9012" in pago.mensaje and "TRX-998877" in pago.mensaje and "$50.000" in pago.mensaje
 
     rondas = client.get("/reto/rondas", headers=admin).json()
-    assert rondas[0]["presupuesto_cop"] == 20 * 50000 and rondas[0]["pagado_cop"] == 50000
+    # Presupuesto dinámico: inscritos × recompensa; el máximo, cupos × recompensa.
+    assert rondas[0]["presupuesto_cop"] == 50000 and rondas[0]["presupuesto_maximo_cop"] == 20 * 50000
+    assert rondas[0]["pagado_cop"] == 50000 and rondas[0]["por_pagar_cop"] == 0
 
 
 def test_tarea_diaria_cierra_vencidas_y_avisa_inactivos(client, db_session):

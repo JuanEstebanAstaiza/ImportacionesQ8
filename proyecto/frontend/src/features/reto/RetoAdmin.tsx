@@ -163,6 +163,9 @@ function NuevaRonda({ nombreSugerido, onCreada, onCancelar }: { nombreSugerido: 
 
 function EditarRonda({ ronda, onGuardada, onCancelar }: { ronda: RondaAdmin; onGuardada: () => void; onCancelar: () => void }) {
   const [max, setMax] = useState(String(ronda.max_participantes));
+  const [umbral, setUmbral] = useState(String(ronda.umbral_aprobados));
+  const [recompensa, setRecompensa] = useState(String(ronda.recompensa_cop));
+  const [cotizaciones, setCotizaciones] = useState(String(ronda.recompensa_cotizaciones));
   const [fecha, setFecha] = useState(aDatetimeLocalBogota(ronda.fecha_limite));
   const [abrirSiguiente, setAbrirSiguiente] = useState(ronda.abrir_siguiente_al_llenarse);
   const [guardando, setGuardando] = useState(false);
@@ -174,6 +177,17 @@ function EditarRonda({ ronda, onGuardada, onCancelar }: { ronda: RondaAdmin; onG
       setError(`Los cupos no pueden ser menos que los inscritos (${ronda.inscritos}).`);
       return;
     }
+    const umbralNum = Math.floor(Number(umbral));
+    const recompensaNum = Math.floor(Number(recompensa));
+    const cotizacionesNum = Math.floor(Number(cotizaciones));
+    if (!Number.isFinite(umbralNum) || umbralNum < 1) {
+      setError("El umbral debe ser al menos 1.");
+      return;
+    }
+    if (!Number.isFinite(recompensaNum) || recompensaNum < 0 || !Number.isFinite(cotizacionesNum) || cotizacionesNum < 0) {
+      setError("Revisa la recompensa.");
+      return;
+    }
     if (!datetimeLocalBogotaAUtc(fecha)) {
       setError("Fecha límite no válida.");
       return;
@@ -181,7 +195,14 @@ function EditarRonda({ ronda, onGuardada, onCancelar }: { ronda: RondaAdmin; onG
     setGuardando(true);
     setError(null);
     try {
-      await retoService.editarRonda(ronda.id, { max_participantes: cupos, fecha_limite: fecha, abrir_siguiente_al_llenarse: abrirSiguiente });
+      await retoService.editarRonda(ronda.id, {
+        max_participantes: cupos,
+        umbral_aprobados: umbralNum,
+        recompensa_cop: recompensaNum,
+        recompensa_cotizaciones: cotizacionesNum,
+        fecha_limite: fecha,
+        abrir_siguiente_al_llenarse: abrirSiguiente,
+      });
       toast.success("Ronda actualizada");
       onGuardada();
     } catch (err) {
@@ -198,6 +219,18 @@ function EditarRonda({ ronda, onGuardada, onCancelar }: { ronda: RondaAdmin; onG
         <input type="number" min={Math.max(1, ronda.inscritos)} value={max} onChange={(e) => setMax(e.target.value)} className={`${CLASE_INPUT} mt-1 w-24`} />
       </label>
       <label className="text-sm">
+        <span className="font-medium">Umbral</span>
+        <input type="number" min={1} value={umbral} onChange={(e) => setUmbral(e.target.value)} className={`${CLASE_INPUT} mt-1 w-24`} />
+      </label>
+      <label className="text-sm">
+        <span className="font-medium">Recompensa (COP)</span>
+        <input type="number" min={0} step={1000} value={recompensa} onChange={(e) => setRecompensa(e.target.value)} className={`${CLASE_INPUT} mt-1 w-32`} />
+      </label>
+      <label className="text-sm">
+        <span className="font-medium">o cotizaciones</span>
+        <input type="number" min={0} value={cotizaciones} onChange={(e) => setCotizaciones(e.target.value)} className={`${CLASE_INPUT} mt-1 w-24`} />
+      </label>
+      <label className="text-sm">
         <span className="font-medium">Fecha límite (Bogotá)</span>
         <input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={`${CLASE_INPUT} mt-1`} />
       </label>
@@ -211,6 +244,10 @@ function EditarRonda({ ronda, onGuardada, onCancelar }: { ronda: RondaAdmin; onG
           {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Guardar
         </button>
       </div>
+      <p className="w-full text-xs text-muted-foreground">
+        Presupuesto máximo con estos cupos: {pesos((Math.floor(Number(max)) || 0) * (Math.floor(Number(recompensa)) || 0))}.
+        La recompensa nueva vale para quien todavía no cobró; lo ya pagado no cambia. Si bajas el umbral, quien ya lo alcanza puede reclamar.
+      </p>
       {error ? <p role="alert" className="w-full text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
     </div>
   );
@@ -299,7 +336,7 @@ function TarjetaParticipante({ p, ronda, onCambio }: { p: ParticipanteAdmin; ron
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {p.eleccion === "efectivo" ? (
-            <Insignia texto={`Efectivo ${pesos(ronda.recompensa_cop)}`} clase="bg-primary/10 text-primary dark:text-accent" />
+            <Insignia texto={`Efectivo ${pesos(p.monto_pagado_cop ?? ronda.recompensa_cop)}`} clase="bg-primary/10 text-primary dark:text-accent" />
           ) : p.eleccion === "cotizaciones" ? (
             <Insignia texto={`${ronda.recompensa_cotizaciones} cotizaciones`} clase="bg-primary/10 text-primary dark:text-accent" />
           ) : null}
@@ -368,7 +405,7 @@ function Participantes({ ronda, onCerrar, onCambio }: { ronda: RondaAdmin; onCer
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-base font-semibold"><Users className="h-4 w-4 text-primary dark:text-accent" /> Participantes de {ronda.nombre}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {ronda.inscritos} inscritos · pagado {pesos(ronda.pagado_cop)} de {pesos(ronda.presupuesto_cop)}
+            {ronda.inscritos} inscritos · pagado {pesos(ronda.pagado_cop)} · por pagar {pesos(ronda.por_pagar_cop)} · presupuesto {pesos(ronda.presupuesto_cop)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -460,8 +497,13 @@ export function RetoAdmin() {
   const rondaSeleccionada = rondas?.find((r) => r.id === seleccionada) ?? null;
   const hayAbierta = (rondas ?? []).some((r) => r.estado === "abierta");
   const totales = useMemo(() => (rondas ?? []).reduce(
-    (acc, r) => ({ presupuesto: acc.presupuesto + r.presupuesto_cop, pagado: acc.pagado + r.pagado_cop }),
-    { presupuesto: 0, pagado: 0 },
+    (acc, r) => ({
+      presupuesto: acc.presupuesto + r.presupuesto_cop,
+      maximo: acc.maximo + r.presupuesto_maximo_cop,
+      porPagar: acc.porPagar + r.por_pagar_cop,
+      pagado: acc.pagado + r.pagado_cop,
+    }),
+    { presupuesto: 0, maximo: 0, porPagar: 0, pagado: 0 },
   ), [rondas]);
 
   return (
@@ -499,16 +541,22 @@ export function RetoAdmin() {
       ) : null}
 
       {rondas && rondas.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className={CLASE_TARJETA}>
-            <p className="text-xs text-muted-foreground">Presupuesto total</p>
+            <p className="text-xs text-muted-foreground">Presupuesto actual</p>
             <p className="mt-0.5 text-lg font-semibold">{pesos(totales.presupuesto)}</p>
+            <p className="text-xs text-muted-foreground">Inscritos × recompensa · máx. {pesos(totales.maximo)}</p>
+          </div>
+          <div className={CLASE_TARJETA}>
+            <p className="text-xs text-muted-foreground">Por pagar</p>
+            <p className="mt-0.5 text-lg font-semibold">{pesos(totales.porPagar)}</p>
+            <p className="text-xs text-muted-foreground">Ya llegaron y no cobraron</p>
           </div>
           <div className={CLASE_TARJETA}>
             <p className="text-xs text-muted-foreground">Pagado</p>
             <p className="mt-0.5 text-lg font-semibold">{pesos(totales.pagado)}</p>
           </div>
-          <div className={`${CLASE_TARJETA} col-span-2 sm:col-span-1`}>
+          <div className={CLASE_TARJETA}>
             <p className="text-xs text-muted-foreground">Rondas</p>
             <p className="mt-0.5 text-lg font-semibold">{rondas.length}</p>
           </div>
@@ -558,7 +606,10 @@ export function RetoAdmin() {
                           <span className="ml-2 inline-flex items-center gap-1"><Ticket className="h-3.5 w-3.5" />{r.recompensa_cotizaciones}</span>
                           <span className="block text-muted-foreground">cada {r.umbral_aprobados} aprobados</span>
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{pesos(r.presupuesto_cop)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          {pesos(r.presupuesto_cop)}
+                          <span className="block text-xs text-muted-foreground">máx. {pesos(r.presupuesto_maximo_cop)}</span>
+                        </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{pesos(r.pagado_cop)}</td>
                         <td className="px-3 py-2.5">
                           {confirmarCierre === r.id ? (

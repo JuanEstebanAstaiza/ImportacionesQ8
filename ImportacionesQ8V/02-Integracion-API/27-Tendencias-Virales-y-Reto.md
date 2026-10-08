@@ -39,6 +39,14 @@ Cada producto entra como un **enlace** a TikTok, Instagram o YouTube. Una person
 - **Reclamo:**
   - **cotizaciones:** suma `usuarios.cotizaciones_gratis`, un saldo que se descontará cuando exista el cobro por cotización;
   - **efectivo:** se piden los datos bancarios, cifrados con Fernet (`CLAVE_CIFRADO_DATOS`; obligatoria en producción). El admin transfiere a mano y marca «Pagado» con la referencia.
+- **Cuenta bancaria:** es una por usuario (`cuentas_pago`) y se carga desde *Mi perfil* o al reclamar; las dos vías escriben la misma fila (`services/cuentas_pago.py`). Si ya la tenía, al elegir efectivo no se le vuelve a pedir. No se puede borrar con un pago en camino, pero sí cambiar.
+- **Presupuesto dinámico** (`reto.presupuesto`):
+  - `presupuesto_cop` = inscritos × recompensa;
+  - `presupuesto_maximo_cop` = cupos × recompensa;
+  - `por_pagar_cop` = quienes llegaron y no cobraron;
+  - `pagado_cop` = suma de `monto_pagado_cop`, guardado al marcar «Pagado» (migración `20261009_0031`).
+
+  El admin puede cambiar recompensa y umbral de una ronda: lo pagado no se mueve, y bajar el umbral habilita a quien ya lo alcanza.
 - **Notificaciones:** van por el módulo existente (`notificar`), con tipo `tendencias` o `reto` y correo según la tabla de la guía.
 
 ### Tarea diaria (`TENDENCIAS_TAREA_HORAS`, 24 por defecto)
@@ -65,6 +73,7 @@ Corre en un solo worker gracias a un candado en Redis:
 | GET | `/reto/mi-participacion` | Sesión |
 | POST | `/reto/participaciones/{id}/reclamar` | Sesión |
 | PUT | `/reto/participaciones/{id}/cuenta-pago` | Sesión |
+| GET · PUT · DELETE | `/usuarios/me/cuenta-pago` | Sesión. Cuenta del perfil, enmascarada; DELETE da 409 con un pago en camino |
 | GET | `/reto/rondas` | Admin |
 | POST | `/reto/rondas` | Admin |
 | PATCH | `/reto/rondas/{id}` | Admin |

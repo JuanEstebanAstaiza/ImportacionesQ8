@@ -20,10 +20,8 @@ import {
 } from "lucide-react";
 
 import {
-  BANCOS_COLOMBIA,
   pesos,
   retoService,
-  type CuentaPagoDatos,
   type Eleccion,
   type Participacion,
   type Ronda,
@@ -37,6 +35,7 @@ import {
   fechaBogota,
   mensajeError,
 } from "./comun";
+import { FormCuentaBancaria } from "@/features/perfil/FormCuentaBancaria";
 
 /**
  * Reto comunitario de Tendencias: página pública de inscripción con contador
@@ -165,8 +164,8 @@ function AvisameProxima() {
 
 // ── Reclamo de la recompensa ─────────────────────────────────────────────────
 
-function ElegirRecompensa({ participacion, onCambio }: { participacion: Participacion; onCambio: () => void }) {
-  const { ronda } = participacion;
+function ElegirRecompensa({ participacion, onCambio, onIrAPerfil }: { participacion: Participacion; onCambio: () => void; onIrAPerfil?: () => void }) {
+  const { ronda, cuenta } = participacion;
   const [eleccion, setEleccion] = useState<Eleccion | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -175,7 +174,9 @@ function ElegirRecompensa({ participacion, onCambio }: { participacion: Particip
       clave: "efectivo",
       icono: Banknote,
       titulo: pesos(ronda.recompensa_cop),
-      detalle: "Por transferencia a tu cuenta. En el siguiente paso te pedimos los datos bancarios.",
+      detalle: cuenta
+        ? `Por transferencia a tu cuenta ${cuenta.banco} terminada en ${cuenta.ultimos_digitos}.`
+        : "Por transferencia a tu cuenta. En el siguiente paso te pedimos los datos bancarios.",
     },
     {
       clave: "cotizaciones",
@@ -190,7 +191,9 @@ function ElegirRecompensa({ participacion, onCambio }: { participacion: Particip
     setEnviando(true);
     try {
       await retoService.reclamar(participacion.id, eleccion);
-      toast.success(eleccion === "efectivo" ? "Listo. Ahora contanos a qué cuenta te transferimos." : "Te acreditamos tus cotizaciones gratis.");
+      toast.success(eleccion === "efectivo"
+        ? (cuenta ? "Listo. El pago sale en máximo 5 días hábiles." : "Listo. Ahora contanos a qué cuenta te transferimos.")
+        : "Te acreditamos tus cotizaciones gratis.");
       onCambio();
     } catch (err) {
       toast.error(mensajeError(err, "No pudimos registrar tu reclamo. Probá de nuevo."));
@@ -205,6 +208,11 @@ function ElegirRecompensa({ participacion, onCambio }: { participacion: Particip
       <div>
         <p className="flex items-center gap-2 text-base font-semibold"><Trophy className="h-5 w-5 text-primary dark:text-accent" /> Llegaste a {participacion.umbral}. Elegí tu recompensa</p>
         <p className="mt-0.5 text-sm text-muted-foreground">Es una sola por ronda y la elección es definitiva.</p>
+        {cuenta && onIrAPerfil ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            ¿Otra cuenta? <button type="button" onClick={onIrAPerfil} className="font-medium text-primary underline-offset-2 hover:underline dark:text-accent">Cámbiala en tu perfil</button> antes de reclamar.
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Recompensa">
         {opciones.map(({ clave, icono: Icono, titulo, detalle }) => {
@@ -235,90 +243,17 @@ function ElegirRecompensa({ participacion, onCambio }: { participacion: Particip
   );
 }
 
-const CUENTA_VACIA: CuentaPagoDatos = { banco: "Bancolombia", tipo_cuenta: "ahorros", numero_cuenta: "", titular: "", documento_titular: "" };
-
 function FormCuenta({ participacion, onCambio }: { participacion: Participacion; onCambio: () => void }) {
-  const [datos, setDatos] = useState<CuentaPagoDatos>(CUENTA_VACIA);
-  const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const set = <K extends keyof CuentaPagoDatos>(campo: K, valor: CuentaPagoDatos[K]) => setDatos((d) => ({ ...d, [campo]: valor }));
-
-  const guardar = async (e: FormEvent) => {
-    e.preventDefault();
-    const numero = datos.numero_cuenta.replace(/\D/g, "");
-    if (numero.length < 6) return setError("El número de cuenta debe tener al menos 6 dígitos.");
-    if (datos.titular.trim().length < 3) return setError("Escribí el nombre completo del titular.");
-    if (datos.documento_titular.trim().length < 5) return setError("Escribí el documento del titular.");
-    setEnviando(true);
-    setError(null);
-    try {
-      await retoService.guardarCuenta(participacion.id, {
-        ...datos,
-        numero_cuenta: numero,
-        titular: datos.titular.trim(),
-        documento_titular: datos.documento_titular.trim(),
-      });
-      toast.success("Recibimos tus datos. El pago sale en máximo 5 días hábiles.");
-      onCambio();
-    } catch (err) {
-      setError(mensajeError(err, "No pudimos guardar tus datos. Probá de nuevo."));
-    } finally {
-      setEnviando(false);
-    }
-  };
-
   return (
-    <form onSubmit={guardar} className="space-y-3" noValidate>
-      <div>
-        <p className="flex items-center gap-2 text-base font-semibold"><Banknote className="h-5 w-5 text-primary dark:text-accent" /> ¿A qué cuenta te transferimos {pesos(participacion.ronda.recompensa_cop)}?</p>
-        <p className="mt-0.5 flex items-start gap-1.5 text-sm text-muted-foreground">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Guardamos el número y el documento cifrados. Solo los ve el equipo que hace la transferencia.
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          <span className="font-medium">Banco</span>
-          <select value={datos.banco} onChange={(e) => set("banco", e.target.value)} className={`${CLASE_INPUT} mt-1`}>
-            {BANCOS_COLOMBIA.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </label>
-        <fieldset className="text-sm">
-          <legend className="font-medium">Tipo de cuenta</legend>
-          <div className="mt-1 flex gap-2">
-            {(["ahorros", "corriente"] as const).map((tipo) => (
-              <label key={tipo} className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 ${datos.tipo_cuenta === tipo ? "border-primary bg-primary/5 font-medium text-primary dark:text-accent" : "border-border bg-white"}`}>
-                <input type="radio" name="tipo_cuenta" value={tipo} checked={datos.tipo_cuenta === tipo} onChange={() => set("tipo_cuenta", tipo)} className="sr-only" />
-                {tipo === "ahorros" ? "Ahorros" : "Corriente"}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <label className="block text-sm sm:col-span-2">
-          <span className="font-medium">Número de cuenta</span>
-          <input
-            inputMode="numeric"
-            autoComplete="off"
-            value={datos.numero_cuenta}
-            onChange={(e) => set("numero_cuenta", e.target.value.replace(/[^\d\s-]/g, ""))}
-            placeholder="Solo números"
-            className={`${CLASE_INPUT} mt-1`}
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="font-medium">Titular de la cuenta</span>
-          <input autoComplete="name" value={datos.titular} onChange={(e) => set("titular", e.target.value)} placeholder="Nombre completo" className={`${CLASE_INPUT} mt-1`} />
-        </label>
-        <label className="block text-sm">
-          <span className="font-medium">Documento del titular</span>
-          <input autoComplete="off" value={datos.documento_titular} onChange={(e) => set("documento_titular", e.target.value)} placeholder="Cédula o NIT" className={`${CLASE_INPUT} mt-1`} />
-        </label>
-      </div>
-      {error ? <p role="alert" className="text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
-      <button type="submit" disabled={enviando} className={`${CLASE_BOTON_PRIMARIO} w-full px-4 py-2.5 sm:w-auto`}>
-        {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Guardar datos de pago
-      </button>
-    </form>
+    <FormCuentaBancaria
+      titulo={<p className="flex items-center gap-2 text-base font-semibold"><Banknote className="h-5 w-5 text-primary dark:text-accent" /> ¿A qué cuenta te transferimos {pesos(participacion.ronda.recompensa_cop)}?</p>}
+      textoBoton="Guardar datos de pago"
+      onGuardar={async (datos) => {
+        await retoService.guardarCuenta(participacion.id, datos);
+        toast.success("Recibimos tus datos. El pago sale en máximo 5 días hábiles.");
+        onCambio();
+      }}
+    />
   );
 }
 
@@ -334,17 +269,20 @@ function Aviso({ tono, icono: Icono, children }: { tono: "exito" | "espera"; ico
   );
 }
 
-function EstadoRecompensa({ participacion, cotizacionesGratis, onCambio }: { participacion: Participacion; cotizacionesGratis: number; onCambio: () => void }) {
+function EstadoRecompensa({ participacion, cotizacionesGratis, onCambio, onIrAPerfil }: { participacion: Participacion; cotizacionesGratis: number; onCambio: () => void; onIrAPerfil?: () => void }) {
   const { ronda, cuenta } = participacion;
   switch (participacion.estado_recompensa) {
     case "reclamable":
-      return <ElegirRecompensa participacion={participacion} onCambio={onCambio} />;
+      return <ElegirRecompensa participacion={participacion} onCambio={onCambio} onIrAPerfil={onIrAPerfil} />;
     case "solicitada":
       if (!cuenta) return <FormCuenta participacion={participacion} onCambio={onCambio} />;
       return (
         <Aviso tono="espera" icono={Clock}>
           <p className="font-semibold">Recibimos tus datos. El pago sale en máximo 5 días hábiles.</p>
           <p>Te vamos a transferir {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} ({cuenta.tipo_cuenta}) terminada en {cuenta.ultimos_digitos}. Te avisamos con la referencia apenas salga.</p>
+          {onIrAPerfil ? (
+            <p className="text-xs">¿Cambió tu cuenta? <button type="button" onClick={onIrAPerfil} className="font-medium underline underline-offset-2">Actualízala en tu perfil</button>.</p>
+          ) : null}
         </Aviso>
       );
     case "pagada":
@@ -382,12 +320,14 @@ function PanelParticipante({
   exclusiones,
   onEnviarEnlace,
   onCambio,
+  onIrAPerfil,
 }: {
   participacion: Participacion;
   cotizacionesGratis: number;
   exclusiones: string;
   onEnviarEnlace: () => void;
   onCambio: () => void;
+  onIrAPerfil?: () => void;
 }) {
   const { ronda } = participacion;
   const activa = ronda.estado !== "cerrada" && !vencida(ronda);
@@ -427,7 +367,7 @@ function PanelParticipante({
         <p className="mt-1.5 text-xs text-muted-foreground">Solo cuentan los productos aprobados. Te avisamos cada vez que revisamos uno.</p>
       </div>
 
-      <EstadoRecompensa participacion={participacion} cotizacionesGratis={cotizacionesGratis} onCambio={onCambio} />
+      <EstadoRecompensa participacion={participacion} cotizacionesGratis={cotizacionesGratis} onCambio={onCambio} onIrAPerfil={onIrAPerfil} />
 
       {activa && exclusiones ? (
         <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
@@ -450,10 +390,13 @@ export function RetoPagina({
   autenticado,
   onIrARegistro,
   onEnviarEnlace,
+  onIrAPerfil,
 }: {
   autenticado: boolean;
   onIrARegistro: () => void;
   onEnviarEnlace: () => void;
+  /** Donde se cambia la cuenta bancaria guardada. */
+  onIrAPerfil?: () => void;
 }) {
   const [ronda, setRonda] = useState<Ronda | null>(null);
   const [exclusiones, setExclusiones] = useState("");
@@ -602,6 +545,7 @@ export function RetoPagina({
           exclusiones={exclusiones}
           onEnviarEnlace={onEnviarEnlace}
           onCambio={refrescarTodo}
+          onIrAPerfil={onIrAPerfil}
         />
       ) : null}
 

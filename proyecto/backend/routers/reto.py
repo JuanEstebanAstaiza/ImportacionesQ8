@@ -3,11 +3,12 @@ from datetime import datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from models.reto import EstadoRonda, RetoRonda
 from models.usuario import Usuario
+from schemas.cuenta_pago import CuentaPagoDatos
 from services import reto as svc
 from services.tendencias_calculo import bogota_a_utc
 from utils.dependencies import get_current_user, get_db, get_optional_current_user, require_rol
@@ -30,6 +31,10 @@ class RondaDatos(BaseModel):
 class RondaCambios(BaseModel):
     nombre: Optional[str] = Field(None, min_length=2, max_length=80)
     max_participantes: Optional[int] = Field(None, ge=1, le=10000)
+    # La recompensa nueva vale para quien todavía no cobró; lo pagado no cambia.
+    umbral_aprobados: Optional[int] = Field(None, ge=1, le=1000)
+    recompensa_cop: Optional[int] = Field(None, ge=0, le=100_000_000)
+    recompensa_cotizaciones: Optional[int] = Field(None, ge=0, le=1000)
     fecha_limite: Optional[datetime] = None
     abrir_siguiente_al_llenarse: Optional[bool] = None
     cerrar: bool = False
@@ -37,22 +42,6 @@ class RondaCambios(BaseModel):
 
 class Reclamo(BaseModel):
     eleccion: Literal["efectivo", "cotizaciones"]
-
-
-class CuentaPagoDatos(BaseModel):
-    banco: str = Field(..., min_length=2, max_length=80)
-    tipo_cuenta: Literal["ahorros", "corriente"]
-    numero_cuenta: str = Field(..., min_length=6, max_length=30)
-    titular: str = Field(..., min_length=3, max_length=150)
-    documento_titular: str = Field(..., min_length=5, max_length=20)
-
-    @field_validator("numero_cuenta")
-    @classmethod
-    def solo_digitos(cls, v: str) -> str:
-        digitos = "".join(c for c in v if c.isdigit())
-        if len(digitos) < 6:
-            raise ValueError("El número de cuenta debe tener al menos 6 dígitos")
-        return digitos
 
 
 class Pagado(BaseModel):
@@ -177,6 +166,13 @@ def editar_ronda(ronda_id: str, datos: RondaCambios, db: Session = Depends(get_d
             ronda.estado = EstadoRonda.abierta.value
     if datos.fecha_limite is not None:
         ronda.fecha_limite = bogota_a_utc(datos.fecha_limite.replace(tzinfo=None))
+    if datos.recompensa_cop is not None:
+        ronda.recompensa_cop = datos.recompensa_cop
+    if datos.recompensa_cotizaciones is not None:
+        ronda.recompensa_cotizaciones = datos.recompensa_cotizaciones
+    if datos.umbral_aprobados is not None:
+        ronda.umbral_aprobados = datos.umbral_aprobados
+        svc.aplicar_umbral(db, ronda)
     db.commit()
     return svc.ronda_dict(db, ronda, admin=True)
 

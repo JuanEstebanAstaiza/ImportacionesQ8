@@ -29,9 +29,15 @@ export interface Ronda {
 
 export interface RondaAdmin extends Ronda {
   inscritos: number;
-  /** Cupos × recompensa. */
+  /** Inscritos × recompensa: crece con cada inscripción. */
   presupuesto_cop: number;
+  /** Cupos × recompensa: el techo si se llena. */
+  presupuesto_maximo_cop: number;
+  /** Ya llegaron al umbral y no cobraron (eligieron efectivo o todavía no eligen). */
+  por_pagar_cop: number;
+  /** Lo transferido, con el monto real de cada pago. */
   pagado_cop: number;
+  recompensas_en_cotizaciones: number;
   abrir_siguiente_al_llenarse: boolean;
   fecha_creacion: string;
 }
@@ -67,6 +73,8 @@ export interface ParticipanteAdmin {
   cuenta: { banco: string; tipo_cuenta: string; numero: string; titular: string; documento: string } | { error: string } | null;
   pagado_en: string | null;
   referencia_pago: string | null;
+  /** Lo que se le transfirió (la recompensa de la ronda puede cambiar después). */
+  monto_pagado_cop: number | null;
   fecha_inscripcion: string;
 }
 
@@ -108,7 +116,8 @@ export const retoService = {
   // Admin
   rondas: () => apiRequest<RondaAdmin[]>("/reto/rondas"),
   crearRonda: (datos: RondaDatos) => apiRequest<RondaAdmin>("/reto/rondas", { method: "POST", body: datos }),
-  editarRonda: (id: string, cambios: Partial<Omit<RondaDatos, "umbral_aprobados" | "recompensa_cop" | "recompensa_cotizaciones">> & { cerrar?: boolean }) =>
+  /** La recompensa nueva vale para quien todavía no cobró; lo pagado no cambia. */
+  editarRonda: (id: string, cambios: Partial<RondaDatos> & { cerrar?: boolean }) =>
     apiRequest<RondaAdmin>(`/reto/rondas/${id}`, { method: "PATCH", body: cambios }),
   participantes: (rondaId: string) => apiRequest<ParticipanteAdmin[]>(`/reto/rondas/${rondaId}/participantes`),
   marcarPagado: (participacionId: string, referencia: string) =>

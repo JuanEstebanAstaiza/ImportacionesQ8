@@ -44,6 +44,7 @@ import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
 import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
 import { RetoPagina } from "@/features/reto/RetoPagina";
+import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
 import { RetoAdmin } from "@/features/reto/RetoAdmin";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
 import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
@@ -11145,77 +11146,6 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   );
 }
 
-function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
-  const [form,setForm]=useState(profile);
-  const [saving,setSaving]=useState(false);
-  const [saved,setSaved]=useState(false);
-  const [error,setError]=useState("");
-
-  useEffect(()=>{
-    setForm(profile);
-  },[profile]);
-
-  async function save(){
-    setSaving(true);
-    setError("");
-    try{
-      await onSave({
-        nombre:form.nombre,
-        telefono:form.telefono,
-        foto_url:form.fotoUrl?.trim()||undefined,
-      });
-      setSaved(true);
-      setTimeout(()=>setSaved(false),3000);
-    }catch(err){
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el perfil.");
-    }finally{
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="dashboard"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Editar perfil"}]}/>
-              <h1 className="text-xl font-semibold mt-3">Editar perfil</h1>
-            </div>
-            <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
-          </div>
-          {error&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{error}</p></Card>}
-          {/* Solo aparece para el rol solicitante: el propio componente se
-              oculta si el backend no le devuelve codigo. */}
-          <div className="max-w-2xl"><TarjetaReferidos/></div>
-          <Card padding="md" className="max-w-2xl">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Input label="Nombre" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>
-              <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))}/>
-              <Input label="Email" value={form.email} disabled/>
-              <div className="sm:col-span-2">
-                <Input label="Foto de perfil" value={form.fotoUrl} onChange={e=>setForm(p=>({...p,fotoUrl:e.target.value}))} placeholder="URL del archivo"/>
-                <div className="mt-2 flex gap-2">
-                  <DocumentUploadButton
-                    label="Subir foto"
-                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                    origen="perfil-usuario"
-                    onUploaded={(fileItem)=>setForm((prev)=>({...prev,fotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}
-                    onError={(message)=>setError(message)}
-                  />
-                  {form.fotoUrl&&<Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.fotoUrl);}}>Ver foto</Button>}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </main>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12055,14 +11985,9 @@ export default function App() {
   }
 
   function handleProfileClick(){
-    if(userRole==="importadora"){
-      goTo("imp-profile");
-      return;
-    }
-    if(userRole==="solicitante"||userRole==="asesor"){
-      goTo("user-profile");
-      return;
-    }
+    // El perfil personal es para todos; la empresa importadora llega desde ahí
+    // (o desde «Mi empresa» en el menú) a los datos de su empresa.
+    goTo("user-profile");
   }
 
   function handleHelpClick(){
@@ -12449,11 +12374,6 @@ export default function App() {
     await reloadImporters();
   }
 
-  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;foto_url?:string}) {
-    await businessService.updateMyUserProfile(payload);
-    await reloadCurrentUserProfile();
-  }
-
   async function handleSendChatMessage(conversationId: string, contenido: string, metadata?: Record<string, unknown>) {
     await businessService.sendChatMessage(conversationId, { contenido, tipo: "texto", metadata: metadata ?? null });
     const messages = await businessService.listChatMessages(conversationId);
@@ -12641,7 +12561,8 @@ export default function App() {
     "adv-dashboard": ["asesor"],
     "adv-available": ["asesor"],
     "adv-my-quotes": ["asesor"],
-    "user-profile": ["solicitante", "asesor"],
+    // Perfil personal: cualquier cuenta con sesión.
+    "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte"],
     "help-support": ["solicitante", "importadora", "asesor"],
     "admin-reto": ["admin"],
     "catalogos": ["solicitante"],
@@ -12780,7 +12701,7 @@ export default function App() {
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
     if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
-    if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
+    if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPerfil={()=>goTo("user-profile")}/></PantallaPortal>;
     if(screen==="admin-reto")return <PantallaPortal sb={sb} active="admin-reto" titulo="Reto · Rondas y pagos"><RetoAdmin/></PantallaPortal>;
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
@@ -12798,7 +12719,16 @@ export default function App() {
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PagosScreen sb={sb}/>;
-    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
+    if(screen==="user-profile")return (
+      <PantallaPortal sb={sb} active="user-profile" titulo="Mi perfil">
+        <PerfilUsuario
+          onActualizado={async()=>{await Promise.allSettled([reloadCurrentUserProfile(),refreshUser()]);}}
+          onIrAEmpresa={userRole==="importadora"?()=>goTo("imp-profile"):undefined}
+          // Solo aparece para el cotizante: el componente se oculta si el backend no le devuelve código.
+          extra={userRole==="solicitante"?<TarjetaReferidos/>:undefined}
+        />
+      </PantallaPortal>
+    );
     return null;
   };
 

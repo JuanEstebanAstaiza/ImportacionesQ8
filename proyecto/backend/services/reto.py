@@ -19,7 +19,8 @@ from models.reto import (
     RetoParticipacion, RetoRonda,
 )
 from models.usuario import Usuario
-from utils.cifrado import cifrar, descifrar
+from services import cuentas_pago
+from utils.cifrado import descifrar
 
 logger = logging.getLogger("importacionesq8")
 
@@ -107,30 +108,80 @@ def ronda_dict(db: Session, ronda: RetoRonda, admin: bool = False) -> Dict:
         "exclusiones": EXCLUSIONES,
     }
     if admin:
-        pagadas = db.query(func.count(RetoParticipacion.id)).filter(
-            RetoParticipacion.ronda_id == ronda.id,
-            RetoParticipacion.estado_recompensa == EstadoRecompensa.pagada.value,
-            RetoParticipacion.eleccion == EleccionRecompensa.efectivo.value,
-        ).scalar() or 0
+        datos.update(presupuesto(db, ronda, usados))
         datos.update({
             "inscritos": usados,
-            "presupuesto_cop": ronda.max_participantes * ronda.recompensa_cop,
-            "pagado_cop": pagadas * ronda.recompensa_cop,
             "abrir_siguiente_al_llenarse": ronda.abrir_siguiente_al_llenarse,
             "fecha_creacion": ronda.fecha_creacion.isoformat() + "Z",
         })
     return datos
 
 
+def presupuesto(db: Session, ronda: RetoRonda, usados: Optional[int] = None) -> Dict:
+    """El presupuesto se mueve con la ronda, no con los cupos:
+
+    - `presupuesto_cop`: inscritos × recompensa. Lo que costaría si todos los
+      inscritos llegan al umbral y eligen efectivo; crece con cada inscripción.
+    - `presupuesto_maximo_cop`: cupos × recompensa, el techo si se llena.
+    - `por_pagar_cop`: quienes ya llegaron y no cobraron (eligieron efectivo o
+      todavía no eligieron) × recompensa vigente.
+    - `pagado_cop`: lo transferido, con el monto de cada pago.
+    """
+    if usados is None:
+        usados = inscritos(db, ronda.id)
+    filas = db.query(RetoParticipacion.estado_recompensa, RetoParticipacion.eleccion,
+                     RetoParticipacion.monto_pagado_cop).filter(RetoParticipacion.ronda_id == ronda.id).all()
+    efectivo = EleccionRecompensa.efectivo.value
+    pagado = sum(
+        (monto if monto is not None else ronda.recompensa_cop)
+        for estado, eleccion, monto in filas
+        if estado == EstadoRecompensa.pagada.value and eleccion == efectivo
+    )
+    por_pagar = sum(
+        1 for estado, eleccion, _ in filas
+        if estado == EstadoRecompensa.reclamable.value
+        or (estado == EstadoRecompensa.solicitada.value and eleccion == efectivo)
+    ) * ronda.recompensa_cop
+    cotizaciones = sum(
+        1 for estado, eleccion, _ in filas
+        if estado == EstadoRecompensa.pagada.value and eleccion == EleccionRecompensa.cotizaciones.value
+    )
+    return {
+        "presupuesto_cop": usados * ronda.recompensa_cop,
+        "presupuesto_maximo_cop": ronda.max_participantes * ronda.recompensa_cop,
+        "por_pagar_cop": por_pagar,
+        "pagado_cop": pagado,
+        "recompensas_en_cotizaciones": cotizaciones,
+    }
+
+
+def aplicar_umbral(db: Session, ronda: RetoRonda) -> int:
+    """Tras bajar el umbral: quien ya lo alcanza pasa a reclamable. Lo ya
+    reclamado no se toca si el umbral sube. Devuelve cuántos cambiaron."""
+    cambiaron = 0
+    for participacion in db.query(RetoParticipacion).filter(
+        RetoParticipacion.ronda_id == ronda.id,
+        RetoParticipacion.estado_recompensa == EstadoRecompensa.pendiente.value,
+        RetoParticipacion.aprobados >= ronda.umbral_aprobados,
+    ).all():
+        participacion.estado_recompensa = EstadoRecompensa.reclamable.value
+        _notificar(db, participacion.usuario_id, "recompensa_lista",
+                   f"Llegaste a {ronda.umbral_aprobados}: reclamá tu recompensa",
+                   f"Elegí: {pesos(ronda.recompensa_cop)} o {ronda.recompensa_cotizaciones} cotizaciones gratis.",
+                   email=True)
+        cambiaron += 1
+    return cambiaron
+
+
 def resumen_participacion(db: Session, participacion: Optional[RetoParticipacion]) -> Optional[Dict]:
     if participacion is None:
         return None
     ronda = ronda_de(db, participacion)
+    # La cuenta del perfil sirve para cobrar: se muestra enmascarada.
+    fila = cuentas_pago.de_usuario(db, participacion.usuario_id)
     cuenta = None
-    if participacion.eleccion == EleccionRecompensa.efectivo.value:
-        fila = db.query(CuentaPago).filter(CuentaPago.usuario_id == participacion.usuario_id).first()
-        if fila is not None:
-            cuenta = {"banco": fila.banco, "tipo_cuenta": fila.tipo_cuenta, "ultimos_digitos": fila.ultimos_digitos}
+    if fila is not None:
+        cuenta = {"banco": fila.banco, "tipo_cuenta": fila.tipo_cuenta, "ultimos_digitos": fila.ultimos_digitos}
     return {
         "id": participacion.id,
         "ronda": ronda_dict(db, ronda),
@@ -296,6 +347,12 @@ def reclamar(db: Session, participacion_id: str, usuario: Usuario, eleccion: str
                    f"Tenés {usuario.cotizaciones_gratis} cotizaciones gratis disponibles.", email=True)
     else:
         participacion.estado_recompensa = EstadoRecompensa.solicitada.value
+        cuenta = cuentas_pago.de_usuario(db, usuario.id)
+        if cuenta is not None:
+            # Ya tenía la cuenta en su perfil: no hace falta pedírsela.
+            _notificar(db, usuario.id, "datos_pago_recibidos", "Recibimos tu solicitud de pago",
+                       f"Te transferimos {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} terminada en "
+                       f"{cuenta.ultimos_digitos} en máximo 5 días hábiles.", email=True)
     db.commit()
     db.refresh(participacion)
     return participacion
@@ -307,17 +364,7 @@ def guardar_cuenta(db: Session, participacion_id: str, usuario: Usuario, datos: 
     if (participacion.eleccion != EleccionRecompensa.efectivo.value
             or participacion.estado_recompensa != EstadoRecompensa.solicitada.value):
         raise _error(status.HTTP_409_CONFLICT, "Los datos bancarios se piden al reclamar la recompensa en efectivo")
-    numero = "".join(c for c in datos["numero_cuenta"] if c.isdigit())
-    cuenta = db.query(CuentaPago).filter(CuentaPago.usuario_id == usuario.id).first()
-    if cuenta is None:
-        cuenta = CuentaPago(usuario_id=usuario.id)
-        db.add(cuenta)
-    cuenta.banco = datos["banco"].strip()
-    cuenta.tipo_cuenta = datos["tipo_cuenta"]
-    cuenta.numero_cifrado = cifrar(numero)
-    cuenta.ultimos_digitos = numero[-4:]
-    cuenta.titular = datos["titular"].strip()
-    cuenta.documento_cifrado = cifrar(datos["documento_titular"].strip())
+    cuentas_pago.guardar(db, usuario, datos)
     _notificar(db, usuario.id, "datos_pago_recibidos", "Recibimos tus datos de pago",
                "El pago sale en máximo 5 días hábiles.", email=True)
     db.commit()
@@ -338,6 +385,7 @@ def marcar_pagado(db: Session, participacion_id: str, referencia: str) -> RetoPa
     participacion.estado_recompensa = EstadoRecompensa.pagada.value
     participacion.pagado_en = datetime.utcnow()
     participacion.referencia_pago = referencia.strip()
+    participacion.monto_pagado_cop = ronda.recompensa_cop
     _notificar(db, participacion.usuario_id, "pago_realizado", "Te transferimos tu recompensa",
                f"Te transferimos {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} terminada en "
                f"{cuenta.ultimos_digitos}. Referencia {participacion.referencia_pago}.", email=True)
@@ -381,6 +429,7 @@ def participantes(db: Session, ronda_id: str) -> List[Dict]:
             "cuenta": datos_cuenta,
             "pagado_en": p.pagado_en.isoformat() + "Z" if p.pagado_en else None,
             "referencia_pago": p.referencia_pago,
+            "monto_pagado_cop": p.monto_pagado_cop,
             "fecha_inscripcion": p.fecha_inscripcion.isoformat() + "Z",
         })
     return resultado

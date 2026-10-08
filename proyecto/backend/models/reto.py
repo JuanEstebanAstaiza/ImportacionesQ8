@@ -64,6 +64,8 @@ class RetoParticipacion(Base):
     estado_recompensa = Column(String(20), nullable=False, default=EstadoRecompensa.pendiente.value)
     pagado_en = Column(DateTime, nullable=True)
     referencia_pago = Column(String(120), nullable=True)
+    # Lo que se transfirió de verdad: la recompensa de la ronda puede cambiar después.
+    monto_pagado_cop = Column(Integer, nullable=True)
     aviso_faltan_pocos = Column(Boolean, nullable=False, default=False, server_default="0")
     ultimo_envio_en = Column(DateTime, nullable=True)
     ultimo_aviso_inactividad = Column(DateTime, nullable=True)

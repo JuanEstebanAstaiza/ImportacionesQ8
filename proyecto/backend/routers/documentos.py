@@ -1030,6 +1030,18 @@ def _es_foto_de_producto_visible(db: Session, archivo_id: str, user_id: str) -> 
     )
 
 
+def _es_foto_de_perfil(db: Session, archivo_id: str) -> bool:
+    """La foto de perfil en uso de cualquier cuenta: se ve en la cabecera, en
+    los chats y en las propuestas, con un `<img>` que no manda el token. Solo
+    la imagen que el dueño puso como foto; el resto de sus archivos sigue privado."""
+    try:
+        PyUUID(archivo_id)
+    except ValueError:
+        return False
+    ruta = f"/documentos/archivos/{archivo_id}/descargar"
+    return db.query(Usuario.id).filter(Usuario.foto_url == ruta).first() is not None
+
+
 def _es_portada_publica_de_tendencia(db: Session, archivo_id: str) -> bool:
     """Las portadas de productos publicados en Tendencias: el feed es público."""
     from services.tendencias_virales import es_portada_publica
@@ -1056,6 +1068,7 @@ async def descargar_archivo(
         or _es_imagen_publica_de_empresa(db, archivo_id)
         or _es_recurso_publico_de_landing(db, archivo_id)
         or _es_portada_publica_de_tendencia(db, archivo_id)
+        or (file_row.tipo_recurso == "imagen" and _es_foto_de_perfil(db, archivo_id))
     )
 
     if not allowed and current_user is not None:
