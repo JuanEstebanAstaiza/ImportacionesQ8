@@ -317,7 +317,7 @@ export function CatalogosComprador({ onPedirPropuesta }: { onPedirPropuesta: (p:
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <BookOpen className="h-5 w-5 text-primary" /> Catálogos de empresas
+          <BookOpen className="h-5 w-5 text-primary dark:text-accent" /> Catálogos de empresas
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Selecciones de productos que las empresas importadoras compartieron contigo. Son gratis: pide propuesta de cualquier producto y te responden con su precio.
@@ -354,9 +354,9 @@ export function CatalogosComprador({ onPedirPropuesta }: { onPedirPropuesta: (p:
                     key={c.id}
                     type="button"
                     onClick={() => setAbiertoId(c.id)}
-                    className="flex flex-col rounded-xl border border-border bg-white p-4 text-left shadow-sm transition-shadow hover:border-primary/40 hover:shadow-md"
+                    className="flex flex-col rounded-xl border border-border bg-white p-4 text-left shadow-sm transition-shadow hover:border-primary/40 dark:hover:border-accent/40 hover:shadow-md"
                   >
-                    <InsigniaExclusivo catalogo={c} />
+                    <InsigniaExclusivo catalogo={c}/>
                     <span className="mt-2 text-base font-semibold">{c.titulo}</span>
                     {c.descripcion ? <span className="mt-1 line-clamp-2 text-sm text-muted-foreground">{c.descripcion}</span> : null}
                     {fotos.length > 0 ? (
@@ -366,7 +366,7 @@ export function CatalogosComprador({ onPedirPropuesta }: { onPedirPropuesta: (p:
                     ) : null}
                     <span className="mt-auto flex items-center justify-between pt-3 text-xs">
                       <span className="text-muted-foreground">{c.total_productos} {c.total_productos === 1 ? "producto" : "productos"}</span>
-                      <span className="font-medium text-primary dark:text-violet-200">Ver catálogo →</span>
+                      <span className="font-medium text-primary dark:text-accent">Ver catálogo →</span>
                     </span>
                   </button>
                 );
