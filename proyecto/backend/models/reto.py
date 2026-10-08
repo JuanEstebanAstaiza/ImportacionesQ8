@@ -66,6 +66,10 @@ class RetoParticipacion(Base):
     referencia_pago = Column(String(120), nullable=True)
     # Lo que se transfirió de verdad: la recompensa de la ronda puede cambiar después.
     monto_pagado_cop = Column(Integer, nullable=True)
+    # Comprobante del pago. La cuenta completa se borra al pagar (ver CuentaPago).
+    pago_banco = Column(String(80), nullable=True)
+    pago_tipo_cuenta = Column(String(20), nullable=True)
+    pago_ultimos_digitos = Column(String(4), nullable=True)
     aviso_faltan_pocos = Column(Boolean, nullable=False, default=False, server_default="0")
     ultimo_envio_en = Column(DateTime, nullable=True)
     ultimo_aviso_inactividad = Column(DateTime, nullable=True)
@@ -73,8 +77,10 @@ class RetoParticipacion(Base):
 
 
 class CuentaPago(Base):
-    """Datos bancarios para transferir la recompensa. Número de cuenta y
-    documento van cifrados (Fernet); solo los ve el rol admin."""
+    """Datos bancarios para transferir una recompensa en efectivo. Temporales:
+    se piden al reclamar y se borran al marcar el pago (del pago quedan banco,
+    tipo y últimos 4 dígitos en la participación). Número de cuenta y documento
+    van cifrados (Fernet); solo los ve el rol admin."""
     __tablename__ = "cuentas_pago"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))

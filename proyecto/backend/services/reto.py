@@ -177,11 +177,17 @@ def resumen_participacion(db: Session, participacion: Optional[RetoParticipacion
     if participacion is None:
         return None
     ronda = ronda_de(db, participacion)
-    # La cuenta del perfil sirve para cobrar: se muestra enmascarada.
-    fila = cuentas_pago.de_usuario(db, participacion.usuario_id)
+    # Enmascarada: la cuenta que cargó para este pago o, ya pagado, el comprobante.
     cuenta = None
-    if fila is not None:
-        cuenta = {"banco": fila.banco, "tipo_cuenta": fila.tipo_cuenta, "ultimos_digitos": fila.ultimos_digitos}
+    if participacion.eleccion == EleccionRecompensa.efectivo.value:
+        if participacion.estado_recompensa == EstadoRecompensa.pagada.value:
+            if participacion.pago_ultimos_digitos:
+                cuenta = {"banco": participacion.pago_banco, "tipo_cuenta": participacion.pago_tipo_cuenta,
+                          "ultimos_digitos": participacion.pago_ultimos_digitos}
+        else:
+            fila = cuentas_pago.de_usuario(db, participacion.usuario_id)
+            if fila is not None:
+                cuenta = {"banco": fila.banco, "tipo_cuenta": fila.tipo_cuenta, "ultimos_digitos": fila.ultimos_digitos}
     return {
         "id": participacion.id,
         "ronda": ronda_dict(db, ronda),
@@ -346,20 +352,16 @@ def reclamar(db: Session, participacion_id: str, usuario: Usuario, eleccion: str
         _notificar(db, usuario.id, "cotizaciones_acreditadas", "Cotizaciones gratis acreditadas",
                    f"Tenés {usuario.cotizaciones_gratis} cotizaciones gratis disponibles.", email=True)
     else:
+        # Los datos bancarios se piden ahora (guardar_cuenta) y se borran al pagar.
         participacion.estado_recompensa = EstadoRecompensa.solicitada.value
-        cuenta = cuentas_pago.de_usuario(db, usuario.id)
-        if cuenta is not None:
-            # Ya tenía la cuenta en su perfil: no hace falta pedírsela.
-            _notificar(db, usuario.id, "datos_pago_recibidos", "Recibimos tu solicitud de pago",
-                       f"Te transferimos {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} terminada en "
-                       f"{cuenta.ultimos_digitos} en máximo 5 días hábiles.", email=True)
     db.commit()
     db.refresh(participacion)
     return participacion
 
 
 def guardar_cuenta(db: Session, participacion_id: str, usuario: Usuario, datos: Dict) -> RetoParticipacion:
-    """Los datos bancarios se piden solo al reclamar en efectivo."""
+    """Los datos bancarios se piden solo al reclamar en efectivo; se pueden
+    corregir hasta que el admin marque el pago."""
     participacion = _propia(db, participacion_id, usuario)
     if (participacion.eleccion != EleccionRecompensa.efectivo.value
             or participacion.estado_recompensa != EstadoRecompensa.solicitada.value):
@@ -386,9 +388,15 @@ def marcar_pagado(db: Session, participacion_id: str, referencia: str) -> RetoPa
     participacion.pagado_en = datetime.utcnow()
     participacion.referencia_pago = referencia.strip()
     participacion.monto_pagado_cop = ronda.recompensa_cop
+    # Del pago queda el comprobante; la cuenta completa se borra.
+    participacion.pago_banco = cuenta.banco
+    participacion.pago_tipo_cuenta = cuenta.tipo_cuenta
+    participacion.pago_ultimos_digitos = cuenta.ultimos_digitos
     _notificar(db, participacion.usuario_id, "pago_realizado", "Te transferimos tu recompensa",
                f"Te transferimos {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} terminada en "
                f"{cuenta.ultimos_digitos}. Referencia {participacion.referencia_pago}.", email=True)
+    db.flush()
+    cuentas_pago.borrar_si_no_hay_pagos(db, participacion.usuario_id)
     db.commit()
     db.refresh(participacion)
     return participacion
@@ -411,7 +419,12 @@ def participantes(db: Session, ronda_id: str) -> List[Dict]:
     for p, u in filas:
         cuenta = cuentas.get(u.id)
         datos_cuenta = None
-        if cuenta is not None and p.eleccion == EleccionRecompensa.efectivo.value:
+        if p.estado_recompensa == EstadoRecompensa.pagada.value:
+            # Ya pagado: la cuenta se borró, queda el comprobante.
+            if p.pago_ultimos_digitos:
+                datos_cuenta = {"banco": p.pago_banco, "tipo_cuenta": p.pago_tipo_cuenta,
+                                "ultimos_digitos": p.pago_ultimos_digitos}
+        elif cuenta is not None and p.eleccion == EleccionRecompensa.efectivo.value:
             try:
                 datos_cuenta = {
                     "banco": cuenta.banco, "tipo_cuenta": cuenta.tipo_cuenta,

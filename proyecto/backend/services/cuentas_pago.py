@@ -1,9 +1,8 @@
-"""Cuenta bancaria de un usuario para recibir pagos (hoy: la recompensa del reto).
+"""Cuenta bancaria para pagar una recompensa del reto en efectivo.
 
-Una por usuario (`cuentas_pago.usuario_id` es único). Se carga desde el perfil o
-al reclamar la recompensa en efectivo; las dos vías escriben la misma fila.
-Número y documento van cifrados (utils/cifrado.py): al dueño solo le vuelven
-enmascarados y el número completo lo ve únicamente el admin que transfiere.
+No se guarda en el perfil: se pide al reclamar en efectivo y se borra al
+marcar el pago (`borrar_si_no_hay_pagos`). Mientras existe, número y documento
+van cifrados (utils/cifrado.py) y solo el admin que transfiere los ve completos.
 """
 from __future__ import annotations
 
@@ -11,37 +10,26 @@ from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
 
-from models.reto import CuentaPago
+from models.reto import CuentaPago, EleccionRecompensa, EstadoRecompensa, RetoParticipacion
 from models.usuario import Usuario
-from utils.cifrado import cifrar, descifrar
-
-TIPOS_CUENTA = ("ahorros", "corriente")
+from utils.cifrado import cifrar
 
 
 def de_usuario(db: Session, usuario_id: str) -> Optional[CuentaPago]:
     return db.query(CuentaPago).filter(CuentaPago.usuario_id == usuario_id).first()
 
 
-def _enmascarar_documento(cifrado: str) -> Optional[str]:
-    try:
-        documento = descifrar(cifrado)
-    except ValueError:
-        return None
-    return "•" * max(len(documento) - 3, 0) + documento[-3:]
-
-
-def resumen(cuenta: Optional[CuentaPago]) -> Optional[Dict]:
-    """Lo que ve el dueño: nunca el número completo."""
-    if cuenta is None:
-        return None
-    return {
-        "banco": cuenta.banco,
-        "tipo_cuenta": cuenta.tipo_cuenta,
-        "ultimos_digitos": cuenta.ultimos_digitos,
-        "titular": cuenta.titular,
-        "documento": _enmascarar_documento(cuenta.documento_cifrado),
-        "fecha_actualizacion": cuenta.fecha_actualizacion.isoformat() + "Z" if cuenta.fecha_actualizacion else None,
-    }
+def borrar_si_no_hay_pagos(db: Session, usuario_id: str) -> bool:
+    """Tras pagar: la cuenta se borra salvo que tenga otro pago en camino
+    (dos rondas reclamadas en efectivo a la vez). No hace commit."""
+    pendiente = db.query(RetoParticipacion.id).filter(
+        RetoParticipacion.usuario_id == usuario_id,
+        RetoParticipacion.eleccion == EleccionRecompensa.efectivo.value,
+        RetoParticipacion.estado_recompensa == EstadoRecompensa.solicitada.value,
+    ).first()
+    if pendiente is not None:
+        return False
+    return db.query(CuentaPago).filter(CuentaPago.usuario_id == usuario_id).delete(synchronize_session=False) > 0
 
 
 def guardar(db: Session, usuario: Usuario, datos: Dict) -> CuentaPago:

@@ -10,10 +10,7 @@ from sqlalchemy import and_
 from models.usuario import Usuario
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.documental import Archivo
-from models.reto import EstadoRecompensa, EleccionRecompensa, RetoParticipacion
-from schemas.cuenta_pago import CuentaPagoDatos
 from schemas.usuario import CambioContrasena, UsuarioMeResponse, UsuarioMeUpdate, CotizacionAsignadaItem
-from services import cuentas_pago
 from utils.limiter import RATE_LIMIT_CAMBIO_CONTRASENA, limiter
 from utils.security import hash_password, verify_password
 from schemas.cotizante import CotizantePerfilPublicoResponse
@@ -123,43 +120,6 @@ async def cambiar_mi_contrasena(
     db.commit()
     logger.info("Contraseña cambiada desde el perfil usuario_id=%s", usuario.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get("/me/cuenta-pago")
-async def obtener_mi_cuenta_pago(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """La cuenta para recibir pagos (recompensas del reto), enmascarada."""
-    usuario = _yo(db, current_user)
-    return {"cuenta": cuentas_pago.resumen(cuentas_pago.de_usuario(db, usuario.id))}
-
-
-@router.put("/me/cuenta-pago")
-async def guardar_mi_cuenta_pago(
-    datos: CuentaPagoDatos,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-):
-    usuario = _yo(db, current_user)
-    cuenta = cuentas_pago.guardar(db, usuario, datos.model_dump())
-    db.commit()
-    db.refresh(cuenta)
-    return {"cuenta": cuentas_pago.resumen(cuenta)}
-
-
-@router.delete("/me/cuenta-pago", status_code=status.HTTP_204_NO_CONTENT)
-async def borrar_mi_cuenta_pago(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    usuario = _yo(db, current_user)
-    pendiente = db.query(RetoParticipacion.id).filter(
-        RetoParticipacion.usuario_id == usuario.id,
-        RetoParticipacion.eleccion == EleccionRecompensa.efectivo.value,
-        RetoParticipacion.estado_recompensa == EstadoRecompensa.solicitada.value,
-    ).first()
-    if pendiente is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail="Tienes un pago en camino a esta cuenta. Puedes cambiarla, pero no borrarla.")
-    cuenta = cuentas_pago.de_usuario(db, usuario.id)
-    if cuenta is not None:
-        db.delete(cuenta)
-        db.commit()
 
 
 @router.put("/me", response_model=UsuarioMeResponse)

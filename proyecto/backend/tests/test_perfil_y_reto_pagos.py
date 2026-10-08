@@ -84,31 +84,15 @@ def test_cambiar_contrasena(client, db_session):
     assert verify_password("NuevaClave22", usuario.password_hash)
 
 
-# ── Cuenta bancaria del perfil ───────────────────────────────────────────────
+# ── La cuenta bancaria no vive en el perfil ──────────────────────────────────
 
-def test_cuenta_del_perfil_se_guarda_cifrada_y_enmascarada(client, db_session):
-    usuario, headers = crear_usuario_con_token(db_session)
-    assert client.get("/usuarios/me/cuenta-pago", headers=headers).json() == {"cuenta": None}
-
-    r = client.put("/usuarios/me/cuenta-pago", headers=headers, json=CUENTA)
-    assert r.status_code == 200, r.text
-    cuenta = r.json()["cuenta"]
-    assert cuenta["banco"] == "Bancolombia" and cuenta["ultimos_digitos"] == "9012"
-    assert cuenta["documento"] == "•••••••050"
-    assert "123456789012" not in r.text and "1020304050" not in r.text
-    fila = db_session.query(CuentaPago).filter(CuentaPago.usuario_id == usuario.id).one()
-    assert "123456789012" not in fila.numero_cifrado
-
-    # Cambiarla reemplaza la misma fila.
-    client.put("/usuarios/me/cuenta-pago", headers=headers, json={**CUENTA, "banco": "Nequi", "numero_cuenta": "3001234567"})
-    assert db_session.query(CuentaPago).filter(CuentaPago.usuario_id == usuario.id).count() == 1
-    assert client.get("/usuarios/me/cuenta-pago", headers=headers).json()["cuenta"]["ultimos_digitos"] == "4567"
-
-    assert client.delete("/usuarios/me/cuenta-pago", headers=headers).status_code == 204
-    assert client.get("/usuarios/me/cuenta-pago", headers=headers).json() == {"cuenta": None}
+def test_el_perfil_no_guarda_cuenta_bancaria(client, db_session):
+    _, headers = crear_usuario_con_token(db_session)
+    assert client.put("/usuarios/me/cuenta-pago", headers=headers, json=CUENTA).status_code in (404, 405)
+    assert client.get("/usuarios/me/cuenta-pago", headers=headers).status_code in (404, 405)
 
 
-# ── Reto: cuenta del perfil y presupuesto dinámico ───────────────────────────
+# ── Reto: cuenta temporal y presupuesto dinámico ─────────────────────────────
 
 def _ronda(client, admin, **extra):
     fin = (datetime.utcnow() + timedelta(days=14)).replace(microsecond=0).isoformat()
@@ -127,25 +111,37 @@ def _participante_con_aprobado(client, db_session, admin, ronda, video="dQw4w9Wg
     return usuario, headers
 
 
-def test_reclamar_efectivo_usa_la_cuenta_del_perfil(client, db_session):
+def test_la_cuenta_se_pide_al_reclamar_y_se_borra_al_pagar(client, db_session):
     _, admin = crear_usuario_con_token(db_session, rol="admin")
     ronda = _ronda(client, admin)
     usuario, headers = _participante_con_aprobado(client, db_session, admin, ronda)
-    client.put("/usuarios/me/cuenta-pago", headers=headers, json=CUENTA)
 
     p = client.get("/reto/mi-participacion", headers=headers).json()["participacion"]
-    assert p["estado_recompensa"] == "reclamable" and p["cuenta"]["ultimos_digitos"] == "9012"
+    assert p["estado_recompensa"] == "reclamable" and p["cuenta"] is None
     r = client.post(f"/reto/participaciones/{p['id']}/reclamar", json={"eleccion": "efectivo"}, headers=headers)
-    assert r.status_code == 200 and r.json()["estado_recompensa"] == "solicitada"
-    assert db_session.query(Notificacion).filter(
-        Notificacion.usuario_id == usuario.id, Notificacion.titulo == "Recibimos tu solicitud de pago").count() == 1
+    assert r.status_code == 200 and r.json()["estado_recompensa"] == "solicitada" and r.json()["cuenta"] is None
 
-    # Con un pago en camino, la cuenta se puede cambiar pero no borrar.
-    assert client.delete("/usuarios/me/cuenta-pago", headers=headers).status_code == 409
+    # Sin datos bancarios no se puede marcar pagado.
+    assert client.patch(f"/reto/participaciones/{p['id']}/pagado", json={"referencia": "TRX-1"},
+                        headers=admin).status_code == 409
+    client.put(f"/reto/participaciones/{p['id']}/cuenta-pago", json=CUENTA, headers=headers)
+    # Se pueden corregir mientras el pago no sale.
+    r = client.put(f"/reto/participaciones/{p['id']}/cuenta-pago",
+                   json={**CUENTA, "numero_cuenta": "999888777666"}, headers=headers)
+    assert r.json()["cuenta"]["ultimos_digitos"] == "7666"
     filas = client.get(f"/reto/rondas/{ronda['id']}/participantes", headers=admin).json()
-    assert filas[0]["cuenta"]["numero"] == "123456789012"
+    assert filas[0]["cuenta"]["numero"] == "999888777666"
+
     assert client.patch(f"/reto/participaciones/{p['id']}/pagado", json={"referencia": "TRX-1"},
                         headers=admin).status_code == 200
+    # Pagado: la cuenta se borró y queda el comprobante (banco y últimos 4).
+    assert db_session.query(CuentaPago).filter(CuentaPago.usuario_id == usuario.id).count() == 0
+    final = client.get(f"/reto/rondas/{ronda['id']}/participantes", headers=admin).json()[0]
+    assert final["cuenta"] == {"banco": "Bancolombia", "tipo_cuenta": "ahorros", "ultimos_digitos": "7666"}
+    mia = client.get("/reto/mi-participacion", headers=headers).json()["participacion"]
+    assert mia is None or mia["cuenta"]["ultimos_digitos"] == "7666"
+    # Ya pagada, no se pueden volver a cargar datos.
+    assert client.put(f"/reto/participaciones/{p['id']}/cuenta-pago", json=CUENTA, headers=headers).status_code == 409
 
 
 def test_presupuesto_crece_con_los_inscritos_y_lo_pagado_no_cambia(client, db_session):
