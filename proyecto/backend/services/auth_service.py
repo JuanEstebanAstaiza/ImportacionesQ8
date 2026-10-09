@@ -202,11 +202,20 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
     db.commit()
     db.refresh(nuevo_usuario)
 
+    correo_enviado = True
     if not config.LOAD_TEST_AUTO_VERIFY:
-        emitir_otp(db, nuevo_usuario, PropositoOtp.verificacion_email.value)
+        correo_enviado = emitir_otp(db, nuevo_usuario, PropositoOtp.verificacion_email.value).enviado
     # Con LOAD_TEST_AUTO_VERIFY el usuario ya queda email_verificado=True y puede
     # hacer POST /auth/login sin OTP (solo development/test; bloqueado en production).
 
+    if not correo_enviado:
+        # La cuenta queda creada: el código se pide de nuevo con «Reenviar».
+        return RegistroPendienteResponse(
+            user_id=str(nuevo_usuario.id),
+            email=nuevo_usuario.email,
+            correo_enviado=False,
+            mensaje="Creamos tu cuenta, pero no pudimos enviarte el código. Pide uno nuevo en unos minutos.",
+        )
     return RegistroPendienteResponse(
         user_id=str(nuevo_usuario.id),
         email=nuevo_usuario.email,
@@ -253,9 +262,9 @@ def reenviar_otp(solicitud: ReenviarOtpRequest, db: Session) -> ReenviarOtpRespo
             and usuario.email_verificado
             and requiere_login_tardio(usuario)
         ):
-            _, challenge = emitir_otp(
+            challenge = emitir_otp(
                 db, usuario, PropositoOtp.login_tardio.value, con_challenge=True
-            )
+            ).challenge
 
     return ReenviarOtpResponse(challenge_token=challenge)
 
@@ -315,9 +324,9 @@ def login_user(login: LoginRequest, db: Session) -> LoginResponse:
         )
 
     if requiere_login_tardio(usuario):
-        _, challenge = emitir_otp(
+        challenge = emitir_otp(
             db, usuario, PropositoOtp.login_tardio.value, con_challenge=True
-        )
+        ).challenge
         return LoginResponse(
             requiere_otp=True,
             motivo_otp=PropositoOtp.login_tardio.value,

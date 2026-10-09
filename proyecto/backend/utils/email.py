@@ -1,5 +1,7 @@
 import logging
 import smtplib
+
+import httpx
 from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -46,12 +48,24 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
     envío SMTP real fue intentado pero falló.
     """
     if not config.SMTP_HOST:
+        if config.APP_ENV == "production":
+            # En producción no hay "simulado": sin servidor el correo no sale, y
+            # quien espera un código tiene que saberlo.
+            logger.error(
+                "SMTP no configurado en producción (SMTP_HOST vacío): no se envió el correo "
+                "a %s (%s). Configura SMTP_HOST, SMTP_USER y SMTP_API_KEY.",
+                destinatario, asunto,
+            )
+            return False
         logger.warning(
             "SMTP no configurado (SMTP_HOST vacío): se omite el envío real. "
             "destinatario=%s asunto=%s (cuerpo omitido por seguridad)",
             destinatario, asunto,
         )
         return True
+
+    if usa_api_resend():
+        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html)
 
     mensaje = MIMEMultipart("alternative")
     mensaje["Subject"] = asunto
@@ -69,9 +83,52 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
                 servidor.login(config.SMTP_USER, config.SMTP_API_KEY)
             servidor.sendmail(config.SMTP_FROM, [destinatario], mensaje.as_string())
         return True
-    except Exception:
-        logger.exception("Error enviando correo SMTP a %s", destinatario)
+    except Exception as error:
+        logger.exception(
+            "Error enviando correo SMTP a %s vía %s:%s (%s: %s). Si es un timeout, el "
+            "servidor probablemente bloquea la salida por ese puerto: usa EMAIL_PROVIDER=resend.",
+            destinatario, config.SMTP_HOST, config.SMTP_PORT, type(error).__name__, error,
+        )
         return False
+
+
+def usa_api_resend() -> bool:
+    """¿Sale por la API HTTPS de Resend en lugar de SMTP?"""
+    if config.EMAIL_PROVIDER:
+        return config.EMAIL_PROVIDER == "resend"
+    return "resend" in (config.SMTP_HOST or "").lower() and (config.SMTP_API_KEY or "").startswith("re_")
+
+
+def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
+    """Envío por la API de Resend (HTTPS, puerto 443). Mismo resultado que SMTP,
+    pero sin depender de que el servidor deje salir los puertos de correo, y con
+    el motivo exacto en el log cuando Resend rechaza el envío (dominio sin
+    verificar, API key inválida o sin permiso, remitente mal escrito…)."""
+    if not config.SMTP_API_KEY:
+        logger.error("Resend sin API key (SMTP_API_KEY vacío): no se envió el correo a %s", destinatario)
+        return False
+    datos = {"from": config.SMTP_FROM, "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
+    if cuerpo_html:
+        datos["html"] = cuerpo_html
+    try:
+        respuesta = httpx.post(
+            config.RESEND_API_URL,
+            json=datos,
+            headers={"Authorization": f"Bearer {config.SMTP_API_KEY}"},
+            timeout=10,
+        )
+    except httpx.HTTPError as error:
+        logger.error("No se pudo conectar con Resend para enviar a %s (%s: %s)",
+                     destinatario, type(error).__name__, error)
+        return False
+    if respuesta.is_success:
+        return True
+    try:
+        motivo = respuesta.json().get("message") or respuesta.text
+    except ValueError:
+        motivo = respuesta.text
+    logger.error("Resend rechazó el correo a %s (HTTP %s): %s", destinatario, respuesta.status_code, motivo[:300])
+    return False
 
 
 def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str) -> bool:
@@ -145,5 +202,10 @@ def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
         f'<p style="font-size:30px;font-weight:700;letter-spacing:6px;color:#4f46e5;">{escape(otp)}</p>'
         f"<p>Caduca en {config.OTP_EXPIRE_MINUTES} minutos.</p>",
     )
+    if not config.SMTP_HOST and config.APP_ENV in ("development", "local"):
+        # Sin servidor de correo en local no hay forma de recibir el código: se
+        # deja en el log del backend (`docker logs importacionesq8_backend`).
+        # Nunca en producción ni en tests.
+        logger.warning("OTP de desarrollo para %s (%s): %s", destinatario, proposito, otp)
     return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
 

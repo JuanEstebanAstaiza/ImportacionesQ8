@@ -16,6 +16,7 @@ import {
   type BackupResumen,
 } from "@/services/admin.service";
 import { businessService } from "@/services/business.service";
+import { tendenciasService } from "@/services/tendencias.service";
 import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
 import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
@@ -26,7 +27,7 @@ import { resolveApiUrl, toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
 
 type AdminTab = "metricas" | "empresas" | "asignacion" | "usuarios" | "cotizantes" | "soporte" | "certificaciones" | "respaldos" | "landing" | "correos";
-type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte";
+type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte" | "designer";
 
 type CompanyUiDetails = {
   nit: string;
@@ -90,7 +91,7 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   correos: { label: "Correos", hint: "Campañas y avisos a usuarios" },
 };
 
-const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "admin"] as const;
+const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "designer", "admin"] as const;
 
 type RoleFilter = (typeof ROLE_OPTIONS)[number];
 type ActiveFilter = "todos" | "activos" | "inactivos";
@@ -774,7 +775,19 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         );
       }
 
-      if (userForm.rol === "soporte") {
+      if (userForm.rol === "designer") {
+        // Equipo de diseño: portadas e imágenes de Tendencias, más el canal del equipo.
+        if (!userForm.nombre || !userForm.email || !userForm.password) {
+          throw new Error("Para una cuenta de diseño debes completar nombre, email y contraseña.");
+        }
+        await tendenciasService.crearDisenador({
+          email: userForm.email,
+          password: userForm.password,
+          nombre: userForm.nombre,
+          telefono: userForm.telefono || undefined,
+        });
+        setStatusMessage(`Cuenta de diseño creada para ${userForm.email}. Entra directo a «Diseño».`);
+      } else if (userForm.rol === "soporte") {
         if (!userForm.nombre || !userForm.email || !userForm.password) {
           throw new Error("Para una cuenta de soporte debes completar nombre, email y contraseña.");
         }
@@ -2285,6 +2298,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                 <option value="solicitante">Solicitante</option>
                 <option value="importador">Importador (crea también su empresa)</option>
                 <option value="soporte">Atención al cliente</option>
+                <option value="designer">Diseño (portadas de Tendencias)</option>
                 <option value="asesor">Asesor</option>
                 <option value="admin">Admin</option>
               </select>
@@ -2339,7 +2353,9 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             <div className="mt-3 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
               {userForm.rol === "asesor" || userForm.rol === "admin"
                 ? "Con la API actual, las altas directas disponibles en este panel son para solicitantes e importadores."
-                : "El formulario usará los endpoints existentes del frontend vía apiRequest."}
+                : userForm.rol === "designer"
+                  ? "Diseño pone portada e imágenes con la identidad de Zarpi a lo aprobado en Tendencias y lo publica. Entra al canal del equipo; no ve soporte ni clientes."
+                  : "El formulario usará los endpoints existentes del frontend vía apiRequest."}
             </div>
 
             <div className="mt-5 flex justify-end gap-2">

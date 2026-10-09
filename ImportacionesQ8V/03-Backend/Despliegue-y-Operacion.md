@@ -97,6 +97,7 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Activan la configuración de producción |
 | `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES=1440` | JWT. El frontend no renueva el token, por eso dura 24 h |
 | `SMTP_*` (Resend), `CONTACT_EMAIL` | Correo transaccional y formulario de contacto |
+| `EMAIL_PROVIDER` | `resend` (API HTTPS, puerto 443), `smtp`, o vacío = automático (API de Resend si `SMTP_HOST` es de Resend y la key empieza por `re_`) |
 | `WOMPI_SIMULATE`, `WOMPI_*` | Pagos (simulados mientras no haya llaves reales) |
 | `BACKUP_RETENCION`, `BACKUP_REMOTO`, `MAX_BACKUP_UPLOAD_BYTES` | Backups. Ver [[Backups-y-Restauracion]] |
 | `CUPO_COTIZACIONES_UTC_OFFSET_HORAS` | Zona horaria del cupo diario (−5, Colombia) |
@@ -104,3 +105,25 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `TRM_CONSULTA_AUTOMATICA`, `TRM_URL`, `TRM_TIMEOUT_SEGUNDOS`, `TRM_RESPALDO_COP` | TRM oficial diaria desde datos.gov.co para guardar montos en pesos. El servidor necesita salida HTTPS a `www.datos.gov.co`; si no la tiene, usa el respaldo del admin. Ver [[24-Eventos-y-Panel-Empresa]] |
 
 ← [[Indice-Backend]] · [[Estado-del-proyecto]]
+
+## Si no llegan los correos (OTP, notificaciones)
+
+Corre el diagnóstico dentro del backend:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend     python scripts/diagnostico_correo.py tu-correo@ejemplo.com
+```
+
+El script revisa cuatro cosas:
+- La configuración que ve el backend, sin imprimir la API key.
+- Si el servidor deja salir conexiones a los puertos SMTP y a `api.resend.com:443`.
+- El estado del dominio en Resend.
+- Un envío de prueba real, con el motivo exacto si Resend lo rechaza.
+
+Causas habituales:
+- **El VPS bloquea los puertos SMTP:** pasa en muchos proveedores. Con Resend, el backend ya usa su API HTTPS, que no depende de ellos.
+- **El dominio del remitente no está verificado en Resend:** el de `SMTP_FROM`, por ejemplo `zarpi.co`. Hay que verificarlo con sus registros DNS en resend.com/domains.
+- **La key está mal escrita o le sobran comillas:** pasa al editarla en el `.env`.
+- **El `.env` cambió con el contenedor ya levantado:** el contenedor sigue con los valores viejos. Hay que recrearlo con `docker compose ... up -d --force-recreate backend`.
+
+Los errores de envío quedan en `docker compose logs backend`, en las líneas que empiezan por «Resend rechazó» o «Error enviando correo».

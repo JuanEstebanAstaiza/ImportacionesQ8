@@ -40,6 +40,8 @@ export interface RegisterResponse {
 	user_id: string;
 	email: string;
 	requiere_verificacion: boolean;
+	/** false: la cuenta quedó creada pero el correo con el código no salió. */
+	correo_enviado?: boolean;
 	mensaje: string;
 }
 

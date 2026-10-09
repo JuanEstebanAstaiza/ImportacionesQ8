@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import NamedTuple, Optional, Tuple
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -22,16 +22,24 @@ def invalidar_otps_pendientes(db: Session, usuario_id: str, proposito: str) -> N
     ).update({"usado": True})
 
 
+class OtpEmitido(NamedTuple):
+    otp: str
+    challenge: Optional[str]
+    # False si el correo no salió (SMTP caído o sin configurar en producción).
+    enviado: bool
+
+
 def emitir_otp(
     db: Session,
     usuario: Usuario,
     proposito: str,
     *,
     con_challenge: bool = False,
-) -> Tuple[str, Optional[str]]:
+) -> "OtpEmitido":
     """
     Invalida OTPs previos del mismo propósito, genera uno nuevo, lo persiste
-    hasheado y envía el correo. Devuelve (otp_plano, challenge_token|None).
+    hasheado y envía el correo. Devuelve el OTP plano, el challenge (o None) y
+    si el correo salió.
     """
     if proposito not in (PropositoOtp.verificacion_email.value, PropositoOtp.login_tardio.value):
         raise ValueError(f"Propósito OTP inválido: {proposito}")
@@ -53,8 +61,8 @@ def emitir_otp(
     db.add(registro)
     db.commit()
 
-    enviar_correo_otp(usuario.email, otp, proposito)
-    return otp, challenge
+    enviado = enviar_correo_otp(usuario.email, otp, proposito)
+    return OtpEmitido(otp, challenge, enviado)
 
 
 def consumir_otp(

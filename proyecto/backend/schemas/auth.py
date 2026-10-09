@@ -100,6 +100,8 @@ class RegistroPendienteResponse(BaseModel):
     user_id: str
     email: str
     requiere_verificacion: bool = True
+    # False: la cuenta se creó pero el correo con el código no salió.
+    correo_enviado: bool = True
     mensaje: str = "Te enviamos un código de 6 dígitos a tu correo para activar la cuenta"
 
 

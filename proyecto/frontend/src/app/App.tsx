@@ -10480,6 +10480,15 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
   const [loading,setLoading]=useState(false);
   const [success,setSuccess]=useState(false);
   const [registeredEmail,setRegisteredEmail]=useState("");
+  // El correo con el código puede no salir (SMTP caído): se avisa y se deja reenviar.
+  const [correoEnviado,setCorreoEnviado]=useState(true);
+  const [reenviando,setReenviando]=useState(false);
+  const [esperaReenvio,setEsperaReenvio]=useState(0);
+  useEffect(()=>{
+    if(esperaReenvio<=0)return;
+    const t=window.setTimeout(()=>setEsperaReenvio(s=>s-1),1000);
+    return ()=>window.clearTimeout(t);
+  },[esperaReenvio]);
   const [otpCode,setOtpCode]=useState("");
   const [otpLoading,setOtpLoading]=useState(false);
   const [otpError,setOtpError]=useState("");
@@ -10567,13 +10576,31 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 
     try{
       setLoading(true);
-      await authService.register(payload);
+      const respuesta=await authService.register(payload);
       setRegisteredEmail(email);
+      setCorreoEnviado(respuesta.correo_enviado!==false);
+      setEsperaReenvio(respuesta.correo_enviado===false?0:60);
       setSuccess(true);
     }catch(error){
       setSubmitError(getErrorMessage(error));
     }finally{
       setLoading(false);
+    }
+  }
+
+  async function reenviarCodigo(){
+    if(!registeredEmail||reenviando||esperaReenvio>0)return;
+    try{
+      setReenviando(true);
+      setOtpError("");
+      await authService.resendOtp({ email: registeredEmail, proposito: "verificacion_email" });
+      setCorreoEnviado(true);
+      setEsperaReenvio(60);
+      toast.success("Te enviamos un código nuevo. Revisa también la carpeta de spam.");
+    }catch(error){
+      setOtpError(getErrorMessage(error));
+    }finally{
+      setReenviando(false);
     }
   }
 
@@ -10615,7 +10642,11 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
           <>
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
             <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
-            <p className="text-sm text-muted-foreground mb-4">Te enviamos un codigo OTP de 6 digitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>.</p>
+            {correoEnviado?(
+              <p className="text-sm text-muted-foreground mb-4">Te enviamos un código de 6 dígitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>. Si no llega en un par de minutos, revisa la carpeta de spam.</p>
+            ):(
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">Creamos tu cuenta, pero no pudimos enviarte el código a <span className="font-medium">{registeredEmail||"tu correo"}</span>. Pide uno nuevo abajo.</p>
+            )}
 
             <form onSubmit={verifyOtp} className="space-y-3 text-left">
               <Input
@@ -10632,6 +10663,15 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                 {!otpLoading&&"Activar cuenta"}
               </Button>
             </form>
+
+            <button
+              type="button"
+              onClick={()=>{void reenviarCodigo();}}
+              disabled={reenviando||esperaReenvio>0}
+              className="mt-3 text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline dark:text-accent"
+            >
+              {reenviando?"Enviando…":esperaReenvio>0?`Reenviar código en ${esperaReenvio} s`:"Reenviar código"}
+            </button>
 
             <button type="button" onClick={onBack} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
           </>

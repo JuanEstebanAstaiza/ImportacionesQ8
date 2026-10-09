@@ -69,6 +69,11 @@ SMTP_API_KEY = os.getenv("SMTP_API_KEY") or os.getenv("SMTP_PASSWORD")
 SMTP_PASSWORD = SMTP_API_KEY
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@zarpi.co")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+# Cómo sale el correo: "resend" (API HTTPS de Resend, puerto 443), "smtp", o
+# vacío = automático (API de Resend si SMTP_HOST es de Resend y hay una API key
+# "re_…"; si no, SMTP). La API evita los puertos SMTP, que muchos VPS bloquean.
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://zarpi.co").rstrip("/")
