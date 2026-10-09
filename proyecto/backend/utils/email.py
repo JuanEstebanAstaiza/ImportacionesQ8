@@ -71,6 +71,8 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
     mensaje["Subject"] = asunto
     mensaje["From"] = config.SMTP_FROM
     mensaje["To"] = destinatario
+    if config.EMAIL_REPLY_TO:
+        mensaje["Reply-To"] = config.EMAIL_REPLY_TO
     mensaje.attach(MIMEText(cuerpo_texto, "plain"))
     if cuerpo_html:
         mensaje.attach(MIMEText(cuerpo_html, "html"))
@@ -110,6 +112,8 @@ def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo
     datos = {"from": config.SMTP_FROM, "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
     if cuerpo_html:
         datos["html"] = cuerpo_html
+    if config.EMAIL_REPLY_TO:
+        datos["reply_to"] = config.EMAIL_REPLY_TO
     try:
         respuesta = httpx.post(
             config.RESEND_API_URL,

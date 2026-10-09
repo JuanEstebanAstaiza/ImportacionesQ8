@@ -76,6 +76,9 @@ EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "").strip().lower()
 RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
+# A dónde llegan las respuestas: el remitente (no-reply@…) puede ser solo un
+# alias sin buzón, así que quien conteste le escribe a un correo que se lee.
+EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", CONTACT_EMAIL).strip()
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://zarpi.co").rstrip("/")
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
 OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))

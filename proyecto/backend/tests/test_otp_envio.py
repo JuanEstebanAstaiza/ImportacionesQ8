@@ -80,6 +80,8 @@ def test_con_resend_sale_por_la_api_https(monkeypatch):
     assert enviado["url"] == "https://api.resend.com/emails"
     assert enviado["headers"]["Authorization"] == "Bearer re_prueba_123"
     assert enviado["json"]["from"] == "Zarpi <no-reply@zarpi.co>" and enviado["json"]["to"] == ["a@example.com"]
+    # Las respuestas van a un buzón que se lee, no al alias no-reply.
+    assert enviado["json"]["reply_to"] == config.EMAIL_REPLY_TO
 
 
 def test_rechazo_de_resend_queda_en_el_log_con_el_motivo(monkeypatch, caplog):
