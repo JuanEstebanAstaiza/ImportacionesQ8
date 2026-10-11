@@ -147,6 +147,33 @@ Array de `LandingAllyResponse`:
 
 ---
 
+### `POST /landing/lista-privada`
+
+- **Resumen:** Solicitar acceso a la lista privada (desde 2026-10-11)
+- **Auth:** Público (límite `RATE_LIMIT_PUBLIC_WRITE`)
+- **Códigos:** 200, 422, 502
+
+Con el registro cerrado (Admin › Módulos), la landing cambia «Crear cuenta» por «Solicitar acceso»: los cotizantes dejan sus datos y por qué quieren entrar.
+
+- La solicitud llega a `LISTA_PRIVADA_EMAIL` (admin@zarpi.co), con «Responder» apuntando a quien la llenó. Desde ese buzón se le responde con el valor del acceso; las credenciales se crean cuando se registra el pago.
+- A la persona le llega un acuse desde admin@ con el aviso del costo. Si el acuse falla, la solicitud igual queda enviada.
+- 502 si no se pudo enviar la solicitud a admin@.
+
+**Body (`ListaPrivadaRequest`)**
+
+| Campo | Tipo | Req | Descripción |
+|-------|------|-----|-------------|
+| `nombre` | `string` | sí | 2–150 |
+| `email` | `string` | sí |  |
+| `telefono` | `string` | sí | 7–40 (teléfono o WhatsApp) |
+| `ciudad` | `Optional[string]` | no |  |
+| `empresa` | `Optional[string]` | no | Empresa o emprendimiento |
+| `motivo` | `string` | sí | 20–2000: por qué quiere entrar |
+
+**Respuesta (`ContactoResponse`)**
+
+---
+
 ### `GET /landing/dynamic-content`
 
 - **Resumen:** Obtener Contenido Dinamico

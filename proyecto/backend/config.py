@@ -78,6 +78,14 @@ EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "").strip().lower()
 RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
+# Buzón que recibe las solicitudes de la lista privada (registro cerrado); desde
+# ahí se le responde a cada persona con el valor del acceso.
+LISTA_PRIVADA_EMAIL = os.getenv("LISTA_PRIVADA_EMAIL", "admin@zarpi.co").strip()
+# Buzón al que llega copia de cada comprobante de pago que sube un usuario
+# (con el comprobante y el concepto adjuntos).
+PAGOS_EMAIL = os.getenv("PAGOS_EMAIL", "pagos@zarpi.co").strip()
+# Adjuntos más grandes no se mandan por correo: van como enlace a la plataforma.
+MAX_ADJUNTO_CORREO_BYTES = int(os.getenv("MAX_ADJUNTO_CORREO_BYTES", str(10 * 1024 * 1024)))
 # A dónde llegan las respuestas a los correos de notificaciones@ (por defecto,
 # al buzón de contacto, que lo lee una persona).
 EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", CONTACT_EMAIL).strip()
@@ -167,6 +175,11 @@ NOTIFICACIONES_EMAIL = os.getenv("NOTIFICACIONES_EMAIL", "true").lower() == "tru
 MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").lower() == "true"
 # Registro público de cotizantes (el admin lo puede cerrar en Módulos).
 REGISTRO_PUBLICO_HABILITADO = os.getenv("REGISTRO_PUBLICO_HABILITADO", "true").lower() == "true"
+# Mientras no hay pasarela, cada curso con precio se desbloquea cuando el equipo
+# aprueba el comprobante de pago (o da el acceso a mano). Apagado en tests: los
+# de cursos se inscriben directo.
+PAGO_MANUAL_CURSOS = os.getenv(
+    "PAGO_MANUAL_CURSOS", "false" if APP_ENV == "test" else "true").lower() == "true"
 # Cada cotización consume 1 token. Apagado en tests: casi todas crean cotizaciones sin saldo.
 COBRO_COTIZACIONES_TOKENS = os.getenv(
     "COBRO_COTIZACIONES_TOKENS", "false" if APP_ENV == "test" else "true").lower() == "true"

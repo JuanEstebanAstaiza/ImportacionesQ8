@@ -6,6 +6,8 @@
 - `suscripcion`: igual, para la suscripción a Tendencias (se acreditan días).
 - `reto`: el equipo sube el comprobante de la transferencia de una recompensa
   del reto en efectivo; el usuario solo puede verlo y descargarlo.
+- `curso`: el pago de un curso (`curso_id`); al aprobar, el usuario queda con
+  acceso a ese curso.
 
 El archivo vive en gestión documental (carpeta «Pagos/…» de quien lo sube).
 """
@@ -22,6 +24,7 @@ class TipoComprobante(str, enum.Enum):
     tokens = "tokens"
     suscripcion = "suscripcion"
     reto = "reto"
+    curso = "curso"
 
 
 class EstadoComprobante(str, enum.Enum):
@@ -53,4 +56,6 @@ class ComprobantePago(Base):
     revisado_en = Column(DateTime, nullable=True)
     # Solo `reto`: la participación pagada.
     participacion_id = Column(String(36), ForeignKey("reto_participaciones.id"), nullable=True)
+    # Solo `curso`: el curso que se paga.
+    curso_id = Column(String(36), ForeignKey("cursos.id"), nullable=True, index=True)
     fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

@@ -6,6 +6,7 @@ import {
   BookOpen,
   ChevronRight,
   CirclePlay,
+  Clock,
   Coins,
   Pencil,
   FileDown,
@@ -87,6 +88,8 @@ type CoursesScreenProps = {
   role: "solicitante" | "importadora";
   companyName: string;
   onGoDashboard: () => void;
+  /** Pago manual: lleva a Pagos con la ventana del comprobante de ese curso. */
+  onComprarAcceso?: (courseId: string) => void;
 };
 
 type DraftResource = {
@@ -271,7 +274,7 @@ function getNextLesson(course: Course | null, currentLessonId: string | null, co
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
-    currency: "USD",
+    currency: "COP",
     maximumFractionDigits: 0,
   }).format(value);
 }
@@ -415,7 +418,7 @@ function sortByRecent<T extends Course>(rows: T[], recentCourseIds: string[]): T
   });
 }
 
-export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScreenProps) {
+export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcceso }: CoursesScreenProps) {
   const {
     courses,
     purchasedCourseIds,
@@ -1247,9 +1250,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Todas">Todos los precios</SelectItem>
-                  <SelectItem value="150">Hasta USD 150</SelectItem>
-                  <SelectItem value="200">Hasta USD 200</SelectItem>
-                  <SelectItem value="250">Hasta USD 250</SelectItem>
+                  <SelectItem value="500000">Hasta $500.000</SelectItem>
+                  <SelectItem value="1000000">Hasta $1.000.000</SelectItem>
+                  <SelectItem value="2000000">Hasta $2.000.000</SelectItem>
                 </SelectContent>
               </Select>
             </section>
@@ -1884,6 +1887,13 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                   <div className="rounded-xl border bg-muted/20 p-4">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Precio del curso</p>
                     <p className="mt-2 text-2xl font-semibold">{formatCurrency(selectedCourse.precio)}</p>
+                    {selectedCourse.pagoManual && !purchasedCourseIds.includes(selectedCourse.id) ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {selectedCourse.comprobantePendiente
+                          ? "Ya recibimos tu comprobante. Te avisamos por correo cuando confirmemos el pago y se abra el curso."
+                          : "Pagas por transferencia y subes el comprobante en Pagos. Cuando confirmemos el pago, se abre el curso."}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1893,6 +1903,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                 {purchasedCourseIds.includes(selectedCourse.id) ? (
                   <Button onClick={() => { setSelectedCourseId(null); handleOpenPlayer(selectedCourse.id, learningState.lastLessonIdByCourse[selectedCourse.id]); }}>
                     Ir a mi curso
+                  </Button>
+                ) : selectedCourse.pagoManual && selectedCourse.comprobantePendiente ? (
+                  <Button variant="secondary" onClick={() => onComprarAcceso?.(selectedCourse.id)} title="Ya enviaste el comprobante: te avisamos al aprobarlo">
+                    <Clock className="size-4" />
+                    Comprobante en revisión
+                  </Button>
+                ) : selectedCourse.pagoManual && onComprarAcceso ? (
+                  <Button onClick={() => { setSelectedCourseId(null); onComprarAcceso(selectedCourse.id); }}>
+                    <Coins className="size-4" />
+                    Comprar acceso
                   </Button>
                 ) : (
                   <Button disabled={pendingPurchaseCourseId === selectedCourse.id} onClick={() => { void handlePurchase(selectedCourse.id); }}>
@@ -1962,13 +1982,13 @@ export function CoursesScreen({ role, companyName, onGoDashboard }: CoursesScree
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Precio</p>
+                  <p className="text-sm font-medium">Precio (COP)</p>
                   <Input 
                     type="number" 
                     min="1" 
                     value={publishForm.precio} 
                     onChange={(event) => setPublishForm((current) => ({ ...current, precio: event.target.value }))} 
-                    placeholder="199" 
+                    placeholder="2000000" 
                   />
                 </div>
               </div>

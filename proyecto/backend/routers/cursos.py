@@ -19,8 +19,9 @@ from models.importador import Importador
 from schemas.curso import (
     CursoCreate, CursoUpdate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
     ProgresoLeccionRequest, ProgresoLeccionResponse, ModuloResponse, LeccionResponse,
-    RecursoLeccionResponse, CertificadoCursoResponse,
+    RecursoLeccionResponse, CertificadoCursoResponse, AccesoCursoCreate,
 )
+from services import acceso_cursos
 from services.notificacion_service import crear_notificacion_best_effort
 from services.documental_service import extract_document_file_id_from_url, ensure_folder_path
 from utils.dependencies import (
@@ -82,7 +83,8 @@ def _nombres_importadoras(db: Session, importador_ids: List[str]) -> dict:
     return {r[0]: r[1] for r in rows}
 
 
-def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Session] = None) -> CursoListItem:
+def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Session] = None,
+                  pago_manual: bool = False) -> CursoListItem:
     nombre = None
     if nombres is not None:
         nombre = nombres.get(curso.importador_id)
@@ -103,6 +105,7 @@ def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Ses
         estudiantes_count=int(curso.estudiantes_count or 0),
         estado=curso.estado,
         fecha_creacion=curso.fecha_creacion,
+        pago_manual=pago_manual and float(curso.precio or 0) > 0,
     )
 
 
@@ -407,7 +410,8 @@ async def listar_cursos(
 
     cursos = query.offset(offset).limit(limit).all()
     nombres = _nombres_importadoras(db, [c.importador_id for c in cursos])
-    return [_to_list_item(c, nombres=nombres) for c in cursos]
+    manual = acceso_cursos.pago_manual_activo(db)
+    return [_to_list_item(c, nombres=nombres, pago_manual=manual) for c in cursos]
 
 
 @router.get("/cursos/{id_o_slug}", response_model=CursoDetailResponse)
@@ -425,8 +429,9 @@ async def obtener_curso(
         if not current_user or current_user.get("importador_id") != curso.importador_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    item = _to_list_item(curso, db=db)
+    item = _to_list_item(curso, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     comprado = False
+    comprobante_pendiente = False
     lecciones_completadas: List[str] = []
     progreso_pct = 0.0
 
@@ -440,12 +445,16 @@ async def obtener_curso(
             lecciones_completadas, _, progreso_pct = _progreso_usuario(
                 db, current_user["user_id"], curso.id
             )
+        elif item.pago_manual:
+            comprobante_pendiente = acceso_cursos.comprobante_pendiente(
+                db, current_user["user_id"], curso.id) is not None
 
     acceso = _puede_ver_contenido_completo(curso, current_user, comprado)
     return CursoDetailResponse(
         **item.model_dump(),
         modulos=_modulos_response(curso, acceso_completo=acceso),
         comprado=comprado,
+        comprobante_pendiente=comprobante_pendiente,
         lecciones_completadas=lecciones_completadas,
         progreso_pct=progreso_pct,
     )
@@ -523,8 +532,10 @@ async def comprar_curso(
     restringirlo al rol "solicitante" devolvía 403 a los asesores y dueños de
     empresa que quisieran tomar un curso de otra importadora.
 
-    Nota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en
-    auditoría 2026-07-28 (A04 diseño de pagos).
+    Con el pago manual de cursos encendido (Admin › Módulos), un curso con
+    precio no se compra aquí: responde 402 y el usuario sube el comprobante en
+    Pagos; el acceso llega cuando el equipo lo aprueba (services/acceso_cursos).
+    Los cursos gratis siguen siendo de inscripción directa.
     """
     from sqlalchemy.exc import IntegrityError
 
@@ -548,6 +559,11 @@ async def comprar_curso(
         CompraCurso.curso_id == curso.id,
         CompraCurso.usuario_id == usuario_id,
     ).first()
+    if not existente and acceso_cursos.requiere_comprobante(db, curso):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Este curso se paga por transferencia: sube el comprobante en Pagos y te damos acceso al aprobarlo.",
+        )
     if existente:
         return CompraCursoResponse(
             id=str(existente.id),
@@ -612,6 +628,47 @@ async def comprar_curso(
         fecha_compra=compra.fecha_compra,
         curso=_to_list_item(curso, db=db),
     )
+
+
+# ── Admin: accesos a cursos ──────────────────────────────────────────────────
+
+@router.get("/admin/cursos/catalogo")
+def catalogo_para_accesos(db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
+    """Cursos publicados, para elegir a cuál dar acceso."""
+    return acceso_cursos.catalogo_publicado(db)
+
+
+@router.get("/admin/cursos/accesos")
+def listar_accesos_cursos(
+    curso_id: Optional[str] = Query(None, max_length=36),
+    q: Optional[str] = Query(None, max_length=120, description="Buscar por correo"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Quién tiene acceso a cada curso y de dónde salió (inscripción, comprobante o a mano)."""
+    return acceso_cursos.listar_accesos(db, curso_id=curso_id, q=q)
+
+
+@router.post("/admin/cursos/accesos", status_code=status.HTTP_201_CREATED)
+def dar_acceso_curso(datos: AccesoCursoCreate, db: Session = Depends(get_db),
+                     current_user: dict = Depends(require_rol("admin"))):
+    """Da acceso a un curso a la cuenta de ese correo (p. ej. confirmamos el pago
+    por fuera). Le llega un correo desde pagos@."""
+    from models.usuario import Usuario
+
+    admin = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    acceso = acceso_cursos.dar_acceso_manual(db, admin, curso_id=datos.curso_id, email=datos.email, nota=datos.nota)
+    db.commit()
+    return next(a for a in acceso_cursos.listar_accesos(db, curso_id=acceso.curso_id) if a["id"] == acceso.id)
+
+
+@router.delete("/admin/cursos/accesos/{acceso_id}")
+def quitar_acceso_curso(acceso_id: str, db: Session = Depends(get_db),
+                        current_user: dict = Depends(require_rol("admin"))):
+    """Quita el acceso (el progreso queda guardado por si se vuelve a dar)."""
+    acceso_cursos.quitar_acceso(db, acceso_id)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/mis-cursos", response_model=List[CursoDetailResponse])

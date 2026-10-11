@@ -31,6 +31,12 @@ MODULOS = {
         "Cada cotización consume 1 token (primero las gratis del reto). Los tokens se compran subiendo "
         "el comprobante en Pagos.",
     ),
+    "pago_manual_cursos": (
+        "modulos.pago_manual_cursos",
+        "Pago manual de cursos",
+        "Cada curso con precio se desbloquea por persona cuando el equipo aprueba el comprobante de pago "
+        "(o da el acceso a mano en Accesos a cursos). Apágalo cuando haya pasarela: la compra vuelve a ser directa.",
+    ),
 }
 
 
@@ -41,6 +47,8 @@ def _por_defecto(nombre: str) -> bool:
         return bool(config.REGISTRO_PUBLICO_HABILITADO)
     if nombre == "cobro_cotizaciones":
         return bool(config.COBRO_COTIZACIONES_TOKENS)
+    if nombre == "pago_manual_cursos":
+        return bool(config.PAGO_MANUAL_CURSOS)
     return True
 
 

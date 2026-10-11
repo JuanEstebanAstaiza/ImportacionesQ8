@@ -43,6 +43,10 @@ export interface Course {
   comprado?: boolean;
   progreso_pct?: number;
   modulos: Module[];
+  /** Pago manual de cursos: se paga subiendo el comprobante en Pagos. */
+  pagoManual?: boolean;
+  /** Ya subió el comprobante de este curso y lo están revisando. */
+  comprobantePendiente?: boolean;
 }
 
 export interface PublishLessonResourceInput {

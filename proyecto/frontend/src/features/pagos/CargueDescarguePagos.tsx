@@ -10,6 +10,7 @@ import {
   Folder,
   FolderOpen,
   Gift,
+  GraduationCap,
   Inbox,
   Info,
   Landmark,
@@ -38,14 +39,19 @@ import {
   ORIGEN_COMPROBANTE,
   comprobantesService,
   type Comprobante,
+  type CursoPorPagar,
   type ResumenPagos,
   type TipoComprobante,
 } from "@/services/comprobantes.service";
 
 /**
  * Cargue y descargue de pagos: mientras se habilita la pasarela, el usuario paga
- * por transferencia y sube el comprobante. Tres carpetas: tokens de cotización,
- * suscripción a Tendencias (ambas con formulario) y pagos del reto (solo lectura).
+ * por transferencia y sube el comprobante. Carpetas: tokens de cotización,
+ * suscripción a Tendencias, cursos (con el pago manual de cursos; las tres con
+ * formulario) y pagos del reto (solo lectura).
+ *
+ * Desde Cursos, «Comprar acceso» llega con `cursoInicial`: se abre la ventana
+ * con el concepto (ese curso), el valor y la subida del comprobante.
  */
 
 const FORMATO_COP = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
@@ -54,15 +60,14 @@ function cop(valor: number | null | undefined): string {
   return valor == null ? "—" : FORMATO_COP.format(valor);
 }
 
-const ORDEN_CARPETAS: TipoComprobante[] = ["tokens", "suscripcion", "reto"];
-
 type Listas = Record<TipoComprobante, Comprobante[]>;
 
-const LISTAS_VACIAS: Listas = { tokens: [], suscripcion: [], reto: [] };
+const LISTAS_VACIAS: Listas = { tokens: [], suscripcion: [], curso: [], reto: [] };
 
 const VACIO_CARPETA: Record<TipoComprobante, string> = {
   tokens: "Aún no has subido comprobantes de tokens.",
   suscripcion: "Aún no has subido comprobantes de la suscripción.",
+  curso: "Aún no has pagado ningún curso. Elige uno, transfiere y sube aquí el comprobante.",
   reto: "Cuando te paguemos una recompensa del reto en efectivo, aquí verás el comprobante.",
 };
 
@@ -82,12 +87,19 @@ async function descargar(ruta: string, nombre?: string | null) {
   if (!r.ok) toast.error(r.motivo || "No se pudo descargar el comprobante.");
 }
 
-export function CargueDescarguePagos({ rol }: { rol: string }) {
+export function CargueDescarguePagos({ rol, cursoInicial, onCursoInicialUsado }: {
+  rol: string;
+  /** Curso que se quiere comprar (viene de «Comprar acceso» en Cursos). */
+  cursoInicial?: string | null;
+  onCursoInicialUsado?: () => void;
+}) {
   const [resumen, setResumen] = useState<ResumenPagos | null>(null);
   const [listas, setListas] = useState<Listas>(LISTAS_VACIAS);
+  const [cursos, setCursos] = useState<CursoPorPagar[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [carpeta, setCarpeta] = useState<TipoComprobante>("tokens");
+  const [carpeta, setCarpeta] = useState<TipoComprobante>(cursoInicial ? "curso" : "tokens");
+  const [cursoVentana, setCursoVentana] = useState<string | null>(cursoInicial ?? null);
 
   // `silencioso`: refresco tras subir; si falla no se tumba la vista, solo se avisa.
   const cargar = useCallback(async (silencioso = false) => {
@@ -96,14 +108,17 @@ export function CargueDescarguePagos({ rol }: { rol: string }) {
       setError(null);
     }
     try {
-      const [r, tokens, suscripcion, reto] = await Promise.all([
+      const [r, tokens, suscripcion, curso, reto, porPagar] = await Promise.all([
         comprobantesService.resumen(),
         comprobantesService.mios("tokens"),
         comprobantesService.mios("suscripcion"),
+        comprobantesService.mios("curso"),
         comprobantesService.mios("reto"),
+        comprobantesService.cursosPorPagar(),
       ]);
       setResumen(r);
-      setListas({ tokens: tokens ?? [], suscripcion: suscripcion ?? [], reto: reto ?? [] });
+      setListas({ tokens: tokens ?? [], suscripcion: suscripcion ?? [], curso: curso ?? [], reto: reto ?? [] });
+      setCursos(porPagar ?? []);
       setError(null);
     } catch (e) {
       const mensaje = mensajeError(e, "No pudimos cargar tus pagos.");
@@ -115,6 +130,27 @@ export function CargueDescarguePagos({ rol }: { rol: string }) {
   }, []);
 
   useEffect(() => { void cargar(); }, [cargar]);
+
+  // Otro «Comprar acceso» estando ya en Pagos.
+  useEffect(() => {
+    if (cursoInicial) {
+      setCarpeta("curso");
+      setCursoVentana(cursoInicial);
+    }
+  }, [cursoInicial]);
+
+  const cerrarVentana = () => {
+    setCursoVentana(null);
+    onCursoInicialUsado?.();
+  };
+
+  // La carpeta de cursos aparece con el pago manual encendido (o si ya hay comprobantes de cursos).
+  const conCursos = Boolean(resumen?.cursos_pago_manual) || listas.curso.length > 0;
+  const carpetas: TipoComprobante[] = conCursos ? ["tokens", "suscripcion", "curso", "reto"] : ["tokens", "suscripcion", "reto"];
+  const cursoElegido = cursoVentana ? cursos.find((c) => c.id === cursoVentana) ?? null : null;
+  const comprobanteDelCurso = cursoVentana
+    ? listas.curso.find((c) => c.curso?.id === cursoVentana && c.estado !== "rechazado") ?? null
+    : null;
 
   return (
     <div className="space-y-5">
@@ -142,8 +178,8 @@ export function CargueDescarguePagos({ rol }: { rol: string }) {
           <Saldos resumen={resumen} />
           <ComoPagar resumen={resumen} />
 
-          <div role="tablist" aria-label="Carpetas de pagos" className="grid gap-2 sm:grid-cols-3">
-            {ORDEN_CARPETAS.map((tipo) => (
+          <div role="tablist" aria-label="Carpetas de pagos" className={`grid gap-2 sm:grid-cols-2 ${conCursos ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+            {carpetas.map((tipo) => (
               <TarjetaCarpeta
                 key={tipo}
                 tipo={tipo}
@@ -167,6 +203,21 @@ export function CargueDescarguePagos({ rol }: { rol: string }) {
 
             {carpeta === "reto" ? (
               <ListaComprobantes tipo="reto" comprobantes={listas.reto} />
+            ) : carpeta === "curso" ? (
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+                {resumen.cursos_pago_manual ? (
+                  <FormularioPagoCurso cursos={cursos} onSubido={() => cargar(true)} />
+                ) : (
+                  <p className="flex h-fit items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+                    <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    Los cursos ya se compran directamente desde Cursos.
+                  </p>
+                )}
+                <div className="min-w-0">
+                  <p className="mb-1 text-sm font-medium">Tus comprobantes</p>
+                  <ListaComprobantes tipo="curso" comprobantes={listas.curso} />
+                </div>
+              </div>
             ) : (
               <div className="grid gap-5 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
                 {carpeta === "suscripcion" && rol !== "solicitante" ? (
@@ -190,6 +241,16 @@ export function CargueDescarguePagos({ rol }: { rol: string }) {
             )}
           </section>
         </>
+      ) : null}
+
+      {cursoVentana && resumen && !cargando ? (
+        <VentanaPagoCurso
+          curso={cursoElegido}
+          comprobante={comprobanteDelCurso}
+          datosPago={resumen.datos_pago}
+          onCerrar={cerrarVentana}
+          onSubido={async () => { cerrarVentana(); await cargar(true); }}
+        />
       ) : null}
     </div>
   );
@@ -508,6 +569,195 @@ function FormularioComprobante({ tipo, resumen, onSubido }: {
   );
 }
 
+/* ------------------------------------------------------------------ cursos */
+
+/** Subir el comprobante de un curso: el concepto es el curso y el valor, su precio. */
+function SubidaPagoCurso({ curso, onSubido, onCancelar }: {
+  curso: CursoPorPagar;
+  onSubido: () => Promise<void> | void;
+  onCancelar?: () => void;
+}) {
+  const [archivo, setArchivo] = useState<BackendArchivoItem | null>(null);
+  const [nota, setNota] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  const enviar = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!archivo) return;
+    setEnviando(true);
+    try {
+      await comprobantesService.subir({ tipo: "curso", curso_id: curso.id, archivo_id: archivo.id, nota: nota.trim() || undefined });
+      toast.success("Comprobante enviado. Te avisaremos cuando confirmemos el pago.");
+      setArchivo(null);
+      setNota("");
+      await onSubido();
+    } catch (err) {
+      toast.error(mensajeError(err, "No se pudo enviar el comprobante."));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <form onSubmit={(e) => void enviar(e)} className="space-y-3">
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        <div className="rounded-lg border border-border px-3 py-2">
+          <dt className="text-xs text-muted-foreground">Concepto</dt>
+          <dd className="font-semibold">Acceso al curso «{curso.titulo}»</dd>
+          {curso.importadora_nombre ? <dd className="text-xs text-muted-foreground">{curso.importadora_nombre}</dd> : null}
+        </div>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <dt className="text-xs text-muted-foreground">Valor</dt>
+          <dd className="text-lg font-semibold tabular-nums">{cop(curso.precio)}</dd>
+        </div>
+      </dl>
+
+      <div>
+        <p className="mb-1 text-xs font-medium text-muted-foreground">
+          Comprobante <span className="text-rose-600">*</span>
+        </p>
+        {archivo ? (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
+            <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-sm" title={archivo.nombre}>{archivo.nombre}</span>
+            <button
+              type="button"
+              onClick={() => setArchivo(null)}
+              disabled={enviando}
+              className="inline-flex flex-shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+            >
+              <X className="h-3.5 w-3.5" /> Quitar
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <DocumentUploadButton
+              label="Elegir archivo"
+              origen={ORIGEN_COMPROBANTE}
+              accept={ACEPTA_COMPROBANTE}
+              disabled={enviando}
+              onUploaded={(a) => setArchivo(a)}
+              onError={(m) => toast.error(m)}
+            />
+            <span className="text-xs text-muted-foreground">Imagen o PDF</span>
+          </div>
+        )}
+      </div>
+
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground">Nota (opcional)</span>
+        <textarea
+          rows={2}
+          maxLength={500}
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          placeholder="Ej.: transferí desde la cuenta de mi empresa"
+          className={`${CLASE_INPUT} resize-y`}
+        />
+      </label>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        {onCancelar ? <button type="button" onClick={onCancelar} className={CLASE_BOTON_SECUNDARIO}>Cancelar</button> : null}
+        <button type="submit" disabled={!archivo || enviando} className={`${onCancelar ? "" : "w-full "}${CLASE_BOTON_PRIMARIO}`}>
+          {enviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          Enviar comprobante
+        </button>
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Le llega al equipo de pagos. Cuando confirmemos la transferencia, se abre el curso y te avisamos por correo.
+      </p>
+    </form>
+  );
+}
+
+/** Carpeta «Cursos»: elegir el curso y subir el comprobante. */
+function FormularioPagoCurso({ cursos, onSubido }: { cursos: CursoPorPagar[]; onSubido: () => Promise<void> | void }) {
+  const disponibles = cursos.filter((c) => !c.pendiente);
+  const [cursoId, setCursoId] = useState("");
+  const curso = disponibles.find((c) => c.id === cursoId) ?? null;
+
+  return (
+    <div className="h-fit space-y-3 rounded-lg border border-border p-3">
+      <p className="text-sm font-medium">Pagar un curso</p>
+      {disponibles.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {cursos.length > 0 ? "Los comprobantes de tus cursos ya están en revisión." : "No hay cursos por pagar en este momento."}
+        </p>
+      ) : (
+        <>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Curso</span>
+            <select value={cursoId} onChange={(e) => setCursoId(e.target.value)} className={CLASE_INPUT}>
+              <option value="">Elige el curso que pagaste</option>
+              {disponibles.map((c) => <option key={c.id} value={c.id}>{c.titulo} · {cop(c.precio)}</option>)}
+            </select>
+          </label>
+          {curso ? <SubidaPagoCurso key={curso.id} curso={curso} onSubido={async () => { setCursoId(""); await onSubido(); }} /> : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Ventana que abre «Comprar acceso» desde Cursos. */
+function VentanaPagoCurso({ curso, comprobante, datosPago, onCerrar, onSubido }: {
+  curso: CursoPorPagar | null;
+  comprobante: Comprobante | null;
+  datosPago: string | null;
+  onCerrar: () => void;
+  onSubido: () => Promise<void> | void;
+}) {
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => { if (e.key === "Escape") onCerrar(); };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [onCerrar]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={onCerrar}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ventana-pago-curso"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <p id="ventana-pago-curso" className="flex items-center gap-2 text-base font-semibold">
+            <GraduationCap className="h-5 w-5 text-primary dark:text-accent" /> Comprar acceso al curso
+          </p>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="rounded-md p-1 text-muted-foreground hover:bg-muted">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {comprobante && comprobante.estado === "pendiente" ? (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            Ya recibimos tu comprobante de «{comprobante.curso?.titulo ?? "este curso"}». Te avisamos por correo cuando confirmemos el pago y se abra el curso.
+          </p>
+        ) : comprobante && comprobante.estado === "aprobado" ? (
+          <p className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+            <Check className="mt-0.5 h-4 w-4 flex-shrink-0" /> Ya tienes acceso a este curso: entra desde Cursos.
+          </p>
+        ) : curso ? (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-muted/60 p-3 text-sm">
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Landmark className="h-3.5 w-3.5" /> Transfiere a</p>
+              {datosPago
+                ? <p className="whitespace-pre-line break-words">{datosPago}</p>
+                : <p className="text-muted-foreground">Pronto publicaremos los datos de pago. Escríbenos a pagos@zarpi.co.</p>}
+            </div>
+            <SubidaPagoCurso curso={curso} onSubido={onSubido} onCancelar={onCerrar} />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Este curso ya no está disponible para pagar, o ya tienes acceso a él.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------- lista */
 
 function InsigniaEstado({ comprobante }: { comprobante: Comprobante }) {
@@ -542,6 +792,7 @@ function ListaComprobantes({ tipo, comprobantes }: { tipo: TipoComprobante; comp
 
 function FilaComprobante({ comprobante: c, soloLectura }: { comprobante: Comprobante; soloLectura: boolean }) {
   const nombre = c.archivo.nombre || "Comprobante";
+  const esCurso = c.tipo === "curso";
   const unidad = c.tipo === "suscripcion" ? ["día", "días"] : ["token", "tokens"];
   const plural = (v: number) => (v === 1 ? unidad[0] : unidad[1]);
   const acreditado = c.cantidad_acreditada ?? c.cantidad_solicitada;
@@ -565,12 +816,14 @@ function FilaComprobante({ comprobante: c, soloLectura }: { comprobante: Comprob
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <p className="min-w-0 truncate text-sm font-medium" title={nombre}>{nombre}</p>
+          <p className="min-w-0 truncate text-sm font-medium" title={esCurso ? c.curso?.titulo : nombre}>
+            {esCurso ? c.curso?.titulo ?? "Curso" : nombre}
+          </p>
           <InsigniaEstado comprobante={c} />
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <span>{fechaCorta(c.fecha)}</span>
-          {!soloLectura && c.cantidad_solicitada != null && (
+          {!soloLectura && !esCurso && c.cantidad_solicitada != null && (
             <>
               <span>·</span>
               <span className="tabular-nums">{c.cantidad_solicitada} {plural(c.cantidad_solicitada)}</span>
@@ -583,7 +836,13 @@ function FilaComprobante({ comprobante: c, soloLectura }: { comprobante: Comprob
             </>
           )}
         </div>
-        {c.estado === "aprobado" && acreditado != null && (
+        {c.estado === "aprobado" && esCurso && (
+          <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">Ya tienes acceso al curso</p>
+        )}
+        {c.estado === "pendiente" && esCurso && (
+          <p className="mt-1 text-xs text-muted-foreground">Lo estamos revisando. Te avisamos por correo cuando se abra el curso.</p>
+        )}
+        {c.estado === "aprobado" && !esCurso && acreditado != null && (
           <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
             +{acreditado} {plural(acreditado)} acreditados
           </p>
