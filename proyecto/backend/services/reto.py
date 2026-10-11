@@ -18,7 +18,6 @@ from models.reto import (
     CuentaPago, EleccionRecompensa, EstadoRecompensa, EstadoRonda, RetoListaEspera,
     RetoParticipacion, RetoRonda,
 )
-import config
 from models.usuario import Usuario
 from services import cuentas_pago
 from utils.cifrado import descifrar
@@ -43,12 +42,12 @@ def pesos(valor: int) -> str:
 
 
 def _notificar(db: Session, usuario_id: str, evento: str, titulo: str, mensaje: str, *, email: bool,
-               remitente: Optional[str] = None) -> None:
+               buzon: Optional[str] = None) -> None:
     from services.notificacion_service import notificar
 
     notificar(
         db, usuario_id=usuario_id, tipo="reto", titulo=titulo, mensaje=mensaje,
-        data={"evento": evento}, enlace_relativo="/reto", whatsapp=False, email=email, remitente=remitente,
+        data={"evento": evento}, enlace_relativo="/reto", whatsapp=False, email=email, buzon=buzon,
     )
 
 
@@ -402,7 +401,7 @@ def marcar_pagado(db: Session, participacion_id: str, referencia: str) -> RetoPa
     _notificar(db, participacion.usuario_id, "pago_realizado", "Te transferimos tu recompensa",
                f"Te transferimos {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} terminada en "
                f"{cuenta.ultimos_digitos}. Referencia {participacion.referencia_pago}.", email=True,
-               remitente=config.EMAIL_FROM_PAGOS)
+               buzon="pagos")
     db.flush()
     cuentas_pago.borrar_si_no_hay_pagos(db, participacion.usuario_id)
     db.commit()

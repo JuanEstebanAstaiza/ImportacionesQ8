@@ -4,6 +4,8 @@ import { CheckCircle2, Mail, Send } from "lucide-react";
 import {
   adminService,
   type AdminUser,
+  type BuzonCorreo,
+  type RemitenteCorreo,
   type UsuarioEncontrado,
 } from "@/services/admin.service";
 import { BuscadorUsuarios } from "@/app/components/busqueda/BuscadorUsuarios";
@@ -16,7 +18,16 @@ const SEGMENTS = [
   { value: "admin", label: "Administradores" },
 ] as const;
 
+// Si no carga la lista del backend, estas mismas opciones (con sus direcciones por defecto).
+const REMITENTES_POR_DEFECTO: RemitenteCorreo[] = [
+  { buzon: "notificaciones", direccion: "notificaciones@zarpi.co", uso: "Avisos a usuarios: estado de la plataforma, cambios en los términos, soporte resuelto, aprobaciones." },
+  { buzon: "contacto", direccion: "contacto@zarpi.co", uso: "Lo que tiene que ver con el formulario de contacto." },
+  { buzon: "pagos", direccion: "pagos@zarpi.co", uso: "Pagos: comprobantes, tokens, suscripción a Tendencias y recompensas del reto." },
+  { buzon: "admin", direccion: "admin@zarpi.co", uso: "El equipo y correos directos a empresas: verificación de cuentas y avisos urgentes." },
+];
+
 type CampaignForm = {
+  buzon: BuzonCorreo;
   asunto: string;
   cuerpo: string;
   roles: string[];
@@ -25,6 +36,7 @@ type CampaignForm = {
 };
 
 const EMPTY_FORM: CampaignForm = {
+  buzon: "admin",
   asunto: "",
   cuerpo: "",
   roles: [],
@@ -43,6 +55,16 @@ export function AdminEmailCampaign() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [remitentes, setRemitentes] = useState<RemitenteCorreo[]>(REMITENTES_POR_DEFECTO);
+
+  useEffect(() => {
+    let active = true;
+    adminService.listarRemitentesCorreo()
+      .then((filas) => { if (active && filas.length) setRemitentes(filas); })
+      .catch(() => { /* se quedan las opciones por defecto */ });
+    return () => { active = false; };
+  }, []);
+  const remitenteElegido = remitentes.find((r) => r.buzon === form.buzon) ?? remitentes[0];
 
   useEffect(() => {
     let active = true;
@@ -130,12 +152,13 @@ export function AdminEmailCampaign() {
         roles: form.roles,
         usuarios_ids: form.usuarios_ids,
         correos,
+        buzon: form.buzon,
       });
       setMessage(`Campaña procesada: ${result.enviados} enviados de ${result.destinatarios}${result.remitente ? ` desde ${result.remitente}` : ""}.`);
       if (result.fallidos > 0) {
         setError(`No se pudieron enviar ${result.fallidos} mensajes.`);
       }
-      setForm((current) => ({ ...EMPTY_FORM, asunto: current.asunto }));
+      setForm((current) => ({ ...EMPTY_FORM, asunto: current.asunto, buzon: current.buzon }));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "No se pudo enviar la campaña.");
     } finally {
@@ -164,6 +187,18 @@ export function AdminEmailCampaign() {
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm dark:bg-card/80">
           <div className="space-y-4">
             <div>
+              <label htmlFor="buzon-remitente" className="mb-1 block text-xs font-medium text-muted-foreground">Enviar desde</label>
+              <select
+                id="buzon-remitente"
+                className={inputClassName()}
+                value={form.buzon}
+                onChange={(event) => setForm((current) => ({ ...current, buzon: event.target.value as BuzonCorreo }))}
+              >
+                {remitentes.map((r) => <option key={r.buzon} value={r.buzon}>{r.direccion}</option>)}
+              </select>
+              {remitenteElegido ? <p className="mt-1 text-[11px] text-muted-foreground">{remitenteElegido.uso}</p> : null}
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Asunto</label>
               <input className={inputClassName()} maxLength={180} value={form.asunto} onChange={(event) => setForm((current) => ({ ...current, asunto: event.target.value }))} placeholder="Novedades importantes de Zarpi" />
             </div>
@@ -173,7 +208,7 @@ export function AdminEmailCampaign() {
               <p className="mt-1 text-right text-[11px] text-muted-foreground">{form.cuerpo.length.toLocaleString("es-CO")} / 20.000</p>
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-              <p className="text-xs text-muted-foreground">Salen desde admin@zarpi.co; las respuestas llegan a ese buzón.</p>
+              <p className="text-xs text-muted-foreground">{form.buzon === "notificaciones" ? "Las respuestas llegan al buzón de contacto." : "Las respuestas llegan a ese mismo buzón."}</p>
               <button type="button" disabled={sending} onClick={() => { void sendCampaign(); }} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-accent dark:text-accent-foreground">
                 <Send className="h-4 w-4" />{sending ? "Enviando..." : "Enviar campaña"}
               </button>

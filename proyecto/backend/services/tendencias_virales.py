@@ -412,7 +412,9 @@ def _notificar_revision(db: Session, item: TendenciaItem, *, aprobado: bool, par
         db, usuario_id=item.enviado_por, tipo="tendencias", titulo=titulo, mensaje=mensaje,
         data={"evento": "enlace_aprobado" if aprobado else "enlace_rechazado", "tendencia_id": item.id},
         enlace_relativo=f"/tendencias/{item.id}" if item.estado == EstadoTendencia.publicado.value else "/tendencias/enviar",
-        whatsapp=False, email=False,
+        # Por correo (desde notificaciones@) a la comunidad y a las importadoras;
+        # el equipo lo ve en su panel.
+        whatsapp=False, email=item.rol_remitente != RolRemitente.equipo.value,
     )
 
 

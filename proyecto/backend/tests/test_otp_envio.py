@@ -59,7 +59,7 @@ def _resend(monkeypatch, respuesta):
     llamadas = []
     monkeypatch.setattr(config, "SMTP_HOST", "smtp.resend.com")
     monkeypatch.setattr(config, "SMTP_API_KEY", "re_prueba_123")
-    monkeypatch.setattr(config, "SMTP_FROM", "Zarpi <no-reply@zarpi.co>")
+    monkeypatch.setattr(config, "EMAIL_FROM_NOTIFICACIONES", "Zarpi <notificaciones@zarpi.co>")
     monkeypatch.setattr(config, "EMAIL_PROVIDER", "")
 
     def falso_post(url, json=None, headers=None, timeout=None):
@@ -79,8 +79,8 @@ def test_con_resend_sale_por_la_api_https(monkeypatch):
     enviado = llamadas[0]
     assert enviado["url"] == "https://api.resend.com/emails"
     assert enviado["headers"]["Authorization"] == "Bearer re_prueba_123"
-    assert enviado["json"]["from"] == "Zarpi <no-reply@zarpi.co>" and enviado["json"]["to"] == ["a@example.com"]
-    # Las respuestas van a un buzón que se lee, no al alias no-reply.
+    assert enviado["json"]["from"] == "Zarpi <notificaciones@zarpi.co>" and enviado["json"]["to"] == ["a@example.com"]
+    # Las respuestas a notificaciones@ van a un buzón que lee una persona.
     assert enviado["json"]["reply_to"] == config.EMAIL_REPLY_TO
 
 

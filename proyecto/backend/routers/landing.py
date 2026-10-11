@@ -103,7 +103,8 @@ async def enviar_contacto(request: Request, datos: ContactoRequest):
     )
 
     try:
-        # Llega a contacto@; «Responder» le escribe directo a quien llenó el formulario.
+        # Sale de notificaciones@ y llega a contacto@; «Responder» le escribe
+        # directo a quien llenó el formulario.
         enviado = enviar_correo(config.CONTACT_EMAIL, asunto, cuerpo_texto, cuerpo_html,
                                 responder_a=datos.email.strip())
     except Exception:

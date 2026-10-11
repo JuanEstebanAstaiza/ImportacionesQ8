@@ -29,6 +29,8 @@ class EnvioCorreoMasivoRequest(BaseModel):
     roles: List[str] = Field(default_factory=list, max_length=5)
     usuarios_ids: List[str] = Field(default_factory=list, max_length=500)
     correos: List[EmailStr] = Field(default_factory=list, max_length=500)
+    # Desde qué buzón sale (ver utils/email.BUZONES).
+    buzon: str = Field("admin", pattern="^(notificaciones|contacto|pagos|admin)$")
 
 
 class EnvioCorreoMasivoResponse(BaseModel):
@@ -36,7 +38,14 @@ class EnvioCorreoMasivoResponse(BaseModel):
     enviados: int
     fallidos: int
     fallos: List[str] = Field(default_factory=list)
+    buzon: Optional[str] = None
     remitente: Optional[str] = None
+
+
+class RemitenteCorreo(BaseModel):
+    buzon: str
+    direccion: str
+    uso: str
 
 class DisputaOrdenResponse(BaseModel):
     id: str

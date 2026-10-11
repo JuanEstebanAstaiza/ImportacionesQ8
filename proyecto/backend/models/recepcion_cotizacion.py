@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, UniqueConstraint, true
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, true
 from uuid import uuid4
 from datetime import datetime
 
@@ -31,3 +31,8 @@ class RecepcionCotizacion(Base):
     # encaje) o "manual" (la asignó el admin). Y quién la asignó, si fue a mano.
     origen = Column(String(20), nullable=True)
     asignado_por = Column(String(36), nullable=True)
+    # La empresa la rechazó (con motivo, que le llega al cotizante). Una abierta
+    # rechazada sale de su bandeja; una dirigida pasa a «rechazada».
+    rechazada_en = Column(DateTime, nullable=True)
+    rechazada_por = Column(String(36), nullable=True)
+    motivo_rechazo = Column(Text, nullable=True)

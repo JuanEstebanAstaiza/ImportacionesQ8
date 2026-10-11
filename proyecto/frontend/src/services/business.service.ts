@@ -56,6 +56,8 @@ export interface BackendCupoDiario {
 
 export interface BackendCotizacion {
   id: string;
+  /** Si la empresa a la que iba dirigida la rechazó: su motivo. */
+  motivo_rechazo?: string | null;
   solicitante_id?: string;
   importador_id: string | null;
   modalidad: "dirigida" | "abierta";
@@ -1052,6 +1054,14 @@ export const businessService = {
     });
   },
   
+  /** La empresa no toma la cotización; el motivo le llega al cotizante por correo. */
+  rechazarCotizacion(cotizacionId: string, motivo: string): Promise<BackendCotizacion> {
+    return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}/rechazar`, {
+      method: "POST",
+      body: { motivo },
+    });
+  },
+
   claimAdvisorQuote(cotizacionId: string): Promise<BackendCotizacion> {
     return apiRequest<BackendCotizacion>(`/cotizaciones/${cotizacionId}/reclamar`, {
       method: "POST",

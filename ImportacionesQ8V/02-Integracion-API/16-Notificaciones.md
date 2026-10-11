@@ -102,13 +102,29 @@ Se persisten (best-effort, no rompen el flujo de negocio) al menos en:
 
 | Evento | Destinatario | Tipo |
 |--------|--------------|------|
-| Cambio de estado de orden | Solicitante | `orden` |
+| Cambio de estado de orden («Tu orden ahora está: …», con producto y estados en palabras) | Solicitante | `orden` |
+| Orden de compra creada por doble aceptación («Tu cotización ya es una orden de compra») | Solicitante | `orden` |
+| Cotización nueva («Tienes una nueva solicitud de cotización») | Empresa dueña y sus asesores | `cotizacion` |
+| La empresa rechaza la cotización, con motivo (`POST /cotizaciones/{id}/rechazar`) | Solicitante | `cotizacion` |
 | Asesor/dueño reclama cotización (`POST /cotizaciones/{id}/reclamar`) | Solicitante | `negociacion` (con `cotizacion_id` y `conversacion_id` del chat creado) |
 | Solicitante inicia negociación (`PUT .../propuestas/aceptar`) | Asesor asignado | `negociacion` |
 | Asesor inicia chat (`POST /chat/iniciar`) | Solicitante | `negociacion` |
 | Compra de curso | Comprador | `curso` |
 
 Redis Pub/Sub sigue existiendo para tiempo real; la bandeja REST es la fuente de verdad persistente.
+
+### Desde qué buzón sale cada correo
+
+`notificar(..., buzon=)` elige el remitente (`utils/email.py::BUZONES`, configurados con `EMAIL_FROM_*`):
+
+| Buzón | Qué sale de ahí |
+|-------|-----------------|
+| `notificaciones` | **Por defecto.** Eventos del usuario: códigos, soporte resuelto, aprobaciones del reto, cotizaciones, órdenes y rechazos. También el aviso del formulario de contacto, el estado de la plataforma y los cambios de términos. Las respuestas llegan a `EMAIL_REPLY_TO` (contacto@). |
+| `contacto` | Lo que tiene que ver con el formulario de contacto; se elige en Admin › Correos. |
+| `pagos` | Comprobantes (acuse, aprobación, rechazo), retiros del reto y transferencias. |
+| `admin` | El equipo (si no se indica buzón y el destinatario es admin, soporte o designer) y los correos directos a empresas: verificación de cuenta y retiro del sello. |
+
+En Admin › Correos (`POST /admin/correos/masivo`, campo `buzon`) se elige el remitente; `GET /admin/correos/remitentes` lista los buzones con su dirección y su uso.
 
 ---
 

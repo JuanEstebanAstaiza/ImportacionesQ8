@@ -48,6 +48,7 @@ import { AdminTendencias } from "@/features/tendencias/AdminTendencias";
 import { SeccionTendenciasLanding } from "@/features/tendencias/SeccionTendenciasLanding";
 import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
 import { RevisionPagos } from "@/features/admin/RevisionPagos";
+import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
 import { fijarRegistro, registroAbierto, correoContacto } from "@/app/registro";
 import { RetoPagina } from "@/features/reto/RetoPagina";
@@ -1065,6 +1066,8 @@ function backendEstadoToUi(estado: string): Quote["status"] {
       return "accepted";
     case "orden_activa":
       return "active-order";
+    case "rechazada":
+      return "rejected-importer";
     default:
       return "created";
   }
@@ -1086,6 +1089,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     importadorId: cot.importador_id,
     mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
     status: backendEstadoToUi(cot.estado),
+    motivoRechazo: cot.motivo_rechazo ?? null,
     updatedAt: formatShortDate(cot.fecha_actualizacion),
     country: cot.pais_importacion,
     productLine: cot.linea_producto,
@@ -2985,6 +2989,12 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </div>
             </div>
           </Card>
+          {quote.status==="rejected-importer"&&quote.motivoRechazo&&(
+            <Card padding="md" className="mb-5 border-rose-300/60 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30">
+              <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">{quote.importer} rechazó esta cotización</p>
+              <p className="mt-1 text-sm text-rose-800/90 dark:text-rose-200 whitespace-pre-line">Motivo: {quote.motivoRechazo}</p>
+            </Card>
+          )}
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
@@ -8583,8 +8593,9 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>}) {
+function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
   const [search,setSearch]=useState("");
   const [detalle,setDetalle]=useState<Quote|null>(null);
   const [asignando,setAsignando]=useState<Quote|null>(null);
@@ -8720,6 +8731,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
                         <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
                         <Button variant="ghost" size="sm" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
                         <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                         <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>
@@ -8728,6 +8740,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
               </tbody>
             </table>
             {filtered.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No hay cotizaciones para este filtro.</div>}
+            <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
           </Card>
           {mensaje&&<div className="p-3 rounded-lg border border-border bg-muted/40 text-sm">{mensaje}</div>}
         </main>
@@ -8952,11 +8965,17 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
 // ─────────────────────────────────────────────────────────────────────────────
+/** La empresa todavía puede rechazar la cotización: no hay orden ni rechazo previo. */
+function puedeRechazarse(q: Quote): boolean {
+  return q.status === "created" || q.status === "directed" || q.status === "open";
+}
+
 function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
   const [claimingId,setClaimingId]=useState<string|null>(null);
   const [discardingId,setDiscardingId]=useState<string|null>(null);
   const [claimError,setClaimError]=useState("");
   const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
 
   async function handleClaim(quoteId: string){
     try{
@@ -9027,7 +9046,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
                 <div className="grid grid-cols-1 gap-2">
                   <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Revisar y aceptar</Button>
                   <div className="grid grid-cols-1 gap-2">
-                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>{void handleDiscard(q);}}>{q.mode==="Abierta"?"Descartar":"Rechazar"}</Button>
+                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>setRechazando(q)}>Rechazar</Button>
                   </div>
                 </div>
               </div>
@@ -9036,6 +9055,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
         </main>
       </div>
       <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)} onAccept={handleAcceptFromDetail} accepting={Boolean(selectedQuote && claimingId===selectedQuote.id)}/>
+      <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={()=>rechazando?handleDiscard(rechazando):undefined}/>
     </div>
   );
 }
@@ -9043,8 +9063,9 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void}) {
+function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat,onRechazada}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onRechazada:()=>Promise<void>}) {
   const myQuotes=quotes.slice(0,20);
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
   // Al crearse la orden el hilo pasa a tipo "orden" y `refId` apunta a ella,
   // pero sigue siendo la misma conversacion con el cliente: sin buscar tambien
   // por `quoteId`, el asesor perdia el acceso al chat justo al cerrar el trato.
@@ -9090,6 +9111,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
                         ) : (
                           <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Crear Respuesta</Button>
                         )}
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                       </div>
                     </td>
                   </tr>
@@ -9098,6 +9120,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
             </table>
             {myQuotes.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No tienes cotizaciones asignadas.</div>}
           </Card>
+          <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
         </main>
       </div>
       <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
@@ -12320,29 +12343,6 @@ export default function App() {
     goTo("chats");
   }
 
-  async function discardAdvisorQuote(quote: Quote){
-    const companyId = currentUserProfile?.importador_id || "unknown-company";
-    if (quote.mode === "Abierta") {
-      const current = hiddenOpenQuotesByCompany[companyId] || [];
-      const nextByCompany = {
-        ...hiddenOpenQuotesByCompany,
-        [companyId]: Array.from(new Set([...current, quote.id])),
-      };
-      setHiddenOpenQuotesByCompany(nextByCompany);
-      saveHiddenOpenQuotesByCompany(nextByCompany);
-      return;
-    }
-
-    const nextOverrides = {
-      ...quoteStatusOverrides,
-      [quote.id]: "rejected-importer" as Quote["status"],
-    };
-    setQuoteStatusOverrides(nextOverrides);
-    saveQuoteStatusOverrides(nextOverrides);
-
-    await refreshQuoteLists();
-  }
-
   function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
     // Si hay un producto de Tendencias por retomar, el efecto de arriba lleva al
@@ -12731,12 +12731,12 @@ export default function App() {
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany} onRechazada={refreshQuoteLists}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
     if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
-    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat}/>;
+    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={async()=>{await refreshQuoteLists();}} headerUser={advisorHeaderUser}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>;
 
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 

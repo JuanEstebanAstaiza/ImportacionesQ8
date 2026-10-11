@@ -88,7 +88,7 @@ def _despachar_canales_externos(
     enlace_relativo: str = "",
     whatsapp: bool = True,
     email: bool = True,
-    remitente: Optional[str] = None,
+    buzon: Optional[str] = None,
 ) -> None:
     """Réplica la notificación por WhatsApp y correo. Nunca lanza.
 
@@ -115,6 +115,11 @@ def _despachar_canales_externos(
     destino_whatsapp = usuario.whatsapp or usuario.telefono
     indicativo = usuario.indicativo_pais_telefono
     destino_email = usuario.email
+    if buzon is None:
+        # Lo del equipo sale de admin@; lo de los usuarios, de notificaciones@.
+        from models.usuario import ROLES_EQUIPO
+
+        buzon = "admin" if usuario.rol in ROLES_EQUIPO else "notificaciones"
 
     def _enviar() -> None:
         if whatsapp and config.NOTIFICACIONES_WHATSAPP:
@@ -132,8 +137,7 @@ def _despachar_canales_externos(
             try:
                 from utils.email import enviar_correo_notificacion
 
-                extra = {"remitente": remitente} if remitente else {}
-                enviar_correo_notificacion(destino_email, titulo, mensaje, enlace_relativo, **extra)
+                enviar_correo_notificacion(destino_email, titulo, mensaje, enlace_relativo, buzon=buzon)
             except Exception:
                 logger.warning("Fallo enviando correo de notificación a %s", usuario_id, exc_info=True)
 
@@ -157,10 +161,11 @@ def notificar(
     enlace_relativo: str = "",
     whatsapp: bool = True,
     email: bool = True,
-    remitente: Optional[str] = None,
+    buzon: Optional[str] = None,
 ) -> Optional[Notificacion]:
-    """Notificación in-app + WhatsApp + correo, todo best-effort. `remitente`
-    cambia el From del correo (p. ej. pagos@); por defecto, SMTP_FROM.
+    """Notificación in-app + WhatsApp + correo, todo best-effort. `buzon` es el
+    remitente del correo (utils/email.BUZONES); sin él, admin@ si el destinatario
+    es del equipo y notificaciones@ si no.
 
     Punto único de entrada para los eventos de negocio: la fila in-app se crea
     dentro de la transacción del caller (que debe hacer commit), y los canales
@@ -186,7 +191,7 @@ def notificar(
         enlace_relativo=enlace_relativo,
         whatsapp=whatsapp,
         email=email,
-        remitente=remitente,
+        buzon=buzon,
     )
 
     return notificacion

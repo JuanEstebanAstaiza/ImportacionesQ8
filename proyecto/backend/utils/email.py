@@ -34,28 +34,48 @@ def construir_html_zarpi(titulo: str, contenido_html: str) -> str:
     )
 
 
-def _cabeceras(remitente: str = None, responder_a: str = None) -> tuple:
-    """(From, Reply-To). Con un remitente propio (admin@, pagos@…) las respuestas
-    vuelven a ese buzón; sin él, sale de SMTP_FROM y responde a EMAIL_REPLY_TO."""
-    if remitente:
-        return remitente, responder_a or parseaddr(remitente)[1] or None
-    return config.SMTP_FROM, responder_a or config.EMAIL_REPLY_TO or None
+# Buzones desde los que sale la plataforma y para qué se usa cada uno.
+BUZONES = {
+    "notificaciones": "Avisos a usuarios: estado de la plataforma, cambios en los términos, "
+                      "soporte resuelto, aprobaciones y demás eventos de su cuenta.",
+    "contacto": "Lo que tiene que ver con el formulario de contacto.",
+    "pagos": "Pagos: comprobantes, tokens, suscripción a Tendencias y recompensas del reto.",
+    "admin": "El equipo y correos directos a empresas: verificación de cuentas y avisos urgentes.",
+}
+BUZON_POR_DEFECTO = "notificaciones"
+
+
+def remitente_de(buzon: str = BUZON_POR_DEFECTO) -> tuple:
+    """(From, Reply-To) de un buzón. Las respuestas a notificaciones@ van a
+    EMAIL_REPLY_TO (contacto@, lo lee una persona); las demás, al mismo buzón."""
+    direcciones = {
+        "notificaciones": config.EMAIL_FROM_NOTIFICACIONES,
+        "contacto": config.EMAIL_FROM_CONTACTO,
+        "pagos": config.EMAIL_FROM_PAGOS,
+        "admin": config.EMAIL_FROM_ADMIN,
+    }
+    if buzon not in direcciones:
+        buzon = BUZON_POR_DEFECTO
+    de = direcciones[buzon]
+    if buzon == BUZON_POR_DEFECTO:
+        return de, config.EMAIL_REPLY_TO or parseaddr(de)[1] or None
+    return de, parseaddr(de)[1] or None
 
 
 def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
-                  remitente: str = None, responder_a: str = None) -> bool:
+                  buzon: str = BUZON_POR_DEFECTO, responder_a: str = None) -> bool:
     """
     Envía un correo real vía SMTP usando las credenciales configuradas en
     variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_API_KEY`,
-    `SMTP_FROM`, `SMTP_USE_TLS`). `SMTP_PASSWORD` se conserva como alias antiguo.
+    `SMTP_USE_TLS`) y el remitente del buzón. `SMTP_PASSWORD` se conserva como alias antiguo.
 
     Si no hay `SMTP_HOST` configurado (ej. entorno de desarrollo/tests sin
     credenciales reales), se registra el correo en el log en vez de fallar, para
     no bloquear el flujo de negocio por falta de configuración de correo. En
     producción, `SMTP_HOST` debe estar siempre configurado.
 
-    `remitente` cambia el From (p. ej. `config.EMAIL_FROM_PAGOS`) y `responder_a`
-    el Reply-To; ver `_cabeceras`.
+    `buzon` elige el remitente (ver `BUZONES` y `remitente_de`); `responder_a`
+    cambia el Reply-To (p. ej. el correo de quien llenó el formulario de contacto).
 
     Devuelve `True` si el correo se envió (o se simuló vía log), `False` si el
     envío SMTP real fue intentado pero falló.
@@ -77,7 +97,8 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
         )
         return True
 
-    de, responder = _cabeceras(remitente, responder_a)
+    de, responder = remitente_de(buzon)
+    responder = responder_a or responder
     if usa_api_resend():
         return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html, de=de, responder_a=responder)
 
@@ -124,7 +145,7 @@ def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo
     if not config.SMTP_API_KEY:
         logger.error("Resend sin API key (SMTP_API_KEY vacío): no se envió el correo a %s", destinatario)
         return False
-    datos = {"from": de or config.SMTP_FROM, "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
+    datos = {"from": de or remitente_de()[0], "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
     if cuerpo_html:
         datos["html"] = cuerpo_html
     if responder_a:
@@ -177,12 +198,12 @@ def enviar_correo_notificacion(
     titulo: str,
     mensaje: str = "",
     enlace_relativo: str = "",
-    remitente: str = None,
+    buzon: str = BUZON_POR_DEFECTO,
 ) -> bool:
     """Réplica por correo de una notificación in-app.
 
     `enlace_relativo` se resuelve contra `FRONTEND_URL` para que el usuario entre
-    directo a la pantalla correspondiente. `remitente`: ver `enviar_correo`.
+    directo a la pantalla correspondiente. `buzon`: ver `enviar_correo`.
     """
     enlace = f"{config.FRONTEND_URL}{enlace_relativo}" if enlace_relativo else config.FRONTEND_URL
     cuerpo_texto = (
@@ -196,7 +217,7 @@ def enviar_correo_notificacion(
         f"<p>{escape(mensaje)}</p>"
         f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Entrar a la plataforma</a></p>',
     )
-    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html, remitente=remitente)
+    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html, buzon=buzon)
 
 
 def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:

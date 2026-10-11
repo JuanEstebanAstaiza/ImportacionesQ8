@@ -32,6 +32,7 @@ class EstadoCotizacion(str, enum.Enum):
     cotizacion_aceptada = "cotizacion_aceptada"
     orden_activa = "orden_activa"
     cancelada = "cancelada"  # Semana 4: anulada por error tras una SolicitudRecreacion aprobada
+    rechazada = "rechazada"  # La empresa a la que iba dirigida la rechazó (ver motivo_rechazo)
 
 class Cotizacion(Base):
     __tablename__ = "cotizaciones"
@@ -98,6 +99,8 @@ class Cotizacion(Base):
     cotizacion_origen_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=True)
     cancelada_por_error = Column(String(20), nullable=True)  # NULL, o quien fue responsable: "solicitante"/"importador"
     motivo_cancelacion = Column(Text, nullable=True)
+    # Por qué la rechazó la empresa a la que iba dirigida (lo ve el cotizante).
+    motivo_rechazo = Column(Text, nullable=True)
 
     # --- Por qué el cliente eligió una propuesta sobre las demás ---
     # Lo indica al aceptar ("precio", "tiempo", "condiciones" u "otro"). Al

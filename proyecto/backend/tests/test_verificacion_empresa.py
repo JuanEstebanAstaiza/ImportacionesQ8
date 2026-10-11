@@ -222,7 +222,8 @@ class TestRetirarVerificacion:
         )
 
         aviso = db_session.query(Notificacion).filter(
-            Notificacion.usuario_id == str(dueño.id), Notificacion.tipo == "empresa"
+            Notificacion.usuario_id == str(dueño.id), Notificacion.tipo == "empresa",
+            Notificacion.titulo == "Se retiró el sello de socio verificado",
         ).first()
         assert aviso is not None
         assert "Documentación caducada" in aviso.mensaje

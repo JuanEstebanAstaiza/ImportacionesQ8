@@ -351,6 +351,16 @@ export interface EnvioCorreoMasivoPayload {
   roles?: string[];
   usuarios_ids?: string[];
   correos?: string[];
+  /** Desde qué buzón sale: notificaciones, contacto, pagos o admin. */
+  buzon?: BuzonCorreo;
+}
+
+export type BuzonCorreo = "notificaciones" | "contacto" | "pagos" | "admin";
+
+export interface RemitenteCorreo {
+  buzon: BuzonCorreo;
+  direccion: string;
+  uso: string;
 }
 
 export interface EnvioCorreoMasivoResponse {
@@ -358,6 +368,7 @@ export interface EnvioCorreoMasivoResponse {
   enviados: number;
   fallidos: number;
   fallos: string[];
+  buzon?: BuzonCorreo | null;
   remitente?: string | null;
 }
 
@@ -518,6 +529,10 @@ export const adminService = {
     return apiRequest<AdminUser[]>(`/admin/usuarios${suffix ? `?${suffix}` : ""}`, {
       method: "GET",
     });
+  },
+
+  listarRemitentesCorreo(): Promise<RemitenteCorreo[]> {
+    return apiRequest<RemitenteCorreo[]>("/admin/correos/remitentes");
   },
 
   sendBulkEmail(payload: EnvioCorreoMasivoPayload): Promise<EnvioCorreoMasivoResponse> {

@@ -15,7 +15,6 @@ from models.comprobante import ComprobantePago, EstadoComprobante, TipoComproban
 from models.documental import Archivo
 from models.tier import MovimientoPuntoCotizacion
 from models.usuario import Usuario
-import config
 from services import configuracion
 from services.documental_service import ensure_folder_path
 
@@ -53,7 +52,7 @@ def acusar_recibo(db: Session, usuario_id: str, titulo: str, que: str, *, evento
         db, usuario_id=usuario_id, tipo="pagos", titulo=titulo,
         mensaje=f"Hemos recibido tu {que}. Pronto nos pondremos en contacto contigo después de haber verificado la información.",
         data={"evento": evento, **(data or {})}, enlace_relativo="/pagos", whatsapp=False, email=True,
-        remitente=config.EMAIL_FROM_PAGOS,
+        buzon="pagos",
     )
 
 
@@ -211,7 +210,7 @@ def aprobar(db: Session, comprobante_id: str, admin: Usuario, cantidad: int) -> 
     c.revisado_en = datetime.utcnow()
     notificar(db, usuario_id=c.usuario_id, tipo="pagos", titulo=titulo, mensaje=mensaje,
               data={"evento": "comprobante_aprobado", "comprobante_id": c.id}, enlace_relativo="/pagos",
-              whatsapp=False, email=True, remitente=config.EMAIL_FROM_PAGOS)
+              whatsapp=False, email=True, buzon="pagos")
     return c
 
 
@@ -225,7 +224,7 @@ def rechazar(db: Session, comprobante_id: str, admin: Usuario, motivo: str) -> C
     c.revisado_en = datetime.utcnow()
     notificar(db, usuario_id=c.usuario_id, tipo="pagos", titulo="No pudimos aprobar tu comprobante",
               mensaje=c.motivo_rechazo, data={"evento": "comprobante_rechazado", "comprobante_id": c.id},
-              enlace_relativo="/pagos", whatsapp=False, email=True, remitente=config.EMAIL_FROM_PAGOS)
+              enlace_relativo="/pagos", whatsapp=False, email=True, buzon="pagos")
     return c
 
 
@@ -267,5 +266,5 @@ def subir_reto(db: Session, admin: Usuario, participacion_id: str, archivo_id: s
     notificar(db, usuario_id=participacion.usuario_id, tipo="pagos", titulo="Comprobante de tu recompensa",
               mensaje="Ya puedes ver y descargar el comprobante de la transferencia en Pagos.",
               data={"evento": "comprobante_reto", "comprobante_id": c.id}, enlace_relativo="/pagos",
-              whatsapp=False, email=True, remitente=config.EMAIL_FROM_PAGOS)
+              whatsapp=False, email=True, buzon="pagos")
     return c

@@ -54,7 +54,7 @@ def test_cupos_en_vivo_y_ronda_llena_abre_la_siguiente(client, db_session):
 def test_lista_de_espera_recibe_aviso_de_la_nueva_ronda(client, db_session, monkeypatch):
     enviados = []
     import utils.email as correo
-    monkeypatch.setattr(correo, "enviar_correo_notificacion", lambda d, t, m="", e="": enviados.append(d) or True)
+    monkeypatch.setattr(correo, "enviar_correo_notificacion", lambda d, t, m="", e="", **kw: enviados.append(d) or True)
     _, admin = crear_usuario_con_token(db_session, rol="admin")
     assert client.post("/reto/lista-espera", json={"email": "Espera@Example.com"}).status_code == 204
     _ronda(client, admin)
