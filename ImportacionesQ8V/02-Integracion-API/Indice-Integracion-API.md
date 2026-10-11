@@ -43,6 +43,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[25-Tendencias-y-Catalogos]] | Tendencias semanales por suscripción, panel del curador y catálogos selectos de empresas |
 | [[26-Tipografia-y-Videos-Landing]] | Tipografía de toda la plataforma (Fontsource, alojada en el servidor) y carrusel de videos de «Quiénes somos» |
 | [[27-Tendencias-Virales-y-Reto]] | Tendencias v2: productos virales (comunidad, importadoras, equipo), aprobación con portada, solicitudes atribuidas y reto con recompensa |
+| [[28-Pagos-Manuales-y-Modulos]] | Comprobantes de pago (tokens, suscripción, reto), 1 token por cotización, módulos (académico, registro, cobro) y carpetas por módulo |
 | `Zarpi.postman_collection.json` | Importar en Postman o Insomnia |
 
 ---

@@ -47,6 +47,7 @@ from .tendencias import (
 )
 from .catalogo import CatalogoEmpresa, ProductoCatalogo, AccesoCatalogo
 from .reto import RetoRonda, RetoParticipacion, CuentaPago, RetoListaEspera
+from .comprobante import ComprobantePago
 from .tendencias_virales import TendenciaItem
 
 __all__ = [

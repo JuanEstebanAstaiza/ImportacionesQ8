@@ -10,7 +10,7 @@ from models.tendencias_virales import EstadoTendencia
 from models.usuario import Usuario
 from services import tendencias_virales as svc
 from services.tendencias import puede_curar, puede_disenar
-from utils.dependencies import get_current_user, get_db
+from utils.dependencies import get_current_user, get_db, get_optional_current_user
 from utils.limiter import RATE_LIMIT_TENDENCIAS_ENVIO, limiter
 
 router = APIRouter(prefix="/tendencias", tags=["Tendencias"])
@@ -27,12 +27,31 @@ class EnvioEnlace(BaseModel):
     portada_url: Optional[str] = Field(None, max_length=500)
 
 
+class ProductoEquipo(BaseModel):
+    """Producto del catálogo del equipo: video externo, textos e imágenes propias."""
+    url: str = Field(..., min_length=5, max_length=1000)
+    nombre: str = Field(..., min_length=2, max_length=120)
+    categoria: str = Field(..., min_length=2, max_length=100)
+    descripcion: Optional[str] = Field(None, max_length=4000)
+    por_que_tendencia: Optional[str] = Field(None, max_length=200)
+    ojo_antes: Optional[str] = Field(None, max_length=200)
+    regulado: bool = False
+    # Dueño del video (cuenta de TikTok/YouTube/Instagram). Vacío: el del oEmbed.
+    autor_plataforma: Optional[str] = Field(None, max_length=200)
+    portada_url: Optional[str] = Field(None, max_length=500)
+    imagenes: List[str] = Field(default_factory=list, max_length=8)
+    # Sin portada pasa a diseño aunque se pida publicar.
+    publicar: bool = True
+
+
 class EdicionFicha(BaseModel):
     nombre: Optional[str] = Field(None, max_length=120)
     categoria: Optional[str] = Field(None, max_length=100)
     regulado: Optional[bool] = None
     por_que_tendencia: Optional[str] = Field(None, max_length=200)
     ojo_antes: Optional[str] = Field(None, max_length=200)
+    descripcion: Optional[str] = Field(None, max_length=4000)
+    autor_plataforma: Optional[str] = Field(None, max_length=200)
     portada_url: Optional[str] = Field(None, max_length=500)
     # Solo Instagram (V1): el código de inserción oficial que pega el aprobador.
     embed_html: Optional[str] = Field(None, max_length=20000)
@@ -177,6 +196,37 @@ def archivar(item_id: str, db: Session = Depends(get_db), usuario: Usuario = Dep
     return svc.para_aprobador(db, item)
 
 
+# ── Catálogo del equipo (admin › Tendencias) ─────────────────────────────────
+
+@router.post("/catalogo", status_code=status.HTTP_201_CREATED)
+def crear_producto(datos: ProductoEquipo, db: Session = Depends(get_db), usuario: Usuario = Depends(aprobador)):
+    """El equipo sube un producto a su catálogo: se publica de una vez (con
+    portada) o pasa a diseño. No pasa por la cola de aprobación."""
+    item = svc.crear_del_equipo(db, usuario, datos.model_dump())
+    db.commit()
+    db.refresh(item)
+    return svc.para_disenador(db, item)
+
+
+@router.get("/catalogo")
+def listar_catalogo(
+    estado: Literal["publicado", "en_diseno", "archivado", "caido", "todos"] = "publicado",
+    q: Optional[str] = Query(None, max_length=120),
+    origen: Optional[Literal["equipo", "importadora", "comunidad"]] = None,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(aprobador),
+):
+    return [svc.para_disenador(db, i) for i in svc.catalogo(db, estado=estado, q=q, origen=origen)]
+
+
+@router.post("/items/{item_id}/republicar")
+def republicar(item_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(aprobador)):
+    item = svc.item_o_404(db, item_id)
+    svc.republicar(item)
+    db.commit()
+    return svc.para_disenador(db, item)
+
+
 # ── Diseño ───────────────────────────────────────────────────────────────────
 # El designer pone portada e imágenes con la identidad de Zarpi a lo aprobado y
 # lo publica. No aprueba ni rechaza: eso es del equipo aprobador.
@@ -237,21 +287,37 @@ def publicar_diseno(item_id: str, db: Session = Depends(get_db), usuario: Usuari
 
 # ── Público ──────────────────────────────────────────────────────────────────
 
+def _usuario_opcional(db: Session, current_user: Optional[dict]) -> Optional[Usuario]:
+    if not current_user:
+        return None
+    usuario = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    return usuario if usuario is not None and usuario.activo else None
+
+
 @router.get("/feed")
 def feed(
     semana: Optional[date] = None,
     categoria: Optional[str] = Query(None, max_length=100),
     importador_id: Optional[str] = Query(None, max_length=36),
+    recientes: bool = False,
+    limite: int = Query(60, ge=1, le=60),
     db: Session = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_optional_current_user),
 ):
-    """Productos publicados de la semana (la actual por defecto). Sin código de
-    inserción: el feed solo muestra portadas."""
-    return svc.feed(db, semana=semana, categoria=categoria, importador_id=importador_id)
+    """Productos publicados de la semana (la actual por defecto), o los más
+    recientes de todas (`recientes`, para la landing). Sin código de inserción:
+    el feed solo muestra portadas. Con el muro de pago y sin acceso, solo la
+    vista previa (`acceso.completo` = false)."""
+    return svc.feed(db, semana=semana, categoria=categoria, importador_id=importador_id,
+                    recientes=recientes, limite=limite, usuario=_usuario_opcional(db, current_user))
 
 
 @router.get("/items/{item_id}")
-def ficha(item_id: str, db: Session = Depends(get_db)):
+def ficha(item_id: str, db: Session = Depends(get_db),
+          current_user: Optional[dict] = Depends(get_optional_current_user)):
+    """La ficha completa. Con el muro de pago y sin acceso responde 402 con la
+    vista previa del producto."""
     item = svc.item_o_404(db, item_id)
     if item.estado != EstadoTendencia.publicado.value:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
-    return svc.ficha(db, item)
+    return svc.ficha_con_acceso(db, item, _usuario_opcional(db, current_user))

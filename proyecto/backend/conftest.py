@@ -100,6 +100,7 @@ from models.tendencias import (  # noqa: F401
 )
 from models.catalogo import AccesoCatalogo, CatalogoEmpresa, ProductoCatalogo  # noqa: F401
 from models.reto import CuentaPago, RetoListaEspera, RetoParticipacion, RetoRonda  # noqa: F401
+from models.comprobante import ComprobantePago  # noqa: F401
 from models.tendencias_virales import TendenciaItem  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
@@ -581,6 +582,7 @@ def cleanup_test_db(db_session):
 
         # Tendencias v2 y reto: las fichas apuntan a participaciones y estas a rondas.
         db_session.query(TendenciaItem).delete()
+        db_session.query(ComprobantePago).delete()
         db_session.query(CuentaPago).delete()
         db_session.query(RetoListaEspera).delete()
         db_session.query(RetoParticipacion).delete()

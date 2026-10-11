@@ -41,12 +41,13 @@ def pesos(valor: int) -> str:
     return "$" + f"{int(valor):,}".replace(",", ".")
 
 
-def _notificar(db: Session, usuario_id: str, evento: str, titulo: str, mensaje: str, *, email: bool) -> None:
+def _notificar(db: Session, usuario_id: str, evento: str, titulo: str, mensaje: str, *, email: bool,
+               buzon: Optional[str] = None) -> None:
     from services.notificacion_service import notificar
 
     notificar(
         db, usuario_id=usuario_id, tipo="reto", titulo=titulo, mensaje=mensaje,
-        data={"evento": evento}, enlace_relativo="/reto", whatsapp=False, email=email,
+        data={"evento": evento}, enlace_relativo="/reto", whatsapp=False, email=email, buzon=buzon,
     )
 
 
@@ -367,8 +368,13 @@ def guardar_cuenta(db: Session, participacion_id: str, usuario: Usuario, datos: 
             or participacion.estado_recompensa != EstadoRecompensa.solicitada.value):
         raise _error(status.HTTP_409_CONFLICT, "Los datos bancarios se piden al reclamar la recompensa en efectivo")
     cuentas_pago.guardar(db, usuario, datos)
-    _notificar(db, usuario.id, "datos_pago_recibidos", "Recibimos tus datos de pago",
-               "El pago sale en máximo 5 días hábiles.", email=True)
+    # Con los datos bancarios queda hecha la solicitud de retiro: acuse desde pagos@.
+    from services.comprobantes import acusar_recibo
+
+    ronda = ronda_de(db, participacion)
+    acusar_recibo(db, usuario.id, "Recibimos tu solicitud de retiro",
+                  f"solicitud de retiro de fondos del reto ({pesos(ronda.recompensa_cop)})",
+                  evento="datos_pago_recibidos", data={"participacion_id": participacion.id})
     db.commit()
     db.refresh(participacion)
     return participacion
@@ -394,7 +400,8 @@ def marcar_pagado(db: Session, participacion_id: str, referencia: str) -> RetoPa
     participacion.pago_ultimos_digitos = cuenta.ultimos_digitos
     _notificar(db, participacion.usuario_id, "pago_realizado", "Te transferimos tu recompensa",
                f"Te transferimos {pesos(ronda.recompensa_cop)} a tu cuenta {cuenta.banco} terminada en "
-               f"{cuenta.ultimos_digitos}. Referencia {participacion.referencia_pago}.", email=True)
+               f"{cuenta.ultimos_digitos}. Referencia {participacion.referencia_pago}.", email=True,
+               buzon="pagos")
     db.flush()
     cuentas_pago.borrar_si_no_hay_pagos(db, participacion.usuario_id)
     db.commit()

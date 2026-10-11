@@ -305,6 +305,30 @@ export interface CreateImporterWithOwnerPayload {
   email_dueño: string;
   password_dueño: string;
   nombre_dueño?: string;
+  /** Datos legales de la empresa y de su representante (registro de persona jurídica). */
+  nit?: string;
+  razon_social?: string;
+  apellido_dueño?: string;
+  tipo_documento_dueño?: string;
+  numero_documento_dueño?: string;
+  indicativo_dueño?: string;
+  telefono_dueño?: string;
+}
+
+/** Alta de un cotizante por el admin: mismos datos del registro, sin OTP. */
+export interface CrearSolicitantePayload {
+  email: string;
+  password: string;
+  tipo_persona: "natural" | "juridica";
+  nombre?: string;
+  apellido?: string;
+  tipo_documento?: string;
+  numero_documento?: string;
+  nit?: string;
+  razon_social?: string;
+  indicativo_pais_telefono: string;
+  telefono: string;
+  tokens_iniciales?: number;
 }
 
 export interface CreateImporterWithOwnerResponse {
@@ -327,6 +351,16 @@ export interface EnvioCorreoMasivoPayload {
   roles?: string[];
   usuarios_ids?: string[];
   correos?: string[];
+  /** Desde qué buzón sale: notificaciones, contacto, pagos o admin. */
+  buzon?: BuzonCorreo;
+}
+
+export type BuzonCorreo = "notificaciones" | "contacto" | "pagos" | "admin";
+
+export interface RemitenteCorreo {
+  buzon: BuzonCorreo;
+  direccion: string;
+  uso: string;
 }
 
 export interface EnvioCorreoMasivoResponse {
@@ -334,6 +368,8 @@ export interface EnvioCorreoMasivoResponse {
   enviados: number;
   fallidos: number;
   fallos: string[];
+  buzon?: BuzonCorreo | null;
+  remitente?: string | null;
 }
 
 // ---- Asignación de solicitudes abiertas y ajustes de operación ----
@@ -493,6 +529,10 @@ export const adminService = {
     return apiRequest<AdminUser[]>(`/admin/usuarios${suffix ? `?${suffix}` : ""}`, {
       method: "GET",
     });
+  },
+
+  listarRemitentesCorreo(): Promise<RemitenteCorreo[]> {
+    return apiRequest<RemitenteCorreo[]>("/admin/correos/remitentes");
   },
 
   sendBulkEmail(payload: EnvioCorreoMasivoPayload): Promise<EnvioCorreoMasivoResponse> {
@@ -738,6 +778,11 @@ export const adminService = {
   /** Deja una copia previa lista para restaurar (deshacer) sin volver a subirla. */
   preparePreviousBackup(nombre: string): Promise<BackupSubido> {
     return apiRequest<BackupSubido>(`/admin/backup/previos/${encodeURIComponent(nombre)}/preparar`, { method: "POST" });
+  },
+
+  /** Crea el cotizante ya verificado (sin OTP), aunque el registro público esté cerrado. */
+  crearSolicitante(payload: CrearSolicitantePayload): Promise<unknown> {
+    return apiRequest<unknown>("/admin/solicitantes", { method: "POST", body: payload });
   },
 
   inviteSolicitante(payload: InviteSolicitantePayload): Promise<RegisterResponse> {

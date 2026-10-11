@@ -105,3 +105,24 @@ Se conservan:
 - **Tablas y datos.**
 - **`services/tendencias_calculo.py`**, que lo usan las migraciones.
 - **El acceso por suscripción** (`/tendencias/acceso`, checkout, simulación, webhook), **la cortesía y el acceso libre**, listos para cobrar por ver Tendencias más adelante.
+
+## Catálogo del equipo, muro de pago y módulos (2026-10-10)
+
+**Admin › Tendencias** (`features/tendencias/AdminTendencias.tsx`). El equipo sube productos a su catálogo sin pasar por aprobación:
+- **Datos del producto:** video externo, nombre, categoría, descripción (`tendencias_items.descripcion`, migración `20261010_0035`), dueño del video (`autor_plataforma`), portada e imágenes.
+- **Publicación:** con portada se publica de una vez; sin ella pasa a diseño. También se archiva y se vuelve a publicar.
+- **Endpoints:** `POST/GET /tendencias/catalogo` y `POST /tendencias/items/{id}/republicar`.
+- **Un solo catálogo:** lo del reto y las importadoras (aprobación → diseño) cae en la misma cuadrícula.
+
+**Muro de pago** (`services/tendencias.py::acceso_completo`):
+- **Interruptor «gratis»:** `tendencias.gratis`, encendido por defecto. Encendido, todo el mundo ve todo, incluso sin sesión. Se maneja en *Admin › Tendencias › Acceso y precio* con `PUT /tendencias/admin/suscripcion {gratis}`.
+- **Con el interruptor apagado:** quien no tiene acceso recibe del feed solo la vista previa (`LIMITE_VISTA_PREVIA` = 8 portadas y nombres, `acceso.completo = false`). La ficha responde **402** con `{codigo: "requiere_suscripcion", producto}`.
+- **Quién tiene acceso:** suscriptores, cortesías, acceso libre, aprobadores y diseño.
+- **Frontend:** `MuroPago.tsx` se muestra en el feed y en la ficha. `apiRequest` lanza `ApiError` con `status` y `detail`.
+- **Landing:** `SeccionTendenciasLanding.tsx` muestra los 8 más recientes de todas las semanas (`GET /tendencias/feed?recientes=true&limite=8`) y no aparece si no hay productos.
+
+**Módulos** (`services/modulos.py`, *Admin › Módulos*):
+- **Endpoints:** `GET/PUT /admin/modulos`.
+- **Por ahora:** solo `academico` (cursos).
+- **Prioridad:** lo que elige el admin manda sobre `MODULO_EDUCATIVO_HABILITADO` del `.env`.
+- **Al apagarlo:** desaparece del menú y `/cursos` responde 404. `/configuracion-publica` lo refleja sin redesplegar.

@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
@@ -31,6 +32,7 @@ from schemas.admin import (
     MensajeSoporteRequest,
     CrearAgenteSoporteRequest,
     CrearDisenadorRequest,
+    CrearSolicitanteAdminRequest,
     DisenadorItem,
     NivelAgenteRequest,
     AgenteSoporteItem,
@@ -45,6 +47,7 @@ from schemas.admin import (
     MovimientoPuntoCotizacionResponse,
     EnvioCorreoMasivoRequest,
     EnvioCorreoMasivoResponse,
+    RemitenteCorreo,
     BackupSubidoResponse,
     RestaurarBackupRequest,
     RestaurarBackupResponse,
@@ -71,7 +74,7 @@ from utils.dependencies import get_db, require_rol, require_rol_in
 # este router sigue siendo exclusivo de `admin`.
 require_equipo = require_rol_in("admin", "soporte")
 from utils.security import hash_password
-from utils.email import construir_html_zarpi, enviar_correo
+from utils.email import BUZONES, construir_html_zarpi, enviar_correo, remitente_de
 
 logger = logging.getLogger("importacionesq8")
 
@@ -286,6 +289,15 @@ async def crear_importador_con_dueño(
         rol="importador",
         importador_id=nuevo_importador.id,
         nombre=datos.nombre_dueño,
+        apellido=datos.apellido_dueño,
+        # La empresa es persona jurídica; la cuenta es de su representante.
+        tipo_persona="juridica" if (datos.nit or datos.razon_social) else None,
+        nit=datos.nit,
+        razon_social=datos.razon_social or datos.nombre_empresa,
+        tipo_documento=datos.tipo_documento_dueño,
+        numero_documento=datos.numero_documento_dueño,
+        indicativo_pais_telefono=datos.indicativo_dueño,
+        telefono=datos.telefono_dueño,
         activo=True,
         email_verificado=True,
         perfil_completo=bool(datos.nombre_dueño)
@@ -301,6 +313,42 @@ async def crear_importador_con_dueño(
         importador=adjuntar_certificaciones(db, [nuevo_importador])[0],
         usuario_dueño_id=str(nuevo_dueño.id),
         email_dueño=nuevo_dueño.email
+    )
+
+
+# ==================== Cotizantes ====================
+
+@router.post("/solicitantes", response_model=UsuarioAdminResponse, status_code=status.HTTP_201_CREATED)
+async def crear_solicitante(
+    datos: CrearSolicitanteAdminRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Crea un cotizante (persona natural o jurídica) con los mismos datos del
+    registro público. Queda verificado (no hay OTP) y funciona aunque el
+    registro público esté cerrado en Módulos. Puede arrancar con tokens."""
+    from services.auth_service import crear_cuenta_solicitante
+
+    if db.query(Usuario).filter(Usuario.email == datos.email).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email ya está registrado")
+    for campo in ("nombre", "apellido", "tipo_documento", "numero_documento", "nit", "razon_social", "telefono"):
+        valor = getattr(datos, campo)
+        if isinstance(valor, str):
+            setattr(datos, campo, valor.strip() or None)
+    usuario = crear_cuenta_solicitante(db, datos, email_verificado=True, acepto_politica=False)
+    if datos.tokens_iniciales:
+        usuario.puntos_cotizacion = datos.tokens_iniciales
+        db.add(MovimientoPuntoCotizacion(
+            usuario_id=usuario.id, admin_id=current_user["user_id"], tipo="recarga",
+            delta=datos.tokens_iniciales, saldo_resultante=datos.tokens_iniciales,
+            descripcion="Tokens iniciales al crear la cuenta",
+        ))
+        db.commit()
+        db.refresh(usuario)
+    return UsuarioAdminResponse(
+        id=str(usuario.id), email=usuario.email, rol=usuario.rol, importador_id=usuario.importador_id,
+        nombre=usuario.nombre, activo=usuario.activo, perfil_completo=usuario.perfil_completo,
+        fecha_creacion=usuario.fecha_creacion,
     )
 
 
@@ -430,6 +478,36 @@ async def cambiar_nivel_agente(
     )
 
 
+# ==================== Módulos ====================
+
+class CambioModulos(BaseModel):
+    academico: Optional[bool] = None
+    registro: Optional[bool] = None
+    cobro_cotizaciones: Optional[bool] = None
+
+
+@router.get("/modulos")
+async def ver_modulos(db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
+    """Los módulos que se pueden encender o apagar sin redesplegar."""
+    from services import modulos
+
+    return modulos.todos(db)
+
+
+@router.put("/modulos")
+async def cambiar_modulos(
+    datos: CambioModulos,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    from services import modulos
+
+    for nombre, valor in datos.model_dump(exclude_none=True).items():
+        modulos.fijar(db, nombre, valor, current_user["user_id"])
+    db.commit()
+    return modulos.todos(db)
+
+
 # ==================== Equipo de diseño ====================
 
 @router.post("/disenadores", response_model=DisenadorItem, status_code=status.HTTP_201_CREATED)
@@ -536,6 +614,25 @@ async def verificar_importador(
 
     importador.estado = "activo"
     importador.verificado = True
+
+    # Correo directo a la empresa: sale de admin@.
+    from services.notificacion_service import notificar
+
+    dueño = db.query(Usuario).filter(
+        Usuario.importador_id == importador.id, Usuario.rol == "importador"
+    ).first()
+    if dueño:
+        notificar(
+            db,
+            usuario_id=str(dueño.id),
+            tipo="empresa",
+            titulo="Tu empresa quedó verificada",
+            mensaje=f"{importador.nombre_empresa} ya tiene el sello de socio verificado en Zarpi.",
+            data={"importador_id": str(importador.id)},
+            enlace_relativo="/empresa/perfil",
+            whatsapp=False,
+            buzon="admin",
+        )
     db.commit()
     db.refresh(importador)
 
@@ -594,6 +691,7 @@ async def retirar_verificacion_importador(
             mensaje=datos.motivo.strip()[:160],
             data={"importador_id": str(importador.id)},
             enlace_relativo="/empresa/perfil",
+            buzon="admin",
         )
 
     db.commit()
@@ -718,6 +816,15 @@ async def actualizar_estado_usuario(
     return usuario
 
 
+@router.get("/correos/remitentes", response_model=List[RemitenteCorreo])
+async def listar_remitentes_correo(current_user: dict = Depends(require_rol("admin"))):
+    """Los buzones desde los que se puede enviar y para qué se usa cada uno."""
+    return [
+        RemitenteCorreo(buzon=buzon, direccion=remitente_de(buzon)[0], uso=uso)
+        for buzon, uso in BUZONES.items()
+    ]
+
+
 @router.post("/correos/masivo", response_model=EnvioCorreoMasivoResponse)
 async def enviar_correo_masivo_admin(
     datos: EnvioCorreoMasivoRequest,
@@ -781,7 +888,7 @@ async def enviar_correo_masivo_admin(
     fallos = []
     enviados = 0
     for destinatario in sorted(destinatarios):
-        if enviar_correo(destinatario, asunto, cuerpo, cuerpo_html):
+        if enviar_correo(destinatario, asunto, cuerpo, cuerpo_html, buzon=datos.buzon):
             enviados += 1
         else:
             fallos.append(destinatario)
@@ -795,6 +902,8 @@ async def enviar_correo_masivo_admin(
         enviados=enviados,
         fallidos=len(fallos),
         fallos=fallos[:50],
+        buzon=datos.buzon,
+        remitente=remitente_de(datos.buzon)[0],
     )
 
 

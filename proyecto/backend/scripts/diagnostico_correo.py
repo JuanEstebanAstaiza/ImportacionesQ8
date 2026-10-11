@@ -2,7 +2,7 @@
 """Diagnóstico del envío de correo (OTP, notificaciones). Correr en el servidor:
 
     docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend \\
-        python scripts/diagnostico_correo.py tu-correo@ejemplo.com
+        python scripts/diagnostico_correo.py tu-correo@ejemplo.com [no-reply|notificaciones|contacto|pagos|admin]
 
 Revisa, en orden y sin imprimir la API key:
 1. La configuración que ve el backend (proveedor, host, puerto, remitente).
@@ -45,8 +45,8 @@ def _conecta(host: str, puerto: int, espera: float = 4.0) -> str:
 def main() -> int:
     destino = sys.argv[1] if len(sys.argv) > 1 else None
     clave = config.SMTP_API_KEY or ""
-    remitente = config.SMTP_FROM or ""
-    dominio = remitente.rsplit("@", 1)[-1].strip(" >") if "@" in remitente else ""
+    remitentes = {buzon: email.remitente_de(buzon)[0] for buzon in (email.BUZON_CODIGOS, *email.BUZONES)}
+    dominios_remitentes = sorted({d.rsplit("@", 1)[-1].strip(" >") for d in remitentes.values() if "@" in d})
 
     print("\n1. Configuración que ve el backend")
     _linea(OK, f"APP_ENV={config.APP_ENV}")
@@ -60,7 +60,10 @@ def main() -> int:
                + ("" if clave.startswith("re_") else " — las de Resend empiezan por 're_'"))
         if clave.strip() != clave or clave.startswith(("'", '"')):
             _linea(MAL, "La API key tiene espacios o comillas alrededor: quítalas del .env")
-    _linea(OK if dominio else MAL, f"SMTP_FROM={remitente or '(vacío)'}  → dominio remitente: {dominio or '?'}")
+    for buzon, direccion in remitentes.items():
+        _linea(OK if "@" in direccion else MAL, f"Buzón {buzon}: {direccion or '(vacío)'}")
+    if len(dominios_remitentes) > 1:
+        _linea(AVISO, f"Los remitentes usan varios dominios ({', '.join(dominios_remitentes)}): todos deben estar verificados")
     via = "API HTTPS de Resend" if email.usa_api_resend() else "SMTP"
     _linea(OK, f"Transporte elegido: {via} (EMAIL_PROVIDER={config.EMAIL_PROVIDER or 'automático'})")
 
@@ -79,12 +82,13 @@ def main() -> int:
             if r.status_code == 200:
                 dominios = r.json().get("data", [])
                 if not dominios:
-                    _linea(MAL, "La cuenta de Resend no tiene dominios: agrega y verifica " + (dominio or "tu dominio"))
+                    _linea(MAL, "La cuenta de Resend no tiene dominios: agrega y verifica " + (", ".join(dominios_remitentes) or "tu dominio"))
                 for d in dominios:
                     estado = d.get("status")
                     _linea(OK if estado == "verified" else MAL, f"{d.get('name')}: {estado}")
-                if dominio and not any(d.get("name") == dominio for d in dominios):
-                    _linea(MAL, f"El remitente usa '{dominio}', que no está en Resend")
+                for propio in dominios_remitentes:
+                    if not any(d.get("name") == propio for d in dominios):
+                        _linea(MAL, f"Un remitente usa '{propio}', que no está en Resend")
             elif r.status_code in (401, 403):
                 motivo = (r.json() or {}).get("message", r.text) if r.headers.get("content-type", "").startswith("application/json") else r.text
                 _linea(AVISO, f"No se pudieron leer los dominios (HTTP {r.status_code}): {motivo}. "
@@ -95,12 +99,14 @@ def main() -> int:
             _linea(MAL, f"No se pudo consultar Resend: {type(error).__name__}: {error}")
 
     if destino:
-        print(f"\n4. Envío de prueba a {destino} ({via})")
+        buzon = sys.argv[2] if len(sys.argv) > 2 else email.BUZON_POR_DEFECTO
+        print(f"\n4. Envío de prueba a {destino} desde {email.remitente_de(buzon)[0]} ({via})")
         logging.basicConfig(level=logging.INFO, format="     %(levelname)s %(message)s")
         enviado = email.enviar_correo(
             destino, "Prueba de correo — Zarpi",
             "Si lees esto, el correo de la plataforma funciona.",
             email.construir_html_zarpi("Prueba de correo", "<p>Si lees esto, el correo de la plataforma funciona.</p>"),
+            buzon=buzon,
         )
         _linea(OK if enviado else MAL, "Enviado: revisa la bandeja (y spam)." if enviado
                else "No salió. El motivo está justo arriba.")

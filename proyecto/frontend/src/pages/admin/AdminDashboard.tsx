@@ -17,6 +17,7 @@ import {
 } from "@/services/admin.service";
 import { businessService } from "@/services/business.service";
 import { tendenciasService } from "@/services/tendencias.service";
+import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
 import { LandingCmsEditor } from "@/features/admin/LandingCmsEditor";
 import { GestionCotizantes } from "@/features/admin/GestionCotizantes";
@@ -41,6 +42,12 @@ type CompanyFormState = {
   email_dueño: string;
   password_dueño: string;
   nombre_dueño: string;
+  /** Representante legal (cuenta dueña) y datos legales: los del registro de persona jurídica. */
+  apellido_dueño: string;
+  tipo_documento_dueño: string;
+  numero_documento_dueño: string;
+  indicativo_dueño: string;
+  razon_social: string;
   especialidad_producto: string;
   paises_origen: string;
   tiempo_respuesta_promedio: string;
@@ -56,16 +63,29 @@ type CompanyFormState = {
 
 type UserFormState = {
   nombre: string;
+  apellido: string;
   email: string;
   password: string;
   rol: InviteRole;
   telefono: string;
   indicativo_pais_telefono: string;
-  companyId: string;
+  /** Cotizante: los mismos datos del registro público. */
+  tipoPersona: "natural" | "juridica";
+  tipoDocumento: string;
+  numeroDocumento: string;
+  nit: string;
+  razonSocial: string;
+  tokensIniciales: string;
+  /** Empresa importadora: nombre comercial y ficha básica. */
   companyName: string;
+  especialidades: string[];
+  paises: string;
+  tiempoRespuesta: string;
   /** Solo para el rol de atención al cliente: nivel de la mesa (1-3). */
   nivelSoporte: number;
 };
+
+const TIPOS_DOCUMENTO = ["CC", "CE", "Pasaporte", "PPT", "DNI"];
 
 interface AdminDashboardProps {
   onRefreshGlobal?: () => Promise<void>;
@@ -105,6 +125,11 @@ const EMPTY_IMPORTER_FORM: CompanyFormState = {
   email_dueño: "",
   password_dueño: "",
   nombre_dueño: "",
+  apellido_dueño: "",
+  tipo_documento_dueño: "CC",
+  numero_documento_dueño: "",
+  indicativo_dueño: "+57",
+  razon_social: "",
   especialidad_producto: "",
   paises_origen: "",
   tiempo_respuesta_promedio: "~48h",
@@ -120,13 +145,22 @@ const EMPTY_IMPORTER_FORM: CompanyFormState = {
 
 const EMPTY_USER_FORM: UserFormState = {
   nombre: "",
+  apellido: "",
   email: "",
   password: "",
   rol: "solicitante",
   telefono: "",
   indicativo_pais_telefono: "+57",
-  companyId: "",
+  tipoPersona: "natural",
+  tipoDocumento: "CC",
+  numeroDocumento: "",
+  nit: "",
+  razonSocial: "",
+  tokensIniciales: "0",
   companyName: "",
+  especialidades: [],
+  paises: "China",
+  tiempoRespuesta: "~24h",
   nivelSoporte: 1,
 };
 
@@ -651,15 +685,34 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
       const especialidades = parseCsvField(companyForm.especialidad_producto);
       const paises = parseCsvField(companyForm.paises_origen);
 
-      if (!companyForm.nombre_empresa || !companyForm.email_dueño || !companyForm.password_dueño) {
-        throw new Error("Nombre de empresa, email dueno y password del dueno son obligatorios.");
+      const faltan = [
+        !companyForm.nombre_empresa.trim() && "nombre comercial",
+        !companyForm.razon_social.trim() && "razón social",
+        !companyForm.nit.trim() && "NIT",
+        !companyForm.nombre_dueño.trim() && "nombre del representante",
+        !companyForm.apellido_dueño.trim() && "apellido del representante",
+        !companyForm.numero_documento_dueño.trim() && "documento del representante",
+        !companyForm.telefono.trim() && "teléfono",
+        !companyForm.email_dueño.trim() && "correo de la cuenta dueña",
+        !companyForm.password_dueño && "contraseña",
+        especialidades.length === 0 && "al menos una especialidad",
+      ].filter(Boolean);
+      if (faltan.length > 0) {
+        throw new Error(`Para la empresa falta: ${faltan.join(", ")}.`);
       }
 
       await adminService.createImporterWithOwner({
         nombre_empresa: companyForm.nombre_empresa,
         email_dueño: companyForm.email_dueño,
         password_dueño: companyForm.password_dueño,
-        nombre_dueño: companyForm.nombre_dueño || undefined,
+        nombre_dueño: companyForm.nombre_dueño.trim() || undefined,
+        apellido_dueño: companyForm.apellido_dueño.trim() || undefined,
+        tipo_documento_dueño: companyForm.tipo_documento_dueño,
+        numero_documento_dueño: companyForm.numero_documento_dueño.trim() || undefined,
+        indicativo_dueño: companyForm.indicativo_dueño.trim() || "+57",
+        telefono_dueño: companyForm.telefono.trim() || undefined,
+        nit: companyForm.nit.trim() || undefined,
+        razon_social: companyForm.razon_social.trim() || undefined,
         especialidad_producto: especialidades,
         paises_origen: paises,
         tiempo_respuesta_promedio: companyForm.tiempo_respuesta_promedio || "~48h",
@@ -802,29 +855,75 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           `Cuenta de atención al cliente creada para ${userForm.email} en nivel ${userForm.nivelSoporte}.`,
         );
       } else if (userForm.rol === "importador") {
-        if (!userForm.nombre || !userForm.email || !userForm.password) {
-          throw new Error("Para rol importador debes completar nombre, email y password.");
+        const faltan = [
+          !userForm.companyName.trim() && "nombre comercial",
+          !userForm.razonSocial.trim() && "razón social",
+          !userForm.nit.trim() && "NIT",
+          !userForm.nombre.trim() && "nombre del representante",
+          !userForm.apellido.trim() && "apellido del representante",
+          !userForm.numeroDocumento.trim() && "documento del representante",
+          !userForm.telefono.trim() && "teléfono",
+          !userForm.email.trim() && "correo",
+          !userForm.password && "contraseña",
+          userForm.especialidades.length === 0 && "al menos una especialidad",
+        ].filter(Boolean);
+        if (faltan.length > 0) {
+          throw new Error(`Para la empresa falta: ${faltan.join(", ")}.`);
         }
 
         await adminService.createImporterWithOwner({
-          nombre_empresa: userForm.companyName.trim() || `Empresa ${userForm.nombre}`,
-          email_dueño: userForm.email,
+          nombre_empresa: userForm.companyName.trim(),
+          especialidad_producto: userForm.especialidades,
+          paises_origen: userForm.paises.split(",").map((pais) => pais.trim()).filter(Boolean),
+          tiempo_respuesta_promedio: userForm.tiempoRespuesta.trim() || "~48h",
+          email_dueño: userForm.email.trim(),
           password_dueño: userForm.password,
-          nombre_dueño: userForm.nombre,
-          especialidad_producto: ["General"],
-          paises_origen: ["Colombia"],
-          tiempo_respuesta_promedio: "~48h",
+          nombre_dueño: userForm.nombre.trim(),
+          apellido_dueño: userForm.apellido.trim(),
+          tipo_documento_dueño: userForm.tipoDocumento,
+          numero_documento_dueño: userForm.numeroDocumento.trim(),
+          nit: userForm.nit.trim(),
+          razon_social: userForm.razonSocial.trim(),
+          indicativo_dueño: userForm.indicativo_pais_telefono.trim() || "+57",
+          telefono_dueño: userForm.telefono.trim(),
         });
         setStatusMessage("Usuario importador creado con su empresa base.");
       } else {
-        await adminService.inviteSolicitante({
-          email: userForm.email,
+        const natural = userForm.tipoPersona === "natural";
+        const faltan = (natural
+          ? [
+            !userForm.nombre.trim() && "nombre",
+            !userForm.apellido.trim() && "apellido",
+            !userForm.numeroDocumento.trim() && "número de documento",
+          ]
+          : [
+            !userForm.razonSocial.trim() && "razón social",
+            !userForm.nit.trim() && "NIT",
+          ]).concat([
+            !userForm.telefono.trim() && "teléfono",
+            !userForm.email.trim() && "correo",
+            !userForm.password && "contraseña",
+          ]).filter(Boolean);
+        if (faltan.length > 0) {
+          throw new Error(`Falta: ${faltan.join(", ")}.`);
+        }
+        await adminService.crearSolicitante({
+          email: userForm.email.trim(),
           password: userForm.password,
-          nombre: userForm.nombre,
-          telefono: userForm.telefono || "0000000000",
-          indicativo_pais_telefono: userForm.indicativo_pais_telefono || "+57",
+          tipo_persona: userForm.tipoPersona,
+          ...(natural
+            ? {
+              nombre: userForm.nombre.trim(),
+              apellido: userForm.apellido.trim(),
+              tipo_documento: userForm.tipoDocumento,
+              numero_documento: userForm.numeroDocumento.trim(),
+            }
+            : { nit: userForm.nit.trim(), razon_social: userForm.razonSocial.trim() }),
+          indicativo_pais_telefono: userForm.indicativo_pais_telefono.trim() || "+57",
+          telefono: userForm.telefono.trim(),
+          tokens_iniciales: Math.max(0, Math.floor(Number(userForm.tokensIniciales) || 0)),
         });
-        setStatusMessage("Invitacion de solicitante enviada correctamente.");
+        setStatusMessage(`Cotizante creado: ${userForm.email.trim()} ya puede iniciar sesión (sin código de verificación).`);
       }
 
       setUserForm(EMPTY_USER_FORM);
@@ -2108,19 +2207,55 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <input
                 value={companyForm.nombre_empresa}
                 onChange={(event) => setCompanyForm((prev) => ({ ...prev, nombre_empresa: event.target.value }))}
-                placeholder="Nombre empresa"
+                placeholder="Nombre comercial"
                 className="h-9 rounded-lg border border-border px-3 text-sm"
               />
+              <input
+                value={companyForm.razon_social}
+                onChange={(event) => setCompanyForm((prev) => ({ ...prev, razon_social: event.target.value }))}
+                placeholder="Razón social"
+                className="h-9 rounded-lg border border-border px-3 text-sm"
+              />
+              <p className="text-xs font-semibold text-muted-foreground md:col-span-2">Representante legal (cuenta dueña)</p>
               <input
                 value={companyForm.nombre_dueño}
                 onChange={(event) => setCompanyForm((prev) => ({ ...prev, nombre_dueño: event.target.value }))}
-                placeholder="Nombre dueno"
+                placeholder="Nombre del representante"
                 className="h-9 rounded-lg border border-border px-3 text-sm"
               />
               <input
+                value={companyForm.apellido_dueño}
+                onChange={(event) => setCompanyForm((prev) => ({ ...prev, apellido_dueño: event.target.value }))}
+                placeholder="Apellido del representante"
+                className="h-9 rounded-lg border border-border px-3 text-sm"
+              />
+              <div className="flex gap-2">
+                <select
+                  aria-label="Tipo de documento del representante"
+                  value={companyForm.tipo_documento_dueño}
+                  onChange={(event) => setCompanyForm((prev) => ({ ...prev, tipo_documento_dueño: event.target.value }))}
+                  className="h-9 w-28 shrink-0 rounded-lg border border-border px-2 text-sm"
+                >
+                  {TIPOS_DOCUMENTO.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+                </select>
+                <input
+                  value={companyForm.numero_documento_dueño}
+                  onChange={(event) => setCompanyForm((prev) => ({ ...prev, numero_documento_dueño: event.target.value }))}
+                  placeholder="Número de documento"
+                  className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                />
+              </div>
+              <input
                 value={companyForm.email_dueño}
                 onChange={(event) => setCompanyForm((prev) => ({ ...prev, email_dueño: event.target.value }))}
-                placeholder="Email dueno"
+                placeholder="Correo de la cuenta dueña (inicia sesión con él)"
+                className="h-9 rounded-lg border border-border px-3 text-sm"
+              />
+              <input
+                aria-label="Indicativo del teléfono"
+                value={companyForm.indicativo_dueño}
+                onChange={(event) => setCompanyForm((prev) => ({ ...prev, indicativo_dueño: event.target.value }))}
+                placeholder="Indicativo (+57)"
                 className="h-9 rounded-lg border border-border px-3 text-sm"
               />
               <input
@@ -2260,7 +2395,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="w-full max-w-2xl rounded-xl border border-border bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Crear / Invitar Usuario</h2>
+              <h2 className="text-lg font-semibold">Crear usuario</h2>
               <button
                 type="button"
                 onClick={() => setShowUserModal(false)}
@@ -2270,92 +2405,164 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               </button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <input
-                value={userForm.nombre}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, nombre: event.target.value }))}
-                placeholder="Nombre"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
-              <input
-                value={userForm.email}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))}
-                placeholder="Email"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
-              <input
-                value={userForm.password}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
-                placeholder="Contrasena temporal"
-                type="password"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
-              <select
-                value={userForm.rol}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, rol: event.target.value as InviteRole }))}
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              >
-                <option value="solicitante">Solicitante</option>
-                <option value="importador">Importador (crea también su empresa)</option>
-                <option value="soporte">Atención al cliente</option>
-                <option value="designer">Diseño (portadas de Tendencias)</option>
-                <option value="asesor">Asesor</option>
-                <option value="admin">Admin</option>
-              </select>
+            {/* Los campos cambian con el tipo de cuenta: los mismos del registro público. */}
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="text-xs font-medium text-muted-foreground">Tipo de cuenta
+                  <select
+                    value={userForm.rol}
+                    onChange={(event) => setUserForm((prev) => ({ ...prev, rol: event.target.value as InviteRole }))}
+                    className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                  >
+                    <option value="solicitante">Cotizante</option>
+                    <option value="importador">Empresa importadora (crea también su empresa)</option>
+                    <option value="soporte">Atención al cliente</option>
+                    <option value="designer">Diseño (portadas de Tendencias)</option>
+                    <option value="asesor">Asesor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                {userForm.rol === "solicitante" ? (
+                  <div className="text-xs font-medium text-muted-foreground">Tipo de persona
+                    <div className="mt-1 flex gap-2">
+                      {(["natural", "juridica"] as const).map((tipo) => (
+                        <button
+                          key={tipo}
+                          type="button"
+                          onClick={() => setUserForm((prev) => ({ ...prev, tipoPersona: tipo }))}
+                          className={`h-9 flex-1 rounded-lg border text-sm ${userForm.tipoPersona === tipo ? "border-primary bg-primary/5 font-medium text-primary dark:text-accent" : "border-border"}`}
+                        >
+                          {tipo === "natural" ? "Persona natural" : "Persona jurídica"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {/* El nivel decide qué tickets se le pueden asignar. */}
+                {userForm.rol === "soporte" ? (
+                  <label className="text-xs font-medium text-muted-foreground">Nivel de soporte
+                    <select
+                      value={userForm.nivelSoporte}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, nivelSoporte: Number(event.target.value) }))}
+                      className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                    >
+                      <option value={1}>Nivel 1 — consultas corrientes</option>
+                      <option value={2}>Nivel 2 — casos intermedios</option>
+                      <option value={3}>Nivel 3 — casos complejos</option>
+                    </select>
+                  </label>
+                ) : null}
+              </div>
 
-              {/* El nivel decide qué tickets se le pueden asignar. */}
-              {userForm.rol === "soporte" ? (
-                <select
-                  value={userForm.nivelSoporte}
-                  onChange={(event) => setUserForm((prev) => ({ ...prev, nivelSoporte: Number(event.target.value) }))}
-                  className="h-9 rounded-lg border border-border px-3 text-sm"
-                >
-                  <option value={1}>Nivel 1 — consultas corrientes</option>
-                  <option value={2}>Nivel 2 — casos intermedios</option>
-                  <option value={3}>Nivel 3 — casos complejos</option>
-                </select>
+              {userForm.rol === "importador" ? (
+                <fieldset className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-2">
+                  <legend className="px-1 text-xs font-semibold">Empresa</legend>
+                  <input value={userForm.companyName} onChange={(event) => setUserForm((prev) => ({ ...prev, companyName: event.target.value }))} placeholder="Nombre comercial" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                  <input value={userForm.razonSocial} onChange={(event) => setUserForm((prev) => ({ ...prev, razonSocial: event.target.value }))} placeholder="Razón social" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                  <input value={userForm.nit} onChange={(event) => setUserForm((prev) => ({ ...prev, nit: event.target.value }))} placeholder="NIT" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                  <input value={userForm.tiempoRespuesta} onChange={(event) => setUserForm((prev) => ({ ...prev, tiempoRespuesta: event.target.value }))} placeholder="Tiempo de respuesta (ej. ~24h)" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                  <input value={userForm.paises} onChange={(event) => setUserForm((prev) => ({ ...prev, paises: event.target.value }))} placeholder="Países de origen (separados por coma)" className="h-9 w-full rounded-lg border border-border px-3 text-sm md:col-span-2" />
+                  <div className="md:col-span-2">
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">Especialidades</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {CATEGORIAS_PRODUCTO.map((categoria) => {
+                        const activa = userForm.especialidades.includes(categoria);
+                        return (
+                          <button
+                            key={categoria}
+                            type="button"
+                            aria-pressed={activa}
+                            onClick={() => setUserForm((prev) => ({
+                              ...prev,
+                              especialidades: activa ? prev.especialidades.filter((c) => c !== categoria) : [...prev.especialidades, categoria],
+                            }))}
+                            className={`rounded-full border px-2.5 py-1 text-xs ${activa ? "border-primary bg-primary/10 font-medium text-primary dark:text-accent" : "border-border text-muted-foreground"}`}
+                          >
+                            {categoria}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </fieldset>
               ) : null}
 
-              <input
-                value={userForm.indicativo_pais_telefono}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, indicativo_pais_telefono: event.target.value }))}
-                placeholder="Indicativo (+57)"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
-              <input
-                value={userForm.telefono}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, telefono: event.target.value }))}
-                placeholder="Telefono"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
+              {userForm.rol === "solicitante" && userForm.tipoPersona === "juridica" ? (
+                <fieldset className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-2">
+                  <legend className="px-1 text-xs font-semibold">Empresa del cotizante</legend>
+                  <input value={userForm.razonSocial} onChange={(event) => setUserForm((prev) => ({ ...prev, razonSocial: event.target.value }))} placeholder="Razón social" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                  <input value={userForm.nit} onChange={(event) => setUserForm((prev) => ({ ...prev, nit: event.target.value }))} placeholder="NIT" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                </fieldset>
+              ) : null}
 
-              <select
-                value={userForm.companyId}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, companyId: event.target.value }))}
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              >
-                <option value="">Sin empresa asignada</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.nombre_empresa}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                value={userForm.companyName}
-                onChange={(event) => setUserForm((prev) => ({ ...prev, companyName: event.target.value }))}
-                placeholder="Nombre de empresa (si rol importador)"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
+              <fieldset className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-2">
+                <legend className="px-1 text-xs font-semibold">
+                  {userForm.rol === "importador" ? "Representante legal (cuenta dueña)" : userForm.rol === "solicitante" && userForm.tipoPersona === "juridica" ? "Contacto y acceso" : "Datos de la persona"}
+                </legend>
+                {!(userForm.rol === "solicitante" && userForm.tipoPersona === "juridica") ? (
+                  <>
+                    <input value={userForm.nombre} onChange={(event) => setUserForm((prev) => ({ ...prev, nombre: event.target.value }))} placeholder="Nombre" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                    {userForm.rol === "solicitante" || userForm.rol === "importador" ? (
+                      <input value={userForm.apellido} onChange={(event) => setUserForm((prev) => ({ ...prev, apellido: event.target.value }))} placeholder="Apellido" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                    ) : null}
+                  </>
+                ) : null}
+                {(userForm.rol === "solicitante" && userForm.tipoPersona === "natural") || userForm.rol === "importador" ? (
+                  <div className="flex gap-2">
+                    <select
+                      aria-label="Tipo de documento"
+                      value={userForm.tipoDocumento}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, tipoDocumento: event.target.value }))}
+                      className="h-9 w-28 shrink-0 rounded-lg border border-border px-2 text-sm"
+                    >
+                      {TIPOS_DOCUMENTO.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+                    </select>
+                    <input value={userForm.numeroDocumento} onChange={(event) => setUserForm((prev) => ({ ...prev, numeroDocumento: event.target.value }))} placeholder="Número de documento" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                  </div>
+                ) : null}
+                <div className="flex gap-2">
+                  <input
+                    aria-label="Indicativo"
+                    value={userForm.indicativo_pais_telefono}
+                    onChange={(event) => setUserForm((prev) => ({ ...prev, indicativo_pais_telefono: event.target.value }))}
+                    placeholder="+57"
+                    className="h-9 w-20 shrink-0 rounded-lg border border-border px-2 text-sm"
+                  />
+                  <input value={userForm.telefono} onChange={(event) => setUserForm((prev) => ({ ...prev, telefono: event.target.value }))} placeholder="Teléfono" inputMode="tel" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                </div>
+                <input value={userForm.email} onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Correo (con él inicia sesión)" type="email" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                <input
+                  value={userForm.password}
+                  onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
+                  placeholder="Contraseña temporal (9+ caracteres, letras y números)"
+                  type="password"
+                  autoComplete="new-password"
+                  className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                />
+                {userForm.rol === "solicitante" ? (
+                  <label className="text-xs font-medium text-muted-foreground">Tokens de cotización iniciales
+                    <input
+                      type="number"
+                      min={0}
+                      value={userForm.tokensIniciales}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, tokensIniciales: event.target.value }))}
+                      className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                    />
+                  </label>
+                ) : null}
+              </fieldset>
             </div>
 
             <div className="mt-3 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
               {userForm.rol === "asesor" || userForm.rol === "admin"
-                ? "Con la API actual, las altas directas disponibles en este panel son para solicitantes e importadores."
+                ? "Los asesores los crea cada empresa desde su panel; las cuentas de administración no se crean desde aquí."
+                : userForm.rol === "solicitante"
+                  ? "El cotizante queda verificado: entra con este correo y contraseña sin código de verificación, aunque el registro público esté cerrado. Puede cambiar la contraseña en Mi perfil."
+                : userForm.rol === "importador"
+                  ? "Se crea la empresa y su cuenta dueña (el representante legal). Logo, descripción y demás datos los completa la empresa en «Mi empresa»."
                 : userForm.rol === "designer"
                   ? "Diseño pone portada e imágenes con la identidad de Zarpi a lo aprobado en Tendencias y lo publica. Entra al canal del equipo; no ve soporte ni clientes."
-                  : "El formulario usará los endpoints existentes del frontend vía apiRequest."}
+                  : "Atención al cliente atiende tickets e incidentes; no administra la plataforma."}
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
@@ -2374,7 +2581,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                 disabled={submitting}
                 className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {submitting ? "Guardando..." : "Crear / Invitar"}
+                {submitting ? "Guardando..." : "Crear cuenta"}
               </button>
             </div>
           </div>

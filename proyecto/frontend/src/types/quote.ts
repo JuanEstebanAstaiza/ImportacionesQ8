@@ -32,6 +32,8 @@ export interface Quote {
   shippingMark?: string | null;
   /** Lo que escribió el cliente antes de normalizar ("prendas control"). */
   shippingMarkSufijo?: string | null;
+  /** Por qué la rechazó la empresa a la que iba dirigida. */
+  motivoRechazo?: string | null;
   customFields?: Record<string, unknown> | null;
   requesterId?: string;
   tierMinimoRequerido?: string;

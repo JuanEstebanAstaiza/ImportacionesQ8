@@ -97,6 +97,87 @@ def aplicar_referido_si_aplica(db: Session, nuevo_usuario: Usuario, codigo: Opti
     ))
 
 
+def crear_cuenta_solicitante(db: Session, datos, *, email_verificado: bool, acepto_politica: bool) -> Usuario:
+    """Crea la cuenta de un cotizante (natural o jurídica) con su organización y
+    wallet. La usan el registro público (sin verificar: falta el OTP) y el admin
+    (verificada: la crea el equipo). `datos` trae los campos de `RegistroRequest`."""
+    password_hash = hash_password(datos.password)
+    nombre_registro = datos.nombre if datos.tipo_persona == "natural" else datos.razon_social
+    # Sin cobro a solicitantes no hay bono de créditos de bienvenida.
+    bono = float(config.CREDITO_BONO_REGISTRO) if config.COBRO_A_SOLICITANTES else 0.0
+
+    # Jurídica: bono (si aplica) va al wallet de la org; natural: al personal.
+    saldo_personal_inicial = 0.0 if datos.tipo_persona == "juridica" else bono
+
+    nuevo_usuario = Usuario(
+        id=str(uuid4()),
+        email=datos.email,
+        password_hash=password_hash,
+        rol="solicitante",
+        tipo_persona=datos.tipo_persona,
+        tipo_documento=datos.tipo_documento,
+        numero_documento=datos.numero_documento,
+        nit=datos.nit,
+        razon_social=datos.razon_social,
+        nombre=nombre_registro,
+        apellido=datos.apellido,
+        indicativo_pais_telefono=datos.indicativo_pais_telefono,
+        telefono=datos.telefono,
+        acepto_politica_datos=acepto_politica,
+        fecha_aceptacion_politica=datetime.utcnow() if acepto_politica else None,
+        creditos_balance=saldo_personal_inicial,
+        perfil_completo=True,
+        email_verificado=email_verificado,
+    )
+    db.add(nuevo_usuario)
+    db.flush()
+
+    if datos.tipo_persona == "juridica":
+        org = OrganizacionSolicitante(
+            id=str(uuid4()),
+            razon_social=datos.razon_social,
+            nit=datos.nit,
+            creditos_balance=bono,
+            owner_usuario_id=nuevo_usuario.id,
+            activo=True,
+        )
+        db.add(org)
+        db.flush()
+        nuevo_usuario.organizacion_id = org.id
+        db.add(MiembroOrganizacion(
+            id=str(uuid4()),
+            organizacion_id=org.id,
+            usuario_id=nuevo_usuario.id,
+            rol_org=RolOrganizacion.owner.value,
+            activo=True,
+        ))
+        if bono > 0:
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=nuevo_usuario.id,
+                organizacion_id=org.id,
+                tipo=TipoMovimientoCredito.bono_datos.value,
+                monto=bono,
+                descripcion="Bono de registro (organización)",
+            ))
+    else:
+        if bono > 0:
+            db.add(MovimientoCredito(
+                id=str(uuid4()),
+                usuario_id=nuevo_usuario.id,
+                tipo=TipoMovimientoCredito.bono_datos.value,
+                monto=bono,
+                descripcion="Bono de registro",
+            ))
+
+    if getattr(datos, "codigo_referido", None):
+        aplicar_referido_si_aplica(db, nuevo_usuario, datos.codigo_referido)
+
+    db.commit()
+    db.refresh(nuevo_usuario)
+    return nuevo_usuario
+
+
 def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteResponse:
     """
     Registra un nuevo solicitante. Persona jurídica crea OrganizaciónSolicitante
@@ -105,6 +186,14 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
     No emite JWT: el usuario debe verificar el email con OTP
     (`POST /auth/verificar-email`) antes de iniciar sesión.
     """
+    from services import modulos
+
+    if not modulos.activo(db, "registro"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"El registro está cerrado por ahora. Escríbenos a {config.CONTACT_EMAIL} y te creamos la cuenta.",
+        )
+
     if registro.rol != "solicitante":
         detalle = "Rol inválido. El auto-registro público solo permite el rol 'solicitante'"
         if registro.rol == "importador":
@@ -127,80 +216,11 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
             detail="No se pudo completar el registro con los datos proporcionados",
         )
 
-    password_hash = hash_password(registro.password)
-    nombre_registro = registro.nombre if registro.tipo_persona == "natural" else registro.razon_social
-    # Sin cobro a solicitantes no hay bono de créditos de bienvenida.
-    bono = float(config.CREDITO_BONO_REGISTRO) if config.COBRO_A_SOLICITANTES else 0.0
-
-    # Jurídica: bono (si aplica) va al wallet de la org; natural: al personal.
-    saldo_personal_inicial = 0.0 if registro.tipo_persona == "juridica" else bono
-
-    nuevo_usuario = Usuario(
-        id=str(uuid4()),
-        email=registro.email,
-        password_hash=password_hash,
-        rol=registro.rol,
-        tipo_persona=registro.tipo_persona,
-        tipo_documento=registro.tipo_documento,
-        numero_documento=registro.numero_documento,
-        nit=registro.nit,
-        razon_social=registro.razon_social,
-        nombre=nombre_registro,
-        apellido=registro.apellido,
-        indicativo_pais_telefono=registro.indicativo_pais_telefono,
-        telefono=registro.telefono,
-        acepto_politica_datos=registro.acepto_politica_datos,
-        fecha_aceptacion_politica=datetime.utcnow(),
-        creditos_balance=saldo_personal_inicial,
-        perfil_completo=True,
-        # LOAD_TEST_AUTO_VERIFY: campañas de carga en development/test (nunca prod).
-        email_verificado=bool(config.LOAD_TEST_AUTO_VERIFY),
+    # LOAD_TEST_AUTO_VERIFY: campañas de carga en development/test (nunca prod).
+    nuevo_usuario = crear_cuenta_solicitante(
+        db, registro, email_verificado=bool(config.LOAD_TEST_AUTO_VERIFY),
+        acepto_politica=registro.acepto_politica_datos,
     )
-    db.add(nuevo_usuario)
-    db.flush()
-
-    if registro.tipo_persona == "juridica":
-        org = OrganizacionSolicitante(
-            id=str(uuid4()),
-            razon_social=registro.razon_social,
-            nit=registro.nit,
-            creditos_balance=bono,
-            owner_usuario_id=nuevo_usuario.id,
-            activo=True,
-        )
-        db.add(org)
-        db.flush()
-        nuevo_usuario.organizacion_id = org.id
-        db.add(MiembroOrganizacion(
-            id=str(uuid4()),
-            organizacion_id=org.id,
-            usuario_id=nuevo_usuario.id,
-            rol_org=RolOrganizacion.owner.value,
-            activo=True,
-        ))
-        if bono > 0:
-            db.add(MovimientoCredito(
-                id=str(uuid4()),
-                usuario_id=nuevo_usuario.id,
-                organizacion_id=org.id,
-                tipo=TipoMovimientoCredito.bono_registro.value,
-                monto=bono,
-                descripcion="Bono de registro (organización)",
-            ))
-    else:
-        if bono > 0:
-            db.add(MovimientoCredito(
-                id=str(uuid4()),
-                usuario_id=nuevo_usuario.id,
-                tipo=TipoMovimientoCredito.bono_registro.value,
-                monto=bono,
-                descripcion="Bono de registro",
-            ))
-
-    aplicar_referido_si_aplica(db, nuevo_usuario, registro.codigo_referido)
-
-    db.commit()
-    db.refresh(nuevo_usuario)
 
     correo_enviado = True
     if not config.LOAD_TEST_AUTO_VERIFY:

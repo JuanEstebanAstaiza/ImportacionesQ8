@@ -67,6 +67,8 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_API_KEY = os.getenv("SMTP_API_KEY") or os.getenv("SMTP_PASSWORD")
 SMTP_PASSWORD = SMTP_API_KEY
+# Legado: el remitente ahora depende del buzón (EMAIL_FROM_*, abajo). Si está,
+# sirve de valor para EMAIL_FROM_NOREPLY.
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@zarpi.co")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 # Cómo sale el correo: "resend" (API HTTPS de Resend, puerto 443), "smtp", o
@@ -76,9 +78,25 @@ EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "").strip().lower()
 RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
-# A dónde llegan las respuestas: el remitente (no-reply@…) puede ser solo un
-# alias sin buzón, así que quien conteste le escribe a un correo que se lee.
+# A dónde llegan las respuestas a los correos de notificaciones@ (por defecto,
+# al buzón de contacto, que lo lee una persona).
 EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", CONTACT_EMAIL).strip()
+# Remitentes por buzón (del dominio verificado en el proveedor; ver
+# utils/email.py::remitente_de). Salvo notificaciones, las respuestas vuelven
+# al mismo buzón que envía.
+# - No-reply: solo los códigos de acceso (OTP de registro y de inicio de sesión,
+#   recuperación de contraseña). Es un alias sin buzón: las respuestas van a EMAIL_REPLY_TO.
+EMAIL_FROM_NOREPLY = (os.getenv("EMAIL_FROM_NOREPLY") or os.getenv("SMTP_FROM") or "Zarpi <no-reply@zarpi.co>").strip()
+# - Notificaciones: eventos del usuario (códigos, soporte resuelto, aprobaciones
+#   del reto…), estado de la plataforma y cambios de términos. Es el de por defecto.
+#   (Los códigos de acceso no: salen de no-reply.)
+EMAIL_FROM_NOTIFICACIONES = os.getenv("EMAIL_FROM_NOTIFICACIONES", "Zarpi <notificaciones@zarpi.co>").strip()
+# - Contacto: lo que tiene que ver con el formulario de contacto.
+EMAIL_FROM_CONTACTO = os.getenv("EMAIL_FROM_CONTACTO", "Zarpi <contacto@zarpi.co>").strip()
+# - Pagos: comprobantes, retiros del reto, aprobaciones y transferencias.
+EMAIL_FROM_PAGOS = os.getenv("EMAIL_FROM_PAGOS", "Zarpi Pagos <pagos@zarpi.co>").strip()
+# - Admin: el equipo y los correos directos a empresas (verificación, urgentes).
+EMAIL_FROM_ADMIN = os.getenv("EMAIL_FROM_ADMIN", "Zarpi <admin@zarpi.co>").strip()
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://zarpi.co").rstrip("/")
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
 OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))
@@ -147,6 +165,11 @@ NOTIFICACIONES_EMAIL = os.getenv("NOTIFICACIONES_EMAIL", "true").lower() == "tru
 # Módulo educativo (cursos/LMS). Apagarlo deja la API de cursos en 404 y el
 # frontend oculta la sección; no borra ningún dato.
 MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").lower() == "true"
+# Registro público de cotizantes (el admin lo puede cerrar en Módulos).
+REGISTRO_PUBLICO_HABILITADO = os.getenv("REGISTRO_PUBLICO_HABILITADO", "true").lower() == "true"
+# Cada cotización consume 1 token. Apagado en tests: casi todas crean cotizaciones sin saldo.
+COBRO_COTIZACIONES_TOKENS = os.getenv(
+    "COBRO_COTIZACIONES_TOKENS", "false" if APP_ENV == "test" else "true").lower() == "true"
 
 TRANSLATION_ENABLED = os.getenv("TRANSLATION_ENABLED", "false").lower() == "true"
 GOOGLE_TRANSLATE_API_KEY = os.getenv("GOOGLE_TRANSLATE_API_KEY")

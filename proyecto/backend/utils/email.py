@@ -5,6 +5,7 @@ import httpx
 from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import parseaddr
 
 import config
 
@@ -33,16 +34,53 @@ def construir_html_zarpi(titulo: str, contenido_html: str) -> str:
     )
 
 
-def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
+# Buzones desde los que sale la plataforma y para qué se usa cada uno.
+BUZONES = {
+    "notificaciones": "Avisos a usuarios: estado de la plataforma, cambios en los términos, "
+                      "soporte resuelto, aprobaciones y demás eventos de su cuenta.",
+    "contacto": "Lo que tiene que ver con el formulario de contacto.",
+    "pagos": "Pagos: comprobantes, tokens, suscripción a Tendencias y recompensas del reto.",
+    "admin": "El equipo y correos directos a empresas: verificación de cuentas y avisos urgentes.",
+}
+BUZON_POR_DEFECTO = "notificaciones"
+# Solo para los códigos de acceso (OTP y recuperación de contraseña); no se
+# ofrece en Admin › Correos.
+BUZON_CODIGOS = "no-reply"
+
+
+def remitente_de(buzon: str = BUZON_POR_DEFECTO) -> tuple:
+    """(From, Reply-To) de un buzón. Las respuestas a notificaciones@ y a
+    no-reply (alias sin buzón) van a EMAIL_REPLY_TO (contacto@, lo lee una
+    persona); las demás, al mismo buzón."""
+    direcciones = {
+        BUZON_CODIGOS: config.EMAIL_FROM_NOREPLY,
+        "notificaciones": config.EMAIL_FROM_NOTIFICACIONES,
+        "contacto": config.EMAIL_FROM_CONTACTO,
+        "pagos": config.EMAIL_FROM_PAGOS,
+        "admin": config.EMAIL_FROM_ADMIN,
+    }
+    if buzon not in direcciones:
+        buzon = BUZON_POR_DEFECTO
+    de = direcciones[buzon]
+    if buzon in (BUZON_POR_DEFECTO, BUZON_CODIGOS):
+        return de, config.EMAIL_REPLY_TO or parseaddr(de)[1] or None
+    return de, parseaddr(de)[1] or None
+
+
+def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
+                  buzon: str = BUZON_POR_DEFECTO, responder_a: str = None) -> bool:
     """
     Envía un correo real vía SMTP usando las credenciales configuradas en
     variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_API_KEY`,
-    `SMTP_FROM`, `SMTP_USE_TLS`). `SMTP_PASSWORD` se conserva como alias antiguo.
+    `SMTP_USE_TLS`) y el remitente del buzón. `SMTP_PASSWORD` se conserva como alias antiguo.
 
     Si no hay `SMTP_HOST` configurado (ej. entorno de desarrollo/tests sin
     credenciales reales), se registra el correo en el log en vez de fallar, para
     no bloquear el flujo de negocio por falta de configuración de correo. En
     producción, `SMTP_HOST` debe estar siempre configurado.
+
+    `buzon` elige el remitente (ver `BUZONES` y `remitente_de`); `responder_a`
+    cambia el Reply-To (p. ej. el correo de quien llenó el formulario de contacto).
 
     Devuelve `True` si el correo se envió (o se simuló vía log), `False` si el
     envío SMTP real fue intentado pero falló.
@@ -64,15 +102,17 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
         )
         return True
 
+    de, responder = remitente_de(buzon)
+    responder = responder_a or responder
     if usa_api_resend():
-        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html)
+        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html, de=de, responder_a=responder)
 
     mensaje = MIMEMultipart("alternative")
     mensaje["Subject"] = asunto
-    mensaje["From"] = config.SMTP_FROM
+    mensaje["From"] = de
     mensaje["To"] = destinatario
-    if config.EMAIL_REPLY_TO:
-        mensaje["Reply-To"] = config.EMAIL_REPLY_TO
+    if responder:
+        mensaje["Reply-To"] = responder
     mensaje.attach(MIMEText(cuerpo_texto, "plain"))
     if cuerpo_html:
         mensaje.attach(MIMEText(cuerpo_html, "html"))
@@ -83,7 +123,7 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
                 servidor.starttls()
             if config.SMTP_USER and config.SMTP_API_KEY:
                 servidor.login(config.SMTP_USER, config.SMTP_API_KEY)
-            servidor.sendmail(config.SMTP_FROM, [destinatario], mensaje.as_string())
+            servidor.sendmail(parseaddr(de)[1] or de, [destinatario], mensaje.as_string())
         return True
     except Exception as error:
         logger.exception(
@@ -101,7 +141,8 @@ def usa_api_resend() -> bool:
     return "resend" in (config.SMTP_HOST or "").lower() and (config.SMTP_API_KEY or "").startswith("re_")
 
 
-def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
+def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
+                       de: str = None, responder_a: str = None) -> bool:
     """Envío por la API de Resend (HTTPS, puerto 443). Mismo resultado que SMTP,
     pero sin depender de que el servidor deje salir los puertos de correo, y con
     el motivo exacto en el log cuando Resend rechaza el envío (dominio sin
@@ -109,11 +150,11 @@ def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo
     if not config.SMTP_API_KEY:
         logger.error("Resend sin API key (SMTP_API_KEY vacío): no se envió el correo a %s", destinatario)
         return False
-    datos = {"from": config.SMTP_FROM, "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
+    datos = {"from": de or remitente_de()[0], "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
     if cuerpo_html:
         datos["html"] = cuerpo_html
-    if config.EMAIL_REPLY_TO:
-        datos["reply_to"] = config.EMAIL_REPLY_TO
+    if responder_a:
+        datos["reply_to"] = responder_a
     try:
         respuesta = httpx.post(
             config.RESEND_API_URL,
@@ -154,7 +195,7 @@ def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str)
         f"<p>Este código y el enlace vencen en {config.PASSWORD_RESET_EXPIRE_MINUTES} minutos.</p>"
         f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Restablecer contraseña</a></p>',
     )
-    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html, buzon=BUZON_CODIGOS)
 
 
 def enviar_correo_notificacion(
@@ -162,11 +203,12 @@ def enviar_correo_notificacion(
     titulo: str,
     mensaje: str = "",
     enlace_relativo: str = "",
+    buzon: str = BUZON_POR_DEFECTO,
 ) -> bool:
     """Réplica por correo de una notificación in-app.
 
     `enlace_relativo` se resuelve contra `FRONTEND_URL` para que el usuario entre
-    directo a la pantalla correspondiente.
+    directo a la pantalla correspondiente. `buzon`: ver `enviar_correo`.
     """
     enlace = f"{config.FRONTEND_URL}{enlace_relativo}" if enlace_relativo else config.FRONTEND_URL
     cuerpo_texto = (
@@ -180,7 +222,7 @@ def enviar_correo_notificacion(
         f"<p>{escape(mensaje)}</p>"
         f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Entrar a la plataforma</a></p>',
     )
-    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html, buzon=buzon)
 
 
 def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
@@ -211,5 +253,5 @@ def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
         # deja en el log del backend (`docker logs importacionesq8_backend`).
         # Nunca en producción ni en tests.
         logger.warning("OTP de desarrollo para %s (%s): %s", destinatario, proposito, otp)
-    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html, buzon=BUZON_CODIGOS)
 

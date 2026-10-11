@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarDays, Link2, Loader2, Play, RefreshCw, Send, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Link2, Loader2, Lock, Play, RefreshCw, Send, Users } from "lucide-react";
 
 import {
   ETIQUETA_PLATAFORMA,
@@ -11,6 +11,7 @@ import {
   type TarjetaTendencia,
 } from "@/services/tendencias.service";
 
+import { MuroPago } from "./MuroPago";
 import type { PrefillSolicitud } from "./prefill";
 import {
   EtiquetaRegulado,
@@ -35,6 +36,9 @@ type Props = {
   onAbrir: (id: string) => void;
   onPedirPropuestas: (p: PrefillSolicitud) => void;
   onEnviarEnlace: () => void;
+  /** Muro de pago: sin estos, se navega a /registro y /login. */
+  onRegistrarse?: () => void;
+  onIniciarSesion?: () => void;
 };
 
 const CLASE_CTA =
@@ -110,7 +114,23 @@ function Tarjeta({
   );
 }
 
-export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace }: Props) {
+/** Hueco de lo que queda detrás del muro: portada difuminada y candado. */
+function TarjetaBloqueada({ portada, texto }: { portada: string | null; texto: string | null }) {
+  return (
+    <div aria-hidden={texto ? undefined : true} className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-white/10 bg-[#18171C]">
+      {portada ? <ImagenPublica src={portada} alt="" className="absolute inset-0 h-full w-full scale-125 opacity-60 blur-xl" /> : null}
+      <span className="absolute inset-0 bg-gradient-to-br from-[#4F06EB]/35 via-black/50 to-black/80" />
+      <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/20 backdrop-blur-sm">
+          <Lock className="h-5 w-5" />
+        </span>
+        {texto ? <span className="text-sm font-semibold text-white">{texto}</span> : null}
+      </span>
+    </div>
+  );
+}
+
+export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace, onRegistrarse, onIniciarSesion }: Props) {
   const [semana, setSemana] = useState<string | null>(null);
   const [semanaActual, setSemanaActual] = useState<string | null>(null);
   const [categoria, setCategoria] = useState<string | null>(null);
@@ -147,6 +167,10 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
   const mostrarBoton = puedeCotizar(rol);
   // Semana más reciente con productos, para sugerirla si la elegida está vacía.
   const otraSemana = (datos?.semanas ?? []).find((s) => s !== semanaMostrada) ?? null;
+  // Muro de pago: solo vista previa. Con "Tendencias gratis" acceso.completo llega en true.
+  const vistaPrevia = datos?.acceso ? !datos.acceso.completo : false;
+  const ocultos = vistaPrevia ? datos?.acceso.ocultos ?? 0 : 0;
+  const huecos = Math.min(ocultos, 4);
 
   async function pedir(item: TarjetaTendencia) {
     if (pidiendo) return;
@@ -269,8 +293,25 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
                 onPedir={() => { void pedir(item); }}
               />
             ))}
+            {Array.from({ length: huecos }, (_, i) => (
+              <TarjetaBloqueada
+                key={`oculto-${i}`}
+                portada={items[(i + 1) % items.length]?.portada_url ?? null}
+                texto={i === huecos - 1 ? `+${ocultos} ${ocultos === 1 ? "producto más" : "productos más"}` : null}
+              />
+            ))}
           </div>
         )}
+
+        {vistaPrevia && !error && items.length > 0 ? (
+          <MuroPago
+            autenticado={rol !== null}
+            rol={rol}
+            onRegistrarse={onRegistrarse ?? (() => window.location.assign("/registro"))}
+            onIniciarSesion={onIniciarSesion ?? (() => window.location.assign("/login"))}
+            onAccesoConcedido={() => setIntento((n) => n + 1)}
+          />
+        ) : null}
 
         <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

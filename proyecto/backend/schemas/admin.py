@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -29,6 +29,8 @@ class EnvioCorreoMasivoRequest(BaseModel):
     roles: List[str] = Field(default_factory=list, max_length=5)
     usuarios_ids: List[str] = Field(default_factory=list, max_length=500)
     correos: List[EmailStr] = Field(default_factory=list, max_length=500)
+    # Desde qué buzón sale (ver utils/email.BUZONES).
+    buzon: str = Field("admin", pattern="^(notificaciones|contacto|pagos|admin)$")
 
 
 class EnvioCorreoMasivoResponse(BaseModel):
@@ -36,6 +38,14 @@ class EnvioCorreoMasivoResponse(BaseModel):
     enviados: int
     fallidos: int
     fallos: List[str] = Field(default_factory=list)
+    buzon: Optional[str] = None
+    remitente: Optional[str] = None
+
+
+class RemitenteCorreo(BaseModel):
+    buzon: str
+    direccion: str
+    uso: str
 
 class DisputaOrdenResponse(BaseModel):
     id: str
@@ -100,6 +110,42 @@ class CrearAgenteSoporteRequest(BaseModel):
     telefono: Optional[str] = Field(None, max_length=30)
     # Nivel de la mesa. 1 atiende lo corriente; 3, lo que requiere experiencia.
     nivel: int = Field(1, ge=1, le=3)
+
+
+class CrearSolicitanteAdminRequest(BaseModel):
+    """Alta de un cotizante por el equipo: los mismos datos del registro
+    público, sin OTP (queda verificado) y aunque el registro esté cerrado."""
+    email: EmailStr
+    password: str = Field(..., min_length=9, max_length=128)
+    tipo_persona: str = Field(..., pattern="^(natural|juridica)$")
+    # Natural
+    nombre: Optional[str] = Field(None, max_length=120)
+    apellido: Optional[str] = Field(None, max_length=120)
+    tipo_documento: Optional[str] = Field(None, max_length=30)
+    numero_documento: Optional[str] = Field(None, max_length=50)
+    # Jurídica
+    nit: Optional[str] = Field(None, max_length=50)
+    razon_social: Optional[str] = Field(None, max_length=255)
+    # Comunes
+    indicativo_pais_telefono: str = Field("+57", pattern=r"^\+\d{1,4}$")
+    telefono: str = Field(..., min_length=5, max_length=30)
+    # Tokens de cotización con los que arranca (cada cotización consume 1).
+    tokens_iniciales: int = Field(0, ge=0, le=10000)
+
+    @model_validator(mode="after")
+    def campos_por_tipo(self):
+        from utils.password_policy import password_cumple_politica
+
+        if not password_cumple_politica(self.password):
+            raise ValueError("La contraseña debe tener al menos 9 caracteres, una letra y un dígito")
+        if self.tipo_persona == "juridica":
+            requeridos = ("nit", "razon_social")
+        else:
+            requeridos = ("nombre", "apellido", "tipo_documento", "numero_documento")
+        faltan = [c for c in requeridos if not (getattr(self, c) or "").strip()]
+        if faltan:
+            raise ValueError(f"Faltan: {', '.join(faltan)}")
+        return self
 
 
 class CrearDisenadorRequest(BaseModel):

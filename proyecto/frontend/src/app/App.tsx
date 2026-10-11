@@ -18,7 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
-  Sparkles, LibraryBig, Type, Trophy, Palette,
+  Sparkles, LibraryBig, Type, Trophy, Palette, ToggleRight, Flame,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -44,6 +44,13 @@ import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
 import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
 import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
+import { AdminTendencias } from "@/features/tendencias/AdminTendencias";
+import { SeccionTendenciasLanding } from "@/features/tendencias/SeccionTendenciasLanding";
+import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
+import { RevisionPagos } from "@/features/admin/RevisionPagos";
+import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
+import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
+import { fijarRegistro, registroAbierto, correoContacto } from "@/app/registro";
 import { RetoPagina } from "@/features/reto/RetoPagina";
 import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
 import { BloqueLanding } from "@/features/landing/BloqueLanding";
@@ -109,7 +116,6 @@ import { RUTA_RESTABLECER, destinoDe, esPantalla, rutaDe, type ParamRuta, type S
 import type { UrgenciaSoporte } from "@/services/business.service";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
-const SHOW_PAYMENTS_MODULE = false;
 /** Producto de Tendencias que un visitante quiso cotizar antes de registrarse. */
 const CLAVE_PREFILL_PENDIENTE = "zarpi:prefill-pendiente";
 /** Pantalla (y por tanto URL) de cada documento legal. */
@@ -809,10 +815,13 @@ const NAV_ADMIN=[
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
+  {icon:Flame,         label:"Tendencias",      key:"admin-tendencias"},
   {icon:Sparkles,      label:"Aprobación",      key:"tendencias-aprobacion"},
   {icon:Palette,       label:"Diseño",          key:"diseno"},
   {icon:Trophy,        label:"Reto",            key:"admin-reto"},
+  {icon:CreditCard,    label:"Pagos",           key:"admin-pagos"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
+  {icon:ToggleRight,   label:"Módulos",         key:"admin-modulos"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
@@ -1057,6 +1066,8 @@ function backendEstadoToUi(estado: string): Quote["status"] {
       return "accepted";
     case "orden_activa":
       return "active-order";
+    case "rechazada":
+      return "rejected-importer";
     default:
       return "created";
   }
@@ -1078,6 +1089,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     importadorId: cot.importador_id,
     mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
     status: backendEstadoToUi(cot.estado),
+    motivoRechazo: cot.motivo_rechazo ?? null,
     updatedAt: formatShortDate(cot.fecha_actualizacion),
     country: cot.pais_importacion,
     productLine: cot.linea_producto,
@@ -1387,7 +1399,7 @@ interface AppNotification {
   title:string;body:string;date:string;read:boolean;
   cotizacionId?:string;conversationId?:string;approval?:boolean;
   /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
-  destino?:"tendencias-enviar"|"catalogos"|"reto"|"diseno";
+  destino?:"tendencias-enviar"|"catalogos"|"reto"|"diseno"|"pagos"|"admin-pagos";
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1424,6 +1436,8 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
     // "Para diseñar" lleva a la cola de diseño; el resto de Tendencias, a mis envíos.
     destino: notification.tipo === "tendencias" ? (notification.data?.evento === "para_disenar" ? "diseno" : "tendencias-enviar")
       : notification.tipo === "reto" ? "reto"
+      // Comprobantes: el admin revisa los nuevos; el usuario ve el resultado en Pagos.
+      : notification.tipo === "pagos" ? (notification.data?.evento === "comprobante_nuevo" ? "admin-pagos" : "pagos")
       : notification.tipo === "catalogo" ? "catalogos" : undefined,
   };
 }
@@ -2975,6 +2989,12 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </div>
             </div>
           </Card>
+          {quote.status==="rejected-importer"&&quote.motivoRechazo&&(
+            <Card padding="md" className="mb-5 border-rose-300/60 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30">
+              <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">{quote.importer} rechazó esta cotización</p>
+              <p className="mt-1 text-sm text-rose-800/90 dark:text-rose-200 whitespace-pre-line">Motivo: {quote.motivoRechazo}</p>
+            </Card>
+          )}
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
@@ -6406,7 +6426,7 @@ function PantallaPublica({activa,onLanding,onLogin,onRegister,onTendencias,onRet
           <nav className="flex items-center gap-1">{pestana("tendencias","Tendencias",onTendencias)}{pestana("reto","Reto",onReto)}</nav>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
-            <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>Crear cuenta</Button>
+            {registroAbierto()&&<Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>Crear cuenta</Button>}
           </div>
         </div>
       </header>
@@ -6431,41 +6451,6 @@ function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:strin
   );
 }
 
-function PagosScreen({sb}:{sb:SidebarCtrl}) {
-  if (!SHOW_PAYMENTS_MODULE) {
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="pagos"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3 mb-6">Pagos</h1>
-            <Card padding="lg" className="border-dashed max-w-lg"><div className="flex flex-col items-center text-center py-8 gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><CreditCard className="w-6 h-6 text-muted-foreground/50"/></div><div><p className="font-semibold">Módulo en construcción</p><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Próximamente habilitaremos pagos y conciliaciones para órdenes.</p></div><span className="px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">Próximamente</span></div></Card>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  const mp=[{id:"PAG-001",amount:"$4,600 USD",concept:"Orden #ORD-2025-0042",date:"10 Mar 2025",status:"Completado"},{id:"PAG-002",amount:"$3,200 USD",concept:"Orden #ORD-2025-0038",date:"02 Mar 2025",status:"Pendiente"},{id:"PAG-003",amount:"$8,900 USD",concept:"Orden #ORD-2025-0031",date:"22 Feb 2025",status:"Parcial"}];
-  const sc:Record<string,string>={"Completado":"bg-emerald-50 text-emerald-700","Pendiente":"bg-orange-50 text-orange-700","Parcial":"bg-blue-50 text-blue-700"};
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="pagos"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración de pagos pendiente</span></div></div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{[["Total pagado","$16,700 USD","text-emerald-600"],["Pendiente","$3,200 USD","text-orange-600"],["En liberación parcial","$8,900 USD","text-blue-600"]].map(([l,v,c])=><Card key={l as string} padding="md"><p className="text-xs text-muted-foreground">{l as string}</p><p className={clsx("text-2xl font-semibold mt-1",c as string)}>{v as string}</p></Card>)}</div>
-          <Card padding="none"><div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><p className="text-sm font-semibold">Historial de pagos</p><span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">Visual mockup</span></div>
-            <table className="w-full text-sm"><thead><tr className="border-b border-border">{["ID","Concepto","Fecha","Estado","Monto"].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>)}</tr></thead>
-            <tbody>{mp.map((p,i)=><tr key={p.id} className={clsx("border-b border-border/60 hover:bg-muted/30",i%2===0?"bg-white":"bg-slate-50/50")}><td className="px-4 py-3 font-mono text-xs font-medium">{p.id}</td><td className="px-4 py-3">{p.concept}</td><td className="px-4 py-3 text-muted-foreground">{p.date}</td><td className="px-4 py-3"><span className={clsx("px-2 py-0.5 rounded-md text-xs font-medium",sc[p.status])}>{p.status}</span></td><td className="px-4 py-3 font-semibold">{p.amount}</td></tr>)}</tbody>
-            </table>
-          </Card>
-        </main>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEW QUOTE WIZARD
@@ -7381,7 +7366,7 @@ interface OrigenSolicitud {
   catalogoProductoId?:string;
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null,cobroTokens=false,cotizacionesGratis=0,onIrAPagos}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null;cobroTokens?:boolean;cotizacionesGratis?:number;onIrAPagos?:()=>void}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
@@ -7403,7 +7388,10 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   const si=importers.find(i=>i.id===selectedId)??null;
   const tierCotizante = cotizanteTier;
   const tierRequerido = si?.tierMinimoRequerido || "Bronze";
-  const tierBloqueado = Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
+  // Con el cobro por tokens, el token de la cotización también desbloquea la empresa de nivel superior.
+  const tierBloqueado = !cobroTokens && Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
+  const saldoTokens = creditos + cotizacionesGratis;
+  const sinTokens = cobroTokens && saldoTokens < 1;
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
   // El backend exige una descripcion de al menos 10 caracteres. Se comprueba
@@ -7439,6 +7427,10 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     }
     if(tierBloqueado && creditos < 1){
       setStepError("No tienes créditos suficientes para desbloquear esta cotización.");
+      return;
+    }
+    if(sinTokens){
+      setStepError("No tienes tokens de cotización. Cárgalos en Pagos y te los acreditamos al revisar el comprobante.");
       return;
     }
 
@@ -7585,6 +7577,20 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
               </div>
             </div>
 
+            {cobroTokens && (
+              <div className={clsx("mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2.5",
+                sinTokens ? "border-amber-200 bg-amber-50 dark:border-accent/30 dark:bg-accent/10" : "border-border bg-muted/40")}>
+                <p className={clsx("text-xs", sinTokens ? "font-semibold text-amber-900 dark:text-accent" : "text-muted-foreground")}>
+                  {sinTokens
+                    ? "No tienes tokens de cotización. Cada cotización usa 1."
+                    : `Esta cotización usa 1 token. Tienes ${creditos} ${creditos===1?"token":"tokens"}${cotizacionesGratis>0?` y ${cotizacionesGratis} ${cotizacionesGratis===1?"cotización gratis":"cotizaciones gratis"} (se usan primero)`:""}.`}
+                </p>
+                {sinTokens && onIrAPagos && (
+                  <Button variant="secondary" size="sm" icon={<WalletCards className="w-3.5 h-3.5"/>} onClick={onIrAPagos}>Cargar tokens</Button>
+                )}
+              </div>
+            )}
+
             {tierBloqueado && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-accent/30 dark:bg-accent/10">
                 <p className="text-xs font-semibold text-amber-900 dark:text-accent">Esta empresa requiere nivel {tierRequerido} o superior. Tu nivel actual es {tierCotizante}.</p>
@@ -7629,7 +7635,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                       size="md"
                       icon={<Send className="w-4 h-4" />}
                       loading={submitting}
-                      disabled={tierBloqueado}
+                      disabled={tierBloqueado || sinTokens}
                       onClick={() => {
                         void handleSubmit(false);
                       }}
@@ -8587,8 +8593,9 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>}) {
+function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
   const [search,setSearch]=useState("");
   const [detalle,setDetalle]=useState<Quote|null>(null);
   const [asignando,setAsignando]=useState<Quote|null>(null);
@@ -8724,6 +8731,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
                         <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
                         <Button variant="ghost" size="sm" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
                         <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                         <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>
@@ -8732,6 +8740,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
               </tbody>
             </table>
             {filtered.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No hay cotizaciones para este filtro.</div>}
+            <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
           </Card>
           {mensaje&&<div className="p-3 rounded-lg border border-border bg-muted/40 text-sm">{mensaje}</div>}
         </main>
@@ -8956,11 +8965,17 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
 // ─────────────────────────────────────────────────────────────────────────────
+/** La empresa todavía puede rechazar la cotización: no hay orden ni rechazo previo. */
+function puedeRechazarse(q: Quote): boolean {
+  return q.status === "created" || q.status === "directed" || q.status === "open";
+}
+
 function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
   const [claimingId,setClaimingId]=useState<string|null>(null);
   const [discardingId,setDiscardingId]=useState<string|null>(null);
   const [claimError,setClaimError]=useState("");
   const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
 
   async function handleClaim(quoteId: string){
     try{
@@ -9031,7 +9046,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
                 <div className="grid grid-cols-1 gap-2">
                   <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Revisar y aceptar</Button>
                   <div className="grid grid-cols-1 gap-2">
-                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>{void handleDiscard(q);}}>{q.mode==="Abierta"?"Descartar":"Rechazar"}</Button>
+                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>setRechazando(q)}>Rechazar</Button>
                   </div>
                 </div>
               </div>
@@ -9040,6 +9055,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
         </main>
       </div>
       <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)} onAccept={handleAcceptFromDetail} accepting={Boolean(selectedQuote && claimingId===selectedQuote.id)}/>
+      <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={()=>rechazando?handleDiscard(rechazando):undefined}/>
     </div>
   );
 }
@@ -9047,8 +9063,9 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void}) {
+function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat,onRechazada}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onRechazada:()=>Promise<void>}) {
   const myQuotes=quotes.slice(0,20);
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
   // Al crearse la orden el hilo pasa a tipo "orden" y `refId` apunta a ella,
   // pero sigue siendo la misma conversacion con el cliente: sin buscar tambien
   // por `quoteId`, el asesor perdia el acceso al chat justo al cerrar el trato.
@@ -9094,6 +9111,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
                         ) : (
                           <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Crear Respuesta</Button>
                         )}
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                       </div>
                     </td>
                   </tr>
@@ -9102,6 +9120,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
             </table>
             {myQuotes.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No tienes cotizaciones asignadas.</div>}
           </Card>
+          <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
         </main>
       </div>
       <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
@@ -9720,6 +9739,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
               Iniciar sesión
             </Button>
 
+            {registroAbierto()&&(
             <Button 
               variant="primary" 
               size="sm" 
@@ -9728,6 +9748,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
             >
               Registrarse
             </Button>
+            )}
           </div>
         </div>
       </nav>
@@ -9752,7 +9773,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="secondary" size="lg" icon={<LogIn className="w-4 h-4"/>} onClick={onLogin} className="px-8 bg-accent text-accent-foreground hover:bg-accent/85">Iniciar sesión</Button>
-            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={onRegister} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Crear cuenta gratis</Button>
+            {registroAbierto()&&<Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={onRegister} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Crear cuenta gratis</Button>}
           </div>
           <p className="mt-8 text-xs uppercase tracking-[0.18em] font-bold text-accent">
             Descubre. Compara. Elige. Zarpi it.
@@ -9875,6 +9896,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
         </div>
       </section>
 
+      {/* TENDENCIAS: lo último del catálogo (no aparece si no hay productos publicados) */}
+      <SeccionTendenciasLanding onAbrir={onAbrirTendencia} onVerTodas={onTendencias}/>
+
       {/* FEATURED IMPORTERS */}
       <section className="py-20 px-6 bg-muted relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-violet absolute -right-24 bottom-10 pointer-events-none opacity-35 scale-90" />
@@ -9970,6 +9994,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
           <h2 className="text-2xl font-bold mb-3">Del mundo a tus manos</h2>
           <p className="text-primary-foreground/75 mb-7 leading-relaxed">Empieza a descubrir oportunidades y encuentra todo más cerca.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            {registroAbierto()&&(
             <Button 
               variant="secondary" 
               size="lg" 
@@ -9978,6 +10003,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
             >
               Crear cuenta gratis
             </Button>
+            )}
             <Button 
               variant="secondary" 
               size="lg" 
@@ -10462,7 +10488,7 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button variant="secondary" size="lg" onClick={onRegister}>Crear cuenta gratis</Button>
+          {registroAbierto()&&<Button variant="secondary" size="lg" onClick={onRegister}>Crear cuenta gratis</Button>}
           <Button variant="primary" size="lg" onClick={onLogin}>Iniciar sesión</Button>
         </div>
       </div>
@@ -10472,6 +10498,25 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
 // ─────────────────────────────────────────────────────────────────────────────
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
+
+/** Con el registro público cerrado (Admin › Módulos), las cuentas las crea el equipo. */
+function RegistroCerrado({onLogin,onLanding}:{onLogin:()=>void;onLanding:()=>void}) {
+  return (
+    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4">
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center relative z-10">
+        <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
+        <h2 className="text-lg font-semibold mb-2">El registro está cerrado por ahora</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          Estamos creando las cuentas nosotros mismos. Escríbenos a{" "}
+          <a href={`mailto:${correoContacto()}`} className="font-medium text-primary dark:text-accent hover:underline">{correoContacto()}</a>{" "}
+          y te creamos la tuya.
+        </p>
+        <Button variant="primary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
+        <button type="button" onClick={onLanding} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+      </div>
+    </div>
+  );
+}
 
 function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:LegalPage)=>void}) {
   const [userType,setUserType]=useState<RegUserType>("solicitante");
@@ -11244,7 +11289,9 @@ export default function App() {
   const [miembrosEquipo,setMiembrosEquipo]=useState<BackendMiembroEquipo[]>([]);
   // Conversación abierta en pantalla: es la única que necesita canal en vivo.
   const [activeChatId,setActiveChatId]=useState<string|null>(null);
-  const { config: platformConfig, isLoading: platformConfigLoading } = usePlatformConfig();
+  const { config: platformConfig, isLoading: platformConfigLoading, recargar: recargarPlatformConfig } = usePlatformConfig();
+  // Lo leen los botones de «Crear cuenta» de toda la app (ver app/registro.ts).
+  fijarRegistro(platformConfig.registro_abierto, platformConfig.correo_contacto);
   const moduloEducativoHabilitado = platformConfig.modulo_educativo_habilitado;
   const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
   const [chatAttachmentsByConversation,setChatAttachmentsByConversation]=useState<Record<string, BackendChatAttachmentItem[]>>({});
@@ -12296,29 +12343,6 @@ export default function App() {
     goTo("chats");
   }
 
-  async function discardAdvisorQuote(quote: Quote){
-    const companyId = currentUserProfile?.importador_id || "unknown-company";
-    if (quote.mode === "Abierta") {
-      const current = hiddenOpenQuotesByCompany[companyId] || [];
-      const nextByCompany = {
-        ...hiddenOpenQuotesByCompany,
-        [companyId]: Array.from(new Set([...current, quote.id])),
-      };
-      setHiddenOpenQuotesByCompany(nextByCompany);
-      saveHiddenOpenQuotesByCompany(nextByCompany);
-      return;
-    }
-
-    const nextOverrides = {
-      ...quoteStatusOverrides,
-      [quote.id]: "rejected-importer" as Quote["status"],
-    };
-    setQuoteStatusOverrides(nextOverrides);
-    saveQuoteStatusOverrides(nextOverrides);
-
-    await refreshQuoteLists();
-  }
-
   function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
     // Si hay un producto de Tendencias por retomar, el efecto de arriba lleva al
@@ -12592,6 +12616,9 @@ export default function App() {
     "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte", "designer"],
     "help-support": ["solicitante", "importadora", "asesor"],
     "admin-reto": ["admin"],
+    "admin-tendencias": ["admin"],
+    "admin-modulos": ["admin"],
+    "admin-pagos": ["admin"],
     "catalogos": ["solicitante"],
     "imp-catalogos": ["importadora", "asesor"],
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
@@ -12690,6 +12717,7 @@ export default function App() {
   );
 
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onAbrirTendencia={abrirTendencia}/>;
+  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
@@ -12703,12 +12731,12 @@ export default function App() {
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany} onRechazada={refreshQuoteLists}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
     if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
-    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat}/>;
+    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={async()=>{await refreshQuoteLists();}} headerUser={advisorHeaderUser}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>;
 
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
@@ -12730,7 +12758,7 @@ export default function App() {
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} onIrAPagos={()=>goTo("pagos")}/>;
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
     if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
@@ -12739,6 +12767,9 @@ export default function App() {
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
+    if(screen==="admin-tendencias")return <PantallaPortal sb={sb} active="admin-tendencias" titulo="Tendencias"><AdminTendencias/></PantallaPortal>;
+    if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
+    if(screen==="admin-modulos")return <PantallaPortal sb={sb} active="admin-modulos" titulo="Módulos"><ModulosPlataforma onCambio={recargarPlatformConfig}/></PantallaPortal>;
     if(screen==="diseno")return <PantallaPortal sb={sb} active="diseno" titulo="Diseño"><PanelDiseno/></PantallaPortal>;
     if(screen==="tendencias-aprobacion"){
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
@@ -12752,7 +12783,7 @@ export default function App() {
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
-    if(screen==="pagos")return <PagosScreen sb={sb}/>;
+    if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole}/></PantallaPortal>;
     if(screen==="user-profile")return (
       <PantallaPortal sb={sb} active="user-profile" titulo="Mi perfil">
         <PerfilUsuario
@@ -12769,8 +12800,8 @@ export default function App() {
   if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
     return (
       <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")}>
-        {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")}/>}
-        {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/>}
+        {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
+        {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}
       </PantallaPublica>
     );
