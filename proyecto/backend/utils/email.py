@@ -43,12 +43,17 @@ BUZONES = {
     "admin": "El equipo y correos directos a empresas: verificación de cuentas y avisos urgentes.",
 }
 BUZON_POR_DEFECTO = "notificaciones"
+# Solo para los códigos de acceso (OTP y recuperación de contraseña); no se
+# ofrece en Admin › Correos.
+BUZON_CODIGOS = "no-reply"
 
 
 def remitente_de(buzon: str = BUZON_POR_DEFECTO) -> tuple:
-    """(From, Reply-To) de un buzón. Las respuestas a notificaciones@ van a
-    EMAIL_REPLY_TO (contacto@, lo lee una persona); las demás, al mismo buzón."""
+    """(From, Reply-To) de un buzón. Las respuestas a notificaciones@ y a
+    no-reply (alias sin buzón) van a EMAIL_REPLY_TO (contacto@, lo lee una
+    persona); las demás, al mismo buzón."""
     direcciones = {
+        BUZON_CODIGOS: config.EMAIL_FROM_NOREPLY,
         "notificaciones": config.EMAIL_FROM_NOTIFICACIONES,
         "contacto": config.EMAIL_FROM_CONTACTO,
         "pagos": config.EMAIL_FROM_PAGOS,
@@ -57,7 +62,7 @@ def remitente_de(buzon: str = BUZON_POR_DEFECTO) -> tuple:
     if buzon not in direcciones:
         buzon = BUZON_POR_DEFECTO
     de = direcciones[buzon]
-    if buzon == BUZON_POR_DEFECTO:
+    if buzon in (BUZON_POR_DEFECTO, BUZON_CODIGOS):
         return de, config.EMAIL_REPLY_TO or parseaddr(de)[1] or None
     return de, parseaddr(de)[1] or None
 
@@ -190,7 +195,7 @@ def enviar_correo_recuperacion_password(destinatario: str, otp: str, token: str)
         f"<p>Este código y el enlace vencen en {config.PASSWORD_RESET_EXPIRE_MINUTES} minutos.</p>"
         f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Restablecer contraseña</a></p>',
     )
-    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html, buzon=BUZON_CODIGOS)
 
 
 def enviar_correo_notificacion(
@@ -248,5 +253,5 @@ def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:
         # deja en el log del backend (`docker logs importacionesq8_backend`).
         # Nunca en producción ni en tests.
         logger.warning("OTP de desarrollo para %s (%s): %s", destinatario, proposito, otp)
-    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, asunto, cuerpo_texto, cuerpo_html, buzon=BUZON_CODIGOS)
 

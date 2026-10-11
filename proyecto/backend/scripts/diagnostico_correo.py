@@ -2,7 +2,7 @@
 """Diagnóstico del envío de correo (OTP, notificaciones). Correr en el servidor:
 
     docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend \\
-        python scripts/diagnostico_correo.py tu-correo@ejemplo.com [notificaciones|contacto|pagos|admin]
+        python scripts/diagnostico_correo.py tu-correo@ejemplo.com [no-reply|notificaciones|contacto|pagos|admin]
 
 Revisa, en orden y sin imprimir la API key:
 1. La configuración que ve el backend (proveedor, host, puerto, remitente).
@@ -45,7 +45,7 @@ def _conecta(host: str, puerto: int, espera: float = 4.0) -> str:
 def main() -> int:
     destino = sys.argv[1] if len(sys.argv) > 1 else None
     clave = config.SMTP_API_KEY or ""
-    remitentes = {buzon: email.remitente_de(buzon)[0] for buzon in email.BUZONES}
+    remitentes = {buzon: email.remitente_de(buzon)[0] for buzon in (email.BUZON_CODIGOS, *email.BUZONES)}
     dominios_remitentes = sorted({d.rsplit("@", 1)[-1].strip(" >") for d in remitentes.values() if "@" in d})
 
     print("\n1. Configuración que ve el backend")

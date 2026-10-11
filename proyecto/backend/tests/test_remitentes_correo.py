@@ -74,8 +74,23 @@ def test_cada_buzon_con_su_remitente(monkeypatch, buzon, de, responde):
 
 def test_por_defecto_sale_de_notificaciones(monkeypatch):
     email, llamadas = _resend(monkeypatch)
-    assert email.enviar_correo("a@example.com", "Verifica tu cuenta — Zarpi", "Código 123456")
+    assert email.enviar_correo("a@example.com", "Novedades — Zarpi", "Cuerpo")
     assert llamadas[-1]["from"] == "Zarpi <notificaciones@zarpi.co>"
+
+
+def test_los_codigos_salen_de_no_reply(monkeypatch):
+    email, llamadas = _resend(monkeypatch)
+    monkeypatch.setattr(config, "EMAIL_FROM_NOREPLY", "Zarpi <no-reply@zarpi.co>")
+    assert email.enviar_correo_otp("a@example.com", "123456", "login_tardio")
+    assert email.enviar_correo_recuperacion_password("a@example.com", "654321", "token-de-prueba")
+    for enviado in llamadas:
+        assert enviado["from"] == "Zarpi <no-reply@zarpi.co>" and enviado["reply_to"] == "contacto@zarpi.co"
+
+
+def test_no_reply_no_se_ofrece_en_admin_correos():
+    import utils.email as email
+
+    assert email.BUZON_CODIGOS not in email.BUZONES
 
 
 def test_contacto_llega_a_contacto_y_se_responde_al_visitante(client, monkeypatch):
