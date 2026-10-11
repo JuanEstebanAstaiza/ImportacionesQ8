@@ -36,15 +36,16 @@ from utils.query_safety import like_contains_pattern, clamp_str
 logger = logging.getLogger("importacionesq8")
 
 
-def _modulo_educativo_activo() -> None:
-    """Apaga el módulo LMS entero desde `MODULO_EDUCATIVO_HABILITADO`.
+def _modulo_educativo_activo(db: Session = Depends(get_db)) -> None:
+    """Apaga el módulo LMS entero: lo decide el admin en *Módulos* (y, si nunca
+    lo tocó, `MODULO_EDUCATIVO_HABILITADO` del `.env`).
 
     Se responde 404 (no 403) para que la sección sea indistinguible de una que
     no existe cuando el cliente decide no ofrecer formación.
     """
-    import config as app_config
+    from services import modulos
 
-    if not app_config.MODULO_EDUCATIVO_HABILITADO:
+    if not modulos.activo(db, "academico"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="El módulo de cursos no está habilitado en esta instalación",

@@ -20,7 +20,7 @@ from models.importador import Importador
 from models.tendencias_virales import EstadoTendencia, MotivoRechazo, RolRemitente, TendenciaItem
 from models.usuario import Usuario
 from services import enlaces_video, reto
-from services.tendencias import lunes_de, puede_curar, puede_disenar
+from services.tendencias import LIMITE_VISTA_PREVIA, acceso_completo, es_gratis, lunes_de, puede_curar, puede_disenar
 from services.tendencias_calculo import bogota_a_utc, hoy_bogota
 
 PIE_FICHA = "Zarpi conecta, no importa ni vende la mercancía."
@@ -518,6 +518,7 @@ def ficha(db: Session, item: TendenciaItem) -> Dict:
         "autor_plataforma": item.autor_plataforma,
         "por_que_tendencia": item.por_que_tendencia,
         "ojo_antes": item.ojo_antes,
+        "descripcion": item.descripcion,
         "imagenes": imagenes_de(item),
         "pie": f"El video pertenece a su autor y se reproduce desde "
                f"{ETIQUETA_PLATAFORMA.get(item.plataforma, item.plataforma)}. {PIE_FICHA}",
@@ -551,16 +552,23 @@ def para_aprobador(db: Session, item: TendenciaItem) -> Dict:
 
 
 def feed(db: Session, *, semana: Optional[date] = None, categoria: Optional[str] = None,
-         importador_id: Optional[str] = None, limite: int = 60) -> Dict:
+         importador_id: Optional[str] = None, limite: int = 60, recientes: bool = False,
+         usuario: Optional[Usuario] = None) -> Dict:
+    """Productos publicados. Con el muro de pago y sin acceso, solo la vista
+    previa: las primeras portadas y nombres (la ficha completa pide suscripción)."""
     semana = lunes_de(semana) if semana else lunes_de(hoy_bogota())
     consulta = db.query(TendenciaItem).filter(TendenciaItem.estado == EstadoTendencia.publicado.value)
     if importador_id:
         # Los "Recomendados" de una importadora: todos los publicados, no solo la semana.
         consulta = consulta.filter(TendenciaItem.importador_id == importador_id)
-    else:
+    elif not recientes:
         consulta = consulta.filter(TendenciaItem.semana == semana)
     if categoria:
         consulta = consulta.filter(TendenciaItem.categoria == categoria)
+    completo = acceso_completo(db, usuario)
+    total = consulta.count()
+    if not completo:
+        limite = min(limite, LIMITE_VISTA_PREVIA)
     items = consulta.order_by(TendenciaItem.publicado_en.desc()).limit(limite).all()
     empresas = _empresas(db, (i.importador_id for i in items))
     semanales = _cotizaciones_semana(db, [i.id for i in items])
@@ -569,7 +577,143 @@ def feed(db: Session, *, semana: Optional[date] = None, categoria: Optional[str]
         "semanas": semanas_con_publicaciones(db),
         "categorias": categorias_publicadas(db),
         "items": [tarjeta(i, empresas.get(i.importador_id), semanales.get(i.id, 0)) for i in items],
+        # Para el muro de pago: si ve todo y cuántos productos quedan detrás.
+        "acceso": {
+            "completo": completo,
+            "gratis": es_gratis(db),
+            "total": total,
+            "ocultos": 0 if completo else max(total - len(items), 0),
+        },
     }
+
+
+def ficha_con_acceso(db: Session, item: TendenciaItem, usuario: Optional[Usuario]) -> Dict:
+    """La ficha completa (video, fotos, textos) o, con el muro de pago y sin
+    acceso, un 402 con lo justo para la vista previa."""
+    if not acceso_completo(db, usuario):
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail={
+            "codigo": "requiere_suscripcion",
+            "mensaje": "Suscríbete a Tendencias para ver el video, las fotos y la ficha completa.",
+            "producto": {"id": item.id, "nombre": item.nombre, "categoria": item.categoria,
+                         "portada_url": item.portada_url},
+        })
+    return ficha(db, item)
+
+
+# ── Catálogo del equipo ──────────────────────────────────────────────────────
+
+def _imagen_propia(db: Session, ruta: Optional[str], usuario: Usuario) -> Optional[str]:
+    ruta = (ruta or "").strip()
+    if not ruta:
+        return None
+    m = PATRON_ARCHIVO.match(ruta)
+    if not m:
+        raise _error(status.HTTP_400_BAD_REQUEST, "Las imágenes deben subirse a la plataforma")
+    archivo = db.query(Archivo).filter(Archivo.id == m.group(1), Archivo.deleted_at.is_(None)).first()
+    if archivo is None or archivo.tipo_recurso != "imagen":
+        raise _error(status.HTTP_400_BAD_REQUEST, "Debe ser una imagen subida a la plataforma")
+    if archivo.owner_user_id != usuario.id:
+        raise _error(status.HTTP_403_FORBIDDEN, "Solo puedes usar imágenes que subiste tú")
+    return ruta
+
+
+def crear_del_equipo(db: Session, usuario: Usuario, datos: Dict) -> TendenciaItem:
+    """Un producto que sube el equipo desde el admin: sin aprobación (ya es del
+    equipo). Con portada se publica; sin ella pasa a diseño."""
+    try:
+        enlace = enlaces_video.normalizar(datos["url"])
+    except enlaces_video.EnlaceInvalido as exc:
+        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+    existente = db.query(TendenciaItem).filter(TendenciaItem.url_normalizada == enlace.normalizada).first()
+    if existente is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "codigo": "duplicado", "mensaje": f"Ese video ya está en Tendencias ({existente.nombre or 'sin nombre'}).",
+            "id": existente.id, "estado": existente.estado,
+        })
+    try:
+        enlace = enlaces_video.consultar_oembed(enlace)
+    except enlaces_video.VideoNoDisponible:
+        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ese video no existe o ya no está disponible.")
+
+    portada = _imagen_propia(db, datos.get("portada_url"), usuario)
+    imagenes = []
+    for ruta in datos.get("imagenes") or []:
+        ruta = _imagen_propia(db, ruta, usuario)
+        if ruta and ruta not in imagenes:
+            imagenes.append(ruta)
+    if len(imagenes) > MAX_IMAGENES:
+        raise _error(status.HTTP_400_BAD_REQUEST, f"Máximo {MAX_IMAGENES} imágenes")
+
+    ahora = datetime.utcnow()
+    publicar = bool(portada) and datos.get("publicar", True)
+    autor = (datos.get("autor_plataforma") or "").strip()[:200] or enlace.autor
+    item = TendenciaItem(
+        url_origen=enlace.url_publica,
+        url_normalizada=enlace.normalizada,
+        plataforma=enlace.plataforma,
+        id_video_plataforma=enlace.id_video,
+        autor_plataforma=autor,
+        miniatura_plataforma_url=enlace.miniatura_url,
+        embed_html=enlace.embed_html,
+        enviado_por=usuario.id,
+        rol_remitente=RolRemitente.equipo.value,
+        nombre=datos["nombre"].strip()[:120],
+        categoria=datos["categoria"].strip()[:100],
+        regulado=bool(datos.get("regulado")),
+        descripcion=(datos.get("descripcion") or "").strip()[:4000] or None,
+        por_que_tendencia=(datos.get("por_que_tendencia") or "").strip()[:200] or None,
+        ojo_antes=(datos.get("ojo_antes") or "").strip()[:200] or None,
+        portada_url=portada,
+        imagenes=json.dumps(imagenes) if imagenes else None,
+        aprobado_por=usuario.id,
+        revisado_en=ahora,
+        estado=EstadoTendencia.publicado.value if publicar else EstadoTendencia.en_diseno.value,
+    )
+    if publicar:
+        # Lo sube el equipo con sus propias imágenes: ya tiene la identidad de Zarpi.
+        item.publicado_en = ahora
+        item.semana = lunes_de(hoy_bogota())
+        item.disenado_por = usuario.id
+        item.disenado_en = ahora
+    db.add(item)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise _error(status.HTTP_409_CONFLICT, "Ese video ya está en Tendencias.")
+    if not publicar:
+        _avisar_disenadores(db, item)
+    return item
+
+
+def catalogo(db: Session, *, estado: str = "publicado", q: Optional[str] = None,
+             origen: Optional[str] = None, limite: int = 300) -> List[TendenciaItem]:
+    """Lo que administra el equipo: publicados, en diseño, archivados o caídos."""
+    consulta = db.query(TendenciaItem)
+    if estado != "todos":
+        consulta = consulta.filter(TendenciaItem.estado == estado)
+    else:
+        consulta = consulta.filter(TendenciaItem.estado.in_((
+            EstadoTendencia.publicado.value, EstadoTendencia.en_diseno.value,
+            EstadoTendencia.archivado.value, EstadoTendencia.caido.value)))
+    if origen:
+        consulta = consulta.filter(TendenciaItem.rol_remitente == origen)
+    if q and q.strip():
+        consulta = consulta.filter(TendenciaItem.nombre.ilike(f"%{q.strip()}%"))
+    return consulta.order_by(TendenciaItem.fecha_actualizacion.desc()).limit(limite).all()
+
+
+def republicar(item: TendenciaItem) -> TendenciaItem:
+    """Vuelve al feed algo archivado (o caído, si el video volvió)."""
+    if item.estado not in (EstadoTendencia.archivado.value, EstadoTendencia.caido.value):
+        raise _error(status.HTTP_409_CONFLICT, "Solo se vuelve a publicar algo archivado o caído")
+    if not item.portada_url:
+        raise _error(status.HTTP_400_BAD_REQUEST, "Ponle portada antes de publicarlo")
+    item.estado = EstadoTendencia.publicado.value
+    if item.publicado_en is None:
+        item.publicado_en = datetime.utcnow()
+        item.semana = lunes_de(hoy_bogota())
+    return item
 
 
 def semanas_con_publicaciones(db: Session, limite: int = 26) -> List[str]:

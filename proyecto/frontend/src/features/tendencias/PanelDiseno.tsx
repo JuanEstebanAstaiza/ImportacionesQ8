@@ -79,7 +79,7 @@ function cambiosDiseno(item: ItemDiseno, b: Borrador): CambiosDiseno | null {
   return Object.keys(cambios).length > 0 ? cambios : null;
 }
 
-function soloImagenes(lista: FileList | null | undefined): File[] {
+export function soloImagenes(lista: FileList | null | undefined): File[] {
   return Array.from(lista ?? []).filter((f) => TIPOS_IMAGEN.includes(f.type));
 }
 
@@ -235,7 +235,7 @@ function GuiaMarca() {
 }
 
 /** Contenedor que acepta imágenes arrastradas o pegadas mientras tiene el foco. */
-function ZonaSoltar({
+export function ZonaSoltar({
   etiqueta,
   disabled,
   onArchivos,
@@ -283,7 +283,7 @@ function ZonaSoltar({
   );
 }
 
-const CLASE_ICONO_TILE =
+export const CLASE_ICONO_TILE =
   "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40";
 
 // ── Área de trabajo ──────────────────────────────────────────────────────────

@@ -46,6 +46,7 @@ from schemas.documental import (
 )
 from services import acceso_chat
 from services.documental_service import (
+    carpeta_por_origen,
     clonar_archivo_para_chat,
     create_document_file,
     ensure_file_not_linked_to_active_course,
@@ -379,7 +380,7 @@ async def crear_archivo(
         db,
         owner_user_id=user_id,
         nombre=payload.nombre,
-        carpeta_id=payload.carpeta_id,
+        carpeta_id=payload.carpeta_id or carpeta_por_origen(db, owner_user_id=user_id, origen=payload.origen),
         extension=payload.extension,
         mime_type=payload.mime_type,
         size_bytes=payload.size_bytes,
@@ -454,7 +455,7 @@ async def subir_archivo(
         db,
         owner_user_id=user_id,
         nombre=original_name,
-        carpeta_id=carpeta_id,
+        carpeta_id=carpeta_id or carpeta_por_origen(db, owner_user_id=user_id, origen=origen),
         extension=extension,
         mime_type=archivo.content_type or None,
         size_bytes=size_bytes,
@@ -1070,6 +1071,12 @@ async def descargar_archivo(
         or _es_portada_publica_de_tendencia(db, archivo_id)
         or (file_row.tipo_recurso == "imagen" and _es_foto_de_perfil(db, archivo_id))
     )
+
+    if not allowed and current_user is not None:
+        # Comprobantes de pago: los ve quien pagó (o recibió el pago del reto) y el admin.
+        from services.comprobantes import puede_ver_archivo
+
+        allowed = puede_ver_archivo(db, archivo_id, _current_user_id(current_user), current_user.get("rol", ""))
 
     if not allowed and current_user is not None:
         user_id = _current_user_id(current_user)

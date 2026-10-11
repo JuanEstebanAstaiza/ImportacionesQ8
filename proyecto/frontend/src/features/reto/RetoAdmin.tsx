@@ -6,6 +6,7 @@ import {
   Banknote,
   Check,
   Copy,
+  FileText,
   Info,
   Loader2,
   Lock,
@@ -18,6 +19,12 @@ import {
   X,
 } from "lucide-react";
 
+import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
+import {
+  ACEPTA_COMPROBANTE,
+  ORIGEN_COMPROBANTE,
+  comprobantesService,
+} from "@/services/comprobantes.service";
 import {
   pesos,
   retoService,
@@ -257,6 +264,8 @@ function EditarRonda({ ronda, onGuardada, onCancelar }: { ronda: RondaAdmin; onG
 
 function MarcarPagado({ participante, monto, onPagado }: { participante: ParticipanteAdmin; monto: number; onPagado: () => void }) {
   const [referencia, setReferencia] = useState("");
+  // Comprobante de la transferencia, opcional: ya subido, solo falta enlazarlo.
+  const [archivo, setArchivo] = useState<{ id: string; nombre: string } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -269,7 +278,7 @@ function MarcarPagado({ participante, monto, onPagado }: { participante: Partici
     setGuardando(true);
     setError(null);
     try {
-      await retoService.marcarPagado(participante.id, referencia.trim());
+      await retoService.marcarPagado(participante.id, referencia.trim(), archivo?.id);
       toast.success("Pago registrado. Le avisamos al participante.");
       onPagado();
     } catch (err) {
@@ -297,11 +306,73 @@ function MarcarPagado({ participante, monto, onPagado }: { participante: Partici
           {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />} Marcar pagado
         </button>
       </div>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <span className="text-sm font-medium">Comprobante de la transferencia</span>
+        <span className="text-xs text-muted-foreground">(opcional)</span>
+        {archivo ? (
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2 py-1 text-xs">
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{archivo.nombre}</span>
+            <button
+              type="button"
+              onClick={() => setArchivo(null)}
+              disabled={guardando}
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+              title="Quitar comprobante"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ) : (
+          <DocumentUploadButton
+            label="Subir comprobante"
+            origen={ORIGEN_COMPROBANTE}
+            accept={ACEPTA_COMPROBANTE}
+            disabled={guardando}
+            onUploaded={(item) => setArchivo({ id: item.id, nombre: item.nombre })}
+            onError={(m) => toast.error(m)}
+          />
+        )}
+      </div>
       <p className="text-xs text-muted-foreground">
         Al marcarlo, el participante recibe una notificación y un correo con el monto, su banco y esta referencia.
+        Si adjuntas el comprobante, lo puede ver y descargar en Pagos.
       </p>
       {error ? <p role="alert" className="text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
     </form>
+  );
+}
+
+/** Para pagos ya registrados sin comprobante (o con uno más): se pueden subir varios. */
+function SubirComprobanteReto({ participacionId }: { participacionId: string }) {
+  const [enviados, setEnviados] = useState<string[]>([]);
+
+  const enlazar = async (archivoId: string, nombre: string) => {
+    try {
+      await comprobantesService.subirReto(participacionId, archivoId);
+      setEnviados((lista) => [...lista, nombre]);
+      toast.success("Comprobante enviado. El participante lo ve en Pagos.");
+    } catch (err) {
+      toast.error(mensajeError(err, "No se pudo adjuntar el comprobante."));
+    }
+  };
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <DocumentUploadButton
+        label="Subir comprobante"
+        origen={ORIGEN_COMPROBANTE}
+        accept={ACEPTA_COMPROBANTE}
+        variant="ghost"
+        onUploaded={(item) => enlazar(item.id, item.nombre)}
+        onError={(m) => toast.error(m)}
+      />
+      {enviados.map((nombre, i) => (
+        <span key={`${nombre}-${i}`} className="inline-flex max-w-full items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300">
+          <Check className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{nombre}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -373,6 +444,7 @@ function TarjetaParticipante({ p, ronda, onCambio }: { p: ParticipanteAdmin; ron
           {p.referencia_pago ? <> · Ref. <span className="font-mono">{p.referencia_pago}</span></> : null}
         </p>
       ) : null}
+      {p.estado_recompensa === "pagada" && p.eleccion === "efectivo" ? <SubirComprobanteReto participacionId={p.id} /> : null}
     </li>
   );
 }

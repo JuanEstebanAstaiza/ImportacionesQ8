@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock,
   ExternalLink,
+  FileText,
   Flame,
   Images,
   Loader2,
@@ -22,9 +23,16 @@ import {
   X,
 } from "lucide-react";
 
-import { resolveApiUrl } from "@/services/api-client";
-import { ETIQUETA_PLATAFORMA, tendenciasService, type EmpresaTendencia, type FichaTendencia } from "@/services/tendencias.service";
+import { ApiError, resolveApiUrl } from "@/services/api-client";
+import {
+  ETIQUETA_PLATAFORMA,
+  tendenciasService,
+  type EmpresaTendencia,
+  type FichaBloqueada,
+  type FichaTendencia,
+} from "@/services/tendencias.service";
 
+import { MuroPago } from "./MuroPago";
 import type { PrefillSolicitud } from "./prefill";
 import {
   ImagenPublica,
@@ -46,7 +54,18 @@ type Props = {
   rol: RolTendencias;
   onVolver: () => void;
   onPedirPropuestas: (p: PrefillSolicitud) => void;
+  /** Muro de pago: sin estos, se navega a /registro y /login. */
+  onRegistrarse?: () => void;
+  onIniciarSesion?: () => void;
 };
+
+/** El 402 del muro de pago trae la vista previa del producto en `detail`. */
+function fichaBloqueada(e: unknown): FichaBloqueada | null {
+  if (!(e instanceof ApiError) || e.status !== 402) return null;
+  const d = e.detail as Partial<FichaBloqueada> | null;
+  if (d && typeof d === "object" && d.producto && typeof d.producto === "object") return d as FichaBloqueada;
+  return { codigo: "requiere_suscripcion", mensaje: e.message, producto: { id: "", nombre: null, categoria: null, portada_url: null } };
+}
 
 const CLASE_CTA =
   "inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
@@ -287,8 +306,9 @@ function GaleriaImagenes({ imagenes, nombre }: { imagenes: string[]; nombre: str
   );
 }
 
-export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas }: Props) {
+export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas, onRegistrarse, onIniciarSesion }: Props) {
   const [ficha, setFicha] = useState<FichaTendencia | null>(null);
+  const [bloqueada, setBloqueada] = useState<FichaBloqueada | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [noExiste, setNoExiste] = useState(false);
@@ -299,11 +319,17 @@ export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas }: Props) 
     setCargando(true);
     setError(null);
     setNoExiste(false);
+    setBloqueada(null);
     tendenciasService
       .ficha(id)
       .then((f) => { if (vigente) setFicha(f); })
       .catch((e: unknown) => {
         if (!vigente) return;
+        const muro = fichaBloqueada(e);
+        if (muro) {
+          setBloqueada(muro);
+          return;
+        }
         const mensaje = e instanceof Error ? e.message : "";
         if (/no encontrado/i.test(mensaje)) setNoExiste(true);
         else setError(mensaje || "No pudimos cargar este producto.");
@@ -327,6 +353,31 @@ export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas }: Props) 
         <p className="text-base font-semibold">Este producto ya no está disponible</p>
         <p className="text-sm text-muted-foreground">Puede que el video se haya eliminado o que lo hayamos retirado de Tendencias.</p>
         <BotonVolver onVolver={onVolver} />
+      </div>
+    );
+  }
+
+  if (bloqueada) {
+    const { producto } = bloqueada;
+    return (
+      <div className="mx-auto max-w-4xl space-y-5 pb-4">
+        <BotonVolver onVolver={onVolver} />
+        {producto.nombre ? (
+          <div>
+            {producto.categoria ? (
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary dark:text-violet-300">{producto.categoria}</p>
+            ) : null}
+            <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">{producto.nombre}</h1>
+          </div>
+        ) : null}
+        <MuroPago
+          autenticado={rol !== null}
+          rol={rol}
+          producto={producto}
+          onRegistrarse={onRegistrarse ?? (() => window.location.assign("/registro"))}
+          onIniciarSesion={onIniciarSesion ?? (() => window.location.assign("/login"))}
+          onAccesoConcedido={() => setIntento((n) => n + 1)}
+        />
       </div>
     );
   }
@@ -382,6 +433,13 @@ export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas }: Props) 
             )}
             <Dato icono={Video} texto={ficha.autor_plataforma ? `${plataforma} · ${ficha.autor_plataforma}` : plataforma} />
           </div>
+
+          {ficha.descripcion?.trim() ? (
+            <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+              <p className="flex items-center gap-1.5 text-sm font-semibold"><FileText className="h-4 w-4 text-primary dark:text-violet-300" /> Descripción</p>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed">{ficha.descripcion}</p>
+            </div>
+          ) : null}
 
           {(ficha.imagenes ?? []).length > 0 ? <GaleriaImagenes imagenes={ficha.imagenes} nombre={ficha.nombre} /> : null}
 

@@ -1,7 +1,8 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
+from utils.dependencies import get_db
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,7 @@ from routers.catalogos import router as catalogos_router
 from routers.tipografia import router as tipografia_router
 from routers.tendencias_virales import router as tendencias_virales_router
 from routers.reto import router as reto_router
+from routers.comprobantes import router as comprobantes_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -273,6 +275,7 @@ app.include_router(catalogos_router)
 app.include_router(tipografia_router)
 app.include_router(tendencias_virales_router)
 app.include_router(reto_router)
+app.include_router(comprobantes_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
@@ -284,7 +287,7 @@ async def root():
     }
 
 @app.get("/configuracion-publica", tags=["Salud"])
-async def configuracion_publica():
+def configuracion_publica(db=Depends(get_db)):
     """Flags que el frontend necesita conocer antes de dibujar la navegación.
 
     Fuente única de verdad: el frontend no duplica estas banderas en su propio
@@ -293,8 +296,19 @@ async def configuracion_publica():
     import config as app_config
     from utils.security_middleware import MAX_UPLOAD_BYTES
 
+    from services import modulos
+
+    # Los módulos los enciende el admin en tiempo real (configuracion_plataforma).
+    modulo_educativo = modulos.activo(db, "academico")
+    registro_abierto = modulos.activo(db, "registro")
+    cobro_cotizaciones = modulos.activo(db, "cobro_cotizaciones")
+
     return {
-        "modulo_educativo_habilitado": app_config.MODULO_EDUCATIVO_HABILITADO,
+        "modulo_educativo_habilitado": modulo_educativo,
+        # Registro público abierto; si no, las cuentas las crea el equipo.
+        "registro_abierto": registro_abierto,
+        "cobro_cotizaciones": cobro_cotizaciones,
+        "correo_contacto": app_config.CONTACT_EMAIL,
         "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
         "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
         # Para que el frontend avise ANTES de subir en vez de dejar que el usuario

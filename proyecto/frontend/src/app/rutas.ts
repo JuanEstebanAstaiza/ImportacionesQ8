@@ -63,6 +63,9 @@ export type Screen =
   | "diseno"
   | "reto"
   | "admin-reto"
+  | "admin-tendencias"
+  | "admin-modulos"
+  | "admin-pagos"
   | "admin-tipografia";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
@@ -107,6 +110,11 @@ export const RUTAS: Ruta[] = [
   { screen: "reto", path: "/reto" },
   // Espacio del designer: portadas e imágenes de lo aprobado en Tendencias.
   { screen: "diseno", path: "/diseno" },
+  // Admin: catálogo del equipo, muro de pago y precio de Tendencias; y los módulos.
+  { screen: "admin-tendencias", path: "/admin/tendencias" },
+  { screen: "admin-modulos", path: "/admin/modulos" },
+  // Revisión de comprobantes de pago (tokens y suscripción) mientras llega la pasarela.
+  { screen: "admin-pagos", path: "/admin/pagos" },
   { screen: "catalogos", path: "/catalogos" },
 
   // Comunes

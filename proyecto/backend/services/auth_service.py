@@ -105,6 +105,14 @@ def register_user(registro: RegistroRequest, db: Session) -> RegistroPendienteRe
     No emite JWT: el usuario debe verificar el email con OTP
     (`POST /auth/verificar-email`) antes de iniciar sesión.
     """
+    from services import modulos
+
+    if not modulos.activo(db, "registro"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"El registro está cerrado por ahora. Escríbenos a {config.CONTACT_EMAIL} y te creamos la cuenta.",
+        )
+
     if registro.rol != "solicitante":
         detalle = "Rol inválido. El auto-registro público solo permite el rol 'solicitante'"
         if registro.rol == "importador":

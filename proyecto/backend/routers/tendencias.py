@@ -61,6 +61,9 @@ def mi_acceso(db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_
         origen, hasta = "libre", libre_hasta
     return {
         "tiene_acceso": svc.tiene_acceso(db, usuario),
+        # Lo que ve de verdad: con Tendencias gratis, todo aunque no tenga acceso propio.
+        "acceso_completo": svc.acceso_completo(db, usuario),
+        "gratis": svc.es_gratis(db),
         "es_curador": svc.puede_curar(usuario),
         "origen": origen,
         "vigente_hasta": hasta.isoformat() + "Z" if hasta else None,
@@ -144,6 +147,8 @@ class ParametrosSuscripcion(BaseModel):
     # Sin precio (o 0) la suscripción no se vende; solo se regala.
     precio_cop: Optional[int] = Field(None, ge=0, le=100_000_000)
     dias_suscripcion: int = Field(30, ge=1, le=3650)
+    # Interruptor «Tendencias gratis»: abierto para todos, sin muro de pago.
+    gratis: Optional[bool] = None
 
 
 def _parametros(db: Session) -> dict:
@@ -152,6 +157,8 @@ def _parametros(db: Session) -> dict:
         "precio_cop": svc.precio_suscripcion(db),
         "dias_suscripcion": svc.dias_suscripcion(db),
         "acceso_libre_hasta": libre.isoformat() + "Z" if libre else None,
+        "gratis": svc.es_gratis(db),
+        "limite_vista_previa": svc.LIMITE_VISTA_PREVIA,
     }
 
 
@@ -166,6 +173,10 @@ def guardar_suscripcion(datos: ParametrosSuscripcion, db: Session = Depends(get_
     uid = current_user["user_id"]
     configuracion.guardar(db, svc.CLAVE_PRECIO_COP, str(datos.precio_cop) if datos.precio_cop else None, uid)
     configuracion.guardar(db, svc.CLAVE_DIAS_SUSCRIPCION, str(datos.dias_suscripcion), uid)
+    if datos.gratis is not None:
+        configuracion.guardar(db, svc.CLAVE_GRATIS, "1" if datos.gratis else "0", uid)
+        db.add(CambioTendencias(usuario_id=uid, accion="gratis_encendido" if datos.gratis else "gratis_apagado",
+                                datos={}))
     db.commit()
     return _parametros(db)
 

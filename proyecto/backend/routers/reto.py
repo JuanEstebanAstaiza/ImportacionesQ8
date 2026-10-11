@@ -46,6 +46,9 @@ class Reclamo(BaseModel):
 
 class Pagado(BaseModel):
     referencia: str = Field(..., min_length=3, max_length=120)
+    # Comprobante de la transferencia (archivo ya subido por el admin): el
+    # participante lo ve y lo descarga en Pagos.
+    archivo_id: Optional[str] = Field(None, min_length=36, max_length=36)
 
 
 class ListaEspera(BaseModel):
@@ -187,4 +190,10 @@ def participantes(ronda_id: str, db: Session = Depends(get_db), current_user: di
 def marcar_pagado(participacion_id: str, datos: Pagado, db: Session = Depends(get_db),
                   current_user: dict = Depends(require_rol("admin"))):
     svc.marcar_pagado(db, participacion_id, datos.referencia)
+    if datos.archivo_id:
+        from services import comprobantes
+
+        admin = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+        comprobantes.subir_reto(db, admin, participacion_id, datos.archivo_id)
+        db.commit()
     return {"ok": True}

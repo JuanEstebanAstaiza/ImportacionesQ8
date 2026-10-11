@@ -481,6 +481,15 @@ async def crear_cotizacion(
     tier_requerido = "Bronze"
     requiere_desbloqueo = False
 
+    # Cada cotización consume 1 token (primero las gratis del reto). El token
+    # también desbloquea la empresa de nivel superior: no se cobra dos veces.
+    from services import modulos as modulos_svc
+    from services import tokens_cotizacion
+
+    cobra_tokens = solicitante.rol == "solicitante" and modulos_svc.activo(db, "cobro_cotizaciones")
+    if cobra_tokens and tokens_cotizacion.saldo(solicitante) < 1:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=tokens_cotizacion.MENSAJE_SIN_TOKENS)
+
     # Modelo actual: no se cobra al solicitante (natural/jurídica).
     # Si COBRO_A_SOLICITANTES=true, se restaura el débito de créditos al crear.
     if config.COBRO_A_SOLICITANTES:
@@ -586,7 +595,7 @@ async def crear_cotizacion(
 
         tier_requerido = importador.tier_minimo_requerido or "Bronze"
         requiere_desbloqueo = tier_insuficiente(solicitante.tier, tier_requerido)
-        if requiere_desbloqueo and int(solicitante.puntos_cotizacion or 0) < 1:
+        if requiere_desbloqueo and int(solicitante.puntos_cotizacion or 0) < 1 and not cobra_tokens:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_SIN_PUNTOS)
 
     # Crear nueva cotización - usar el importador_id como string directamente
@@ -657,7 +666,15 @@ async def crear_cotizacion(
             descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
         )
 
-    if requiere_desbloqueo:
+    if cobra_tokens:
+        db.flush()
+        try:
+            tokens_cotizacion.cobrar(db, usuario_id=user_id_str, cotizacion_id=nuevo_cotizacion.id)
+        except tokens_cotizacion.SinTokens:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                                detail=tokens_cotizacion.MENSAJE_SIN_TOKENS)
+    elif requiere_desbloqueo:
         from services.tier_service import SinPuntosParaDesbloquear, consumir_punto_desbloqueo
 
         # Se gasta en la misma transacción que crea la cotización: o quedan las

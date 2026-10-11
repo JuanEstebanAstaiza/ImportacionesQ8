@@ -29,6 +29,11 @@ CONCEPTO_PAGO_SUSCRIPCION = "suscripcion_tendencias"
 # sesión ve Tendencias sin suscripción ni cortesía. Vacío o vencido: solo
 # suscriptores e invitados. Lo fija el admin desde el panel.
 CLAVE_ACCESO_LIBRE_HASTA = "tendencias.acceso_libre_hasta"
+# Interruptor del admin: con Tendencias gratis lo ve todo el mundo, incluso sin
+# sesión. Encendido por defecto mientras se termina la pasarela de pago.
+CLAVE_GRATIS = "tendencias.gratis"
+# Con el muro de pago, cuántos productos ve quien no tiene acceso (solo portada y nombre).
+LIMITE_VISTA_PREVIA = 8
 
 
 def _entero(db: Session, clave: str, defecto: int) -> int:
@@ -103,6 +108,20 @@ def acceso_libre_hasta(db: Session, ahora: Optional[datetime] = None) -> Optiona
     except ValueError:
         return None
     return hasta if hasta > (ahora or datetime.utcnow()) else None
+
+
+def es_gratis(db: Session) -> bool:
+    return configuracion.obtener(db, CLAVE_GRATIS, "1") != "0"
+
+
+def acceso_completo(db: Session, usuario: Optional[Usuario]) -> bool:
+    """Ve videos, fotos y fichas: con Tendencias gratis, cualquiera; si no, el
+    equipo (aprobación y diseño), suscriptores, cortesías y acceso libre."""
+    if es_gratis(db):
+        return True
+    if usuario is not None and puede_disenar(usuario):
+        return True
+    return tiene_acceso(db, usuario)
 
 
 def tiene_acceso(db: Session, usuario: Optional[Usuario], ahora: Optional[datetime] = None) -> bool:

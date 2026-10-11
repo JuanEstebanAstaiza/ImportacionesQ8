@@ -67,6 +67,8 @@ export interface FichaTendencia extends TarjetaTendencia {
   autor_plataforma: string | null;
   por_que_tendencia: string | null;
   ojo_antes: string | null;
+  /** Descripción larga del producto (puede traer saltos de línea). */
+  descripcion: string | null;
   /** Imágenes extra del producto con la identidad de Zarpi (rutas de gestión documental). */
   imagenes: string[];
   /** "El video pertenece a su autor y se reproduce desde …" */
@@ -80,7 +82,88 @@ export interface FeedTendencias {
   semanas: string[];
   categorias: string[];
   items: TarjetaTendencia[];
+  /** Muro de pago: sin acceso completo solo llega la vista previa (pocas portadas). */
+  acceso: AccesoFeed;
 }
+
+export interface AccesoFeed {
+  completo: boolean;
+  /** Interruptor del admin: Tendencias abierto para todos. */
+  gratis: boolean;
+  total: number;
+  /** Productos que quedan detrás del muro de pago. */
+  ocultos: number;
+}
+
+/** Cuerpo del 402 de la ficha cuando el muro de pago está activo. */
+export interface FichaBloqueada {
+  codigo: "requiere_suscripcion";
+  mensaje: string;
+  producto: { id: string; nombre: string | null; categoria: string | null; portada_url: string | null };
+}
+
+export interface MiAccesoTendencias {
+  /** Acceso propio (suscripción, cortesía o acceso libre). */
+  tiene_acceso: boolean;
+  /** Lo que ve de verdad: con Tendencias gratis, todo. */
+  acceso_completo: boolean;
+  gratis: boolean;
+  origen: string | null;
+  vigente_hasta: string | null;
+  precio_cop: number | null;
+  dias_suscripcion: number;
+  /** Solo cuentas de comprador y con precio fijado. */
+  venta_habilitada: boolean;
+  pago_simulado: boolean;
+}
+
+export interface CheckoutSuscripcion {
+  pago_id: string;
+  checkout_url: string;
+  monto_cop: number;
+  dias: number;
+  pago_simulado: boolean;
+}
+
+export interface ParametrosAccesoTendencias {
+  precio_cop: number | null;
+  dias_suscripcion: number;
+  gratis: boolean;
+  acceso_libre_hasta: string | null;
+  limite_vista_previa: number;
+}
+
+export interface AccesoCortesia {
+  id: string;
+  usuario_id: string;
+  email: string | null;
+  nombre: string | null;
+  origen: string;
+  inicio: string;
+  fin: string;
+  nota: string | null;
+  revocado: boolean;
+  vigente: boolean;
+}
+
+/** Producto del catálogo del equipo (admin › Tendencias). */
+export interface ProductoEquipo {
+  url: string;
+  nombre: string;
+  categoria: string;
+  descripcion?: string | null;
+  por_que_tendencia?: string | null;
+  ojo_antes?: string | null;
+  regulado?: boolean;
+  /** Dueño del video; vacío = el que reporta la plataforma. */
+  autor_plataforma?: string | null;
+  portada_url?: string | null;
+  imagenes?: string[];
+  /** Sin portada pasa a diseño aunque se pida publicar. */
+  publicar?: boolean;
+}
+
+export type EstadoCatalogo = "publicado" | "en_diseno" | "archivado" | "caido" | "todos";
 
 export interface ResumenReto {
   id: string;
@@ -166,6 +249,8 @@ export interface CambiosFicha {
   regulado?: boolean;
   por_que_tendencia?: string | null;
   ojo_antes?: string | null;
+  descripcion?: string | null;
+  autor_plataforma?: string | null;
   portada_url?: string | null;
   embed_html?: string | null;
 }
@@ -179,15 +264,26 @@ export interface AprobadorItem {
 
 export const tendenciasService = {
   // Público
-  feed: (filtros: { semana?: string; categoria?: string; importadorId?: string } = {}) => {
+  /** `recientes`: los últimos de todas las semanas (la sección de la landing). */
+  feed: (filtros: { semana?: string; categoria?: string; importadorId?: string; recientes?: boolean; limite?: number } = {}) => {
     const q = new URLSearchParams();
     if (filtros.semana) q.set("semana", filtros.semana);
     if (filtros.categoria) q.set("categoria", filtros.categoria);
     if (filtros.importadorId) q.set("importador_id", filtros.importadorId);
+    if (filtros.recientes) q.set("recientes", "true");
+    if (filtros.limite) q.set("limite", String(filtros.limite));
     const qs = q.toString();
     return apiRequest<FeedTendencias>(`/tendencias/feed${qs ? `?${qs}` : ""}`);
   },
+  /** Con el muro de pago y sin acceso falla con 402 (cuerpo: `FichaBloqueada` en `detail`). */
   ficha: (id: string) => apiRequest<FichaTendencia>(`/tendencias/items/${id}`),
+
+  // Acceso y suscripción (con sesión)
+  miAcceso: () => apiRequest<MiAccesoTendencias>("/tendencias/acceso"),
+  checkout: () => apiRequest<CheckoutSuscripcion>("/tendencias/suscripcion/checkout", { method: "POST" }),
+  /** Solo en local (pago simulado): confirma el pago como lo haría Wompi. */
+  simularPago: (pagoId: string) =>
+    apiRequest<{ vigente_hasta: string }>(`/tendencias/suscripcion/simular-pago/${pagoId}`, { method: "POST" }),
 
   // Cualquier usuario registrado
   /** Un enlace de video no válido responde con error (422) y su motivo en el mensaje. */
@@ -226,6 +322,28 @@ export const tendenciasService = {
     apiRequest<ItemDiseno>(`/tendencias/diseno/items/${id}`, { method: "PATCH", body: cambios }),
   publicarDiseno: (id: string) =>
     apiRequest<ItemDiseno>(`/tendencias/diseno/items/${id}/publicar`, { method: "POST" }),
+
+  // Catálogo del equipo (admin o aprobador)
+  crearProducto: (datos: ProductoEquipo) =>
+    apiRequest<ItemDiseno>("/tendencias/catalogo", { method: "POST", body: datos }),
+  catalogo: (filtros: { estado?: EstadoCatalogo; q?: string; origen?: OrigenTendencia } = {}) => {
+    const q = new URLSearchParams({ estado: filtros.estado ?? "publicado" });
+    if (filtros.q?.trim()) q.set("q", filtros.q.trim());
+    if (filtros.origen) q.set("origen", filtros.origen);
+    return apiRequest<ItemDiseno[]>(`/tendencias/catalogo?${q.toString()}`);
+  },
+  republicar: (id: string) => apiRequest<ItemDiseno>(`/tendencias/items/${id}/republicar`, { method: "POST" }),
+
+  // Admin: muro de pago, precio y cortesías
+  parametrosAcceso: () => apiRequest<ParametrosAccesoTendencias>("/tendencias/admin/suscripcion"),
+  guardarParametrosAcceso: (datos: { precio_cop: number | null; dias_suscripcion: number; gratis?: boolean }) =>
+    apiRequest<ParametrosAccesoTendencias>("/tendencias/admin/suscripcion", { method: "PUT", body: datos }),
+  cortesias: (soloVigentes = true) =>
+    apiRequest<AccesoCortesia[]>(`/tendencias/admin/accesos?solo_vigentes=${soloVigentes}`),
+  otorgarCortesia: (datos: { email: string; dias: number; nota?: string }) =>
+    apiRequest<AccesoCortesia>("/tendencias/admin/accesos", { method: "POST", body: datos }),
+  revocarCortesia: (id: string) =>
+    apiRequest<AccesoCortesia>(`/tendencias/admin/accesos/${id}/revocar`, { method: "POST" }),
 
   // Admin: equipo de diseño
   listarDisenadores: () => apiRequest<DisenadorItem[]>("/admin/disenadores"),

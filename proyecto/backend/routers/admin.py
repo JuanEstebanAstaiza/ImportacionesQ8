@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
@@ -428,6 +429,36 @@ async def cambiar_nivel_agente(
         activo=bool(agente.activo),
         nivel=agente.nivel_soporte,
     )
+
+
+# ==================== Módulos ====================
+
+class CambioModulos(BaseModel):
+    academico: Optional[bool] = None
+    registro: Optional[bool] = None
+    cobro_cotizaciones: Optional[bool] = None
+
+
+@router.get("/modulos")
+async def ver_modulos(db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
+    """Los módulos que se pueden encender o apagar sin redesplegar."""
+    from services import modulos
+
+    return modulos.todos(db)
+
+
+@router.put("/modulos")
+async def cambiar_modulos(
+    datos: CambioModulos,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    from services import modulos
+
+    for nombre, valor in datos.model_dump(exclude_none=True).items():
+        modulos.fijar(db, nombre, valor, current_user["user_id"])
+    db.commit()
+    return modulos.todos(db)
 
 
 # ==================== Equipo de diseño ====================

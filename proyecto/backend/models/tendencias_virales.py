@@ -82,6 +82,8 @@ class TendenciaItem(Base):
     ojo_antes = Column(String(200), nullable=True)
     # Ruta de gestión documental (`/documentos/archivos/{id}/descargar`).
     portada_url = Column(String(500), nullable=True)
+    # Descripción larga del producto (qué es, materiales, usos).
+    descripcion = Column(Text, nullable=True)
     # Imágenes extra de la ficha (JSON: lista de rutas de gestión documental).
     imagenes = Column(Text, nullable=True)
     disenado_por = Column(String(36), ForeignKey("usuarios.id"), nullable=True)

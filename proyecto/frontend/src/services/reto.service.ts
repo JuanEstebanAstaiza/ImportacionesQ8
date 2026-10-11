@@ -120,6 +120,10 @@ export const retoService = {
   editarRonda: (id: string, cambios: Partial<RondaDatos> & { cerrar?: boolean }) =>
     apiRequest<RondaAdmin>(`/reto/rondas/${id}`, { method: "PATCH", body: cambios }),
   participantes: (rondaId: string) => apiRequest<ParticipanteAdmin[]>(`/reto/rondas/${rondaId}/participantes`),
-  marcarPagado: (participacionId: string, referencia: string) =>
-    apiRequest<{ ok: boolean }>(`/reto/participaciones/${participacionId}/pagado`, { method: "PATCH", body: { referencia } }),
+  marcarPagado: (participacionId: string, referencia: string, archivoId?: string) =>
+    apiRequest<{ ok: boolean }>(`/reto/participaciones/${participacionId}/pagado`, {
+      method: "PATCH",
+      // `archivoId`: comprobante de la transferencia (ya subido); el participante lo ve en Pagos.
+      body: archivoId ? { referencia, archivo_id: archivoId } : { referencia },
+    }),
 };

@@ -147,6 +147,11 @@ NOTIFICACIONES_EMAIL = os.getenv("NOTIFICACIONES_EMAIL", "true").lower() == "tru
 # Módulo educativo (cursos/LMS). Apagarlo deja la API de cursos en 404 y el
 # frontend oculta la sección; no borra ningún dato.
 MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").lower() == "true"
+# Registro público de cotizantes (el admin lo puede cerrar en Módulos).
+REGISTRO_PUBLICO_HABILITADO = os.getenv("REGISTRO_PUBLICO_HABILITADO", "true").lower() == "true"
+# Cada cotización consume 1 token. Apagado en tests: casi todas crean cotizaciones sin saldo.
+COBRO_COTIZACIONES_TOKENS = os.getenv(
+    "COBRO_COTIZACIONES_TOKENS", "false" if APP_ENV == "test" else "true").lower() == "true"
 
 TRANSLATION_ENABLED = os.getenv("TRANSLATION_ENABLED", "false").lower() == "true"
 GOOGLE_TRANSLATE_API_KEY = os.getenv("GOOGLE_TRANSLATE_API_KEY")

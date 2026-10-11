@@ -124,6 +124,24 @@ def create_document_file(
     return archivo
 
 
+# Lo que suben los módulos va a su carpeta, no a la raíz de gestión documental.
+CARPETA_POR_ORIGEN = {
+    "tendencias": ["Tendencias"],
+    "catalogo": ["Catálogos"],
+    "perfil-usuario": ["Perfil"],
+    "presentacion-empresa": ["Presentación de empresa"],
+    "comprobante-pago": ["Pagos"],
+}
+
+
+def carpeta_por_origen(db: Session, *, owner_user_id: str, origen: Optional[str]) -> Optional[str]:
+    """Carpeta (creada si falta) para un archivo subido sin carpeta desde un módulo."""
+    segmentos = CARPETA_POR_ORIGEN.get((origen or "").strip())
+    if not segmentos:
+        return None
+    return ensure_folder_path(db, owner_user_id=owner_user_id, segments=segmentos)
+
+
 def carpeta_chat_de_usuario(db: Session, *, owner_user_id: str, conversacion_id: str) -> Optional[str]:
     """Carpeta `Chats/Conversacion-xxxxxxxx` del usuario en gestión documental."""
     return ensure_folder_path(

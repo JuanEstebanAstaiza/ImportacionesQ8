@@ -301,6 +301,8 @@ export interface BackendUserProfile {
   puntos_cotizacion?: number;
   /** Curador de Tendencias (capacidad aparte del rol). */
   es_curador?: boolean;
+  /** Cotizaciones gratis ganadas en el reto: se gastan antes que los tokens. */
+  cotizaciones_gratis?: number;
 }
 
 export interface BackendCotizantePerfilPublico {
