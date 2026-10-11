@@ -40,11 +40,13 @@ interface BackendCourseListItem {
   estudiantes_count: number;
   estado: string;
   fecha_creacion: string | null;
+  pago_manual?: boolean;
 }
 
 interface BackendCourseDetail extends BackendCourseListItem {
   modulos: BackendModule[];
   comprado: boolean;
+  comprobante_pendiente?: boolean;
   lecciones_completadas: string[];
   progreso_pct: number;
 }
@@ -151,6 +153,8 @@ export function mapBackendCourseToCourse(course: BackendCourseListItem | Backend
     comprado: withDetail ? course.comprado : false,
     progreso_pct: withDetail ? Number(course.progreso_pct || 0) : 0,
     modulos: withDetail ? course.modulos.map(mapModule) : [],
+    pagoManual: Boolean(course.pago_manual),
+    comprobantePendiente: withDetail ? Boolean(course.comprobante_pendiente) : false,
   };
 }
 

@@ -18,7 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
-  Sparkles, LibraryBig, Type, Trophy, Palette, ToggleRight, Flame,
+  Sparkles, LibraryBig, Type, Trophy, Palette, ToggleRight, Flame, GraduationCap,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -48,9 +48,10 @@ import { AdminTendencias } from "@/features/tendencias/AdminTendencias";
 import { SeccionTendenciasLanding } from "@/features/tendencias/SeccionTendenciasLanding";
 import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
 import { RevisionPagos } from "@/features/admin/RevisionPagos";
+import { AccesosCursos } from "@/features/admin/AccesosCursos";
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
-import { fijarRegistro, registroAbierto, correoContacto } from "@/app/registro";
+import { fijarRegistro, registroAbierto } from "@/app/registro";
 import { RetoPagina } from "@/features/reto/RetoPagina";
 import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
 import { BloqueLanding } from "@/features/landing/BloqueLanding";
@@ -820,6 +821,7 @@ const NAV_ADMIN=[
   {icon:Palette,       label:"Diseño",          key:"diseno"},
   {icon:Trophy,        label:"Reto",            key:"admin-reto"},
   {icon:CreditCard,    label:"Pagos",           key:"admin-pagos"},
+  {icon:GraduationCap, label:"Accesos a cursos",key:"admin-cursos-accesos"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
   {icon:ToggleRight,   label:"Módulos",         key:"admin-modulos"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
@@ -1802,19 +1804,21 @@ function CoursesPortalScreen({
   headerUser,
   companyName,
   onGoDashboard,
+  onComprarAcceso,
 }:{
   sb: SidebarCtrl;
   role: "solicitante" | "importadora";
   headerUser: { name: string; company: string; initials: string };
   companyName: string;
   onGoDashboard: () => void;
+  onComprarAcceso: (courseId: string) => void;
 }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="courses"/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
-        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard}/>
+        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard} onComprarAcceso={onComprarAcceso}/>
       </div>
     </div>
   );
@@ -6426,7 +6430,7 @@ function PantallaPublica({activa,onLanding,onLogin,onRegister,onTendencias,onRet
           <nav className="flex items-center gap-1">{pestana("tendencias","Tendencias",onTendencias)}{pestana("reto","Reto",onReto)}</nav>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
-            {registroAbierto()&&<Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>Crear cuenta</Button>}
+            <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
           </div>
         </div>
       </header>
@@ -9632,6 +9636,8 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
+/** «acceso» es la lista privada: solo se llega por los botones de «Solicitar acceso». */
+type PestanaLanding=LandingSection|"acceso";
 const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"home",label:"Inicio"},
   {key:"about",label:"Quiénes somos"},
@@ -9643,7 +9649,11 @@ const LANDING_TABS:{key:LandingSection;label:string}[]=[
 function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onReto,onAbrirTendencia}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[];onTendencias:()=>void;onReto:()=>void;onAbrirTendencia:(id:string)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
-  const [activeTab,setActiveTab]=useState<LandingSection>("home");
+  const [activeTab,setActiveTab]=useState<PestanaLanding>("home");
+  // Con el registro cerrado, «Crear cuenta» pasa a ser «Solicitar acceso» (lista privada).
+  const irA=(pestana:PestanaLanding)=>{setActiveTab(pestana);window.scrollTo({top:0});};
+  const crearCuenta=registroAbierto()?onRegister:()=>irA("acceso");
+  const textoCrearCuenta=registroAbierto()?"Crear cuenta gratis":"Solicitar acceso";
   const [profileModalImporter,setProfileModalImporter]=useState<Importer|null>(null);
   const [dynamicContent,setDynamicContent]=useState<LandingDynamicContent|null>(null);
   const [dynamicContentError,setDynamicContentError]=useState("");
@@ -9691,7 +9701,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
     {n:"04",title:"Confirma y rastrea",desc:"Una vez acordada la operación, se crea automáticamente la orden y puedes seguir cada etapa del proceso."},
   ];
   const faqs=[
-    {q:"¿Cuánto cuesta usar la plataforma?",a:"El registro y el uso básico de la plataforma son gratuitos para los solicitantes. Las empresas importadoras tienen planes según su volumen de operaciones."},
+    {q:"¿Cuánto cuesta usar la plataforma?",a:registroAbierto()
+      ?"El registro y el uso básico de la plataforma son gratuitos para los solicitantes. Las empresas importadoras tienen planes según su volumen de operaciones."
+      :"Por ahora Zarpi funciona como lista privada y el acceso tiene un costo: te indicamos el valor al responder tu solicitud. Las empresas importadoras tienen planes según su volumen de operaciones."},
     {q:"¿Cómo sé que las empresas importadoras son confiables?",a:"Todas las empresas pasan por un proceso de verificación documental realizado por nuestro equipo administrativo antes de ser listadas."},
     {q:"¿Puedo enviar cotizaciones a múltiples empresas a la vez?",a:"Sí. Puedes crear cotizaciones abiertas que llegan a todas las empresas relevantes, o cotizaciones dirigidas a una empresa específica."},
     {q:"¿Qué pasa si no recibo respuesta?",a:"El sistema notifica a las empresas automáticamente. Si no recibes respuesta en 48h, te recomendamos ampliar tu solicitud a más proveedores."},
@@ -9739,16 +9751,14 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
               Iniciar sesión
             </Button>
 
-            {registroAbierto()&&(
             <Button 
               variant="primary" 
               size="sm" 
               className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" 
-              onClick={onRegister}
+              onClick={registroAbierto()?onRegister:()=>irA("acceso")}
             >
-              Registrarse
+              {registroAbierto()?"Registrarse":"Solicitar acceso"}
             </Button>
-            )}
           </div>
         </div>
       </nav>
@@ -9773,7 +9783,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="secondary" size="lg" icon={<LogIn className="w-4 h-4"/>} onClick={onLogin} className="px-8 bg-accent text-accent-foreground hover:bg-accent/85">Iniciar sesión</Button>
-            {registroAbierto()&&<Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={onRegister} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Crear cuenta gratis</Button>}
+            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={crearCuenta} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoCrearCuenta}</Button>
           </div>
           <p className="mt-8 text-xs uppercase tracking-[0.18em] font-bold text-accent">
             Descubre. Compara. Elige. Zarpi it.
@@ -9980,9 +9990,10 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
       {activeTab==="news" && (
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
       )}
-      {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={onRegister}/>}
+      {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={crearCuenta}/>}
+      {activeTab==="acceso" && <LandingListaPrivadaSection onLogin={onLogin} onContacto={()=>irA("contact")}/>}
 
-      {activeTab!=="contact" && (
+      {activeTab!=="contact" && activeTab!=="acceso" && (
       <>
       {/* CTA BANNER */}
       <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
@@ -9994,16 +10005,14 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
           <h2 className="text-2xl font-bold mb-3">Del mundo a tus manos</h2>
           <p className="text-primary-foreground/75 mb-7 leading-relaxed">Empieza a descubrir oportunidades y encuentra todo más cerca.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            {registroAbierto()&&(
             <Button 
               variant="secondary" 
               size="lg" 
-              onClick={onRegister} 
+              onClick={crearCuenta} 
               className="px-8 text-accent-foreground"
             >
-              Crear cuenta gratis
+              {textoCrearCuenta}
             </Button>
-            )}
             <Button 
               variant="secondary" 
               size="lg" 
@@ -10370,7 +10379,9 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
   const [errorEnvio,setErrorEnvio]=useState("");
 
   const faqsContacto=[
-    {q:"¿Cómo empiezo si soy comprador?",a:"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."},
+    {q:"¿Cómo empiezo si soy comprador?",a:registroAbierto()
+      ?"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."
+      :"Por ahora el acceso es por lista privada: pídelo con «Solicitar acceso» y te escribimos con el valor."},
     {q:"¿Cómo empiezo si soy nacionalizadora?",a:"Escríbenos desde este formulario: el equipo revisa tu documentación antes del alta."},
   ];
 
@@ -10488,7 +10499,7 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          {registroAbierto()&&<Button variant="secondary" size="lg" onClick={onRegister}>Crear cuenta gratis</Button>}
+          <Button variant="secondary" size="lg" onClick={onRegister}>{registroAbierto()?"Crear cuenta gratis":"Solicitar acceso"}</Button>
           <Button variant="primary" size="lg" onClick={onLogin}>Iniciar sesión</Button>
         </div>
       </div>
@@ -10499,20 +10510,126 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
-/** Con el registro público cerrado (Admin › Módulos), las cuentas las crea el equipo. */
+const CLASE_CAMPO_LISTA="focus:border-primary dark:focus:border-accent";
+
+/**
+ * Lista privada: con el registro cerrado, los cotizantes dejan sus datos y por
+ * qué quieren entrar. Llega a admin@ (`/landing/lista-privada`), que les responde
+ * con el valor del acceso; las credenciales se crean cuando se registra el pago.
+ */
+function FormularioListaPrivada() {
+  const [nombre,setNombre]=useState("");
+  const [email,setEmail]=useState("");
+  const [telefono,setTelefono]=useState("");
+  const [ciudad,setCiudad]=useState("");
+  const [empresa,setEmpresa]=useState("");
+  const [motivo,setMotivo]=useState("");
+  const [enviado,setEnviado]=useState(false);
+  const [enviando,setEnviando]=useState(false);
+  const [error,setError]=useState("");
+
+  async function enviar(event:React.FormEvent){
+    event.preventDefault();
+    setError("");
+    if(motivo.trim().length<20){setError("Cuéntanos un poco más por qué quieres entrar (mínimo 20 caracteres).");return;}
+    setEnviando(true);
+    try{
+      await landingService.solicitarListaPrivada({
+        nombre:nombre.trim(),
+        email:email.trim(),
+        telefono:telefono.trim(),
+        ciudad:ciudad.trim()||undefined,
+        empresa:empresa.trim()||undefined,
+        motivo:motivo.trim(),
+      });
+      setEnviado(true);
+    }catch(err){
+      setError(err instanceof Error&&err.message.trim()?err.message:"No se pudo enviar tu solicitud. Intenta nuevamente.");
+    }finally{
+      setEnviando(false);
+    }
+  }
+
+  if(enviado)return (
+    <div className="text-center py-6">
+      <CheckCircle2 className="w-10 h-10 text-accent mx-auto mb-3"/>
+      <p className="font-semibold">Recibimos tu solicitud.</p>
+      <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto leading-relaxed">
+        Te escribiremos a {email} con el valor del acceso. Cuando registremos el pago, creamos tus credenciales y te las enviamos.
+      </p>
+    </div>
+  );
+
+  return (
+    <form className="space-y-4 text-left" onSubmit={(event)=>{void enviar(event);}}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input label="Nombre completo" value={nombre} onChange={e=>setNombre(e.target.value)} required minLength={2} maxLength={150} autoComplete="name" className={CLASE_CAMPO_LISTA}/>
+        <Input label="Correo" type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email" className={CLASE_CAMPO_LISTA}/>
+        <Input label="Teléfono o WhatsApp" type="tel" value={telefono} onChange={e=>setTelefono(e.target.value)} required minLength={7} maxLength={40} autoComplete="tel" className={CLASE_CAMPO_LISTA}/>
+        <Input label="Ciudad (opcional)" value={ciudad} onChange={e=>setCiudad(e.target.value)} maxLength={100} autoComplete="address-level2" className={CLASE_CAMPO_LISTA}/>
+      </div>
+      <Input label="Empresa o emprendimiento (opcional)" value={empresa} onChange={e=>setEmpresa(e.target.value)} maxLength={150} autoComplete="organization" className={CLASE_CAMPO_LISTA}/>
+      <Textarea
+        label="¿Por qué quieres entrar?"
+        rows={4}
+        value={motivo}
+        onChange={e=>setMotivo(e.target.value)}
+        required
+        maxLength={2000}
+        placeholder="Qué vendes o quieres vender, qué te gustaría importar y cómo te ayudaría Zarpi."
+        className={CLASE_CAMPO_LISTA}
+      />
+      {error?<p className="text-sm text-destructive">{error}</p>:null}
+      <Button type="submit" variant="primary" fullWidth loading={enviando} className="dark:bg-accent dark:hover:bg-accent/80 dark:text-accent-foreground">
+        {enviando?"Enviando...":"Solicitar acceso"}
+      </Button>
+      <p className="text-xs text-muted-foreground leading-relaxed text-center">
+        El acceso a la lista privada tiene un costo. Te indicaremos el valor al responder tu solicitud, y tus credenciales se crean una vez registremos el pago.
+      </p>
+    </form>
+  );
+}
+
+/** Pestaña «Solicitar acceso» de la landing. */
+function LandingListaPrivadaSection({onLogin,onContacto}:{onLogin:()=>void;onContacto:()=>void}) {
+  return (
+    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+      <LandingBackground />
+      <div className="max-w-2xl mx-auto space-y-8 relative z-10">
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Lista privada</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Pide tu acceso a Zarpi</h1>
+          <p className="text-muted-foreground mt-3 leading-relaxed">
+            Por ahora abrimos Zarpi a un grupo reducido de cotizantes. Déjanos tus datos y cuéntanos por qué quieres entrar: revisamos cada solicitud y te escribimos.
+          </p>
+        </div>
+        <Card padding="lg"><FormularioListaPrivada/></Card>
+        <div className="text-center text-sm text-muted-foreground space-y-1">
+          <p>¿Ya tienes cuenta? <button type="button" onClick={onLogin} className="font-medium text-primary dark:text-accent hover:underline">Inicia sesión</button></p>
+          <p>¿Eres empresa importadora? <button type="button" onClick={onContacto} className="font-medium text-primary dark:text-accent hover:underline">Escríbenos desde Contacto</button></p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Con el registro público cerrado (Admin › Módulos), se pide acceso a la lista privada. */
 function RegistroCerrado({onLogin,onLanding}:{onLogin:()=>void;onLanding:()=>void}) {
   return (
-    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4">
-      <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center relative z-10">
-        <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
-        <h2 className="text-lg font-semibold mb-2">El registro está cerrado por ahora</h2>
-        <p className="text-sm text-muted-foreground mb-5">
-          Estamos creando las cuentas nosotros mismos. Escríbenos a{" "}
-          <a href={`mailto:${correoContacto()}`} className="font-medium text-primary dark:text-accent hover:underline">{correoContacto()}</a>{" "}
-          y te creamos la tuya.
-        </p>
-        <Button variant="primary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
-        <button type="button" onClick={onLanding} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4 py-10">
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8 max-w-xl w-full relative z-10">
+        <div className="text-center mb-6">
+          <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
+          <h2 className="text-lg font-semibold mb-2">Zarpi está en lista privada</h2>
+          <p className="text-sm text-muted-foreground">
+            Por ahora no hay registro abierto. Déjanos tus datos y cuéntanos por qué quieres entrar; te escribimos con los pasos.
+          </p>
+        </div>
+        <FormularioListaPrivada/>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
+          <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+        </div>
       </div>
     </div>
   );
@@ -11259,6 +11376,8 @@ export default function App() {
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
   // Producto de Tendencias o de un catálogo del que sale la solicitud en curso.
   const [origenSolicitud,setOrigenSolicitud]=useState<OrigenSolicitud|null>(null);
+  // «Comprar acceso» en Cursos (pago manual): Pagos abre la ventana de ese curso.
+  const [cursoAPagar,setCursoAPagar]=useState<string|null>(null);
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>(
     ()=>idInicialDe("conversation") || undefined,
   );
@@ -12049,7 +12168,7 @@ export default function App() {
       : NAV_ITEMS;
     // Con el módulo educativo apagado en el backend, "Cursos" desaparece del
     // menú: dejarlo visible llevaría a una pantalla cuya API responde 404.
-    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses"&&item.key!=="admin-cursos-accesos");
     // El curador de Tendencias es una capacidad, no un rol: se le suma la
     // entrada del panel a su menú, sea soporte, asesor o cualquier otro.
     if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="tendencias-aprobacion")){
@@ -12619,6 +12738,7 @@ export default function App() {
     "admin-tendencias": ["admin"],
     "admin-modulos": ["admin"],
     "admin-pagos": ["admin"],
+    "admin-cursos-accesos": ["admin"],
     "catalogos": ["solicitante"],
     "imp-catalogos": ["importadora", "asesor"],
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
@@ -12751,6 +12871,7 @@ export default function App() {
         headerUser={userRole === "importadora" ? importerHeaderUser : USER}
         companyName={userRole === "importadora" ? (companyProfile?.nombre_empresa || importerHeaderUser.company) : ""}
         onGoDashboard={() => goTo(userRole === "importadora" ? "imp-dashboard" : "dashboard")}
+        onComprarAcceso={(courseId) => { setCursoAPagar(courseId); goTo("pagos"); }}
       />
     );
 
@@ -12769,6 +12890,7 @@ export default function App() {
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
     if(screen==="admin-tendencias")return <PantallaPortal sb={sb} active="admin-tendencias" titulo="Tendencias"><AdminTendencias/></PantallaPortal>;
     if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
+    if(screen==="admin-cursos-accesos")return <PantallaPortal sb={sb} active="admin-cursos-accesos" titulo="Accesos a cursos"><AccesosCursos/></PantallaPortal>;
     if(screen==="admin-modulos")return <PantallaPortal sb={sb} active="admin-modulos" titulo="Módulos"><ModulosPlataforma onCambio={recargarPlatformConfig}/></PantallaPortal>;
     if(screen==="diseno")return <PantallaPortal sb={sb} active="diseno" titulo="Diseño"><PanelDiseno/></PantallaPortal>;
     if(screen==="tendencias-aprobacion"){
@@ -12783,7 +12905,7 @@ export default function App() {
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
-    if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole}/></PantallaPortal>;
+    if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)}/></PantallaPortal>;
     if(screen==="user-profile")return (
       <PantallaPortal sb={sb} active="user-profile" titulo="Mi perfil">
         <PerfilUsuario

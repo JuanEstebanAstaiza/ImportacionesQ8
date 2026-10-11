@@ -39,6 +39,8 @@ sed \
   -e "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$(secreto)|" \
   -e "s|^WOMPI_EVENTS_SECRET=.*|WOMPI_EVENTS_SECRET=$(secreto)|" \
   -e "s|^CONTACT_EMAIL=.*|CONTACT_EMAIL=contacto@${DOMINIO}|" \
+  -e "s|^LISTA_PRIVADA_EMAIL=.*|LISTA_PRIVADA_EMAIL=admin@${DOMINIO}|" \
+  -e "s|^PAGOS_EMAIL=.*|PAGOS_EMAIL=pagos@${DOMINIO}|" \
   -e "s|^EMAIL_FROM_NOREPLY=.*|EMAIL_FROM_NOREPLY=Zarpi <no-reply@${DOMINIO}>|" \
   -e "s|^EMAIL_FROM_NOTIFICACIONES=.*|EMAIL_FROM_NOTIFICACIONES=Zarpi <notificaciones@${DOMINIO}>|" \
   -e "s|^EMAIL_FROM_CONTACTO=.*|EMAIL_FROM_CONTACTO=Zarpi <contacto@${DOMINIO}>|" \
@@ -48,6 +50,6 @@ sed \
 chmod 600 .env
 
 echo ".env creado para ${DOMINIO} con secretos nuevos."
-echo "Correos: los códigos salen de no-reply@; el resto, de notificaciones@, contacto@, pagos@ y admin@${DOMINIO}; el formulario de contacto llega a contacto@${DOMINIO}."
+echo "Correos: los códigos salen de no-reply@; el resto, de notificaciones@, contacto@, pagos@ y admin@${DOMINIO}; el formulario de contacto llega a contacto@${DOMINIO} la lista privada, a admin@${DOMINIO}, y la copia de los comprobantes, a pagos@${DOMINIO}."
 echo "Falta editar a mano:  SMTP_API_KEY (Resend)  y, si aplica, las llaves de Wompi."
 echo "Luego:  docker compose up -d --build"

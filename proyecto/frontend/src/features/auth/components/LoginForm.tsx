@@ -10,7 +10,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/components/ui/utils";
 import type { BackendAuthRole } from "@/types/auth";
-import { correoContacto, registroAbierto } from "@/app/registro";
+import { registroAbierto } from "@/app/registro";
 
 const loginSchema = z.object({
   email: z.string().email("Ingresa un correo valido."),
@@ -187,8 +187,10 @@ export function LoginForm({
             </p>
           ) : (
             <p>
-              ¿No tienes cuenta? Escríbenos a{" "}
-              <a href={`mailto:${correoContacto()}`} className="text-primary dark:text-accent hover:underline">{correoContacto()}</a>
+              ¿No tienes cuenta?{"  "}
+              <button type="button" onClick={onRegister} className="text-primary dark:text-accent hover:underline">
+                Solicita acceso a la lista privada
+              </button>
             </p>
           )}
           <button type="button" onClick={onLanding} className="hover:text-foreground">

@@ -1,8 +1,11 @@
+import base64
 import logging
 import smtplib
 
 import httpx
 from html import escape
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import parseaddr
@@ -68,7 +71,7 @@ def remitente_de(buzon: str = BUZON_POR_DEFECTO) -> tuple:
 
 
 def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
-                  buzon: str = BUZON_POR_DEFECTO, responder_a: str = None) -> bool:
+                  buzon: str = BUZON_POR_DEFECTO, responder_a: str = None, adjuntos: list = None) -> bool:
     """
     Envía un correo real vía SMTP usando las credenciales configuradas en
     variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_API_KEY`,
@@ -81,6 +84,7 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
 
     `buzon` elige el remitente (ver `BUZONES` y `remitente_de`); `responder_a`
     cambia el Reply-To (p. ej. el correo de quien llenó el formulario de contacto).
+    `adjuntos`: lista de `(nombre, bytes, tipo MIME)`.
 
     Devuelve `True` si el correo se envió (o se simuló vía log), `False` si el
     envío SMTP real fue intentado pero falló.
@@ -97,25 +101,38 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
             return False
         logger.warning(
             "SMTP no configurado (SMTP_HOST vacío): se omite el envío real. "
-            "destinatario=%s asunto=%s (cuerpo omitido por seguridad)",
-            destinatario, asunto,
+            "destinatario=%s asunto=%s adjuntos=%s (cuerpo omitido por seguridad)",
+            destinatario, asunto, len(adjuntos or []),
         )
         return True
 
     de, responder = remitente_de(buzon)
     responder = responder_a or responder
     if usa_api_resend():
-        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html, de=de, responder_a=responder)
+        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html, de=de, responder_a=responder,
+                                  adjuntos=adjuntos)
 
-    mensaje = MIMEMultipart("alternative")
+    cuerpo = MIMEMultipart("alternative")
+    cuerpo.attach(MIMEText(cuerpo_texto, "plain"))
+    if cuerpo_html:
+        cuerpo.attach(MIMEText(cuerpo_html, "html"))
+    if adjuntos:
+        mensaje = MIMEMultipart("mixed")
+        mensaje.attach(cuerpo)
+        for nombre, contenido, tipo in adjuntos:
+            principal, _, secundario = (tipo or "application/octet-stream").partition("/")
+            parte = MIMEBase(principal or "application", secundario or "octet-stream")
+            parte.set_payload(contenido)
+            encoders.encode_base64(parte)
+            parte.add_header("Content-Disposition", "attachment", filename=nombre)
+            mensaje.attach(parte)
+    else:
+        mensaje = cuerpo
     mensaje["Subject"] = asunto
     mensaje["From"] = de
     mensaje["To"] = destinatario
     if responder:
         mensaje["Reply-To"] = responder
-    mensaje.attach(MIMEText(cuerpo_texto, "plain"))
-    if cuerpo_html:
-        mensaje.attach(MIMEText(cuerpo_html, "html"))
 
     try:
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as servidor:
@@ -142,7 +159,7 @@ def usa_api_resend() -> bool:
 
 
 def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
-                       de: str = None, responder_a: str = None) -> bool:
+                       de: str = None, responder_a: str = None, adjuntos: list = None) -> bool:
     """Envío por la API de Resend (HTTPS, puerto 443). Mismo resultado que SMTP,
     pero sin depender de que el servidor deje salir los puertos de correo, y con
     el motivo exacto en el log cuando Resend rechaza el envío (dominio sin
@@ -155,6 +172,11 @@ def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo
         datos["html"] = cuerpo_html
     if responder_a:
         datos["reply_to"] = responder_a
+    if adjuntos:
+        datos["attachments"] = [
+            {"filename": nombre, "content": base64.b64encode(contenido).decode("ascii")}
+            for nombre, contenido, _ in adjuntos
+        ]
     try:
         respuesta = httpx.post(
             config.RESEND_API_URL,

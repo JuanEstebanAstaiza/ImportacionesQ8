@@ -66,6 +66,7 @@ export type Screen =
   | "admin-tendencias"
   | "admin-modulos"
   | "admin-pagos"
+  | "admin-cursos-accesos"
   | "admin-tipografia";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
@@ -115,6 +116,8 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-modulos", path: "/admin/modulos" },
   // Revisión de comprobantes de pago (tokens y suscripción) mientras llega la pasarela.
   { screen: "admin-pagos", path: "/admin/pagos" },
+  // Dar o quitar el acceso a un curso a mano (pago manual de cursos).
+  { screen: "admin-cursos-accesos", path: "/admin/accesos-cursos" },
   { screen: "catalogos", path: "/catalogos" },
 
   // Comunes

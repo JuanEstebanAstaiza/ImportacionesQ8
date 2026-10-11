@@ -484,6 +484,7 @@ class CambioModulos(BaseModel):
     academico: Optional[bool] = None
     registro: Optional[bool] = None
     cobro_cotizaciones: Optional[bool] = None
+    pago_manual_cursos: Optional[bool] = None
 
 
 @router.get("/modulos")

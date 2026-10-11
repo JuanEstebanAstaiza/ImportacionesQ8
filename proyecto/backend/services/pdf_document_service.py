@@ -16,7 +16,9 @@ def _escape_pdf_text(value: str) -> str:
     return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def _build_simple_pdf(lines: Iterable[str]) -> bytes:
+def _build_simple_pdf(lines: Iterable[str], win_ansi: bool = False) -> bytes:
+    """PDF de una página con texto plano. `win_ansi`: tildes y eñes bien
+    escritas (fuente con WinAnsiEncoding y texto en cp1252)."""
     content_lines = ["BT", "/F1 11 Tf", "40 790 Td", "14 TL"]
     first = True
     for line in lines:
@@ -28,7 +30,7 @@ def _build_simple_pdf(lines: Iterable[str]) -> bytes:
             content_lines.append("T*")
             content_lines.append(f"({safe}) Tj")
     content_lines.append("ET")
-    content = "\n".join(content_lines).encode("latin-1", errors="replace")
+    content = "\n".join(content_lines).encode("cp1252" if win_ansi else "latin-1", errors="replace")
 
     objects = []
     objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n")
@@ -36,7 +38,8 @@ def _build_simple_pdf(lines: Iterable[str]) -> bytes:
     objects.append(
         b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n"
     )
-    objects.append(b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n")
+    codificacion = b" /Encoding /WinAnsiEncoding" if win_ansi else b""
+    objects.append(b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica" + codificacion + b" >> endobj\n")
     objects.append(
         f"5 0 obj << /Length {len(content)} >> stream\n".encode("ascii")
         + content

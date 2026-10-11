@@ -113,7 +113,12 @@ Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03
 | `DELETE` | `/cursos/{curso_id}` | Cursos | JWT | Eliminar Curso |
 | `PUT` | `/cursos/{curso_id}` | Cursos | JWT | Actualizar Curso |
 | `GET` | `/cursos/{curso_id}/certificado` | Cursos | JWT | Obtener Certificado Curso |
-| `POST` | `/cursos/{curso_id}/comprar` | Cursos | JWT | Comprar Curso |
+| `POST` | `/cursos/{curso_id}/comprar` | Cursos | JWT | Comprar Curso (402 con pago manual de cursos) |
+| `GET` | `/admin/cursos/catalogo` | Cursos | JWT | Cursos para dar acceso |
+| `GET` | `/admin/cursos/accesos` | Cursos | JWT | Listar accesos a cursos |
+| `POST` | `/admin/cursos/accesos` | Cursos | JWT | Dar acceso a un curso |
+| `DELETE` | `/admin/cursos/accesos/{acceso_id}` | Cursos | JWT | Quitar acceso a un curso |
+| `GET` | `/comprobantes/cursos` | Pagos | JWT | Cursos por pagar |
 | `POST` | `/cursos/{curso_id}/lecciones/{leccion_id}/progreso` | Cursos | JWT | Marcar Progreso Leccion |
 | `GET` | `/cursos/{id_o_slug}` | Cursos | JWT | Obtener Curso |
 | `GET` | `/disputas/orden/{orden_id}` | Disputas | JWT | Disputa Por Orden |
@@ -168,6 +173,7 @@ Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03
 | `DELETE` | `/landing/allies/{aliado_id}` | Landing CMS | JWT | Eliminar Aliado |
 | `PUT` | `/landing/allies/{aliado_id}` | Landing CMS | JWT | Editar Aliado |
 | `POST` | `/landing/contacto` | Landing CMS | Público | Enviar Contacto |
+| `POST` | `/landing/lista-privada` | Landing CMS | Público | Solicitar acceso a la lista privada |
 | `GET` | `/landing/dynamic-content` | Landing CMS | Público | Obtener Contenido Dinamico |
 | `PUT` | `/landing/dynamic-content` | Landing CMS | JWT | Guardar Bloques |
 | `GET` | `/landing/dynamic-content/admin` | Landing CMS | JWT | Obtener Contenido Dinamico Admin |

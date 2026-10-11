@@ -61,6 +61,16 @@ export interface LandingContactPayload {
   mensaje: string;
 }
 
+/** Solicitud para entrar a la lista privada (con el registro cerrado). */
+export interface ListaPrivadaPayload {
+  nombre: string;
+  email: string;
+  telefono: string;
+  ciudad?: string;
+  empresa?: string;
+  motivo: string;
+}
+
 export interface LandingContactResponse {
   enviado: boolean;
   mensaje: string;
@@ -151,5 +161,10 @@ export const landingService = {
   /** Formulario de contacto público de la Landing. Sin autenticación. */
   sendContact(payload: LandingContactPayload): Promise<LandingContactResponse> {
     return apiRequest<LandingContactResponse>("/landing/contacto", { method: "POST", body: payload });
+  },
+
+  /** Lista privada: llega a admin@, que responde con el valor del acceso. Sin autenticación. */
+  solicitarListaPrivada(payload: ListaPrivadaPayload): Promise<LandingContactResponse> {
+    return apiRequest<LandingContactResponse>("/landing/lista-privada", { method: "POST", body: payload });
   },
 };

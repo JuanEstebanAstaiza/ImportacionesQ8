@@ -27,6 +27,7 @@ from schemas.landing import (
     LandingNewsCreate,
     LandingNewsResponse,
     LandingNewsUpdate,
+    ListaPrivadaRequest,
     VideosQuienesSomos,
 )
 from utils.dependencies import get_db, require_rol_in
@@ -122,6 +123,67 @@ async def enviar_contacto(request: Request, datos: ContactoRequest):
         )
 
     return ContactoResponse(enviado=True, mensaje="Mensaje enviado. Te responderemos pronto.")
+
+
+@router.post("/lista-privada", response_model=ContactoResponse)
+@limiter.limit(config.RATE_LIMIT_PUBLIC_WRITE)
+async def solicitar_lista_privada(request: Request, datos: ListaPrivadaRequest):
+    """Con el registro cerrado, los cotizantes piden entrar a la lista privada.
+
+    La solicitud llega a LISTA_PRIVADA_EMAIL (admin@) con «Responder» apuntando a
+    quien la llenó: desde ahí se le dice el valor del acceso, y las credenciales
+    se crean cuando se registra el pago. A la persona le llega un acuse desde
+    admin@ con ese mismo aviso.
+    """
+    nombre = datos.nombre.strip()
+    email = datos.email.strip()
+    filas = [
+        ("Nombre", nombre),
+        ("Correo", email),
+        ("Teléfono", datos.telefono.strip()),
+        ("Ciudad", (datos.ciudad or "").strip() or "No indicada"),
+        ("Empresa o emprendimiento", (datos.empresa or "").strip() or "No indicada"),
+    ]
+    asunto = f"Lista privada Zarpi — {nombre}"
+    nota = ("Respóndele a este correo con el valor del acceso. Las credenciales se crean "
+            "cuando se registre el pago.")
+    cuerpo_texto = (
+        "Nueva solicitud para entrar a la lista privada de Zarpi.\n\n"
+        + "".join(f"{etiqueta}: {valor}\n" for etiqueta, valor in filas)
+        + f"\nPor qué quiere entrar:\n{datos.motivo.strip()}\n\n{nota}\n"
+    )
+    cuerpo_html = construir_html_zarpi(
+        asunto,
+        "<p><strong>Nueva solicitud para entrar a la lista privada de Zarpi.</strong></p>"
+        "<p>" + "<br/>".join(f"<strong>{etiqueta}:</strong> {escape(valor)}" for etiqueta, valor in filas) + "</p>"
+        f"<p><strong>Por qué quiere entrar:</strong><br/>{escape(datos.motivo.strip())}</p>"
+        f'<p style="color:#71717a;font-size:13px;">{escape(nota)}</p>',
+    )
+
+    try:
+        enviado = enviar_correo(config.LISTA_PRIVADA_EMAIL, asunto, cuerpo_texto, cuerpo_html, responder_a=email)
+    except Exception:
+        logger.exception("Fallo inesperado enviando la solicitud de lista privada")
+        enviado = False
+    if not enviado:
+        logger.error("No se pudo enviar la solicitud de lista privada (email=%s)", email)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No se pudo enviar tu solicitud en este momento. Intenta nuevamente en unos minutos.",
+        )
+
+    # Acuse a la persona, desde admin@ (el mismo buzón que le va a responder).
+    # Si falla, la solicitud ya llegó: no se le muestra error.
+    acuse = (f"Hola {nombre}, recibimos tu solicitud para entrar a la lista privada de Zarpi. "
+             "El acceso tiene un costo: te escribiremos desde este correo con el valor y cómo pagarlo. "
+             "Cuando registremos el pago, creamos tus credenciales y te las enviamos.")
+    try:
+        enviar_correo(email, "Recibimos tu solicitud — Lista privada Zarpi", acuse,
+                      construir_html_zarpi("Recibimos tu solicitud", f"<p>{escape(acuse)}</p>"), buzon="admin")
+    except Exception:
+        logger.exception("No se pudo enviar el acuse de la lista privada (email=%s)", email)
+
+    return ContactoResponse(enviado=True, mensaje="Recibimos tu solicitud. Te escribiremos pronto.")
 
 
 # ==================== Administración de bloques ====================

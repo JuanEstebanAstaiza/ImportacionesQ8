@@ -171,6 +171,16 @@ class ContactoRequest(BaseModel):
     mensaje: str = Field(..., min_length=5, max_length=4000)
 
 
+class ListaPrivadaRequest(BaseModel):
+    """Solicitud para entrar a la lista privada de cotizantes (con el registro cerrado)."""
+    nombre: str = Field(..., min_length=2, max_length=150)
+    email: EmailStr
+    telefono: str = Field(..., min_length=7, max_length=40)
+    ciudad: Optional[str] = Field(None, max_length=100)
+    empresa: Optional[str] = Field(None, max_length=150)
+    motivo: str = Field(..., min_length=20, max_length=2000)
+
+
 class ContactoResponse(BaseModel):
     enviado: bool
     mensaje: str

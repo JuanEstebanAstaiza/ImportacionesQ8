@@ -97,6 +97,9 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Activan la configuración de producción |
 | `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES=1440` | JWT. El frontend no renueva el token, por eso dura 24 h |
 | `SMTP_*` (Resend), `CONTACT_EMAIL` | Correo transaccional y formulario de contacto |
+| `PAGOS_EMAIL`, `MAX_ADJUNTO_CORREO_BYTES` | Buzón que recibe copia de cada comprobante de pago, con el comprobante y el concepto adjuntos (por defecto `pagos@zarpi.co`), y el tamaño máximo de un adjunto (10 MB). |
+| `PAGO_MANUAL_CURSOS` | Valor por defecto del módulo «Pago manual de cursos» (Admin › Módulos manda sobre él). |
+| `LISTA_PRIVADA_EMAIL` | Buzón que recibe las solicitudes de la lista privada de la landing (por defecto `admin@zarpi.co`); se responden desde ahí. |
 | `EMAIL_FROM_NOREPLY` (códigos de acceso), `EMAIL_FROM_NOTIFICACIONES`, `EMAIL_FROM_CONTACTO`, `EMAIL_FROM_PAGOS`, `EMAIL_FROM_ADMIN` | Remitentes por buzón; ver «Desde qué buzón sale cada correo» en `02-Integracion-API/16-Notificaciones.md`. Por defecto sale `notificaciones@` y sus respuestas van a `EMAIL_REPLY_TO`; en los demás buzones las respuestas vuelven al mismo buzón. `SMTP_FROM` queda como legado. El formulario de contacto llega a `CONTACT_EMAIL`, y al responderlo se le escribe a quien lo llenó. Prueba de un buzón: `python scripts/diagnostico_correo.py tu@correo.com pagos`. |
 | `EMAIL_PROVIDER` | `resend` (API HTTPS, puerto 443), `smtp`, o vacío = automático (API de Resend si `SMTP_HOST` es de Resend y la key empieza por `re_`) |
 | `WOMPI_SIMULATE`, `WOMPI_*` | Pagos (simulados mientras no haya llaves reales) |

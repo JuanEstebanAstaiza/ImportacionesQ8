@@ -1,4 +1,4 @@
-"""Cargue y descargue de pagos: comprobantes manuales (tokens, suscripción, reto)."""
+"""Cargue y descargue de pagos: comprobantes manuales (tokens, suscripción, cursos, reto)."""
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,8 +14,10 @@ router = APIRouter(prefix="/comprobantes", tags=["Pagos"])
 
 
 class NuevoComprobante(BaseModel):
-    tipo: Literal["tokens", "suscripcion"]
+    tipo: Literal["tokens", "suscripcion", "curso"]
     archivo_id: str = Field(..., min_length=36, max_length=36)
+    # Solo `curso`: el curso que paga (el valor es el del curso).
+    curso_id: Optional[str] = Field(None, min_length=36, max_length=36)
     # Tokens o días que dice haber pagado, y el monto. Orientativos: decide el admin.
     cantidad: Optional[int] = Field(None, ge=1, le=10000)
     monto_cop: Optional[int] = Field(None, ge=0, le=100_000_000)
@@ -23,8 +25,8 @@ class NuevoComprobante(BaseModel):
 
 
 class Aprobacion(BaseModel):
-    # Tokens a acreditar (tokens) o días de suscripción (suscripcion).
-    cantidad: int = Field(..., ge=1, le=10000)
+    # Tokens a acreditar (tokens) o días de suscripción (suscripcion). Un curso no lleva cantidad.
+    cantidad: Optional[int] = Field(None, ge=1, le=10000)
 
 
 class Rechazo(BaseModel):
@@ -54,8 +56,12 @@ def _usuario(db: Session, current_user: dict) -> Usuario:
 @router.get("/resumen")
 def resumen(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Cómo pagar y el saldo: precio por token, datos de la cuenta, suscripción."""
+    from services import acceso_cursos
+
     usuario = _usuario(db, current_user)
     return {
+        # Los cursos con precio se pagan subiendo el comprobante (carpeta «Cursos»).
+        "cursos_pago_manual": acceso_cursos.pago_manual_activo(db),
         "precio_token_cop": svc.precio_token(db),
         "datos_pago": svc.datos_pago(db),
         "tokens": int(usuario.puntos_cotizacion or 0),
@@ -68,8 +74,30 @@ def resumen(db: Session = Depends(get_db), current_user: dict = Depends(get_curr
     }
 
 
+@router.get("/cursos")
+def cursos_por_pagar(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Los cursos con precio que el usuario todavía no tiene, para elegir cuál paga.
+    `pendiente`: ya mandó el comprobante y lo estamos revisando."""
+    from models.comprobante import ComprobantePago, EstadoComprobante
+    from models.curso import CompraCurso
+    from services import acceso_cursos
+
+    usuario = _usuario(db, current_user)
+    if not acceso_cursos.pago_manual_activo(db):
+        return []
+    propios = {fila[0] for fila in db.query(CompraCurso.curso_id).filter(CompraCurso.usuario_id == usuario.id)}
+    pendientes = {fila[0] for fila in db.query(ComprobantePago.curso_id).filter(
+        ComprobantePago.usuario_id == usuario.id, ComprobantePago.tipo == "curso",
+        ComprobantePago.estado == EstadoComprobante.pendiente.value)}
+    return [
+        {**curso, "pendiente": curso["id"] in pendientes}
+        for curso in acceso_cursos.catalogo_publicado(db)
+        if curso["precio"] > 0 and curso["id"] not in propios
+    ]
+
+
 @router.get("")
-def mis_comprobantes(tipo: Optional[Literal["tokens", "suscripcion", "reto"]] = None,
+def mis_comprobantes(tipo: Optional[Literal["tokens", "suscripcion", "reto", "curso"]] = None,
                      db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     usuario = _usuario(db, current_user)
     return [svc.a_dict(db, c) for c in svc.mios(db, usuario.id, tipo)]
@@ -81,7 +109,7 @@ def subir(datos: NuevoComprobante, db: Session = Depends(get_db), current_user: 
     Queda pendiente hasta que el admin lo revise."""
     usuario = _usuario(db, current_user)
     c = svc.crear(db, usuario, tipo=datos.tipo, archivo_id=datos.archivo_id, cantidad=datos.cantidad,
-                  monto_cop=datos.monto_cop, nota=datos.nota)
+                  monto_cop=datos.monto_cop, nota=datos.nota, curso_id=datos.curso_id)
     db.commit()
     return svc.a_dict(db, c)
 
@@ -90,7 +118,7 @@ def subir(datos: NuevoComprobante, db: Session = Depends(get_db), current_user: 
 
 @router.get("/admin")
 def para_admin(estado: Optional[Literal["pendiente", "aprobado", "rechazado", "enviado"]] = None,
-               tipo: Optional[Literal["tokens", "suscripcion", "reto"]] = None,
+               tipo: Optional[Literal["tokens", "suscripcion", "reto", "curso"]] = None,
                db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
     return [svc.a_dict(db, c, admin=True) for c in svc.para_admin(db, estado=estado, tipo=tipo)]
 

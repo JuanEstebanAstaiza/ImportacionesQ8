@@ -8,6 +8,7 @@ import {
   Coins,
   ExternalLink,
   FileText,
+  GraduationCap,
   Inbox,
   Landmark,
   Loader2,
@@ -39,7 +40,8 @@ import {
 /**
  * Revisión de comprobantes de transferencia mientras se habilita la pasarela.
  * El admin abre el comprobante, confirma cuánto acredita (tokens o días de
- * Tendencias) o lo rechaza con un motivo que el usuario ve.
+ * Tendencias) o, si es un curso, le da el acceso; o lo rechaza con un motivo
+ * que el usuario ve.
  */
 
 const MAX_DATOS_PAGO = 2000;
@@ -47,6 +49,7 @@ const MAX_DATOS_PAGO = 2000;
 const TIPO: Record<TipoComprobante, { texto: string; clase: string }> = {
   tokens: { texto: "Tokens", clase: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300" },
   suscripcion: { texto: "Suscripción Tendencias", clase: "bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" },
+  curso: { texto: "Curso", clase: "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" },
   reto: { texto: "Pago del reto", clase: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" },
 };
 
@@ -142,6 +145,7 @@ function TarjetaPendiente({
   onResuelto: (resuelto: Comprobante) => void;
 }) {
   const esSuscripcion = c.tipo === "suscripcion";
+  const esCurso = c.tipo === "curso";
   const [modo, setModo] = useState<"aprobar" | "rechazar" | null>(null);
   const [cantidad, setCantidad] = useState(() => String((esSuscripcion ? c.cantidad_solicitada ?? 30 : c.cantidad_solicitada) ?? ""));
   const [motivo, setMotivo] = useState("");
@@ -158,6 +162,20 @@ function TarjetaPendiente({
   };
 
   const aprobar = async () => {
+    if (esCurso) {
+      setEnviando(true);
+      setError(null);
+      try {
+        const resuelto = await comprobantesService.aprobar(c.id);
+        toast.success(`${nombreUsuario(c)} ya tiene acceso a «${c.curso?.titulo ?? "el curso"}»`);
+        onResuelto(resuelto);
+      } catch (err) {
+        setError(mensajeError(err, "No se pudo aprobar el comprobante."));
+      } finally {
+        setEnviando(false);
+      }
+      return;
+    }
     const n = Math.floor(Number(cantidad));
     if (!Number.isFinite(n) || n < 1) {
       setError(esSuscripcion ? "Escribe cuántos días (mínimo 1)." : "Escribe cuántos tokens (mínimo 1).");
@@ -208,7 +226,14 @@ function TarjetaPendiente({
             </div>
             <Insignia texto={tipo.texto} clase={tipo.clase} />
           </div>
+          {esCurso ? (
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <GraduationCap className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="min-w-0 truncate">{c.curso?.titulo ?? "Curso eliminado"}</span>
+            </p>
+          ) : null}
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {esCurso ? null : <>
             <div>
               <dt className="inline text-muted-foreground">Saldo: </dt>
               <dd className="inline font-medium tabular-nums">{cantidadTexto("tokens", c.usuario?.tokens ?? 0)}</dd>
@@ -219,8 +244,9 @@ function TarjetaPendiente({
                 {c.cantidad_solicitada != null ? cantidadTexto(c.tipo, c.cantidad_solicitada) : "—"}
               </dd>
             </div>
+            </>}
             <div>
-              <dt className="inline text-muted-foreground">Monto: </dt>
+              <dt className="inline text-muted-foreground">{esCurso ? "Valor del curso: " : "Monto: "}</dt>
               <dd className="inline font-medium tabular-nums">{c.monto_cop != null ? pesos(c.monto_cop) : "—"}</dd>
             </div>
             <div className="text-muted-foreground" title={new Date(c.fecha).toLocaleString("es-CO")}>
@@ -248,7 +274,21 @@ function TarjetaPendiente({
         </button>
       </div>
 
-      {modo === "aprobar" ? (
+      {modo === "aprobar" && esCurso ? (
+        <form
+          onSubmit={(e) => { e.preventDefault(); void aprobar(); }}
+          className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-muted/40 p-3"
+          noValidate
+        >
+          <p className="min-w-0 flex-1 text-sm">
+            ¿Confirmaste la transferencia? {nombreUsuario(c)} queda con acceso al curso y le avisamos por correo desde pagos@.
+          </p>
+          <button type="button" onClick={() => setModo(null)} className={CLASE_BOTON_SECUNDARIO}>Cancelar</button>
+          <button type="submit" disabled={enviando} className={CLASE_BOTON_PRIMARIO}>
+            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Dar acceso
+          </button>
+        </form>
+      ) : modo === "aprobar" ? (
         <form
           onSubmit={(e) => { e.preventDefault(); void aprobar(); }}
           className="mt-3 flex flex-wrap items-end gap-3 rounded-lg bg-muted/40 p-3"
@@ -357,12 +397,20 @@ const FILTROS_TIPO: { clave: FiltroTipo; texto: string }[] = [
   { clave: "todos", texto: "Todos los tipos" },
   { clave: "tokens", texto: "Tokens" },
   { clave: "suscripcion", texto: "Suscripción Tendencias" },
+  { clave: "curso", texto: "Cursos" },
   { clave: "reto", texto: "Pagos del reto" },
 ];
 
 function Resultado({ c }: { c: Comprobante }) {
   if (c.estado === "rechazado") {
     return <p className="text-xs text-rose-700 dark:text-rose-300">Motivo: {c.motivo_rechazo || "—"}</p>;
+  }
+  if (c.estado === "aprobado" && c.tipo === "curso") {
+    return (
+      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+        Acceso a «{c.curso?.titulo ?? "curso"}»
+      </p>
+    );
   }
   if (c.estado === "aprobado") {
     const n = c.cantidad_acreditada ?? 0;
@@ -635,6 +683,7 @@ export function RevisionPagos() {
   const contadores = useMemo(() => ({
     tokens: pendientes ? pendientes.filter((c) => c.tipo === "tokens").length : null,
     suscripcion: pendientes ? pendientes.filter((c) => c.tipo === "suscripcion").length : null,
+    curso: pendientes ? pendientes.filter((c) => c.tipo === "curso").length : null,
     mes: aprobados ? aprobados.filter((c) => esDeEsteMes(c.revisado_en ?? c.fecha)).length : null,
   }), [pendientes, aprobados]);
 
@@ -650,7 +699,7 @@ export function RevisionPagos() {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold">Pagos</h1>
           <p className="text-sm text-muted-foreground">
-            Comprobantes de transferencia: revísalos y acredita tokens o suscripción. Mientras habilitamos la pasarela.
+            Comprobantes de transferencia: revísalos y acredita tokens, suscripción o el acceso a un curso. Mientras habilitamos la pasarela.
           </p>
         </div>
         <button
@@ -663,9 +712,10 @@ export function RevisionPagos() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Contador etiqueta="Tokens por revisar" valor={contadores.tokens} icono={Coins} clase="bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300" />
         <Contador etiqueta="Suscripciones por revisar" valor={contadores.suscripcion} icono={CalendarClock} clase="bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" />
+        <Contador etiqueta="Cursos por revisar" valor={contadores.curso} icono={GraduationCap} clase="bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" />
         <Contador etiqueta="Aprobados este mes" valor={contadores.mes} icono={CheckCircle2} clase="bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" />
       </div>
 
