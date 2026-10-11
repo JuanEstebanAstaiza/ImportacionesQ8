@@ -32,6 +32,7 @@ from schemas.admin import (
     MensajeSoporteRequest,
     CrearAgenteSoporteRequest,
     CrearDisenadorRequest,
+    CrearSolicitanteAdminRequest,
     DisenadorItem,
     NivelAgenteRequest,
     AgenteSoporteItem,
@@ -287,6 +288,15 @@ async def crear_importador_con_dueño(
         rol="importador",
         importador_id=nuevo_importador.id,
         nombre=datos.nombre_dueño,
+        apellido=datos.apellido_dueño,
+        # La empresa es persona jurídica; la cuenta es de su representante.
+        tipo_persona="juridica" if (datos.nit or datos.razon_social) else None,
+        nit=datos.nit,
+        razon_social=datos.razon_social or datos.nombre_empresa,
+        tipo_documento=datos.tipo_documento_dueño,
+        numero_documento=datos.numero_documento_dueño,
+        indicativo_pais_telefono=datos.indicativo_dueño,
+        telefono=datos.telefono_dueño,
         activo=True,
         email_verificado=True,
         perfil_completo=bool(datos.nombre_dueño)
@@ -302,6 +312,42 @@ async def crear_importador_con_dueño(
         importador=adjuntar_certificaciones(db, [nuevo_importador])[0],
         usuario_dueño_id=str(nuevo_dueño.id),
         email_dueño=nuevo_dueño.email
+    )
+
+
+# ==================== Cotizantes ====================
+
+@router.post("/solicitantes", response_model=UsuarioAdminResponse, status_code=status.HTTP_201_CREATED)
+async def crear_solicitante(
+    datos: CrearSolicitanteAdminRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Crea un cotizante (persona natural o jurídica) con los mismos datos del
+    registro público. Queda verificado (no hay OTP) y funciona aunque el
+    registro público esté cerrado en Módulos. Puede arrancar con tokens."""
+    from services.auth_service import crear_cuenta_solicitante
+
+    if db.query(Usuario).filter(Usuario.email == datos.email).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email ya está registrado")
+    for campo in ("nombre", "apellido", "tipo_documento", "numero_documento", "nit", "razon_social", "telefono"):
+        valor = getattr(datos, campo)
+        if isinstance(valor, str):
+            setattr(datos, campo, valor.strip() or None)
+    usuario = crear_cuenta_solicitante(db, datos, email_verificado=True, acepto_politica=False)
+    if datos.tokens_iniciales:
+        usuario.puntos_cotizacion = datos.tokens_iniciales
+        db.add(MovimientoPuntoCotizacion(
+            usuario_id=usuario.id, admin_id=current_user["user_id"], tipo="recarga",
+            delta=datos.tokens_iniciales, saldo_resultante=datos.tokens_iniciales,
+            descripcion="Tokens iniciales al crear la cuenta",
+        ))
+        db.commit()
+        db.refresh(usuario)
+    return UsuarioAdminResponse(
+        id=str(usuario.id), email=usuario.email, rol=usuario.rol, importador_id=usuario.importador_id,
+        nombre=usuario.nombre, activo=usuario.activo, perfil_completo=usuario.perfil_completo,
+        fecha_creacion=usuario.fecha_creacion,
     )
 
 
