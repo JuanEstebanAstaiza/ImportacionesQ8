@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, FlaskConical, Images, Loader2, Lock, RefreshCw, Sparkles, Video } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FlaskConical, Images, Landmark, Loader2, Lock, RefreshCw, Sparkles, Video } from "lucide-react";
+
+import { registroAbierto } from "@/app/registro";
 
 import {
   tendenciasService,
@@ -28,6 +30,8 @@ type Props = {
   onIniciarSesion: () => void;
   /** Tras pagar (de prueba o real): el padre recarga. */
   onAccesoConcedido: () => void;
+  /** Sin pasarela: lleva a Pagos (carpeta «Suscripción Tendencias») para subir el comprobante. */
+  onPagarConTransferencia?: () => void;
 };
 
 const BENEFICIOS = [
@@ -69,7 +73,7 @@ function Portada({ producto }: { producto?: ProductoVistaPrevia | null }) {
   );
 }
 
-export function MuroPago({ autenticado, rol, producto, onRegistrarse, onIniciarSesion, onAccesoConcedido }: Props) {
+export function MuroPago({ autenticado, rol, producto, onRegistrarse, onIniciarSesion, onAccesoConcedido, onPagarConTransferencia }: Props) {
   const [acceso, setAcceso] = useState<MiAccesoTendencias | null>(null);
   const [cargando, setCargando] = useState(autenticado);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +144,7 @@ export function MuroPago({ autenticado, rol, producto, onRegistrarse, onIniciarS
     accion = (
       <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <button type="button" onClick={onRegistrarse} className={CLASE_CTA}>
-          Crea tu cuenta gratis
+          {registroAbierto() ? "Crea tu cuenta gratis" : "Solicitar acceso"}
         </button>
         <button type="button" onClick={onIniciarSesion} className="text-sm font-medium text-white/75 underline-offset-4 transition-colors hover:text-white hover:underline">
           Ya tengo cuenta
@@ -178,6 +182,19 @@ export function MuroPago({ autenticado, rol, producto, onRegistrarse, onIniciarS
     accion = <p className="text-sm text-white/70">La suscripción a Tendencias es para cuentas de comprador.</p>;
   } else if (!acceso.venta_habilitada) {
     accion = <p className="text-sm font-medium text-white/80">Muy pronto podrás suscribirte.</p>;
+  } else if (acceso.pago_simulado && onPagarConTransferencia) {
+    // Sin pasarela en línea: se paga por transferencia y el comprobante se sube en Pagos.
+    accion = (
+      <div className="space-y-2">
+        <button type="button" onClick={onPagarConTransferencia} className={CLASE_CTA}>
+          <Landmark className="h-4 w-4" />
+          Suscribirme
+        </button>
+        <p className="text-xs text-white/60">
+          Pagas por transferencia y subes el comprobante en Pagos. Cuando lo confirmemos, se abre Tendencias.
+        </p>
+      </div>
+    );
   } else if (pago) {
     accion = (
       <div className="space-y-3">

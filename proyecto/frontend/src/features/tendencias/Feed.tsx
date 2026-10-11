@@ -39,6 +39,8 @@ type Props = {
   /** Muro de pago: sin estos, se navega a /registro y /login. */
   onRegistrarse?: () => void;
   onIniciarSesion?: () => void;
+  /** Muro de pago sin pasarela: a Pagos, para subir el comprobante de la suscripción. */
+  onIrAPagos?: () => void;
 };
 
 const CLASE_CTA =
@@ -130,7 +132,7 @@ function TarjetaBloqueada({ portada, texto }: { portada: string | null; texto: s
   );
 }
 
-export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace, onRegistrarse, onIniciarSesion }: Props) {
+export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace, onRegistrarse, onIniciarSesion, onIrAPagos }: Props) {
   const [semana, setSemana] = useState<string | null>(null);
   const [semanaActual, setSemanaActual] = useState<string | null>(null);
   const [categoria, setCategoria] = useState<string | null>(null);
@@ -310,6 +312,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
             onRegistrarse={onRegistrarse ?? (() => window.location.assign("/registro"))}
             onIniciarSesion={onIniciarSesion ?? (() => window.location.assign("/login"))}
             onAccesoConcedido={() => setIntento((n) => n + 1)}
+            onPagarConTransferencia={onIrAPagos}
           />
         ) : null}
 

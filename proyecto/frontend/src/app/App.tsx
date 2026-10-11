@@ -11383,6 +11383,9 @@ export default function App() {
   const [origenSolicitud,setOrigenSolicitud]=useState<OrigenSolicitud|null>(null);
   // «Comprar acceso» en Cursos (pago manual): Pagos abre la ventana de ese curso.
   const [cursoAPagar,setCursoAPagar]=useState<string|null>(null);
+  // Muro de pago de Tendencias: Pagos abre en la carpeta de la suscripción.
+  const [carpetaPagos,setCarpetaPagos]=useState<"suscripcion"|null>(null);
+  function pagarSuscripcionTendencias(){setCarpetaPagos("suscripcion");goTo("pagos");}
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>(
     ()=>idInicialDe("conversation") || undefined,
   );
@@ -12886,8 +12889,8 @@ export default function App() {
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} onIrAPagos={()=>goTo("pagos")}/>;
-    if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
-    if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde}/></PantallaPortal>;
+    if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
+    if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
     if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
     if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
     if(screen==="admin-reto")return <PantallaPortal sb={sb} active="admin-reto" titulo="Reto · Rondas y pagos"><RetoAdmin/></PantallaPortal>;
@@ -12913,7 +12916,7 @@ export default function App() {
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
-    if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)}/></PantallaPortal>;
+    if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)} carpetaInicial={carpetaPagos}/></PantallaPortal>;
     if(screen==="user-profile")return (
       <PantallaPortal sb={sb} active="user-profile" titulo="Mi perfil">
         <PerfilUsuario

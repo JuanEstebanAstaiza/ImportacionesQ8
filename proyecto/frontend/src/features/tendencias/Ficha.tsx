@@ -57,6 +57,8 @@ type Props = {
   /** Muro de pago: sin estos, se navega a /registro y /login. */
   onRegistrarse?: () => void;
   onIniciarSesion?: () => void;
+  /** Muro de pago sin pasarela: a Pagos, para subir el comprobante de la suscripción. */
+  onIrAPagos?: () => void;
 };
 
 /** El 402 del muro de pago trae la vista previa del producto en `detail`. */
@@ -306,7 +308,7 @@ function GaleriaImagenes({ imagenes, nombre }: { imagenes: string[]; nombre: str
   );
 }
 
-export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas, onRegistrarse, onIniciarSesion }: Props) {
+export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas, onRegistrarse, onIniciarSesion, onIrAPagos }: Props) {
   const [ficha, setFicha] = useState<FichaTendencia | null>(null);
   const [bloqueada, setBloqueada] = useState<FichaBloqueada | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -377,6 +379,7 @@ export function TendenciaFicha({ id, rol, onVolver, onPedirPropuestas, onRegistr
           onRegistrarse={onRegistrarse ?? (() => window.location.assign("/registro"))}
           onIniciarSesion={onIniciarSesion ?? (() => window.location.assign("/login"))}
           onAccesoConcedido={() => setIntento((n) => n + 1)}
+            onPagarConTransferencia={onIrAPagos}
         />
       </div>
     );
