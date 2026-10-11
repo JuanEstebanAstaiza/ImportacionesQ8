@@ -77,7 +77,7 @@ logger = logging.getLogger("importacionesq8")
 
 router = APIRouter(prefix="/admin", tags=["Administración"])
 
-ROLES_CORREO_ADMIN = {"solicitante", "importador", "asesor", "soporte", "admin"}
+ROLES_CORREO_ADMIN = {"solicitante", "importador", "asesor", "soporte", "designer", "admin"}
 
 
 def _validar_tier_admin(tier: str) -> str:
