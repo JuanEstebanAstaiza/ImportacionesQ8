@@ -98,9 +98,10 @@ async def consultar_trm_ahora(
     current_user: dict = Depends(require_rol("admin")),
     db: Session = Depends(get_db),
 ):
-    """Vuelve a consultar la TRM oficial ahora, sin esperar al día siguiente."""
+    """Vuelve a consultar el dólar ahora (Google Finance y, si falla, la TRM
+    oficial), sin esperar al siguiente refresco."""
     trm.reiniciar_cache()
-    configuracion.guardar(db, trm.CLAVE_OFICIAL_CONSULTA, None)
+    configuracion.guardar(db, trm.CLAVE_OFICIAL_CONSULTADA_EN, None)
     estado = trm.estado_trm(db)
     db.commit()
     return estado

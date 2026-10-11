@@ -39,11 +39,13 @@ const FILTROS: { clave: Filtro; etiqueta: string }[] = [
 ];
 
 const FUENTES_TRM: Record<string, string> = {
-  oficial: "TRM oficial del día",
-  respaldo_admin: "Valor de respaldo (la consulta oficial falló)",
-  ultima_oficial: "Última TRM oficial conocida (la consulta falló)",
-  por_defecto: "Valor por defecto del servidor (sin TRM oficial ni respaldo)",
+  google_finance: "Google Finance (USD/COP), se actualiza cada hora",
+  oficial: "TRM oficial del día (Google Finance no respondió)",
+  respaldo_admin: "Valor de respaldo (la consulta falló)",
+  ultima_oficial: "Última cotización conocida (la consulta falló)",
+  por_defecto: "Valor por defecto del servidor (sin cotización ni respaldo)",
 };
+const FUENTES_TRM_CONSULTADAS = ["google_finance", "oficial"];
 
 const ESTADO_PROPUESTA: Record<string, string> = {
   borrador: "En redacción",
@@ -211,13 +213,13 @@ function AjustesOperacion({
       </div>
 
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
-        <p className="text-base font-semibold">TRM para los montos en pesos</p>
+        <p className="text-base font-semibold">Dólar para los montos en pesos</p>
         <p className="mt-1 text-2xl font-semibold">{pesos(trm.valor)} <span className="text-sm font-normal text-muted-foreground">por dólar</span></p>
-        <p className={`mt-1 text-xs ${trm.fuente === "oficial" ? "text-muted-foreground" : "text-amber-700"}`}>
+        <p className={`mt-1 text-xs ${FUENTES_TRM_CONSULTADAS.includes(trm.fuente) ? "text-muted-foreground" : "text-amber-700"}`}>
           {FUENTES_TRM[trm.fuente] ?? trm.fuente}
-          {trm.vigencia ? ` · vigente desde ${trm.vigencia}` : ""}
+          {trm.vigencia ? ` · del ${trm.vigencia}` : ""}
         </p>
-        <label className="mt-3 block text-sm font-medium" htmlFor="trm-respaldo">Respaldo si falla la consulta oficial</label>
+        <label className="mt-3 block text-sm font-medium" htmlFor="trm-respaldo">Respaldo si falla la consulta</label>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <input
             id="trm-respaldo"
@@ -235,7 +237,7 @@ function AjustesOperacion({
               Quitar
             </button>
           ) : null}
-          <button type="button" disabled={guardando !== null || !trm.consulta_automatica} onClick={consultarTrm} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50" title={trm.consulta_automatica ? "Volver a consultar la TRM oficial" : "La consulta automática está desactivada en el servidor"}>
+          <button type="button" disabled={guardando !== null || !trm.consulta_automatica} onClick={consultarTrm} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50" title={trm.consulta_automatica ? "Volver a consultar el dólar en Google Finance" : "La consulta automática está desactivada en el servidor"}>
             <RefreshCw className={`h-3.5 w-3.5 ${guardando === "consultar" ? "animate-spin" : ""}`} />Consultar ahora
           </button>
         </div>

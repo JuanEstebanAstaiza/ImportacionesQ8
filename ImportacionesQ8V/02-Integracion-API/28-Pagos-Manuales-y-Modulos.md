@@ -47,6 +47,16 @@ Endpoints de admin (`require_rol("admin")`; con el académico apagado, responden
 - `POST /admin/cursos/accesos` con `{curso_id, email, nota?}`: 404 si no hay cuenta con ese correo y 409 si ya tiene acceso.
 - `DELETE /admin/cursos/accesos/{id}`: quita el acceso. El progreso queda guardado.
 
+## Categorías de cotizante (lista privada)
+
+En *Admin › Cotizantes* el admin crea categorías (`categorias_cotizante`, migración `20261016_0041`). Cada una trae:
+- **Tier**: queda fijo (`tier_manual`), como un tier puesto a mano. Vacío: no lo toca.
+- **Días de Tendencias**: una cortesía de N días que empieza el día en que se asigna (`AccesoTendencias`, origen `cortesia`). Vacío: sin Tendencias.
+
+Se asigna al crear el cotizante (`POST /admin/solicitantes` con `categoria_id`; si además viene `tier`, manda ese) o después (`PUT /admin/cotizantes/{id}/categoria`; los días se suman a los que tenga). Editar una categoría no cambia a quienes ya la tienen. Archivada (`activa=false`) ya no se asigna.
+
+Endpoints: `GET|POST /admin/categorias-cotizante`, `PUT /admin/categorias-cotizante/{id}`. El listado de cotizantes trae `categoria_id` y `categoria`.
+
 ## 1 token por cotización
 
 Con el módulo `cobro_cotizaciones` encendido, cada cotización de un comprador consume 1:

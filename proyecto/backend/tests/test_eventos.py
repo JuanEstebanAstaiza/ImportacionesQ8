@@ -5,6 +5,7 @@ USD y en pesos (con la TRM del momento) y la cantidad con su unidad:
 solicitud creada, asignada, vista; propuesta enviada, editada, aceptada o
 descartada (con motivo); y cada hito del pedido.
 """
+import json
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -22,7 +23,8 @@ TRM_PRUEBA = 4000.0
 def trm_fija(db_session):
     """TRM conocida para poder comprobar los montos en pesos."""
     trm.reiniciar_cache()
-    for clave in (trm.CLAVE_OFICIAL_VALOR, trm.CLAVE_OFICIAL_CONSULTA, trm.CLAVE_OFICIAL_VIGENCIA):
+    for clave in (trm.CLAVE_OFICIAL_VALOR, trm.CLAVE_OFICIAL_CONSULTA, trm.CLAVE_OFICIAL_VIGENCIA,
+                  trm.CLAVE_OFICIAL_FUENTE, trm.CLAVE_OFICIAL_CONSULTADA_EN):
         configuracion.guardar(db_session, clave, None)
     configuracion.guardar(db_session, trm.CLAVE_RESPALDO, str(TRM_PRUEBA))
     db_session.commit()
@@ -322,26 +324,66 @@ class TestEtapas:
 
 
 class TestTrm:
-    def test_usa_la_oficial_y_la_guarda(self, db_session, monkeypatch):
+    def test_usa_google_finance_y_la_guarda(self, db_session, monkeypatch):
         configuracion.guardar(db_session, trm.CLAVE_RESPALDO, None)
         db_session.commit()
         monkeypatch.setattr(trm.config, "TRM_CONSULTA_AUTOMATICA", True)
-        with patch.object(trm, "consultar_trm_oficial", return_value={"valor": 3912.45, "vigencia": "2026-10-03"}) as consulta:
+        with patch.object(trm, "consultar_google_finance", return_value={"valor": 3912.45, "vigencia": "2026-10-11"}) as google, \
+                patch.object(trm, "consultar_trm_oficial") as oficial:
             primera = trm.obtener_trm(db_session)
             segunda = trm.obtener_trm(db_session)
-        assert primera["valor"] == 3912.45 and primera["fuente"] == "oficial"
+        assert primera["valor"] == 3912.45 and primera["fuente"] == "google_finance"
         assert segunda == primera
-        assert consulta.call_count == 1  # una consulta al día por proceso
+        assert google.call_count == 1 and oficial.call_count == 0  # una consulta por refresco
         db_session.commit()
         assert configuracion.obtener(db_session, trm.CLAVE_OFICIAL_VALOR) == "3912.45"
+        assert configuracion.obtener(db_session, trm.CLAVE_OFICIAL_FUENTE) == "google_finance"
+
+    def test_se_refresca_pasado_el_intervalo(self, db_session, monkeypatch):
+        from datetime import datetime, timedelta
+
+        monkeypatch.setattr(trm.config, "TRM_CONSULTA_AUTOMATICA", True)
+        ahora = datetime(2026, 10, 11, 15, 0)
+        with patch.object(trm, "consultar_google_finance", side_effect=[
+                {"valor": 3900.0, "vigencia": None}, {"valor": 3950.0, "vigencia": None}]):
+            assert trm.obtener_trm(db_session, ahora)["valor"] == 3900.0
+            assert trm.obtener_trm(db_session, ahora + timedelta(minutes=30))["valor"] == 3900.0
+            assert trm.obtener_trm(db_session, ahora + timedelta(minutes=61))["valor"] == 3950.0
+
+    def test_si_google_falla_usa_la_trm_oficial(self, db_session, monkeypatch):
+        monkeypatch.setattr(trm.config, "TRM_CONSULTA_AUTOMATICA", True)
+        with patch.object(trm, "consultar_google_finance", return_value=None), \
+                patch.object(trm, "consultar_trm_oficial", return_value={"valor": 3901.27, "vigencia": "2026-10-03"}):
+            resultado = trm.obtener_trm(db_session)
+        assert resultado["valor"] == 3901.27 and resultado["fuente"] == "oficial"
 
     def test_si_falla_usa_el_respaldo_del_admin(self, db_session, monkeypatch):
         monkeypatch.setattr(trm.config, "TRM_CONSULTA_AUTOMATICA", True)
-        with patch.object(trm, "consultar_trm_oficial", return_value=None) as consulta:
+        with patch.object(trm, "consultar_google_finance", return_value=None) as google, \
+                patch.object(trm, "consultar_trm_oficial", return_value=None):
             resultado = trm.obtener_trm(db_session)
             trm.obtener_trm(db_session)
         assert resultado == {"valor": TRM_PRUEBA, "fuente": "respaldo_admin", "vigencia": None, "fecha_consulta": None}
-        assert consulta.call_count == 1  # tras un fallo espera antes de reintentar
+        assert google.call_count == 1  # tras un fallo espera antes de reintentar
+
+    def test_lee_la_pagina_de_google_finance(self):
+        html = ('<script>AF_initDataCallback({key: \'ds:2\', data:[[[["/g/11bvvy88g6",null,"USD / COP",3,null,'
+                '[3214.8614,5.01925,0.1563706,4,4,2],null,3209.84215,null,null,null,[1791755479],null,0]]]]});</script>')
+        assert trm.leer_google_finance(html) == {"valor": 3214.8614, "vigencia": "2026-10-11"}
+        assert trm.leer_google_finance('<div data-last-price="4012.5"></div>')["valor"] == 4012.5
+        assert trm.leer_google_finance("<html>consentimiento</html>") is None
+        assert trm.leer_google_finance('"USD / COP",3,null,[12.5,0]') is None  # fuera de rango
+
+    def test_lee_la_respuesta_del_servicio_de_google(self):
+        texto = (")]}'\n\n411\n" + json.dumps([["wrb.fr", "xh8wxf", json.dumps(
+            [[[["/g/11bvvy88g6", None, "USD / COP", 3, None, [3214.58754, 4.7, 0.14, 4, 4, 2], None, 3209.8,
+                None, None, None, [1791755659]]]]]), None, None, None, "generic"]]) + "\n25\n[[\"e\",4]]")
+        assert trm.leer_respuesta_rpc(texto) == {"valor": 3214.58754, "vigencia": "2026-10-11"}
+        assert trm.leer_respuesta_rpc(")]}'\n[[\"e\",4]]") is None
+
+    def test_google_finance_error_de_red(self):
+        with patch("httpx.post", side_effect=OSError("sin red")), patch("httpx.get", side_effect=OSError("sin red")):
+            assert trm.consultar_google_finance() is None
 
     def test_sin_respaldo_usa_la_ultima_oficial(self, db_session, monkeypatch):
         configuracion.guardar(db_session, trm.CLAVE_RESPALDO, None)

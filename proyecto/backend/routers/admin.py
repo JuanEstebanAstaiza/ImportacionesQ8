@@ -40,6 +40,9 @@ from schemas.admin import (
     RetirarVerificacionRequest,
     CotizanteAdminResponse,
     TierUpdateRequest,
+    CategoriaCotizanteCreate,
+    CategoriaCotizanteUpdate,
+    AsignarCategoriaRequest,
     RecalculoTiersResponse,
     UmbralTierResponse,
     UmbralesTierUpdateRequest,
@@ -89,13 +92,19 @@ def _validar_tier_admin(tier: str) -> str:
     return tier
 
 
-def _cotizante_response(usuario: Usuario) -> CotizanteAdminResponse:
+def _cotizante_response(usuario: Usuario, categorias: Optional[dict] = None, db: Optional[Session] = None) -> CotizanteAdminResponse:
+    if categorias is None and db is not None and usuario.categoria_id:
+        from services import categorias_cotizante
+
+        categorias = categorias_cotizante.nombres(db)
     return CotizanteAdminResponse(
         id=str(usuario.id),
         email=usuario.email,
         nombre=usuario.nombre or usuario.razon_social,
         tier=usuario.tier,
         tier_manual=bool(usuario.tier_manual),
+        categoria_id=usuario.categoria_id,
+        categoria=(categorias or {}).get(usuario.categoria_id) if usuario.categoria_id else None,
         puntos_cotizacion=int(usuario.puntos_cotizacion or 0),
         fecha_creacion=usuario.fecha_creacion,
     )
@@ -111,7 +120,11 @@ async def listar_cotizantes_admin(
     if buscar and buscar.strip():
         patron = f"%{buscar.strip()}%"
         query = query.filter(or_(Usuario.nombre.ilike(patron), Usuario.razon_social.ilike(patron), Usuario.email.ilike(patron)))
-    return [_cotizante_response(usuario) for usuario in query.order_by(Usuario.fecha_creacion.desc()).limit(500).all()]
+    from services import categorias_cotizante
+
+    categorias = categorias_cotizante.nombres(db)
+    return [_cotizante_response(usuario, categorias)
+            for usuario in query.order_by(Usuario.fecha_creacion.desc()).limit(500).all()]
 
 
 @router.put("/cotizantes/{usuario_id}/tier", response_model=CotizanteAdminResponse)
@@ -129,7 +142,7 @@ async def actualizar_tier_cotizante(
     usuario.tier_manual = True
     db.commit()
     db.refresh(usuario)
-    return _cotizante_response(usuario)
+    return _cotizante_response(usuario, db=db)
 
 
 @router.delete("/cotizantes/{usuario_id}/tier", response_model=CotizanteAdminResponse)
@@ -148,7 +161,57 @@ async def liberar_tier_manual_cotizante(
     recalcular_tier_cotizante(db, usuario_id)
     db.commit()
     db.refresh(usuario)
-    return _cotizante_response(usuario)
+    return _cotizante_response(usuario, db=db)
+
+
+# ==================== Categorías de cotizante (lista privada) ====================
+
+@router.get("/categorias-cotizante")
+async def listar_categorias_cotizante(db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
+    from services import categorias_cotizante
+
+    return categorias_cotizante.listar(db)
+
+
+@router.post("/categorias-cotizante", status_code=status.HTTP_201_CREATED)
+async def crear_categoria_cotizante(datos: CategoriaCotizanteCreate, db: Session = Depends(get_db),
+                                    current_user: dict = Depends(require_rol("admin"))):
+    from services import categorias_cotizante
+
+    categoria = categorias_cotizante.crear(db, datos.model_dump(), current_user["user_id"])
+    db.commit()
+    return categorias_cotizante.a_dict(categoria)
+
+
+@router.put("/categorias-cotizante/{categoria_id}")
+async def actualizar_categoria_cotizante(categoria_id: str, datos: CategoriaCotizanteUpdate,
+                                         db: Session = Depends(get_db),
+                                         current_user: dict = Depends(require_rol("admin"))):
+    """Cambia lo que trae la categoría. A quienes ya la tienen no se les cambia
+    nada: aplica a los que se les asigne desde ahora."""
+    from services import categorias_cotizante
+
+    categorias_cotizante.actualizar(db, categoria_id, datos.model_dump(exclude_unset=True))
+    db.commit()
+    return next(c for c in categorias_cotizante.listar(db) if c["id"] == categoria_id)
+
+
+@router.put("/cotizantes/{usuario_id}/categoria", response_model=CotizanteAdminResponse)
+async def asignar_categoria_cotizante(usuario_id: str, datos: AsignarCategoriaRequest,
+                                      db: Session = Depends(get_db),
+                                      current_user: dict = Depends(require_rol("admin"))):
+    """Le pone la categoría a un cotizante que ya existe y le da lo que trae
+    (tier fijo y días de Tendencias, que se suman a los que tenga)."""
+    from services import categorias_cotizante
+
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.rol == "solicitante").first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    categoria = categorias_cotizante.obtener(db, datos.categoria_id, activa=True)
+    categorias_cotizante.aplicar(db, usuario, categoria, current_user["user_id"])
+    db.commit()
+    db.refresh(usuario)
+    return _cotizante_response(usuario, db=db)
 
 
 @router.post("/cotizantes/recalcular-tiers", response_model=RecalculoTiersResponse)
@@ -229,7 +292,7 @@ async def ajustar_puntos_cotizante(
     ))
     db.commit()
     db.refresh(usuario)
-    return _cotizante_response(usuario)
+    return _cotizante_response(usuario, db=db)
 
 
 @router.get("/cotizantes/{usuario_id}/puntos/movimientos", response_model=List[MovimientoPuntoCotizacionResponse])
@@ -336,8 +399,17 @@ async def crear_solicitante(
         valor = getattr(datos, campo)
         if isinstance(valor, str):
             setattr(datos, campo, valor.strip() or None)
+    categoria = None
+    if datos.categoria_id:
+        from services import categorias_cotizante
+
+        categoria = categorias_cotizante.obtener(db, datos.categoria_id, activa=True)
     usuario = crear_cuenta_solicitante(db, datos, email_verificado=True, acepto_politica=False)
-    if datos.tier:
+    if categoria is not None:
+        categorias_cotizante.aplicar(db, usuario, categoria, current_user["user_id"], tier=datos.tier)
+        db.commit()
+        db.refresh(usuario)
+    elif datos.tier:
         usuario.tier = _validar_tier_admin(datos.tier)
         usuario.tier_manual = True
         db.commit()

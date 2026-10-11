@@ -14,7 +14,9 @@ import {
   type AdminMetricas,
   type AdminUser,
   type BackupResumen,
+  type CategoriaCotizante,
 } from "@/services/admin.service";
+import { textoCategoria } from "@/features/admin/CategoriasCotizante";
 import { businessService } from "@/services/business.service";
 import { tendenciasService } from "@/services/tendencias.service";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
@@ -76,8 +78,9 @@ type UserFormState = {
   nit: string;
   razonSocial: string;
   tokensIniciales: string;
-  /** "" = automático (Bronze y sube por actividad). */
+  /** "" = automático (Bronze y sube por actividad) o el de la categoría. */
   tier: "" | "Bronze" | "Silver" | "Gold" | "Élite";
+  categoriaId: string;
   /** Empresa importadora: nombre comercial y ficha básica. */
   companyName: string;
   especialidades: string[];
@@ -160,6 +163,7 @@ const EMPTY_USER_FORM: UserFormState = {
   razonSocial: "",
   tokensIniciales: "0",
   tier: "",
+  categoriaId: "",
   companyName: "",
   especialidades: [],
   paises: "China",
@@ -280,6 +284,13 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   const companyUiDetails = useMemo(() => loadCompanyUiDetails(), []);
   const [companyForm, setCompanyForm] = useState(EMPTY_IMPORTER_FORM);
   const [userForm, setUserForm] = useState<UserFormState>(EMPTY_USER_FORM);
+  const [categoriasCotizante, setCategoriasCotizante] = useState<CategoriaCotizante[]>([]);
+
+  // Las categorías se crean en Cotizantes: se recargan cada vez que se abre el alta.
+  useEffect(() => {
+    if (!showUserModal) return;
+    adminService.listarCategoriasCotizante().then(setCategoriasCotizante).catch(() => setCategoriasCotizante([]));
+  }, [showUserModal]);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const metricsSectionRef = useRef<HTMLElement | null>(null);
@@ -926,6 +937,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           telefono: userForm.telefono.trim(),
           tokens_iniciales: Math.max(0, Math.floor(Number(userForm.tokensIniciales) || 0)),
           ...(userForm.tier ? { tier: userForm.tier } : {}),
+          ...(userForm.categoriaId ? { categoria_id: userForm.categoriaId } : {}),
         });
         setStatusMessage(`Cotizante creado: ${userForm.email.trim()} ya puede iniciar sesión (sin código de verificación).`);
       }
@@ -2555,13 +2567,30 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   </label>
                 ) : null}
                 {userForm.rol === "solicitante" ? (
+                  <label className="text-xs font-medium text-muted-foreground">Categoría
+                    <select
+                      value={userForm.categoriaId}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, categoriaId: event.target.value }))}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm"
+                    >
+                      <option value="">Sin categoría</option>
+                      {categoriasCotizante.filter((c) => c.activa).map((c) => (
+                        <option key={c.id} value={c.id}>{c.nombre} · {textoCategoria(c)}</option>
+                      ))}
+                    </select>
+                    <span className="mt-0.5 block font-normal">
+                      Aplica su tier (si abajo no eliges otro) y sus días de Tendencias. Las categorías se crean en Cotizantes.
+                    </span>
+                  </label>
+                ) : null}
+                {userForm.rol === "solicitante" ? (
                   <label className="text-xs font-medium text-muted-foreground">Tier
                     <select
                       value={userForm.tier}
                       onChange={(event) => setUserForm((prev) => ({ ...prev, tier: event.target.value as UserFormState["tier"] }))}
                       className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm"
                     >
-                      <option value="">Automático (empieza en Bronze y sube con su actividad)</option>
+                      <option value="">{userForm.categoriaId ? "El de la categoría" : "Automático (empieza en Bronze y sube con su actividad)"}</option>
                       <option value="Bronze">Bronze (fijo)</option>
                       <option value="Silver">Silver (fijo)</option>
                       <option value="Gold">Gold (fijo)</option>

@@ -16,7 +16,7 @@ TRM = 4000.0
 @pytest.fixture(autouse=True)
 def trm_fija(db_session):
     trm.reiniciar_cache()
-    for clave in (trm.CLAVE_OFICIAL_VALOR, trm.CLAVE_OFICIAL_CONSULTA):
+    for clave in (trm.CLAVE_OFICIAL_VALOR, trm.CLAVE_OFICIAL_CONSULTA, trm.CLAVE_OFICIAL_CONSULTADA_EN):
         configuracion.guardar(db_session, clave, None)
     configuracion.guardar(db_session, trm.CLAVE_RESPALDO, str(TRM))
     db_session.commit()

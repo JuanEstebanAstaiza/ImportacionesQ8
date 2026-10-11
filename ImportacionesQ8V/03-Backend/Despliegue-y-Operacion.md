@@ -106,7 +106,7 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `BACKUP_RETENCION`, `BACKUP_REMOTO`, `MAX_BACKUP_UPLOAD_BYTES` | Backups. Ver [[Backups-y-Restauracion]] |
 | `CUPO_COTIZACIONES_UTC_OFFSET_HORAS` | Zona horaria del cupo diario (−5, Colombia) |
 | `ASIGNACION_COTIZACIONES`, `ASIGNACION_CUPO_POR_SOLICITUD` | Valor inicial del modo de asignación de abiertas (`manual` en el piloto) y del cupo de empresas por solicitud (3). El admin los cambia luego desde el panel. Ver [[23-Asignacion-de-Solicitudes]] |
-| `TRM_CONSULTA_AUTOMATICA`, `TRM_URL`, `TRM_TIMEOUT_SEGUNDOS`, `TRM_RESPALDO_COP` | TRM oficial diaria desde datos.gov.co para guardar montos en pesos. El servidor necesita salida HTTPS a `www.datos.gov.co`; si no la tiene, usa el respaldo del admin. Ver [[24-Eventos-y-Panel-Empresa]] |
+| `TRM_CONSULTA_AUTOMATICA`, `TRM_GOOGLE_FINANCE_URL`, `TRM_URL`, `TRM_REFRESCO_MINUTOS`, `TRM_TIMEOUT_SEGUNDOS`, `TRM_RESPALDO_COP` | Dólar para guardar montos en pesos: Google Finance (USD/COP, cada hora) y, si falla, la TRM oficial de datos.gov.co. El servidor necesita salida HTTPS a `www.google.com` y `www.datos.gov.co`; sin ninguna, usa el respaldo del admin. Ver [[24-Eventos-y-Panel-Empresa]] |
 
 ← [[Indice-Backend]] · [[Estado-del-proyecto]]
 

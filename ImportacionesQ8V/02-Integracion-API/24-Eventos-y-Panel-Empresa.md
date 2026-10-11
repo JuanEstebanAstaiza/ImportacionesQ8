@@ -71,9 +71,10 @@ Esas filas llevan `datos.origen = "historico"` y no tienen TRM ni motivo. El pan
 
 | Paso | Detalle |
 |------|---------|
-| Fuente oficial | Conjunto "TRM" de la Superintendencia Financiera en datos.gov.co (`TRM_URL`), una consulta al día por proceso, con timeout corto (`TRM_TIMEOUT_SEGUNDOS`) |
-| Si falla | 1) respaldo del admin (`trm.respaldo`); 2) última oficial conocida; 3) `TRM_RESPALDO_COP` (4000 por defecto). Tras un fallo espera 15 min antes de reintentar |
-| Trazabilidad | Cada evento guarda la TRM usada y su fuente (`datos.trm_fuente`: `oficial`, `respaldo_admin`, `ultima_oficial`, `por_defecto`) |
+| Fuente principal (desde 2026-10-11) | Cotización USD/COP de **Google Finance**. Google no tiene API pública: se le pide al servicio interno que usa su página (`batchexecute`, RPC `xh8wxf`) y, si eso falla, se lee de la página (`TRM_GOOGLE_FINANCE_URL`). Se refresca cada `TRM_REFRESCO_MINUTOS` (60) por proceso, con timeout corto (`TRM_TIMEOUT_SEGUNDOS`) |
+| Segunda fuente | TRM oficial de la Superintendencia Financiera en datos.gov.co (`TRM_URL`), si Google no responde o cambia el formato |
+| Si las dos fallan | 1) respaldo del admin (`trm.respaldo`); 2) última cotización conocida; 3) `TRM_RESPALDO_COP` (4000 por defecto). Tras un fallo espera 15 min antes de reintentar |
+| Trazabilidad | Cada evento guarda el dólar usado y su fuente (`datos.trm_fuente`: `google_finance`, `oficial`, `respaldo_admin`, `ultima_oficial`, `por_defecto`) |
 | Desactivar | `TRM_CONSULTA_AUTOMATICA=false` (por defecto en tests) |
 
 Endpoints:

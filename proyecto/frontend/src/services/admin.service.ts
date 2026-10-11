@@ -36,9 +36,25 @@ export interface AdminCotizante {
   nombre: string | null;
   tier: string;
   tier_manual: boolean;
+  categoria_id: string | null;
+  categoria: string | null;
   puntos_cotizacion: number;
   fecha_creacion: string;
 }
+
+/** Categoría de la lista privada: el tier con el que entra y días de Tendencias. */
+export interface CategoriaCotizante {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  tier: "Bronze" | "Silver" | "Gold" | "Élite" | null;
+  dias_tendencias: number | null;
+  activa: boolean;
+  cotizantes: number;
+  fecha_creacion: string | null;
+}
+
+export type CategoriaCotizanteDatos = Partial<Pick<CategoriaCotizante, "nombre" | "descripcion" | "tier" | "dias_tendencias" | "activa">>;
 
 export interface AdminTierThreshold {
   tier: string;
@@ -331,6 +347,8 @@ export interface CrearSolicitantePayload {
   tokens_iniciales?: number;
   /** Tier fijado a mano; sin él entra en Bronze y sube por actividad. */
   tier?: "Bronze" | "Silver" | "Gold" | "Élite";
+  /** Categoría de la lista privada: aplica su tier (si no se eligió otro) y sus días de Tendencias. */
+  categoria_id?: string;
 }
 
 export interface CreateImporterWithOwnerResponse {
@@ -554,6 +572,26 @@ export const adminService = {
   listCotizantes(search?: string): Promise<AdminCotizante[]> {
     const suffix = search?.trim() ? `?buscar=${encodeURIComponent(search.trim())}` : "";
     return apiRequest<AdminCotizante[]>(`/admin/cotizantes${suffix}`, { method: "GET" });
+  },
+
+  listarCategoriasCotizante(): Promise<CategoriaCotizante[]> {
+    return apiRequest<CategoriaCotizante[]>("/admin/categorias-cotizante", { method: "GET" });
+  },
+
+  crearCategoriaCotizante(datos: CategoriaCotizanteDatos): Promise<CategoriaCotizante> {
+    return apiRequest<CategoriaCotizante>("/admin/categorias-cotizante", { method: "POST", body: datos });
+  },
+
+  actualizarCategoriaCotizante(id: string, datos: CategoriaCotizanteDatos): Promise<CategoriaCotizante> {
+    return apiRequest<CategoriaCotizante>(`/admin/categorias-cotizante/${id}`, { method: "PUT", body: datos });
+  },
+
+  /** Le aplica la categoría a un cotizante existente (tier fijo y días de Tendencias). */
+  asignarCategoriaCotizante(usuarioId: string, categoriaId: string): Promise<AdminCotizante> {
+    return apiRequest<AdminCotizante>(`/admin/cotizantes/${usuarioId}/categoria`, {
+      method: "PUT",
+      body: { categoria_id: categoriaId },
+    });
   },
 
   updateCotizanteTier(usuarioId: string, tier: string): Promise<AdminCotizante> {

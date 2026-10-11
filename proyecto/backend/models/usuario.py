@@ -96,6 +96,8 @@ class Usuario(Base):
     creditos_balance = Column(Float, default=0.0, nullable=False)
     tier = Column(String(10), default=TierCotizante.bronze.value, server_default=TierCotizante.bronze.value, nullable=False)
     tier_manual = Column(Boolean, default=False, server_default="0", nullable=False)
+    # Categoría de la lista privada (models/categoria_cotizante.py), si tiene.
+    categoria_id = Column(String(36), ForeignKey("categorias_cotizante.id"), nullable=True)
     puntos_cotizacion = Column(Integer, default=0, server_default="0", nullable=False)
     # Importaciones que el cotizante declara haber hecho por fuera de la
     # plataforma. Alimenta el desglose "dentro vs. fuera" de su perfil público.

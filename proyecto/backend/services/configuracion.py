@@ -30,6 +30,9 @@ def guardar(db: Session, clave: str, valor: Optional[str], usuario_id: Optional[
     if fila is None:
         fila = ConfiguracionPlataforma(clave=clave)
         db.add(fila)
+        # Que un segundo `guardar` de la misma clave en esta sesión la encuentre
+        # (sin autoflush, insertaba dos veces la misma clave).
+        db.flush([fila])
     fila.valor = valor
     fila.actualizado_por = usuario_id
     fila.fecha_actualizacion = datetime.utcnow()

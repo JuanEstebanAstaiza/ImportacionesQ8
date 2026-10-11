@@ -95,3 +95,60 @@ def test_admin_elige_el_tier_del_cotizante(client, db_session):
 
     assert client.post("/admin/solicitantes", headers=admin, json={
         **natural, "email": "x2@example.com", "tier": "Platino"}).status_code == 422
+
+
+def test_categorias_de_cotizante_con_tier_y_tendencias(client, db_session):
+    from datetime import datetime, timedelta
+
+    from services import tendencias as tendencias_svc
+
+    _, admin = crear_usuario_con_token(db_session, rol="admin")
+    r = client.post("/admin/categorias-cotizante", headers=admin, json={
+        "nombre": "Lista privada Gold", "descripcion": "Entra en Gold con Tendencias", "tier": "Gold",
+        "dias_tendencias": 30})
+    assert r.status_code == 201, r.text
+    categoria = r.json()
+    assert (categoria["tier"], categoria["dias_tendencias"], categoria["activa"]) == ("Gold", 30, True)
+    # El nombre no se repite.
+    assert client.post("/admin/categorias-cotizante", headers=admin,
+                       json={"nombre": "lista privada gold"}).status_code == 409
+
+    natural = {**BASE, "tipo_persona": "natural", "nombre": "Sara", "apellido": "Mejía",
+               "tipo_documento": "CC", "numero_documento": "55443322"}
+    r = client.post("/admin/solicitantes", headers=admin,
+                    json={**natural, "email": "sara@example.com", "categoria_id": categoria["id"]})
+    assert r.status_code == 201, r.text
+    u = db_session.query(Usuario).filter(Usuario.email == "sara@example.com").one()
+    assert (u.categoria_id, u.tier, u.tier_manual) == (categoria["id"], "Gold", True)
+    hasta = tendencias_svc.acceso_hasta(db_session, u.id)
+    assert hasta is not None and abs((hasta - datetime.utcnow()) - timedelta(days=30)) < timedelta(minutes=5)
+
+    # El tier elegido a mano manda sobre el de la categoría.
+    r = client.post("/admin/solicitantes", headers=admin, json={
+        **natural, "email": "silver@example.com", "numero_documento": "66554433",
+        "categoria_id": categoria["id"], "tier": "Silver"})
+    assert db_session.query(Usuario.tier).filter(Usuario.email == "silver@example.com").scalar() == "Silver"
+
+    listado = client.get("/admin/categorias-cotizante", headers=admin).json()
+    assert listado[0]["cotizantes"] == 2
+    cotizantes = {c["email"]: c for c in client.get("/admin/cotizantes", headers=admin).json()}
+    assert cotizantes["sara@example.com"]["categoria"] == "Lista privada Gold"
+
+    # A un cotizante que ya existe también se le puede aplicar.
+    otra = client.post("/admin/categorias-cotizante", headers=admin,
+                       json={"nombre": "Solo Tendencias", "dias_tendencias": 7}).json()
+    r = client.post("/admin/solicitantes", headers=admin, json={
+        **natural, "email": "luego@example.com", "numero_documento": "77665544"})
+    luego = db_session.query(Usuario).filter(Usuario.email == "luego@example.com").one()
+    r = client.put(f"/admin/cotizantes/{luego.id}/categoria", headers=admin, json={"categoria_id": otra["id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["categoria"] == "Solo Tendencias" and r.json()["tier"] == "Bronze"
+    assert tendencias_svc.acceso_hasta(db_session, luego.id) is not None
+
+    # Archivada: ya no se asigna.
+    assert client.put(f"/admin/categorias-cotizante/{otra['id']}", headers=admin,
+                      json={"activa": False}).json()["activa"] is False
+    assert client.put(f"/admin/cotizantes/{luego.id}/categoria", headers=admin,
+                      json={"categoria_id": otra["id"]}).status_code == 409
+    _, soporte = crear_usuario_con_token(db_session, rol="soporte")
+    assert client.get("/admin/categorias-cotizante", headers=soporte).status_code == 403
