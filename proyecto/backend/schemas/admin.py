@@ -36,6 +36,7 @@ class EnvioCorreoMasivoResponse(BaseModel):
     enviados: int
     fallidos: int
     fallos: List[str] = Field(default_factory=list)
+    remitente: Optional[str] = None
 
 class DisputaOrdenResponse(BaseModel):
     id: str

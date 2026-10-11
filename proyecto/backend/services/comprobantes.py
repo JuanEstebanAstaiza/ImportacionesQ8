@@ -15,6 +15,7 @@ from models.comprobante import ComprobantePago, EstadoComprobante, TipoComproban
 from models.documental import Archivo
 from models.tier import MovimientoPuntoCotizacion
 from models.usuario import Usuario
+import config
 from services import configuracion
 from services.documental_service import ensure_folder_path
 
@@ -29,6 +30,31 @@ CARPETA_EQUIPO_RETO = ["Pagos", "Reto pagados"]
 CLAVE_PRECIO_TOKEN = "pagos.precio_token_cop"
 CLAVE_DATOS_PAGO = "pagos.datos_pago"
 TIPOS_ARCHIVO = ("imagen", "documento")
+
+
+def concepto(tipo: str, cantidad: Optional[int] = None) -> str:
+    """A qué pertenece el pago, para los correos («compra de cotizaciones…»)."""
+    if tipo == TipoComprobante.tokens.value:
+        if cantidad:
+            return f"la compra de cotizaciones ({cantidad} {'token' if cantidad == 1 else 'tokens'})"
+        return "la compra de cotizaciones"
+    if tipo == TipoComprobante.suscripcion.value:
+        return "el pago de la suscripción a Tendencias"
+    return "la recompensa del reto"
+
+
+def acusar_recibo(db: Session, usuario_id: str, titulo: str, que: str, *, evento: str,
+                  data: Optional[Dict] = None) -> None:
+    """Correo automático desde pagos@ (y aviso en la campana) apenas llega un
+    comprobante o una solicitud de retiro: todavía no está aprobado."""
+    from services.notificacion_service import notificar
+
+    notificar(
+        db, usuario_id=usuario_id, tipo="pagos", titulo=titulo,
+        mensaje=f"Hemos recibido tu {que}. Pronto nos pondremos en contacto contigo después de haber verificado la información.",
+        data={"evento": evento, **(data or {})}, enlace_relativo="/pagos", whatsapp=False, email=True,
+        remitente=config.EMAIL_FROM_PAGOS,
+    )
 
 
 def _error(codigo: int, mensaje: str) -> HTTPException:
@@ -132,9 +158,10 @@ def crear(db: Session, usuario: Usuario, *, tipo: str, archivo_id: str, cantidad
     )
     db.add(comprobante)
     db.flush()
-    que = "tokens de cotización" if tipo == TipoComprobante.tokens.value else "la suscripción a Tendencias"
-    _avisar_admins(db, f"Comprobante de pago por revisar", f"{usuario.email} subió el pago de {que}.",
+    _avisar_admins(db, "Comprobante de pago por revisar", f"{usuario.email} subió el comprobante de {concepto(tipo, cantidad)}.",
                    {"evento": "comprobante_nuevo", "comprobante_id": comprobante.id})
+    acusar_recibo(db, usuario.id, "Recibimos tu comprobante de pago", f"comprobante de pago de {concepto(tipo, cantidad)}",
+                  evento="comprobante_recibido", data={"comprobante_id": comprobante.id})
     return comprobante
 
 
@@ -184,7 +211,7 @@ def aprobar(db: Session, comprobante_id: str, admin: Usuario, cantidad: int) -> 
     c.revisado_en = datetime.utcnow()
     notificar(db, usuario_id=c.usuario_id, tipo="pagos", titulo=titulo, mensaje=mensaje,
               data={"evento": "comprobante_aprobado", "comprobante_id": c.id}, enlace_relativo="/pagos",
-              whatsapp=False, email=True)
+              whatsapp=False, email=True, remitente=config.EMAIL_FROM_PAGOS)
     return c
 
 
@@ -198,7 +225,7 @@ def rechazar(db: Session, comprobante_id: str, admin: Usuario, motivo: str) -> C
     c.revisado_en = datetime.utcnow()
     notificar(db, usuario_id=c.usuario_id, tipo="pagos", titulo="No pudimos aprobar tu comprobante",
               mensaje=c.motivo_rechazo, data={"evento": "comprobante_rechazado", "comprobante_id": c.id},
-              enlace_relativo="/pagos", whatsapp=False, email=True)
+              enlace_relativo="/pagos", whatsapp=False, email=True, remitente=config.EMAIL_FROM_PAGOS)
     return c
 
 
@@ -240,5 +267,5 @@ def subir_reto(db: Session, admin: Usuario, participacion_id: str, archivo_id: s
     notificar(db, usuario_id=participacion.usuario_id, tipo="pagos", titulo="Comprobante de tu recompensa",
               mensaje="Ya puedes ver y descargar el comprobante de la transferencia en Pagos.",
               data={"evento": "comprobante_reto", "comprobante_id": c.id}, enlace_relativo="/pagos",
-              whatsapp=False, email=True)
+              whatsapp=False, email=True, remitente=config.EMAIL_FROM_PAGOS)
     return c

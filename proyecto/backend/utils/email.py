@@ -5,6 +5,7 @@ import httpx
 from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import parseaddr
 
 import config
 
@@ -33,7 +34,16 @@ def construir_html_zarpi(titulo: str, contenido_html: str) -> str:
     )
 
 
-def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
+def _cabeceras(remitente: str = None, responder_a: str = None) -> tuple:
+    """(From, Reply-To). Con un remitente propio (admin@, pagos@…) las respuestas
+    vuelven a ese buzón; sin él, sale de SMTP_FROM y responde a EMAIL_REPLY_TO."""
+    if remitente:
+        return remitente, responder_a or parseaddr(remitente)[1] or None
+    return config.SMTP_FROM, responder_a or config.EMAIL_REPLY_TO or None
+
+
+def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
+                  remitente: str = None, responder_a: str = None) -> bool:
     """
     Envía un correo real vía SMTP usando las credenciales configuradas en
     variables de entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_API_KEY`,
@@ -43,6 +53,9 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
     credenciales reales), se registra el correo en el log en vez de fallar, para
     no bloquear el flujo de negocio por falta de configuración de correo. En
     producción, `SMTP_HOST` debe estar siempre configurado.
+
+    `remitente` cambia el From (p. ej. `config.EMAIL_FROM_PAGOS`) y `responder_a`
+    el Reply-To; ver `_cabeceras`.
 
     Devuelve `True` si el correo se envió (o se simuló vía log), `False` si el
     envío SMTP real fue intentado pero falló.
@@ -64,15 +77,16 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
         )
         return True
 
+    de, responder = _cabeceras(remitente, responder_a)
     if usa_api_resend():
-        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html)
+        return _enviar_por_resend(destinatario, asunto, cuerpo_texto, cuerpo_html, de=de, responder_a=responder)
 
     mensaje = MIMEMultipart("alternative")
     mensaje["Subject"] = asunto
-    mensaje["From"] = config.SMTP_FROM
+    mensaje["From"] = de
     mensaje["To"] = destinatario
-    if config.EMAIL_REPLY_TO:
-        mensaje["Reply-To"] = config.EMAIL_REPLY_TO
+    if responder:
+        mensaje["Reply-To"] = responder
     mensaje.attach(MIMEText(cuerpo_texto, "plain"))
     if cuerpo_html:
         mensaje.attach(MIMEText(cuerpo_html, "html"))
@@ -83,7 +97,7 @@ def enviar_correo(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html
                 servidor.starttls()
             if config.SMTP_USER and config.SMTP_API_KEY:
                 servidor.login(config.SMTP_USER, config.SMTP_API_KEY)
-            servidor.sendmail(config.SMTP_FROM, [destinatario], mensaje.as_string())
+            servidor.sendmail(parseaddr(de)[1] or de, [destinatario], mensaje.as_string())
         return True
     except Exception as error:
         logger.exception(
@@ -101,7 +115,8 @@ def usa_api_resend() -> bool:
     return "resend" in (config.SMTP_HOST or "").lower() and (config.SMTP_API_KEY or "").startswith("re_")
 
 
-def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None) -> bool:
+def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo_html: str = None, *,
+                       de: str = None, responder_a: str = None) -> bool:
     """Envío por la API de Resend (HTTPS, puerto 443). Mismo resultado que SMTP,
     pero sin depender de que el servidor deje salir los puertos de correo, y con
     el motivo exacto en el log cuando Resend rechaza el envío (dominio sin
@@ -109,11 +124,11 @@ def _enviar_por_resend(destinatario: str, asunto: str, cuerpo_texto: str, cuerpo
     if not config.SMTP_API_KEY:
         logger.error("Resend sin API key (SMTP_API_KEY vacío): no se envió el correo a %s", destinatario)
         return False
-    datos = {"from": config.SMTP_FROM, "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
+    datos = {"from": de or config.SMTP_FROM, "to": [destinatario], "subject": asunto, "text": cuerpo_texto}
     if cuerpo_html:
         datos["html"] = cuerpo_html
-    if config.EMAIL_REPLY_TO:
-        datos["reply_to"] = config.EMAIL_REPLY_TO
+    if responder_a:
+        datos["reply_to"] = responder_a
     try:
         respuesta = httpx.post(
             config.RESEND_API_URL,
@@ -162,11 +177,12 @@ def enviar_correo_notificacion(
     titulo: str,
     mensaje: str = "",
     enlace_relativo: str = "",
+    remitente: str = None,
 ) -> bool:
     """Réplica por correo de una notificación in-app.
 
     `enlace_relativo` se resuelve contra `FRONTEND_URL` para que el usuario entre
-    directo a la pantalla correspondiente.
+    directo a la pantalla correspondiente. `remitente`: ver `enviar_correo`.
     """
     enlace = f"{config.FRONTEND_URL}{enlace_relativo}" if enlace_relativo else config.FRONTEND_URL
     cuerpo_texto = (
@@ -180,7 +196,7 @@ def enviar_correo_notificacion(
         f"<p>{escape(mensaje)}</p>"
         f'<p><a href="{escape(enlace, quote=True)}" style="color:#4f46e5;">Entrar a la plataforma</a></p>',
     )
-    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html)
+    return enviar_correo(destinatario, f"{titulo} — Zarpi", cuerpo_texto, cuerpo_html, remitente=remitente)
 
 
 def enviar_correo_otp(destinatario: str, otp: str, proposito: str) -> bool:

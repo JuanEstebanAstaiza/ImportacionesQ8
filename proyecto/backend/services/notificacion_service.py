@@ -88,6 +88,7 @@ def _despachar_canales_externos(
     enlace_relativo: str = "",
     whatsapp: bool = True,
     email: bool = True,
+    remitente: Optional[str] = None,
 ) -> None:
     """Réplica la notificación por WhatsApp y correo. Nunca lanza.
 
@@ -131,7 +132,8 @@ def _despachar_canales_externos(
             try:
                 from utils.email import enviar_correo_notificacion
 
-                enviar_correo_notificacion(destino_email, titulo, mensaje, enlace_relativo)
+                extra = {"remitente": remitente} if remitente else {}
+                enviar_correo_notificacion(destino_email, titulo, mensaje, enlace_relativo, **extra)
             except Exception:
                 logger.warning("Fallo enviando correo de notificación a %s", usuario_id, exc_info=True)
 
@@ -155,8 +157,10 @@ def notificar(
     enlace_relativo: str = "",
     whatsapp: bool = True,
     email: bool = True,
+    remitente: Optional[str] = None,
 ) -> Optional[Notificacion]:
-    """Notificación in-app + WhatsApp + correo, todo best-effort.
+    """Notificación in-app + WhatsApp + correo, todo best-effort. `remitente`
+    cambia el From del correo (p. ej. pagos@); por defecto, SMTP_FROM.
 
     Punto único de entrada para los eventos de negocio: la fila in-app se crea
     dentro de la transacción del caller (que debe hacer commit), y los canales
@@ -182,6 +186,7 @@ def notificar(
         enlace_relativo=enlace_relativo,
         whatsapp=whatsapp,
         email=email,
+        remitente=remitente,
     )
 
     return notificacion

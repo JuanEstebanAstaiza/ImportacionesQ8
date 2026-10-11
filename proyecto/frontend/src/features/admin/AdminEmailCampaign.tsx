@@ -131,7 +131,7 @@ export function AdminEmailCampaign() {
         usuarios_ids: form.usuarios_ids,
         correos,
       });
-      setMessage(`Campaña procesada: ${result.enviados} enviados de ${result.destinatarios}.`);
+      setMessage(`Campaña procesada: ${result.enviados} enviados de ${result.destinatarios}${result.remitente ? ` desde ${result.remitente}` : ""}.`);
       if (result.fallidos > 0) {
         setError(`No se pudieron enviar ${result.fallidos} mensajes.`);
       }
@@ -173,7 +173,7 @@ export function AdminEmailCampaign() {
               <p className="mt-1 text-right text-[11px] text-muted-foreground">{form.cuerpo.length.toLocaleString("es-CO")} / 20.000</p>
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-              <p className="text-xs text-muted-foreground">Los correos se envían desde la cuenta SMTP configurada en el backend.</p>
+              <p className="text-xs text-muted-foreground">Salen desde admin@zarpi.co; las respuestas llegan a ese buzón.</p>
               <button type="button" disabled={sending} onClick={() => { void sendCampaign(); }} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-accent dark:text-accent-foreground">
                 <Send className="h-4 w-4" />{sending ? "Enviando..." : "Enviar campaña"}
               </button>

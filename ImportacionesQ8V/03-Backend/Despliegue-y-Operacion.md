@@ -97,6 +97,7 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Activan la configuración de producción |
 | `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES=1440` | JWT. El frontend no renueva el token, por eso dura 24 h |
 | `SMTP_*` (Resend), `CONTACT_EMAIL` | Correo transaccional y formulario de contacto |
+| `EMAIL_FROM_ADMIN`, `EMAIL_FROM_PAGOS` | Remitentes por buzón. Admin › Correos sale de `admin@zarpi.co`. Los acuses de comprobantes y retiros del reto, las aprobaciones y las transferencias salen de `pagos@zarpi.co`. Las respuestas vuelven a ese mismo buzón. El formulario de contacto llega a `CONTACT_EMAIL`, y al responderlo se le escribe a quien lo llenó. |
 | `EMAIL_PROVIDER` | `resend` (API HTTPS, puerto 443), `smtp`, o vacío = automático (API de Resend si `SMTP_HOST` es de Resend y la key empieza por `re_`) |
 | `WOMPI_SIMULATE`, `WOMPI_*` | Pagos (simulados mientras no haya llaves reales) |
 | `BACKUP_RETENCION`, `BACKUP_REMOTO`, `MAX_BACKUP_UPLOAD_BYTES` | Backups. Ver [[Backups-y-Restauracion]] |

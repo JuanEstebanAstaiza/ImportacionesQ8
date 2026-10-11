@@ -5,6 +5,8 @@ from pathlib import Path
 from uuid import UUID as PyUUID, uuid4
 from typing import List, Optional
 
+import config
+
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_
@@ -858,7 +860,7 @@ async def enviar_correo_masivo_admin(
     fallos = []
     enviados = 0
     for destinatario in sorted(destinatarios):
-        if enviar_correo(destinatario, asunto, cuerpo, cuerpo_html):
+        if enviar_correo(destinatario, asunto, cuerpo, cuerpo_html, remitente=config.EMAIL_FROM_ADMIN):
             enviados += 1
         else:
             fallos.append(destinatario)
@@ -872,6 +874,7 @@ async def enviar_correo_masivo_admin(
         enviados=enviados,
         fallidos=len(fallos),
         fallos=fallos[:50],
+        remitente=config.EMAIL_FROM_ADMIN,
     )
 
 

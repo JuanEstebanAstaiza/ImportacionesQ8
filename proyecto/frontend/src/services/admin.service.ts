@@ -358,6 +358,7 @@ export interface EnvioCorreoMasivoResponse {
   enviados: number;
   fallidos: number;
   fallos: string[];
+  remitente?: string | null;
 }
 
 // ---- Asignación de solicitudes abiertas y ajustes de operación ----
