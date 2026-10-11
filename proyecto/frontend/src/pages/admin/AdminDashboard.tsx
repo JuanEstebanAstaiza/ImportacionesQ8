@@ -76,6 +76,8 @@ type UserFormState = {
   nit: string;
   razonSocial: string;
   tokensIniciales: string;
+  /** "" = automático (Bronze y sube por actividad). */
+  tier: "" | "Bronze" | "Silver" | "Gold" | "Élite";
   /** Empresa importadora: nombre comercial y ficha básica. */
   companyName: string;
   especialidades: string[];
@@ -157,6 +159,7 @@ const EMPTY_USER_FORM: UserFormState = {
   nit: "",
   razonSocial: "",
   tokensIniciales: "0",
+  tier: "",
   companyName: "",
   especialidades: [],
   paises: "China",
@@ -922,6 +925,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           indicativo_pais_telefono: userForm.indicativo_pais_telefono.trim() || "+57",
           telefono: userForm.telefono.trim(),
           tokens_iniciales: Math.max(0, Math.floor(Number(userForm.tokensIniciales) || 0)),
+          ...(userForm.tier ? { tier: userForm.tier } : {}),
         });
         setStatusMessage(`Cotizante creado: ${userForm.email.trim()} ya puede iniciar sesión (sin código de verificación).`);
       }
@@ -2548,6 +2552,24 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                       onChange={(event) => setUserForm((prev) => ({ ...prev, tokensIniciales: event.target.value }))}
                       className="h-9 w-full rounded-lg border border-border px-3 text-sm"
                     />
+                  </label>
+                ) : null}
+                {userForm.rol === "solicitante" ? (
+                  <label className="text-xs font-medium text-muted-foreground">Tier
+                    <select
+                      value={userForm.tier}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, tier: event.target.value as UserFormState["tier"] }))}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm"
+                    >
+                      <option value="">Automático (empieza en Bronze y sube con su actividad)</option>
+                      <option value="Bronze">Bronze (fijo)</option>
+                      <option value="Silver">Silver (fijo)</option>
+                      <option value="Gold">Gold (fijo)</option>
+                      <option value="Élite">Élite (fijo)</option>
+                    </select>
+                    <span className="mt-0.5 block font-normal">
+                      Elegido a mano, el tier no cambia solo. Lo puedes liberar después en Cotizantes.
+                    </span>
                   </label>
                 ) : null}
               </fieldset>

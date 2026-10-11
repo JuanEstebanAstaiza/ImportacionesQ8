@@ -329,6 +329,8 @@ export interface CrearSolicitantePayload {
   indicativo_pais_telefono: string;
   telefono: string;
   tokens_iniciales?: number;
+  /** Tier fijado a mano; sin él entra en Bronze y sube por actividad. */
+  tier?: "Bronze" | "Silver" | "Gold" | "Élite";
 }
 
 export interface CreateImporterWithOwnerResponse {

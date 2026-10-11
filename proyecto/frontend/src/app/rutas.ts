@@ -67,6 +67,7 @@ export type Screen =
   | "admin-modulos"
   | "admin-pagos"
   | "admin-cursos-accesos"
+  | "admin-cursos"
   | "admin-tipografia";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
@@ -118,6 +119,8 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-pagos", path: "/admin/pagos" },
   // Dar o quitar el acceso a un curso a mano (pago manual de cursos).
   { screen: "admin-cursos-accesos", path: "/admin/accesos-cursos" },
+  // Cursos propios de Zarpi: los crea y edita el admin.
+  { screen: "admin-cursos", path: "/admin/cursos" },
   { screen: "catalogos", path: "/catalogos" },
 
   // Comunes

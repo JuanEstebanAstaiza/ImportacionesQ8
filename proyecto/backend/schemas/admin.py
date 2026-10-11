@@ -131,6 +131,9 @@ class CrearSolicitanteAdminRequest(BaseModel):
     telefono: str = Field(..., min_length=5, max_length=30)
     # Tokens de cotización con los que arranca (cada cotización consume 1).
     tokens_iniciales: int = Field(0, ge=0, le=10000)
+    # Tier con el que entra (lista privada). Si se elige, queda fijo (`tier_manual`)
+    # hasta que el admin lo libere en Cotizantes; vacío: Bronze y sube por actividad.
+    tier: Optional[str] = Field(None, pattern="^(Bronze|Silver|Gold|Élite)$")
 
     @model_validator(mode="after")
     def campos_por_tipo(self):

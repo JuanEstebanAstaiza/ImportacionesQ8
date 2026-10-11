@@ -49,9 +49,13 @@ from .catalogo import CatalogoEmpresa, ProductoCatalogo, AccesoCatalogo
 from .reto import RetoRonda, RetoParticipacion, CuentaPago, RetoListaEspera
 from .comprobante import ComprobantePago
 from .tendencias_virales import TendenciaItem
+# Sin esta línea, el arranque de una BD vacía (create_all + stamp) no creaba
+# la tabla de ayuda y la migración 0017 ya no corría: 500 en /ayuda.
+from .ayuda import ArticuloAyuda
 
 __all__ = [
     "Usuario",
+    "ArticuloAyuda",
     "Importador",
     "Cotizacion",
     "EstadoCotizacion",

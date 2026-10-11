@@ -163,7 +163,8 @@ class CursoListItem(BaseModel):
     precio: float
     nivel: str
     categoria: str
-    importador_id: str
+    # Vacío en los cursos propios de Zarpi (importadora_nombre = «Zarpi»).
+    importador_id: Optional[str] = None
     importadora_nombre: Optional[str] = None
     rating: float
     estudiantes_count: int

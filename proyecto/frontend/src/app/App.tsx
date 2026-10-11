@@ -821,6 +821,7 @@ const NAV_ADMIN=[
   {icon:Palette,       label:"Diseño",          key:"diseno"},
   {icon:Trophy,        label:"Reto",            key:"admin-reto"},
   {icon:CreditCard,    label:"Pagos",           key:"admin-pagos"},
+  {icon:BookOpen,      label:"Cursos de Zarpi", key:"admin-cursos"},
   {icon:GraduationCap, label:"Accesos a cursos",key:"admin-cursos-accesos"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
   {icon:ToggleRight,   label:"Módulos",         key:"admin-modulos"},
@@ -1805,20 +1806,24 @@ function CoursesPortalScreen({
   companyName,
   onGoDashboard,
   onComprarAcceso,
+  active = "courses",
+  cursosDeZarpi = false,
 }:{
   sb: SidebarCtrl;
   role: "solicitante" | "importadora";
   headerUser: { name: string; company: string; initials: string };
   companyName: string;
   onGoDashboard: () => void;
-  onComprarAcceso: (courseId: string) => void;
+  onComprarAcceso?: (courseId: string) => void;
+  active?: string;
+  cursosDeZarpi?: boolean;
 }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="courses"/>
+      <Sidebar {...sb} active={active}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
-        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard} onComprarAcceso={onComprarAcceso}/>
+        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard} onComprarAcceso={onComprarAcceso} cursosDeZarpi={cursosDeZarpi}/>
       </div>
     </div>
   );
@@ -12168,7 +12173,7 @@ export default function App() {
       : NAV_ITEMS;
     // Con el módulo educativo apagado en el backend, "Cursos" desaparece del
     // menú: dejarlo visible llevaría a una pantalla cuya API responde 404.
-    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses"&&item.key!=="admin-cursos-accesos");
+    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses"&&item.key!=="admin-cursos"&&item.key!=="admin-cursos-accesos");
     // El curador de Tendencias es una capacidad, no un rol: se le suma la
     // entrada del panel a su menú, sea soporte, asesor o cualquier otro.
     if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="tendencias-aprobacion")){
@@ -12739,6 +12744,7 @@ export default function App() {
     "admin-modulos": ["admin"],
     "admin-pagos": ["admin"],
     "admin-cursos-accesos": ["admin"],
+    "admin-cursos": ["admin"],
     "catalogos": ["solicitante"],
     "imp-catalogos": ["importadora", "asesor"],
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
@@ -12890,6 +12896,8 @@ export default function App() {
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
     if(screen==="admin-tendencias")return <PantallaPortal sb={sb} active="admin-tendencias" titulo="Tendencias"><AdminTendencias/></PantallaPortal>;
     if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
+    // Cursos propios de Zarpi: el mismo tablero y editor que usan las importadoras.
+    if(screen==="admin-cursos")return <CoursesPortalScreen sb={sb} active="admin-cursos" role="importadora" headerUser={USER} companyName="Zarpi" cursosDeZarpi onGoDashboard={()=>goTo("admin-dashboard")}/>;
     if(screen==="admin-cursos-accesos")return <PantallaPortal sb={sb} active="admin-cursos-accesos" titulo="Accesos a cursos"><AccesosCursos/></PantallaPortal>;
     if(screen==="admin-modulos")return <PantallaPortal sb={sb} active="admin-modulos" titulo="Módulos"><ModulosPlataforma onCambio={recargarPlatformConfig}/></PantallaPortal>;
     if(screen==="diseno")return <PantallaPortal sb={sb} active="diseno" titulo="Diseño"><PanelDiseno/></PantallaPortal>;

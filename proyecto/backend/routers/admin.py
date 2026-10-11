@@ -326,7 +326,8 @@ async def crear_solicitante(
 ):
     """Crea un cotizante (persona natural o jurídica) con los mismos datos del
     registro público. Queda verificado (no hay OTP) y funciona aunque el
-    registro público esté cerrado en Módulos. Puede arrancar con tokens."""
+    registro público esté cerrado en Módulos. Puede arrancar con tokens y con
+    un tier elegido a mano (queda fijo hasta liberarlo en Cotizantes)."""
     from services.auth_service import crear_cuenta_solicitante
 
     if db.query(Usuario).filter(Usuario.email == datos.email).first():
@@ -336,6 +337,11 @@ async def crear_solicitante(
         if isinstance(valor, str):
             setattr(datos, campo, valor.strip() or None)
     usuario = crear_cuenta_solicitante(db, datos, email_verificado=True, acepto_politica=False)
+    if datos.tier:
+        usuario.tier = _validar_tier_admin(datos.tier)
+        usuario.tier_manual = True
+        db.commit()
+        db.refresh(usuario)
     if datos.tokens_iniciales:
         usuario.puntos_cotizacion = datos.tokens_iniciales
         db.add(MovimientoPuntoCotizacion(

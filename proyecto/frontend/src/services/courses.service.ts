@@ -34,7 +34,8 @@ interface BackendCourseListItem {
   precio: number;
   nivel: "Principiante" | "Avanzado";
   categoria: string;
-  importador_id: string;
+  /** Vacío en los cursos propios de Zarpi. */
+  importador_id: string | null;
   importadora_nombre: string | null;
   rating: number;
   estudiantes_count: number;
@@ -144,7 +145,7 @@ export function mapBackendCourseToCourse(course: BackendCourseListItem | Backend
     precio: Number(course.precio || 0),
     nivel: course.nivel,
     categoria: course.categoria,
-    importador_id: course.importador_id,
+    importador_id: course.importador_id ?? undefined,
     importadora_nombre: course.importadora_nombre || "Importadora",
     rating: Number(course.rating || 0),
     estudiantes_count: Number(course.estudiantes_count || 0),

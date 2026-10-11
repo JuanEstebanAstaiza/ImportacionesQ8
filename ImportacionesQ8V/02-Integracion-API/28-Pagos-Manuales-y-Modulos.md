@@ -37,6 +37,8 @@ Con el módulo `pago_manual_cursos` encendido (y el académico), cada curso con 
 
 Los cursos gratis siguen siendo de inscripción directa. Al apagar el módulo, cuando haya pasarela, la compra vuelve a ser directa y los accesos ya dados se mantienen. Los precios de los cursos están en COP (hasta 100.000.000).
 
+**Cursos de Zarpi.** El admin crea, edita y elimina los cursos propios de la plataforma en *Admin › Cursos de Zarpi*, con el mismo editor que usan las importadoras (`POST|PUT|DELETE /cursos` aceptan el rol `admin`). Esos cursos no tienen empresa (`importador_id` vacío, migración `20261014_0039`) y en el catálogo salen como publicados por «Zarpi». El admin solo edita los de Zarpi, y cada importadora solo los suyos.
+
 `CursoListItem.pago_manual` indica si el curso se paga así, y `CursoDetailResponse.comprobante_pendiente` si ya mandó el comprobante.
 
 Endpoints de admin (`require_rol("admin")`; con el académico apagado, responden 404):

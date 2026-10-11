@@ -70,3 +70,28 @@ def test_empresa_guarda_datos_legales_y_del_representante(client, db_session):
     dueno = db_session.query(Usuario).filter(Usuario.email == "andes@example.com").one()
     assert (dueno.rol, dueno.nit, dueno.razon_social, dueno.apellido, dueno.numero_documento, dueno.telefono) == \
         ("importador", "901234567-1", "Andes Import S.A.S.", "Ríos", "52123456", "3109876543")
+
+
+def test_admin_elige_el_tier_del_cotizante(client, db_session):
+    from services.tier_service import recalcular_tier_cotizante
+
+    _, admin = crear_usuario_con_token(db_session, rol="admin")
+    natural = {**BASE, "tipo_persona": "natural", "nombre": "Leo", "apellido": "Ruiz",
+               "tipo_documento": "CC", "numero_documento": "99887766"}
+    r = client.post("/admin/solicitantes", headers=admin, json={**natural, "email": "gold@example.com", "tier": "Gold"})
+    assert r.status_code == 201, r.text
+    u = db_session.query(Usuario).filter(Usuario.email == "gold@example.com").one()
+    assert (u.tier, u.tier_manual) == ("Gold", True)
+    # Fijo: el recálculo por actividad no lo baja.
+    recalcular_tier_cotizante(db_session, u.id)
+    db_session.refresh(u)
+    assert u.tier == "Gold"
+
+    # Sin elegir: Bronze y automático.
+    r = client.post("/admin/solicitantes", headers=admin, json={**natural, "email": "auto@example.com",
+                                                                 "numero_documento": "11223344"})
+    u = db_session.query(Usuario).filter(Usuario.email == "auto@example.com").one()
+    assert (u.tier, u.tier_manual) == ("Bronze", False)
+
+    assert client.post("/admin/solicitantes", headers=admin, json={
+        **natural, "email": "x2@example.com", "tier": "Platino"}).status_code == 422
