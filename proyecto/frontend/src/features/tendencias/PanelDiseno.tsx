@@ -44,6 +44,7 @@ import {
 import { nombreRemitente } from "./AprobacionCola";
 import { ACEPTA_IMAGEN, TIPOS_IMAGEN, rutaArchivo } from "./AprobacionFicha";
 import { EtiquetaRegulado } from "./piezas";
+import { MarcoPin } from "./MarcoPin";
 
 /**
  * Panel del equipo de diseño de Tendencias: a lo que aprobó el equipo
@@ -133,7 +134,15 @@ function VideoDiseno({ item }: { item: ItemDiseno }) {
   const vertical = item.plataforma !== "youtube";
   return (
     <div className="space-y-2">
-      {item.embed_url ? (
+      {item.embed_url && item.plataforma === "pinterest" ? (
+        <MarcoPin
+          key={item.id}
+          src={item.embed_url}
+          titulo={`Pin de Pinterest${item.autor_plataforma ? ` de ${item.autor_plataforma}` : ""}`}
+          proporcion={item.proporcion_pin}
+          anchoMaximo={340}
+        />
+      ) : item.embed_url ? (
         <div className={vertical ? "mx-auto w-full max-w-[340px]" : "w-full"}>
           <div className={`overflow-hidden rounded-xl bg-black ${vertical ? "aspect-[9/16]" : "aspect-video"}`}>
             <iframe

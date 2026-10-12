@@ -125,7 +125,8 @@ Usar `/health/ready` en orquestadores y CI smoke. Detalle: [[Remediaciones-Backe
 | Método | Endpoint | Rol | Descripción |
 |--------|----------|-----|-------------|
 | POST/GET/DELETE | `/importadores/evidencias` | Dueño importador | CRUD de evidencias de perfil (URL); estado inicial `pendiente` |
-| PUT | `/admin/evidencias/{id}/revisar` | Admin | Aprueba/rechaza evidencia (`aprobada`/`rechazada` + nota) |
+| GET | `/admin/evidencias?estado=` | Admin | Cola de revisión (Admin › Presentaciones) con contadores por estado |
+| PUT | `/admin/evidencias/{id}/revisar` | Admin | Aprueba/rechaza evidencia (`aprobada`/`rechazada`; el rechazo exige nota). Avisa a la empresa |
 | GET | `/importadores/{id}` | Público | Incluye `evidencias_aprobadas` en el detalle |
 | GET | `/organizaciones/me` | Solicitante con org | Organización solicitante y saldo corporativo |
 | POST | `/organizaciones/miembros` | Owner/admin org | Invitar/vincular miembro por email + rol |

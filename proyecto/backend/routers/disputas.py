@@ -77,13 +77,13 @@ async def disputa_por_orden(
     try:
         oid = str(PyUUID(orden_id))
     except ValueError:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
+        raise HTTPException(status_code=404, detail="Operación no encontrada")
     orden = db.query(Orden).filter(Orden.id == oid).first()
     if not orden or not _autorizado_en_orden(db, orden, current_user):
         raise HTTPException(status_code=403, detail="No autorizado")
     disputa = db.query(Disputa).filter(Disputa.orden_id == oid).first()
     if not disputa:
-        raise HTTPException(status_code=404, detail="No hay disputa para esta orden")
+        raise HTTPException(status_code=404, detail="No hay disputa para esta operación")
     return _cargar_disputa_completa(db, disputa)
 
 

@@ -18,7 +18,7 @@ export interface PrefillSolicitud {
   revisarRequisitos?: boolean;
   /** Ficha de Tendencias de la que nace la solicitud (queda atribuida a ella). */
   tendenciaItemId?: string;
-  /** Enlace del video de referencia (TikTok, Instagram o YouTube). */
+  /** Enlace del video o pin de referencia (TikTok, Instagram, YouTube o Pinterest). */
   urlVideo?: string;
   catalogoProductoId?: string;
   /** Desde un catálogo, o una ficha que recomienda una importadora, la solicitud va dirigida a ella. */

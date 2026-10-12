@@ -31,7 +31,7 @@ import {
 import { fechaCorta } from "./piezas";
 
 /**
- * Enviar un enlace de TikTok, Instagram o YouTube a Tendencias. Un solo campo
+ * Enviar un enlace de TikTok, Instagram, YouTube o Pinterest a Tendencias. Un solo campo
  * obligatorio (la URL); el resto es opcional. Debajo, el historial de envíos.
  */
 
@@ -182,7 +182,7 @@ export function EnviarEnlace({ rol }: Props) {
       <section className="rounded-xl border border-border bg-white p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-bold sm:text-2xl">¿Encontraste un producto viral? Súbelo</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pega el enlace del video de TikTok, Instagram o YouTube. Lo revisamos y, si lo aprobamos, aparece en Tendencias.
+          Pega el enlace del video o pin de TikTok, Instagram, YouTube o Pinterest. Lo revisamos y, si lo aprobamos, aparece en Tendencias.
         </p>
 
         <form onSubmit={enviar} className="mt-5 space-y-4">
@@ -280,7 +280,7 @@ export function EnviarEnlace({ rol }: Props) {
             <p className="flex items-center gap-1.5 font-semibold"><CheckCircle2 className="h-4 w-4" /> Recibido</p>
             <p className="mt-0.5">
               Lo revisamos en menos de 48 horas.
-              {resultado.datos.autor_plataforma ? ` Video de ${resultado.datos.autor_plataforma} en ${ETIQUETA_PLATAFORMA[resultado.datos.plataforma]}.` : ""}
+              {resultado.datos.autor_plataforma ? ` ${resultado.datos.plataforma === "pinterest" ? "Pin" : "Video"} de ${resultado.datos.autor_plataforma} en ${ETIQUETA_PLATAFORMA[resultado.datos.plataforma]}.` : ""}
               {" "}Puedes pegar el siguiente.
             </p>
             {resultado.datos.reto ? (

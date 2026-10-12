@@ -96,6 +96,8 @@ class Usuario(Base):
     creditos_balance = Column(Float, default=0.0, nullable=False)
     tier = Column(String(10), default=TierCotizante.bronze.value, server_default=TierCotizante.bronze.value, nullable=False)
     tier_manual = Column(Boolean, default=False, server_default="0", nullable=False)
+    # Categoría de la lista privada (models/categoria_cotizante.py), si tiene.
+    categoria_id = Column(String(36), ForeignKey("categorias_cotizante.id"), nullable=True)
     puntos_cotizacion = Column(Integer, default=0, server_default="0", nullable=False)
     # Importaciones que el cotizante declara haber hecho por fuera de la
     # plataforma. Alimenta el desglose "dentro vs. fuera" de su perfil público.
@@ -110,6 +112,12 @@ class Usuario(Base):
     # Cotizaciones gratis ganadas en el reto de Tendencias. Se descuentan cuando
     # se active el cobro por cotización (hoy crear cotizaciones no se cobra).
     cotizaciones_gratis = Column(Integer, nullable=False, default=0, server_default="0")
+    # Plan de acceso (models/plan.py): solicitudes de cotización del plan, que
+    # solo valen hasta `plan_vence_en`. Se gastan después de las gratis del reto
+    # y antes de los tokens comprados sueltos (que no vencen).
+    plan_id = Column(String(36), ForeignKey("planes.id"), nullable=True)
+    plan_vence_en = Column(DateTime, nullable=True)
+    solicitudes_plan = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva

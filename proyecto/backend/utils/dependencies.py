@@ -159,7 +159,7 @@ def get_current_solicitante(current_user: dict = Depends(get_current_user)) -> d
     if current_user["rol"] != "solicitante":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No autorizado - Se requiere rol de solicitante",
+            detail="No autorizado - Se requiere rol de comprador",
         )
     return current_user
 

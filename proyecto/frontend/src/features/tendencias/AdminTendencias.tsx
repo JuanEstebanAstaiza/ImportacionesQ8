@@ -551,7 +551,7 @@ function PanelProducto({
               id="producto-url"
               etiqueta="URL del video"
               requerido={nuevo}
-              ayuda={nuevo ? "TikTok, Instagram o YouTube." : "El video no se cambia: si es otro, crea un producto nuevo."}
+              ayuda={nuevo ? "TikTok, Instagram, YouTube o Pinterest." : "El video no se cambia: si es otro, crea un producto nuevo."}
             >
               <div className="flex items-center gap-2">
                 {!nuevo && <IconoPlataforma plataforma={item.plataforma} className="h-8 w-8" />}
@@ -696,7 +696,7 @@ function PanelProducto({
               </Campo>
             </div>
 
-            <Campo id="producto-autor" etiqueta="Dueño del video" ayuda="Vacío: el autor que reporta TikTok/YouTube.">
+            <Campo id="producto-autor" etiqueta="Dueño del video" ayuda="Vacío: el autor que reporta TikTok, YouTube o Pinterest.">
               <input
                 id="producto-autor"
                 value={f.autor_plataforma}

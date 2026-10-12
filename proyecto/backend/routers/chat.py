@@ -371,7 +371,7 @@ async def iniciar_chat(
         if propuesta.estado == EstadoPropuesta.borrador.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Envía la propuesta al solicitante antes de iniciar el chat",
+                detail="Envía la propuesta al comprador antes de iniciar el chat",
             )
         cotizacion = db.query(Cotizacion).filter(Cotizacion.id == propuesta.cotizacion_id).first()
     else:

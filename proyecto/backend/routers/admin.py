@@ -40,6 +40,9 @@ from schemas.admin import (
     RetirarVerificacionRequest,
     CotizanteAdminResponse,
     TierUpdateRequest,
+    CategoriaCotizanteCreate,
+    CategoriaCotizanteUpdate,
+    AsignarCategoriaRequest,
     RecalculoTiersResponse,
     UmbralTierResponse,
     UmbralesTierUpdateRequest,
@@ -89,13 +92,19 @@ def _validar_tier_admin(tier: str) -> str:
     return tier
 
 
-def _cotizante_response(usuario: Usuario) -> CotizanteAdminResponse:
+def _cotizante_response(usuario: Usuario, categorias: Optional[dict] = None, db: Optional[Session] = None) -> CotizanteAdminResponse:
+    if categorias is None and db is not None and usuario.categoria_id:
+        from services import categorias_cotizante
+
+        categorias = categorias_cotizante.nombres(db)
     return CotizanteAdminResponse(
         id=str(usuario.id),
         email=usuario.email,
         nombre=usuario.nombre or usuario.razon_social,
         tier=usuario.tier,
         tier_manual=bool(usuario.tier_manual),
+        categoria_id=usuario.categoria_id,
+        categoria=(categorias or {}).get(usuario.categoria_id) if usuario.categoria_id else None,
         puntos_cotizacion=int(usuario.puntos_cotizacion or 0),
         fecha_creacion=usuario.fecha_creacion,
     )
@@ -111,7 +120,11 @@ async def listar_cotizantes_admin(
     if buscar and buscar.strip():
         patron = f"%{buscar.strip()}%"
         query = query.filter(or_(Usuario.nombre.ilike(patron), Usuario.razon_social.ilike(patron), Usuario.email.ilike(patron)))
-    return [_cotizante_response(usuario) for usuario in query.order_by(Usuario.fecha_creacion.desc()).limit(500).all()]
+    from services import categorias_cotizante
+
+    categorias = categorias_cotizante.nombres(db)
+    return [_cotizante_response(usuario, categorias)
+            for usuario in query.order_by(Usuario.fecha_creacion.desc()).limit(500).all()]
 
 
 @router.put("/cotizantes/{usuario_id}/tier", response_model=CotizanteAdminResponse)
@@ -129,7 +142,7 @@ async def actualizar_tier_cotizante(
     usuario.tier_manual = True
     db.commit()
     db.refresh(usuario)
-    return _cotizante_response(usuario)
+    return _cotizante_response(usuario, db=db)
 
 
 @router.delete("/cotizantes/{usuario_id}/tier", response_model=CotizanteAdminResponse)
@@ -148,7 +161,57 @@ async def liberar_tier_manual_cotizante(
     recalcular_tier_cotizante(db, usuario_id)
     db.commit()
     db.refresh(usuario)
-    return _cotizante_response(usuario)
+    return _cotizante_response(usuario, db=db)
+
+
+# ==================== Categorías de cotizante (lista privada) ====================
+
+@router.get("/categorias-cotizante")
+async def listar_categorias_cotizante(db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
+    from services import categorias_cotizante
+
+    return categorias_cotizante.listar(db)
+
+
+@router.post("/categorias-cotizante", status_code=status.HTTP_201_CREATED)
+async def crear_categoria_cotizante(datos: CategoriaCotizanteCreate, db: Session = Depends(get_db),
+                                    current_user: dict = Depends(require_rol("admin"))):
+    from services import categorias_cotizante
+
+    categoria = categorias_cotizante.crear(db, datos.model_dump(), current_user["user_id"])
+    db.commit()
+    return categorias_cotizante.a_dict(categoria)
+
+
+@router.put("/categorias-cotizante/{categoria_id}")
+async def actualizar_categoria_cotizante(categoria_id: str, datos: CategoriaCotizanteUpdate,
+                                         db: Session = Depends(get_db),
+                                         current_user: dict = Depends(require_rol("admin"))):
+    """Cambia lo que trae la categoría. A quienes ya la tienen no se les cambia
+    nada: aplica a los que se les asigne desde ahora."""
+    from services import categorias_cotizante
+
+    categorias_cotizante.actualizar(db, categoria_id, datos.model_dump(exclude_unset=True))
+    db.commit()
+    return next(c for c in categorias_cotizante.listar(db) if c["id"] == categoria_id)
+
+
+@router.put("/cotizantes/{usuario_id}/categoria", response_model=CotizanteAdminResponse)
+async def asignar_categoria_cotizante(usuario_id: str, datos: AsignarCategoriaRequest,
+                                      db: Session = Depends(get_db),
+                                      current_user: dict = Depends(require_rol("admin"))):
+    """Le pone la categoría a un cotizante que ya existe y le da lo que trae
+    (tier fijo y días de Tendencias, que se suman a los que tenga)."""
+    from services import categorias_cotizante
+
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.rol == "solicitante").first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotizante no encontrado")
+    categoria = categorias_cotizante.obtener(db, datos.categoria_id, activa=True)
+    categorias_cotizante.aplicar(db, usuario, categoria, current_user["user_id"])
+    db.commit()
+    db.refresh(usuario)
+    return _cotizante_response(usuario, db=db)
 
 
 @router.post("/cotizantes/recalcular-tiers", response_model=RecalculoTiersResponse)
@@ -229,7 +292,7 @@ async def ajustar_puntos_cotizante(
     ))
     db.commit()
     db.refresh(usuario)
-    return _cotizante_response(usuario)
+    return _cotizante_response(usuario, db=db)
 
 
 @router.get("/cotizantes/{usuario_id}/puntos/movimientos", response_model=List[MovimientoPuntoCotizacionResponse])
@@ -326,7 +389,8 @@ async def crear_solicitante(
 ):
     """Crea un cotizante (persona natural o jurídica) con los mismos datos del
     registro público. Queda verificado (no hay OTP) y funciona aunque el
-    registro público esté cerrado en Módulos. Puede arrancar con tokens."""
+    registro público esté cerrado en Módulos. Puede arrancar con tokens y con
+    un tier elegido a mano (queda fijo hasta liberarlo en Cotizantes)."""
     from services.auth_service import crear_cuenta_solicitante
 
     if db.query(Usuario).filter(Usuario.email == datos.email).first():
@@ -335,7 +399,21 @@ async def crear_solicitante(
         valor = getattr(datos, campo)
         if isinstance(valor, str):
             setattr(datos, campo, valor.strip() or None)
+    categoria = None
+    if datos.categoria_id:
+        from services import categorias_cotizante
+
+        categoria = categorias_cotizante.obtener(db, datos.categoria_id, activa=True)
     usuario = crear_cuenta_solicitante(db, datos, email_verificado=True, acepto_politica=False)
+    if categoria is not None:
+        categorias_cotizante.aplicar(db, usuario, categoria, current_user["user_id"], tier=datos.tier)
+        db.commit()
+        db.refresh(usuario)
+    elif datos.tier:
+        usuario.tier = _validar_tier_admin(datos.tier)
+        usuario.tier_manual = True
+        db.commit()
+        db.refresh(usuario)
     if datos.tokens_iniciales:
         usuario.puntos_cotizacion = datos.tokens_iniciales
         db.add(MovimientoPuntoCotizacion(
@@ -970,11 +1048,11 @@ async def resolver_disputa(
     try:
         orden_id_str = str(PyUUID(orden_id))
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de orden inválido")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de operación inválido")
 
     orden = db.query(Orden).filter(Orden.id == orden_id_str).first()
     if not orden:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operación no encontrada")
 
     orden.en_disputa = False
     orden.motivo_disputa = f"[RESUELTO] {orden.motivo_disputa or ''} — Resolución: {datos.resolucion}"
@@ -1046,6 +1124,24 @@ async def resolver_disputa_por_id(
     return {"success": True, "disputa_id": disputa.id, "estado": disputa.estado}
 
 
+# ==================== Presentación de empresas (moderación) ====================
+
+@router.get("/evidencias")
+async def listar_evidencias_importadores(
+    estado: Optional[str] = Query(None, pattern="^(pendiente|aprobada|rechazada)$"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Material que suben las empresas desde «Mi empresa» (video, fotos,
+    certificados). Nada sale en la ficha pública sin pasar por aquí."""
+    from services import presentacion_empresa
+
+    return {
+        "items": presentacion_empresa.listar(db, estado),
+        "contadores": presentacion_empresa.contadores(db),
+    }
+
+
 @router.put("/evidencias/{evidencia_id}/revisar", response_model=dict)
 async def revisar_evidencia_importador(
     evidencia_id: str,
@@ -1053,17 +1149,10 @@ async def revisar_evidencia_importador(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("admin")),
 ):
-    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+    """Aprueba (se publica en la ficha) o rechaza con motivo. Se le avisa a la empresa."""
+    from services import presentacion_empresa
 
-    ev = db.query(EvidenciaImportador).filter(EvidenciaImportador.id == evidencia_id).first()
-    if not ev:
-        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
-    if datos.estado not in (EstadoEvidenciaImportador.aprobada.value, EstadoEvidenciaImportador.rechazada.value):
-        raise HTTPException(status_code=400, detail="Estado inválido")
-    ev.estado = datos.estado
-    ev.nota_revision = datos.nota_revision
-    ev.revisado_por_admin_id = current_user["user_id"]
-    ev.fecha_revision = datetime.utcnow()
+    ev = presentacion_empresa.revisar(db, evidencia_id, datos.estado, datos.nota_revision, current_user["user_id"])
     db.commit()
     return {"success": True, "id": ev.id, "estado": ev.estado}
 

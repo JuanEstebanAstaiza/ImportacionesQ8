@@ -40,6 +40,7 @@ Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03
 | `GET` | `/admin/equipo-soporte` | Administración | JWT | Listar Equipo Soporte |
 | `POST` | `/admin/equipo-soporte` | Administración | JWT | Crear Agente Soporte |
 | `PUT` | `/admin/equipo-soporte/{usuario_id}/nivel` | Administración | JWT | Cambiar Nivel Agente |
+| `GET` | `/admin/evidencias` | Administración | JWT | Cola de revisión de presentaciones de empresas |
 | `PUT` | `/admin/evidencias/{evidencia_id}/revisar` | Administración | JWT | Revisar Evidencia Importador |
 | `POST` | `/admin/importadores` | Administración | JWT | Crear Importador Con Dueño |
 | `GET` | `/admin/importadores/{importador_id}/certificaciones` | Administración | JWT | Listar Certificaciones De Empresa |
@@ -119,6 +120,16 @@ Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03
 | `POST` | `/admin/cursos/accesos` | Cursos | JWT | Dar acceso a un curso |
 | `DELETE` | `/admin/cursos/accesos/{acceso_id}` | Cursos | JWT | Quitar acceso a un curso |
 | `GET` | `/comprobantes/cursos` | Pagos | JWT | Cursos por pagar |
+| `GET` | `/planes` | Planes | Público | Planes activos con precio, IVA y cupos |
+| `POST` | `/planes/{clave}/inscripcion` | Planes | Público | Inscripción con comprobante (multipart) |
+| `POST` | `/planes/{clave}/lista-espera` | Planes | Público | Lista de espera sin cupos |
+| `GET` | `/planes/admin/planes` | Planes | JWT admin | Planes con conteo de inscripciones |
+| `POST` | `/planes/admin/planes` | Planes | JWT admin | Crear plan |
+| `PUT` | `/planes/admin/planes/{plan_id}` | Planes | JWT admin | Editar plan |
+| `GET` | `/planes/admin/inscripciones` | Planes | JWT admin | Inscripciones por estado |
+| `GET` | `/planes/admin/inscripciones/{inscripcion_id}/comprobante` | Planes | JWT admin | Descargar comprobante |
+| `POST` | `/planes/admin/inscripciones/{inscripcion_id}/activar` | Planes | JWT admin | Activar (crea cuenta y acredita) |
+| `POST` | `/planes/admin/inscripciones/{inscripcion_id}/rechazar` | Planes | JWT admin | Rechazar con motivo |
 | `POST` | `/cursos/{curso_id}/lecciones/{leccion_id}/progreso` | Cursos | JWT | Marcar Progreso Leccion |
 | `GET` | `/cursos/{id_o_slug}` | Cursos | JWT | Obtener Curso |
 | `GET` | `/disputas/orden/{orden_id}` | Disputas | JWT | Disputa Por Orden |

@@ -1,4 +1,4 @@
-import { Instagram, Music2, Youtube } from "lucide-react";
+import { Instagram, Music2, Pin, Youtube } from "lucide-react";
 
 import type { OrigenTendencia, Plataforma } from "@/services/tendencias.service";
 
@@ -28,12 +28,14 @@ const ICONOS: Record<Plataforma, typeof Instagram> = {
   tiktok: Music2,
   instagram: Instagram,
   youtube: Youtube,
+  pinterest: Pin,
 };
 
 const COLOR_PLATAFORMA: Record<Plataforma, string> = {
   tiktok: "bg-slate-900 text-white dark:bg-white dark:text-black",
   instagram: "bg-pink-600 text-white",
   youtube: "bg-red-600 text-white",
+  pinterest: "bg-[#E60023] text-white",
 };
 
 export function IconoPlataforma({ plataforma, className = "h-7 w-7" }: { plataforma: Plataforma; className?: string }) {

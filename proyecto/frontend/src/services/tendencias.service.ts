@@ -2,7 +2,7 @@ import { apiRequest } from "@/services/api-client";
 
 /**
  * Tendencias v2: feed de productos virales para importar. Los productos llegan
- * como enlaces a TikTok, Instagram o YouTube (comunidad, importadoras, equipo).
+ * como enlaces a TikTok, Instagram, YouTube o Pinterest (comunidad, importadoras, equipo).
  * El equipo aprobador decide si entran; un designer de Zarpi les pone portada
  * e imágenes con la identidad de marca y los publica. La ficha no muestra
  * precio: su única acción es pedir propuestas.
@@ -10,7 +10,7 @@ import { apiRequest } from "@/services/api-client";
  * Ver backend/routers/tendencias_virales.py y docs/Tendencias · Guía de construcción.html.
  */
 
-export type Plataforma = "tiktok" | "instagram" | "youtube";
+export type Plataforma = "tiktok" | "instagram" | "youtube" | "pinterest";
 export type OrigenTendencia = "comunidad" | "importadora" | "equipo";
 export type EstadoTendencia =
   | "pendiente"
@@ -27,6 +27,7 @@ export const ETIQUETA_PLATAFORMA: Record<Plataforma, string> = {
   tiktok: "TikTok",
   instagram: "Instagram",
   youtube: "YouTube",
+  pinterest: "Pinterest",
 };
 
 export interface EmpresaTendencia {
@@ -62,6 +63,8 @@ export interface TarjetaTendencia {
 export interface FichaTendencia extends TarjetaTendencia {
   /** Iframe oficial de la plataforma (se arma en el backend desde el id del video). */
   embed_url: string | null;
+  /** Pinterest: alto/ancho de la imagen del pin, para dimensionar el marco. */
+  proporcion_pin: number | null;
   url_video: string;
   plataforma_nombre: string;
   autor_plataforma: string | null;

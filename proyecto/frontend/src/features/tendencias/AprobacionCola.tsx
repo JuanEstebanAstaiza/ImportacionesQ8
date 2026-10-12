@@ -11,6 +11,7 @@ import {
 
 import { CLASE_BOTON_SECUNDARIO, IconoPlataforma, InsigniaOrigen, haceCuanto, mensajeError } from "./AprobacionComun";
 import { FichaAprobacion, formularioDesde, type FormularioFicha, type ModoCola } from "./AprobacionFicha";
+import { MarcoPin } from "./MarcoPin";
 
 /**
  * Cola de revisión en tres columnas: enlaces a la izquierda (más antiguos
@@ -62,7 +63,15 @@ function VideoAprobacion({ item }: { item: ItemAprobacion }) {
   const vertical = item.plataforma !== "youtube";
   return (
     <div className="space-y-3">
-      {item.embed_url ? (
+      {item.embed_url && item.plataforma === "pinterest" ? (
+        <MarcoPin
+          key={item.id}
+          src={item.embed_url}
+          titulo={`Pin de Pinterest${item.autor_plataforma ? ` de ${item.autor_plataforma}` : ""}`}
+          proporcion={item.proporcion_pin}
+          anchoMaximo={340}
+        />
+      ) : item.embed_url ? (
         <div className={vertical ? "mx-auto w-full max-w-[340px]" : "w-full"}>
           <div className={`overflow-hidden rounded-xl bg-black ${vertical ? "aspect-[9/16]" : "aspect-video"}`}>
             <iframe

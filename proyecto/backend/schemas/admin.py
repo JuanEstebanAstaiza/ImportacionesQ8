@@ -131,6 +131,12 @@ class CrearSolicitanteAdminRequest(BaseModel):
     telefono: str = Field(..., min_length=5, max_length=30)
     # Tokens de cotización con los que arranca (cada cotización consume 1).
     tokens_iniciales: int = Field(0, ge=0, le=10000)
+    # Tier con el que entra (lista privada). Si se elige, queda fijo (`tier_manual`)
+    # hasta que el admin lo libere en Cotizantes; vacío: Bronze y sube por actividad.
+    tier: Optional[str] = Field(None, pattern="^(Bronze|Silver|Gold|Élite)$")
+    # Categoría de la lista privada: aplica su tier (si no se eligió otro) y sus
+    # días de Tendencias.
+    categoria_id: Optional[str] = Field(None, min_length=36, max_length=36)
 
     @model_validator(mode="after")
     def campos_por_tipo(self):
@@ -237,12 +243,35 @@ class CotizanteAdminResponse(BaseModel):
     nombre: Optional[str] = None
     tier: str
     tier_manual: bool
+    categoria_id: Optional[str] = None
+    categoria: Optional[str] = None
     puntos_cotizacion: int
     fecha_creacion: datetime
 
 
 class TierUpdateRequest(BaseModel):
     tier: str
+
+
+class CategoriaCotizanteCreate(BaseModel):
+    """Una categoría de la lista privada: el tier y los días de Tendencias que trae."""
+    nombre: str = Field(..., min_length=2, max_length=60)
+    descripcion: Optional[str] = Field(None, max_length=300)
+    tier: Optional[str] = Field(None, pattern="^(Bronze|Silver|Gold|Élite)$")
+    dias_tendencias: Optional[int] = Field(None, ge=1, le=3650)
+    activa: bool = True
+
+
+class CategoriaCotizanteUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=2, max_length=60)
+    descripcion: Optional[str] = Field(None, max_length=300)
+    tier: Optional[str] = Field(None, pattern="^(Bronze|Silver|Gold|Élite)$")
+    dias_tendencias: Optional[int] = Field(None, ge=1, le=3650)
+    activa: Optional[bool] = None
+
+
+class AsignarCategoriaRequest(BaseModel):
+    categoria_id: str = Field(..., min_length=36, max_length=36)
 
 
 class RecalculoTiersResponse(BaseModel):

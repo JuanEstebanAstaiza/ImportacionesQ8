@@ -1,13 +1,16 @@
-"""Enlaces a videos de TikTok, Instagram y YouTube: validar, normalizar, enriquecer.
+"""Enlaces de TikTok, Instagram, YouTube y Pinterest: validar, normalizar, enriquecer.
 
 Reglas (docs/Tendencias · Guía de construcción.html, sección 3):
-- Solo se aceptan esos tres dominios. Los enlaces cortos (vm.tiktok.com,
-  tiktok.com/t/…) se resuelven siguiendo redirecciones, validando el dominio en
-  cada salto para no terminar consultando un host arbitrario (SSRF).
+- Solo se aceptan esas cuatro plataformas. Los enlaces cortos (vm.tiktok.com,
+  tiktok.com/t/…, pin.it/…) se resuelven siguiendo redirecciones, validando el
+  dominio en cada salto para no terminar consultando un host arbitrario (SSRF).
 - La forma normalizada (sin parámetros de seguimiento ni fragmentos, con el id
   del video) es lo que se compara para detectar repetidos.
-- TikTok y YouTube tienen oEmbed público. Instagram exige una app aprobada por
-  Meta: en V1 el aprobador pega el código de inserción oficial a mano.
+- TikTok, YouTube y Pinterest tienen oEmbed público. Instagram exige una app
+  aprobada por Meta: en V1 el aprobador pega el código de inserción oficial a mano.
+- En Pinterest, quien guarda un pin no siempre es quien creó el contenido. El
+  widget de pines (el que usa el botón oficial de Pinterest) dice quién lo creó;
+  ese es el dueño que se muestra y, si Pinterest no lo sabe, la cuenta que lo publicó.
 - Nunca se descarga el video ni su miniatura.
 
 El reproductor se arma con el `embed_url` oficial de cada plataforma (un
@@ -36,6 +39,22 @@ RE_TIKTOK_VIDEO = re.compile(r"/(?:@[\w.\-]+/)?video/(\d{8,25})")
 RE_TIKTOK_V = re.compile(r"/v/(\d{8,25})")
 RE_YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 RE_INSTAGRAM = re.compile(r"^/(?:p|reel|reels|tv)/([A-Za-z0-9_-]{5,40})")
+
+HOSTS_CORTOS_PINTEREST = {"pin.it"}
+# Pinterest usa subdominios por país (co.pinterest.com) y dominios propios en
+# algunos países (pinterest.es, pinterest.com.mx…). De esos solo se lee el id
+# del pin: las consultas van siempre a www.pinterest.com o, desde un enlace
+# corto, a los hosts de redirección de Pinterest.
+RE_HOST_PINTEREST = re.compile(
+    r"^(?:(?:www|api|[a-z]{2})\.)?pinterest\."
+    r"(?:com|ca|cl|de|es|fr|it|jp|nz|ph|pt|at|ch|dk|ie|se|co\.uk|co\.kr|com\.au|com\.mx)$"
+)
+# /pin/123…/ y la forma con título: /pin/sala-moderna--123…/
+RE_PINTEREST_PIN = re.compile(r"^/pin/(?:[^/]*--)?(\d{5,25})(?:/|$)")
+OEMBED_PINTEREST = "https://www.pinterest.com/oembed.json"
+WIDGET_PINES_PINTEREST = "https://widgets.pinterest.com/v3/pidgets/pins/info/"
+
+NOMBRE_PLATAFORMA = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "pinterest": "Pinterest"}
 
 
 class EnlaceInvalido(ValueError):
@@ -77,34 +96,43 @@ def plataforma_de(host: str) -> Optional[str]:
         return "youtube"
     if host in HOSTS_INSTAGRAM:
         return "instagram"
+    if host in HOSTS_CORTOS_PINTEREST or RE_HOST_PINTEREST.match(host):
+        return "pinterest"
     return None
 
 
-def _es_corto_tiktok(partes) -> bool:
+def _es_corto(partes) -> bool:
     host = partes.hostname.lower()
-    return host in HOSTS_CORTOS_TIKTOK or (host in HOSTS_TIKTOK and partes.path.startswith("/t/"))
+    if host in HOSTS_CORTOS_TIKTOK or (host in HOSTS_TIKTOK and partes.path.startswith("/t/")):
+        return True
+    return host in HOSTS_CORTOS_PINTEREST or (
+        host == "api.pinterest.com" and partes.path.startswith("/url_shortener/"))
 
 
 def resolver_corto(url: str, cliente: Optional[httpx.Client] = None) -> str:
-    """Sigue las redirecciones de un enlace corto de TikTok, sin salir nunca de
-    los dominios de TikTok."""
+    """Sigue las redirecciones de un enlace corto (TikTok o pin.it), sin salir
+    nunca de los dominios de esa plataforma."""
+    plataforma = plataforma_de(urlparse(url).hostname or "")
+    nombre = NOMBRE_PLATAFORMA.get(plataforma or "", "la plataforma")
+    destino_esperado = "un pin" if plataforma == "pinterest" else "un video"
     actual = url
     propio = cliente is None
     cliente = cliente or httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT, follow_redirects=False)
     try:
         for _ in range(MAX_REDIRECCIONES):
             partes = urlparse(actual)
-            if plataforma_de(partes.hostname or "") != "tiktok":
-                raise EnlaceInvalido("El enlace redirige fuera de TikTok.")
-            if not _es_corto_tiktok(partes):
+            if plataforma is None or plataforma_de(partes.hostname or "") != plataforma:
+                raise EnlaceInvalido(f"El enlace redirige fuera de {nombre}.")
+            if not _es_corto(partes):
                 return actual
             try:
                 respuesta = cliente.get(actual)
             except httpx.HTTPError as exc:
-                raise EnlaceInvalido("No pudimos abrir el enlace corto. Pega el enlace completo del video.") from exc
+                raise EnlaceInvalido(
+                    f"No pudimos abrir el enlace corto. Pega el enlace completo de {destino_esperado}.") from exc
             destino = respuesta.headers.get("location")
             if respuesta.status_code not in (301, 302, 303, 307, 308) or not destino:
-                raise EnlaceInvalido("El enlace corto de TikTok no lleva a un video.")
+                raise EnlaceInvalido(f"El enlace corto de {nombre} no lleva a {destino_esperado}.")
             actual = httpx.URL(actual).join(destino).__str__()
         raise EnlaceInvalido("El enlace tiene demasiadas redirecciones.")
     finally:
@@ -117,10 +145,10 @@ def normalizar(url_texto: str, cliente: Optional[httpx.Client] = None) -> Enlace
     partes = _url(url_texto)
     plataforma = plataforma_de(partes.hostname)
     if plataforma is None:
-        raise EnlaceInvalido("Solo aceptamos videos de TikTok, Instagram o YouTube.")
+        raise EnlaceInvalido("Solo aceptamos enlaces de TikTok, Instagram, YouTube o Pinterest.")
 
     if plataforma == "tiktok":
-        if _es_corto_tiktok(partes):
+        if _es_corto(partes):
             partes = urlparse(resolver_corto(partes.geturl(), cliente))
         m = RE_TIKTOK_VIDEO.search(partes.path) or RE_TIKTOK_V.search(partes.path)
         if not m:
@@ -130,6 +158,15 @@ def normalizar(url_texto: str, cliente: Optional[httpx.Client] = None) -> Enlace
         publica = (f"https://www.tiktok.com/@{usuario.group(1)}/video/{id_video}" if usuario
                    else f"https://www.tiktok.com/video/{id_video}")
         return Enlace("tiktok", id_video, f"https://www.tiktok.com/video/{id_video}", publica)
+
+    if plataforma == "pinterest":
+        if _es_corto(partes):
+            partes = urlparse(resolver_corto(partes.geturl(), cliente))
+        m = RE_PINTEREST_PIN.match(partes.path)
+        if not m:
+            raise EnlaceInvalido("El enlace de Pinterest no apunta a un pin.")
+        canonica = f"https://www.pinterest.com/pin/{m.group(1)}/"
+        return Enlace("pinterest", m.group(1), canonica, canonica)
 
     if plataforma == "youtube":
         host = partes.hostname.lower()
@@ -163,6 +200,8 @@ def embed_url(plataforma: str, id_video: str) -> Optional[str]:
         return f"https://www.youtube-nocookie.com/embed/{id_video}"
     if plataforma == "instagram" and re.fullmatch(r"[A-Za-z0-9_-]{5,40}", id_video or ""):
         return f"https://www.instagram.com/p/{id_video}/embed"
+    if plataforma == "pinterest" and re.fullmatch(r"\d{5,25}", id_video or ""):
+        return f"https://assets.pinterest.com/ext/embed.html?id={id_video}"
     return None
 
 
@@ -183,6 +222,9 @@ def consultar_oembed(enlace: Enlace, cliente: Optional[httpx.Client] = None) -> 
     elif enlace.plataforma == "youtube":
         url = "https://www.youtube.com/oembed"
         params = {"url": enlace.url_publica, "format": "json"}
+    elif enlace.plataforma == "pinterest":
+        url = OEMBED_PINTEREST
+        params = {"url": enlace.url_publica}
     else:
         return enlace
 
@@ -190,29 +232,120 @@ def consultar_oembed(enlace: Enlace, cliente: Optional[httpx.Client] = None) -> 
     cliente = cliente or httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT, follow_redirects=False)
     try:
         try:
-            respuesta = cliente.get(url, params=params)
+            respuesta = (_get_en_pinterest(cliente, url, params) if enlace.plataforma == "pinterest"
+                         else cliente.get(url, params=params))
         except httpx.HTTPError:
-            return enlace
-        if respuesta.status_code in (400, 401, 403, 404):
+            respuesta = None
+        if respuesta is not None and respuesta.status_code in (400, 401, 403, 404):
             raise VideoNoDisponible(enlace.normalizada)
-        if respuesta.status_code != 200:
-            return enlace
-        try:
-            datos = respuesta.json()
-        except ValueError:
-            return enlace
-        if not isinstance(datos, dict):
-            return enlace
-        enlace.autor = (str(datos.get("author_name") or "")[:200]) or None
-        miniatura = str(datos.get("thumbnail_url") or "")
-        enlace.miniatura_url = miniatura[:1000] if miniatura.startswith("https://") else None
-        enlace.embed_html = (str(datos.get("html") or "")[:20000]) or None
-        enlace.titulo = (str(datos.get("title") or "")[:300]) or None
-        enlace.datos = {k: datos.get(k) for k in ("author_url", "provider_name") if datos.get(k)}
+        datos = _json_de(respuesta)
+        if datos:
+            _aplicar_oembed(enlace, datos)
+        if enlace.plataforma == "pinterest":
+            _dueno_pinterest(enlace, cliente)
         return enlace
     finally:
         if propio:
             cliente.close()
+
+
+def _json_de(respuesta: Optional[httpx.Response]) -> dict:
+    if respuesta is None or respuesta.status_code != 200:
+        return {}
+    try:
+        datos = respuesta.json()
+    except ValueError:
+        return {}
+    return datos if isinstance(datos, dict) else {}
+
+
+def _aplicar_oembed(enlace: Enlace, datos: dict) -> None:
+    enlace.autor = (str(datos.get("author_name") or "")[:200]) or None
+    miniatura = str(datos.get("thumbnail_url") or "")
+    enlace.miniatura_url = miniatura[:1000] if miniatura.startswith("https://") else None
+    enlace.embed_html = (str(datos.get("html") or "")[:20000]) or None
+    enlace.titulo = (str(datos.get("title") or "")[:300]) or None
+    enlace.datos = {k: datos.get(k) for k in ("author_url", "provider_name") if datos.get(k)}
+
+
+def _es_host_pinterest(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return host == "pinterest.com" or host.endswith(".pinterest.com")
+
+
+def _get_en_pinterest(cliente: httpx.Client, url: str, params: Optional[dict]) -> Optional[httpx.Response]:
+    """GET que sigue redirecciones solo dentro de *.pinterest.com: el oEmbed
+    manda al subdominio del país (co.pinterest.com)."""
+    for _ in range(MAX_REDIRECCIONES):
+        respuesta = cliente.get(url, params=params)
+        destino = respuesta.headers.get("location")
+        if respuesta.status_code not in (301, 302, 303, 307, 308) or not destino:
+            return respuesta
+        # La redirección ya trae los parámetros en la URL.
+        url, params = str(httpx.URL(url).join(destino)), None
+        if not _es_host_pinterest(url):
+            return None
+    return None
+
+
+def _nombre_cuenta_pinterest(cuenta: dict) -> Optional[str]:
+    """«Nombre (@usuario)» de una cuenta del widget de pines."""
+    nombre = str(cuenta.get("full_name") or "").strip()
+    perfil = str(cuenta.get("profile_url") or "")
+    usuario = str(cuenta.get("username") or "").strip()
+    if not usuario and _es_host_pinterest(perfil):
+        usuario = urlparse(perfil).path.strip("/").split("/")[0]
+    if nombre and usuario and nombre.lower() != usuario.lower():
+        return f"{nombre} (@{usuario})"[:200]
+    return (nombre or (f"@{usuario}" if usuario else ""))[:200] or None
+
+
+def _dueno_pinterest(enlace: Enlace, cliente: httpx.Client) -> None:
+    """Completa el dueño del pin con el widget de pines: el creador original
+    (`native_creator`) si Pinterest lo conoce; si no, la cuenta que lo guardó.
+    Si el widget no responde, se queda con lo del oEmbed."""
+    try:
+        respuesta = cliente.get(WIDGET_PINES_PINTEREST, params={"pin_ids": enlace.id_video})
+    except httpx.HTTPError:
+        return
+    pines = _json_de(respuesta).get("data")
+    pin = pines[0] if isinstance(pines, list) and pines and isinstance(pines[0], dict) else None
+    if pin is None:
+        return
+    if pin.get("error"):
+        raise VideoNoDisponible(enlace.normalizada)
+    for clave in ("native_creator", "pinner"):
+        cuenta = pin.get(clave)
+        nombre = _nombre_cuenta_pinterest(cuenta) if isinstance(cuenta, dict) else None
+        if nombre:
+            enlace.autor = nombre
+            perfil = str(cuenta.get("profile_url") or "")
+            if _es_host_pinterest(perfil):
+                enlace.datos["author_url"] = perfil[:500]
+            break
+    imagenes = pin.get("images") if isinstance(pin.get("images"), dict) else {}
+    imagen = (imagenes.get("564x") or {}).get("url")
+    if isinstance(imagen, str) and imagen.startswith("https://"):
+        enlace.miniatura_url = imagen[:1000]
+    enlace.datos["es_video"] = bool(pin.get("is_video"))
+    if pin.get("link"):
+        # El sitio de donde salió el pin: muchas veces, la tienda del producto.
+        enlace.datos["enlace_origen"] = str(pin["link"])[:1000]
+
+
+# La tarjeta de un pin es la imagen a lo ancho más un pie fijo de ~100 px
+# (título y quién lo publicó). El oEmbed da el tamaño de la tarjeta completa.
+ALTO_PIE_PIN = 100
+
+
+def proporcion_pin(embed_html: Optional[str]) -> Optional[float]:
+    """Alto/ancho de la imagen del pin, sacado del iframe que da el oEmbed. Con
+    eso el frontend arma un marco del tamaño justo, sin espacio vacío."""
+    ancho = re.search(r'\bwidth="(\d{2,4})"', embed_html or "")
+    alto = re.search(r'\bheight="(\d{2,4})"', embed_html or "")
+    if not ancho or not alto or int(alto.group(1)) <= ALTO_PIE_PIN:
+        return None
+    return round((int(alto.group(1)) - ALTO_PIE_PIN) / int(ancho.group(1)), 4)
 
 
 def codigo_desde_embed_instagram(embed_html: str) -> Optional[str]:

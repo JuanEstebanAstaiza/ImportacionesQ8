@@ -102,6 +102,8 @@ from models.catalogo import AccesoCatalogo, CatalogoEmpresa, ProductoCatalogo  #
 from models.reto import CuentaPago, RetoListaEspera, RetoParticipacion, RetoRonda  # noqa: F401
 from models.comprobante import ComprobantePago  # noqa: F401
 from models.tendencias_virales import TendenciaItem  # noqa: F401
+from models.categoria_cotizante import CategoriaCotizante  # noqa: F401
+from models.plan import InscripcionPlan, Plan  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -629,11 +631,14 @@ def cleanup_test_db(db_session):
         db_session.query(Carpeta).delete()
 
         db_session.query(Notificacion).delete()
+        db_session.query(InscripcionPlan).delete()
         # Los sellos referencian empresas y admins: van antes que ambos.
         db_session.query(CertificacionImportador).delete()
         db_session.query(Certificacion).delete()
         db_session.query(Importador).delete()
         db_session.query(Usuario).delete()
+        db_session.query(CategoriaCotizante).delete()
+        db_session.query(Plan).delete()
         db_session.commit()
     except Exception:
         # Si las tablas no existen (ej. test falló antes de crearlas), ignorar

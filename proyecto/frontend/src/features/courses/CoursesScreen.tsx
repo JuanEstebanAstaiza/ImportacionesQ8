@@ -90,6 +90,8 @@ type CoursesScreenProps = {
   onGoDashboard: () => void;
   /** Pago manual: lleva a Pagos con la ventana del comprobante de ese curso. */
   onComprarAcceso?: (courseId: string) => void;
+  /** Admin › Cursos de Zarpi: el tablero del creador muestra los cursos sin empresa. */
+  cursosDeZarpi?: boolean;
 };
 
 type DraftResource = {
@@ -418,7 +420,7 @@ function sortByRecent<T extends Course>(rows: T[], recentCourseIds: string[]): T
   });
 }
 
-export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcceso }: CoursesScreenProps) {
+export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcceso, cursosDeZarpi = false }: CoursesScreenProps) {
   const {
     courses,
     purchasedCourseIds,
@@ -491,7 +493,10 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
   }), [filteredCourses]);
 
   const purchasedCourses = useMemo(() => courses.filter((course) => purchasedCourseIds.includes(course.id)), [courses, purchasedCourseIds]);
-  const creatorCourses = useMemo(() => courses.filter((course) => course.importadora_nombre === companyName), [companyName, courses]);
+  const creatorCourses = useMemo(
+    () => courses.filter((course) => (cursosDeZarpi ? !course.importador_id : course.importadora_nombre === companyName)),
+    [companyName, courses, cursosDeZarpi],
+  );
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) || null;
   const playerCourse = courses.find((course) => course.id === activePlayerCourseId) || null;
   const playerLessons = flattenLessons(playerCourse);

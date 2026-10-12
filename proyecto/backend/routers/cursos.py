@@ -73,14 +73,37 @@ def _slug_unico(db: Session, titulo: str) -> str:
     return slug
 
 
+# Así se muestran los cursos propios de la plataforma (sin empresa).
+NOMBRE_ZARPI = "Zarpi"
+
+
+def _es_de_zarpi(curso: Curso) -> bool:
+    return curso.importador_id is None
+
+
+def _puede_editar(curso: Curso, current_user: dict) -> bool:
+    """Los cursos de Zarpi los edita el admin; los de una empresa, su dueño."""
+    if _es_de_zarpi(curso):
+        return current_user.get("rol") == "admin"
+    return current_user.get("rol") == "importador" and current_user.get("importador_id") == curso.importador_id
+
+
+def _es_del_autor(curso: Curso, current_user: Optional[dict]) -> bool:
+    """Quien puede ver el curso aunque esté en borrador."""
+    if not current_user:
+        return False
+    if _es_de_zarpi(curso):
+        return current_user.get("rol") == "admin"
+    return current_user.get("importador_id") == curso.importador_id
+
+
 def _nombres_importadoras(db: Session, importador_ids: List[str]) -> dict:
     """Batch load — evita N+1 en catálogo de cursos."""
-    if not importador_ids:
-        return {}
-    rows = db.query(Importador.id, Importador.nombre_empresa).filter(
-        Importador.id.in_(list(set(importador_ids)))
-    ).all()
-    return {r[0]: r[1] for r in rows}
+    ids = {i for i in importador_ids if i}
+    if not ids:
+        return {None: NOMBRE_ZARPI}
+    rows = db.query(Importador.id, Importador.nombre_empresa).filter(Importador.id.in_(list(ids))).all()
+    return {None: NOMBRE_ZARPI, **{r[0]: r[1] for r in rows}}
 
 
 def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Session] = None,
@@ -425,9 +448,8 @@ async def obtener_curso(
     if not curso or curso.estado == EstadoCurso.archivado.value or curso.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    if curso.estado == EstadoCurso.borrador.value:
-        if not current_user or current_user.get("importador_id") != curso.importador_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+    if curso.estado == EstadoCurso.borrador.value and not _es_del_autor(curso, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
     item = _to_list_item(curso, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     comprado = False
@@ -466,22 +488,25 @@ async def crear_curso(
     request: Request,
     datos: CursoCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "admin")),
 ):
     """
     Publica un curso con módulos, lecciones, URLs de video y archivos adjuntos.
-    Solo la cuenta dueña de la empresa importadora.
+    La cuenta dueña de la empresa importadora, o el admin para los cursos
+    propios de Zarpi (sin empresa).
     """
-    importador_id = current_user.get("importador_id")
-    if not importador_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La cuenta no está asociada a ninguna empresa importadora",
-        )
+    importador_id = None
+    if current_user.get("rol") != "admin":
+        importador_id = current_user.get("importador_id")
+        if not importador_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La cuenta no está asociada a ninguna empresa importadora",
+            )
 
-    importador = db.query(Importador).filter(Importador.id == importador_id).first()
-    if not importador:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
+        importador = db.query(Importador).filter(Importador.id == importador_id).first()
+        if not importador:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
 
     curso_id = str(uuid4())
     curso = Curso(
@@ -506,7 +531,7 @@ async def crear_curso(
 
     db.commit()
     curso = _cargar_curso_detalle(db, curso_id)
-    item = _to_list_item(curso, db=db)
+    item = _to_list_item(curso, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     return CursoDetailResponse(
         **item.model_dump(),
         modulos=_modulos_response(curso, acceso_completo=True),
@@ -829,7 +854,7 @@ async def obtener_certificado_curso(
             db,
             curso=curso,
             usuario=usuario,
-            empresa_nombre=_nombres_importadoras(db, [curso.importador_id]).get(curso.importador_id),
+            empresa_nombre=_nombres_importadoras(db, [curso.importador_id]).get(curso.importador_id) or NOMBRE_ZARPI,
         )
         certificado = CertificadoCurso(
             id=str(uuid4()),
@@ -858,13 +883,13 @@ async def actualizar_curso(
     curso_id: str,
     datos: CursoUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "admin")),
 ):
     curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id), Curso.deleted_at.is_(None)).first()
     if not curso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    if curso.importador_id != current_user.get("importador_id"):
+    if not _puede_editar(curso, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para actualizar este curso")
 
     if datos.titulo is not None:
@@ -893,7 +918,7 @@ async def actualizar_curso(
     db.commit()
 
     refreshed = _cargar_curso_detalle(db, str(curso.id))
-    item = _to_list_item(refreshed, db=db)
+    item = _to_list_item(refreshed, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     return CursoDetailResponse(
         **item.model_dump(),
         modulos=_modulos_response(refreshed, acceso_completo=True),
@@ -909,13 +934,13 @@ async def eliminar_curso(
     request: Request,
     curso_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "admin")),
 ):
     curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id), Curso.deleted_at.is_(None)).first()
     if not curso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    if curso.importador_id != current_user.get("importador_id"):
+    if not _puede_editar(curso, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para eliminar este curso")
 
     now = datetime.utcnow()

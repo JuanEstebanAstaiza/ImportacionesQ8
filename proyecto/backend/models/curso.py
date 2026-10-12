@@ -40,7 +40,8 @@ class Curso(Base):
     precio = Column(Float, nullable=False, default=0.0)
     nivel = Column(String(30), nullable=False, default=NivelCurso.principiante.value)
     categoria = Column(String(120), nullable=False, default="General", index=True)
-    importador_id = Column(String(36), ForeignKey("importadores.id"), nullable=False, index=True)
+    # Empresa que lo publica. Vacío: curso propio de Zarpi (lo crea el admin).
+    importador_id = Column(String(36), ForeignKey("importadores.id"), nullable=True, index=True)
     creado_por_usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
     rating = Column(Float, nullable=False, default=0.0)
     estudiantes_count = Column(Integer, nullable=False, default=0)

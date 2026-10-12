@@ -14,7 +14,9 @@ import {
   type AdminMetricas,
   type AdminUser,
   type BackupResumen,
+  type CategoriaCotizante,
 } from "@/services/admin.service";
+import { textoCategoria } from "@/features/admin/CategoriasCotizante";
 import { businessService } from "@/services/business.service";
 import { tendenciasService } from "@/services/tendencias.service";
 import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
@@ -76,6 +78,9 @@ type UserFormState = {
   nit: string;
   razonSocial: string;
   tokensIniciales: string;
+  /** "" = automático (Bronze y sube por actividad) o el de la categoría. */
+  tier: "" | "Bronze" | "Silver" | "Gold" | "Élite";
+  categoriaId: string;
   /** Empresa importadora: nombre comercial y ficha básica. */
   companyName: string;
   especialidades: string[];
@@ -157,6 +162,8 @@ const EMPTY_USER_FORM: UserFormState = {
   nit: "",
   razonSocial: "",
   tokensIniciales: "0",
+  tier: "",
+  categoriaId: "",
   companyName: "",
   especialidades: [],
   paises: "China",
@@ -277,6 +284,13 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
   const companyUiDetails = useMemo(() => loadCompanyUiDetails(), []);
   const [companyForm, setCompanyForm] = useState(EMPTY_IMPORTER_FORM);
   const [userForm, setUserForm] = useState<UserFormState>(EMPTY_USER_FORM);
+  const [categoriasCotizante, setCategoriasCotizante] = useState<CategoriaCotizante[]>([]);
+
+  // Las categorías se crean en Cotizantes: se recargan cada vez que se abre el alta.
+  useEffect(() => {
+    if (!showUserModal) return;
+    adminService.listarCategoriasCotizante().then(setCategoriasCotizante).catch(() => setCategoriasCotizante([]));
+  }, [showUserModal]);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const metricsSectionRef = useRef<HTMLElement | null>(null);
@@ -650,7 +664,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     setIsResolvingDispute(true);
     try {
       await adminService.resolveDispute(resolvingDispute.id, texto);
-      setStatusMessage(`Incidente de la orden ${resolvingDispute.id.slice(0, 8).toUpperCase()} resuelto.`);
+      setStatusMessage(`Incidente de la operación ${resolvingDispute.id.slice(0, 8).toUpperCase()} resuelto.`);
       setResolvingDispute(null);
       setDisputeResolution("");
       await reloadAdminData();
@@ -922,6 +936,8 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           indicativo_pais_telefono: userForm.indicativo_pais_telefono.trim() || "+57",
           telefono: userForm.telefono.trim(),
           tokens_iniciales: Math.max(0, Math.floor(Number(userForm.tokensIniciales) || 0)),
+          ...(userForm.tier ? { tier: userForm.tier } : {}),
+          ...(userForm.categoriaId ? { categoria_id: userForm.categoriaId } : {}),
         });
         setStatusMessage(`Cotizante creado: ${userForm.email.trim()} ya puede iniciar sesión (sin código de verificación).`);
       }
@@ -999,7 +1015,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <Shield className="h-4 w-4" /> Salud operativa
             </div>
             <p className="text-2xl font-semibold text-foreground">{metrics?.ordenes_en_disputa ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Ordenes en disputa</p>
+            <p className="text-xs text-muted-foreground">Operaciones en disputa</p>
           </div>
         </div>
 
@@ -1236,7 +1252,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
 
             <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
               <p className="text-base font-semibold">Resumen rápido</p>
-              <p className="mt-1 text-xs text-muted-foreground">La creación directa soportada por API actual es para solicitantes e importadores.</p>
+              <p className="mt-1 text-xs text-muted-foreground">La creación directa soportada por API actual es para compradores e importadores.</p>
               <div className="mt-4 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
                 <p className="mb-1 font-medium text-foreground">Distribucion actual por rol:</p>
                 {Object.entries(usersByRole).map(([role, total]) => (
@@ -1273,7 +1289,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               Soporte y gestión de incidentes
             </p>
             <p className="text-sm text-muted-foreground">
-              Atiende dudas de solicitantes y media en incidentes con empresas importadoras. Puedes responder
+              Atiende dudas de compradores y media en incidentes con empresas importadoras. Puedes responder
               dentro de la conversación como equipo de la plataforma.
             </p>
           </div>
@@ -1381,7 +1397,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
-                        Orden {dispute.id.slice(0, 8).toUpperCase()} · estado {dispute.estado}
+                        Operación {dispute.id.slice(0, 8).toUpperCase()} · estado {dispute.estado}
                       </p>
                       <p className="mt-0.5 text-xs text-amber-900">{dispute.motivo_disputa || "Sin motivo indicado"}</p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -1532,7 +1548,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           </p>
           <p className="text-sm text-muted-foreground">
             Sellos con los que respaldas a una empresa. El <strong>peso publicitario</strong> es lo que decide
-            qué tan arriba aparece en el catálogo del solicitante: a mayor peso, más visibilidad.
+            qué tan arriba aparece en el catálogo del comprador: a mayor peso, más visibilidad.
           </p>
         </div>
 
@@ -1906,7 +1922,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   {openConversation.cotizacion_id
                     ? `Cotización ${openConversation.cotizacion_id.slice(0, 8).toUpperCase()}`
                     : "Canal interno de la empresa"}
-                  {openConversation.orden_id ? ` · Orden ${openConversation.orden_id.slice(0, 8).toUpperCase()}` : ""}
+                  {openConversation.orden_id ? ` · Operación ${openConversation.orden_id.slice(0, 8).toUpperCase()}` : ""}
                 </p>
               </div>
               <button
@@ -2134,7 +2150,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <div>
                 <h2 className="text-lg font-semibold">Resolver incidente</h2>
                 <p className="text-xs text-muted-foreground">
-                  Orden {resolvingDispute.id.slice(0, 8).toUpperCase()}
+                  Operación {resolvingDispute.id.slice(0, 8).toUpperCase()}
                 </p>
               </div>
               <button
@@ -2159,7 +2175,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               value={disputeResolution}
               onChange={(event) => setDisputeResolution(event.target.value)}
               rows={4}
-              placeholder="Qué se hizo para resolverlo. Queda registrado en la orden y en la sala del incidente."
+              placeholder="Qué se hizo para resolverlo. Queda registrado en la operación y en la sala del incidente."
               className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
             />
 
@@ -2548,6 +2564,41 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                       onChange={(event) => setUserForm((prev) => ({ ...prev, tokensIniciales: event.target.value }))}
                       className="h-9 w-full rounded-lg border border-border px-3 text-sm"
                     />
+                  </label>
+                ) : null}
+                {userForm.rol === "solicitante" ? (
+                  <label className="text-xs font-medium text-muted-foreground">Categoría
+                    <select
+                      value={userForm.categoriaId}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, categoriaId: event.target.value }))}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm"
+                    >
+                      <option value="">Sin categoría</option>
+                      {categoriasCotizante.filter((c) => c.activa).map((c) => (
+                        <option key={c.id} value={c.id}>{c.nombre} · {textoCategoria(c)}</option>
+                      ))}
+                    </select>
+                    <span className="mt-0.5 block font-normal">
+                      Aplica su tier (si abajo no eliges otro) y sus días de Tendencias. Las categorías se crean en Cotizantes.
+                    </span>
+                  </label>
+                ) : null}
+                {userForm.rol === "solicitante" ? (
+                  <label className="text-xs font-medium text-muted-foreground">Tier
+                    <select
+                      value={userForm.tier}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, tier: event.target.value as UserFormState["tier"] }))}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm"
+                    >
+                      <option value="">{userForm.categoriaId ? "El de la categoría" : "Automático (empieza en Bronze y sube con su actividad)"}</option>
+                      <option value="Bronze">Bronze (fijo)</option>
+                      <option value="Silver">Silver (fijo)</option>
+                      <option value="Gold">Gold (fijo)</option>
+                      <option value="Élite">Élite (fijo)</option>
+                    </select>
+                    <span className="mt-0.5 block font-normal">
+                      Elegido a mano, el tier no cambia solo. Lo puedes liberar después en Cotizantes.
+                    </span>
                   </label>
                 ) : null}
               </fieldset>

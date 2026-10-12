@@ -83,7 +83,7 @@ async def invitar_miembro(
     existente = db.query(Usuario).filter(Usuario.email == datos.email).first()
     if existente:
         if existente.rol != "solicitante":
-            raise HTTPException(status_code=400, detail="Solo se pueden invitar cuentas solicitante")
+            raise HTTPException(status_code=400, detail="Solo se pueden invitar cuentas de comprador")
         if existente.organizacion_id and existente.organizacion_id != org.id:
             raise HTTPException(status_code=400, detail="El usuario ya pertenece a otra organización")
         usuario = existente

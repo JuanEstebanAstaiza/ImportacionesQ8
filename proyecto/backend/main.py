@@ -37,6 +37,7 @@ from routers.tipografia import router as tipografia_router
 from routers.tendencias_virales import router as tendencias_virales_router
 from routers.reto import router as reto_router
 from routers.comprobantes import router as comprobantes_router
+from routers.planes import router as planes_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -97,6 +98,37 @@ async def _tarea_tendencias_periodica(intervalo_horas: int) -> None:
         await asyncio.sleep(intervalo_horas * 3600)
 
 
+async def _devolver_solicitudes_periodicamente(intervalo_minutos: int) -> None:
+    """Devuelve al saldo las solicitudes que llevan 72 horas sin propuestas. El
+    candado en Redis deja que un solo worker la corra en cada vuelta (y el
+    UPDATE condicional evita devolver dos veces aunque no haya Redis)."""
+    import config
+    from database import SessionLocal
+    from services.tokens_cotizacion import devolver_sin_propuestas
+
+    def _pasada() -> None:
+        try:
+            if config.redis_client is not None and not config.redis_client.set(
+                    "lock:devolucion_solicitudes", "1", nx=True, ex=max(intervalo_minutos * 60 - 30, 30)):
+                return
+        except Exception:
+            logger.warning("Sin Redis para el candado de la devolución de solicitudes; se ejecuta igual")
+        db = SessionLocal()
+        try:
+            resultado = devolver_sin_propuestas(db)
+            if resultado["devueltas"]:
+                logger.info("Devolución de solicitudes sin propuestas: %s", resultado)
+        except Exception:
+            db.rollback()
+            logger.exception("Falló la devolución de solicitudes sin propuestas")
+        finally:
+            db.close()
+
+    while True:
+        await asyncio.to_thread(_pasada)
+        await asyncio.sleep(intervalo_minutos * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestiona el inicio y parada de la aplicación"""
@@ -117,8 +149,15 @@ async def lifespan(app: FastAPI):
     if config.TENDENCIAS_TAREA_HORAS > 0:
         tarea_tendencias = asyncio.create_task(_tarea_tendencias_periodica(config.TENDENCIAS_TAREA_HORAS))
 
+    tarea_devolucion = None
+    if config.DEVOLUCION_SOLICITUDES_MINUTOS > 0:
+        tarea_devolucion = asyncio.create_task(
+            _devolver_solicitudes_periodicamente(config.DEVOLUCION_SOLICITUDES_MINUTOS))
+
     yield
 
+    if tarea_devolucion:
+        tarea_devolucion.cancel()
     if tarea_tiers:
         tarea_tiers.cancel()
     if tarea_tendencias:
@@ -276,6 +315,7 @@ app.include_router(tipografia_router)
 app.include_router(tendencias_virales_router)
 app.include_router(reto_router)
 app.include_router(comprobantes_router)
+app.include_router(planes_router)
 
 @app.get("/", tags=["Salud"])
 async def root():

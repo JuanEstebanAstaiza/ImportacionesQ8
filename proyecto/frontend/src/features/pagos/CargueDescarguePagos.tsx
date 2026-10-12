@@ -87,8 +87,10 @@ async function descargar(ruta: string, nombre?: string | null) {
   if (!r.ok) toast.error(r.motivo || "No se pudo descargar el comprobante.");
 }
 
-export function CargueDescarguePagos({ rol, cursoInicial, onCursoInicialUsado }: {
+export function CargueDescarguePagos({ rol, cursoInicial, onCursoInicialUsado, carpetaInicial }: {
   rol: string;
+  /** Carpeta con la que abre (p. ej. «suscripcion» desde el muro de pago de Tendencias). */
+  carpetaInicial?: TipoComprobante | null;
   /** Curso que se quiere comprar (viene de «Comprar acceso» en Cursos). */
   cursoInicial?: string | null;
   onCursoInicialUsado?: () => void;
@@ -98,7 +100,7 @@ export function CargueDescarguePagos({ rol, cursoInicial, onCursoInicialUsado }:
   const [cursos, setCursos] = useState<CursoPorPagar[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [carpeta, setCarpeta] = useState<TipoComprobante>(cursoInicial ? "curso" : "tokens");
+  const [carpeta, setCarpeta] = useState<TipoComprobante>(cursoInicial ? "curso" : carpetaInicial ?? "tokens");
   const [cursoVentana, setCursoVentana] = useState<string | null>(cursoInicial ?? null);
 
   // `silencioso`: refresco tras subir; si falla no se tumba la vista, solo se avisa.
@@ -130,6 +132,10 @@ export function CargueDescarguePagos({ rol, cursoInicial, onCursoInicialUsado }:
   }, []);
 
   useEffect(() => { void cargar(); }, [cargar]);
+
+  useEffect(() => {
+    if (carpetaInicial) setCarpeta(carpetaInicial);
+  }, [carpetaInicial]);
 
   // Otro «Comprar acceso» estando ya en Pagos.
   useEffect(() => {

@@ -129,7 +129,8 @@ def catalogo_publicado(db: Session) -> List[Dict]:
                    .filter(Importador.id.in_({c.importador_id for c in cursos} or {""})).all())
     return [{
         "id": c.id, "titulo": c.titulo, "precio": float(c.precio or 0),
-        "importadora_nombre": nombres.get(c.importador_id), "estudiantes": int(c.estudiantes_count or 0),
+        "importadora_nombre": nombres.get(c.importador_id) if c.importador_id else "Zarpi",
+        "estudiantes": int(c.estudiantes_count or 0),
     } for c in cursos]
 
 

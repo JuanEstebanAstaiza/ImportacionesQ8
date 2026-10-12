@@ -28,7 +28,7 @@ import {
 
 /**
  * Feed público de Tendencias. Regla del módulo: aquí no se carga ningún
- * reproductor ni script de TikTok, Instagram o YouTube; solo la portada.
+ * reproductor ni script de TikTok, Instagram, YouTube o Pinterest; solo la portada.
  */
 
 type Props = {
@@ -39,6 +39,8 @@ type Props = {
   /** Muro de pago: sin estos, se navega a /registro y /login. */
   onRegistrarse?: () => void;
   onIniciarSesion?: () => void;
+  /** Muro de pago sin pasarela: a Pagos, para subir el comprobante de la suscripción. */
+  onIrAPagos?: () => void;
 };
 
 const CLASE_CTA =
@@ -130,7 +132,7 @@ function TarjetaBloqueada({ portada, texto }: { portada: string | null; texto: s
   );
 }
 
-export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace, onRegistrarse, onIniciarSesion }: Props) {
+export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace, onRegistrarse, onIniciarSesion, onIrAPagos }: Props) {
   const [semana, setSemana] = useState<string | null>(null);
   const [semanaActual, setSemanaActual] = useState<string | null>(null);
   const [categoria, setCategoria] = useState<string | null>(null);
@@ -198,7 +200,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#EDF953]">Tendencias</p>
             <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">Productos virales para importar</h1>
             <p className="mt-2 text-sm leading-relaxed text-white/70">
-              Lo que se está moviendo en TikTok, Instagram y YouTube, revisado por el equipo de Zarpi. Mira el video y pide
+              Lo que se está moviendo en TikTok, Instagram, YouTube y Pinterest, revisado por el equipo de Zarpi. Mira el video y pide
               propuestas a importadoras verificadas, sin compromiso.
             </p>
           </div>
@@ -310,13 +312,14 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
             onRegistrarse={onRegistrarse ?? (() => window.location.assign("/registro"))}
             onIniciarSesion={onIniciarSesion ?? (() => window.location.assign("/login"))}
             onAccesoConcedido={() => setIntento((n) => n + 1)}
+            onPagarConTransferencia={onIrAPagos}
           />
         ) : null}
 
         <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold">¿Encontraste un producto viral? Súbelo</p>
-            <p className="text-xs text-white/60">Pega el enlace de TikTok, Instagram o YouTube. Lo revisamos en menos de 48 horas.</p>
+            <p className="text-xs text-white/60">Pega el enlace de TikTok, Instagram, YouTube o Pinterest. Lo revisamos en menos de 48 horas.</p>
           </div>
           <button type="button" onClick={onEnviarEnlace} className={`${CLASE_CTA} shrink-0`}>
             <Link2 className="h-4 w-4" /> Enviar enlace
