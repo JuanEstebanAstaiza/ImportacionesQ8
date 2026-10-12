@@ -2025,7 +2025,7 @@ function ImporterCard({
             size="sm"
             fullWidth
             onClick={() => onViewProfile(imp.id)}
-            className="hover:bg-primary dark:hover:bg-accent"
+            className="hover:bg-primary dark:hover:bg-accent hover:text-white dark:hover:text-black"
           >
             Ver perfil
           </Button>
@@ -2036,7 +2036,7 @@ function ImporterCard({
             fullWidth
             icon={<Plus className="w-3.5 h-3.5" />}
             onClick={() => onCreateQuote(imp.id)}
-            className="dark:bg-accent dark:hover:bg-accent"
+            className="dark:bg-accent dark:hover:bg-accent dark:text-black dark:hover:bg-accent/80"
           >
             Cotizar
           </Button>
@@ -2143,32 +2143,65 @@ function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarC
           <div className="space-y-3">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex-1 min-w-[200px]">
-                <Input placeholder="Buscar por nombre, especialidad o categoría..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/>
+                <Input 
+                  placeholder="Buscar por nombre, especialidad o categoría..." 
+                  value={search} 
+                  onChange={e => setSearch(e.target.value)} 
+                  prefix={<Search className="w-4 h-4"/>}
+                  className="dark:focus:border-accent dark:hover:border-accent/60"
+                />
               </div>
               <div className="w-44">
-                <Select value={certFilter} onChange={e=>setCertFilter(e.target.value)}>
+                <Select 
+                  value={certFilter} 
+                  onChange={e => setCertFilter(e.target.value)}
+                  className={clsx(
+                    "dark:bg-background dark:border-border transition-colors",
+                    "focus:border-accent dark:focus:border-accent",
+                    "hover:border-accent dark:hover:border-accent",
+                    certFilter && "dark:border-accent border-accent"
+                  )}
+                >
                   <option value="">Certificación</option>
                   <option value="certificadas">Con certificaciones</option>
-                  {certOptions.map(c=><option key={c} value={c}>{c}</option>)}
+                  {certOptions.map(c => <option key={c} value={c}>{c}</option>)}
                 </Select>
               </div>
               <div className="w-40">
-                <Select value={countryFilter} onChange={e=>setCountryFilter(e.target.value)}>
+                <Select 
+                  value={countryFilter} 
+                  onChange={e => setCountryFilter(e.target.value)}
+                  className={clsx(
+                    "dark:bg-background dark:border-border transition-colors",
+                    "focus:border-accent dark:focus:border-accent",
+                    "hover:border-accent dark:hover:border-accent",
+                    countryFilter && "dark:border-accent border-accent"
+                  )}
+                >
                   <option value="">País</option>
-                  {[...new Set(importers.map(i=>i.country))].map(c=><option key={c}>{c}</option>)}
+                  {[...new Set(importers.map(i => i.country))].map(c => <option key={c}>{c}</option>)}
                 </Select>
               </div>
-              {(search||certFilter||countryFilter||catFilter!=="Todas")&&(
+              {(search || certFilter || countryFilter || catFilter !== "Todas") && (
                 <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setSearch("");setCertFilter("");setCountryFilter("");setCatFilter("Todas");}}>Limpiar</Button>
               )}
             </div>
 
             {/* Category tabs */}
             <div className="flex gap-1.5 flex-wrap">
-              {quickCats.map(cat=>(
-                <button key={cat} onClick={()=>setCatFilter(cat)}
-                  className={clsx("px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150",
-                    catFilter===cat?"bg-primary text-white shadow-sm":"bg-white border border-border text-muted-foreground hover:text-foreground hover:border-primary/30")}>
+              {quickCats.map(cat => (
+                <button 
+                  key={cat} 
+                  onClick={() => setCatFilter(cat)}
+                  className={clsx(
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border",
+                    catFilter === cat ? (
+                      "bg-primary text-white border-primary dark:bg-accent dark:text-black dark:border-accent shadow-sm"
+                    ) : (
+                      "bg-white dark:bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary dark:hover:border-accent"
+                    )
+                  )}
+                >
                   {cat}
                 </button>
               ))}
@@ -2578,7 +2611,7 @@ function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb,
                 </div>
               </div>
 
-              <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={onNewQuote}>Nueva cotización</Button>
+              <Button variant="primary" className="dark:bg-accent dark:text-black dark:hover:bg-accent/80" icon={<Plus className="w-4 h-4" />} onClick={onNewQuote}>Nueva cotización</Button>
             </div>
           </div>
 
