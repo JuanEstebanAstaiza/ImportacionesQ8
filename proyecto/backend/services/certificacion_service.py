@@ -87,7 +87,7 @@ def adjuntar_certificaciones(db: Session, importadores: List) -> List:
     serializar el catálogo entero siga siendo cuatro consultas y no 3·N.
     También adjunta `asesores`: quién atiende en la empresa.
     """
-    from schemas.importador import ImportadorResponse
+    from schemas.importador import AsesorPublicoResponse, ImportadorResponse
     from services.asesores_publicos import asesores_publicos_por_importador
     from services.proyectos_empresa import proyectos_completados_por_importador
 
@@ -102,6 +102,6 @@ def adjuntar_certificaciones(db: Session, importadores: List) -> List:
         respuesta.certificaciones = certificaciones
         respuesta.puntaje_publicidad = puntaje_de(certificaciones)
         respuesta.proyectos_completados = proyectos.get(str(imp.id), 0)
-        respuesta.asesores = asesores.get(str(imp.id), [])
+        respuesta.asesores = [AsesorPublicoResponse(**a) for a in asesores.get(str(imp.id), [])]
         respuestas.append(respuesta)
     return respuestas

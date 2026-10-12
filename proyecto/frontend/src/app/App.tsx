@@ -8848,13 +8848,27 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
     return null;
   }
 
+  // Mismos campos, en el mismo orden, que el formulario que llena el
+  // comprador (y que su propio detalle). Antes este modal mostraba una «ficha
+  // técnica» con peso, volumen, dimensiones y destino —que el formulario no
+  // pide, así que siempre decían «No especificado»— y se saltaba línea,
+  // calidad, cantidad, precio objetivo y el link de referencia.
   const custom = quote.customFields;
   const peso = findCustomFieldValue(custom, ["peso", "weight"]);
   const volumen = findCustomFieldValue(custom, ["volumen", "volume", "cbm", "m3"]);
   const dimensiones = findCustomFieldValue(custom, ["dimension", "medida", "tamano", "size"]);
-  const origen = findCustomFieldValue(custom, ["origen", "origin", "puerto_origen"]);
   const destino = findCustomFieldValue(custom, ["destino", "destination", "puerto_destino"]);
-  const adjuntos = getQuoteAttachmentLinks(quote);
+  const extras = [["Peso", peso], ["Volumen", volumen], ["Dimensiones", dimensiones], ["Destino", destino]].filter(([, v]) => v);
+  const linkReferencia = safeHttpUrl(quote.referenceLink);
+  const adjuntos = getQuoteAttachmentLinks(quote).filter((link) => link !== quote.referenceLink);
+  const conMayuscula = (texto?: string | null) => (texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "");
+  const proposito = quote.importMode === "corporativo" ? "Corporativo" : quote.importMode === "ecommerce" ? "Ecommerce" : conMayuscula(quote.importMode);
+  const dato = (etiqueta: string, valor: React.ReactNode, clase = "") => (
+    <div key={etiqueta} className={clase}>
+      <p className="text-xs text-muted-foreground">{etiqueta}</p>
+      <div className="text-sm font-medium mt-0.5 whitespace-pre-line break-words">{valor || "—"}</div>
+    </div>
+  );
 
   return (
     <Modal open={open} onClose={onClose} title={`Detalle completo · ${quote.code}`} width="max-w-3xl">
@@ -8876,33 +8890,37 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
         </div>
 
         <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Ficha técnica</h3>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-            <div><p className="text-xs text-muted-foreground">Peso</p><p className="font-medium">{peso || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Volumen</p><p className="font-medium">{volumen || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Dimensiones</p><p className="font-medium">{dimensiones || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Origen</p><p className="font-medium">{origen || quote.country || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Destino</p><p className="font-medium">{destino || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Incoterm</p><p className="font-medium">{quote.incoterm || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Shipping mark</p><p className="font-medium font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</p></div>
+          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+            {dato("Nombre", quote.product)}
+            {dato("Línea", quote.productLine)}
+            {dato("País de importación", quote.country)}
+            {dato("Calidad", conMayuscula(quote.quality))}
+            {dato("Personalización", quote.personalizationLevel)}
+            {dato("Descripción", quote.description, "col-span-2 sm:col-span-3")}
+            {linkReferencia && dato(
+              "Link de referencia",
+              <a href={linkReferencia} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-primary dark:text-accent hover:underline break-all">
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0"/>{quote.referenceLink}
+              </a>,
+              "col-span-2 sm:col-span-3",
+            )}
           </div>
+          {(quote.productPhotoUrls??[]).length>0&&(
+            <div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>
+          )}
         </Card>
 
         <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Información registrada por el comprador</h3>
-          <div className="space-y-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Descripción</p>
-              <p className="mt-1 whitespace-pre-wrap">{quote.description || "Sin descripción"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Notas adicionales</p>
-              <p className="mt-1 whitespace-pre-wrap">{quote.notes || "Sin notas"}</p>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div><p className="text-xs text-muted-foreground">Nivel de personalización</p><p className="font-medium mt-1">{quote.personalizationLevel || "No especificado"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Modalidad de importación</p><p className="font-medium mt-1">{quote.importMode || "No especificado"}</p></div>
-            </div>
+          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+            {dato("Propósito", proposito)}
+            {dato("Cantidad", cantidadConUnidad(quote.minQuantity, quote.unit))}
+            {dato("Precio objetivo", quote.targetPrice && quote.targetPrice !== "N/A" ? quote.targetPrice : "Sin precio objetivo")}
+            {dato("Incoterm", quote.incoterm)}
+            {dato("Shipping mark", <span className="font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</span>)}
+            {extras.map(([k, v]) => dato(k, v))}
+            {dato("Notas", quote.notes, "col-span-2 sm:col-span-3")}
           </div>
         </Card>
 
@@ -8922,17 +8940,9 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
           </div>
         )}
 
-        {(quote.productPhotoUrls??[]).length>0&&(
+        {adjuntos.length>0&&(
           <Card padding="md">
-            <GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/>
-          </Card>
-        )}
-
-        <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
-          {adjuntos.length===0 ? (
-            <p className="text-sm text-muted-foreground">No hay archivos o enlaces adjuntos en esta cotización.</p>
-          ) : (
+            <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
             <div className="space-y-2">
               {adjuntos.map((link)=> (
                 <a key={link} href={link} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all inline-flex items-center gap-1.5">
@@ -8940,8 +8950,8 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
                 </a>
               ))}
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </Modal>
   );
