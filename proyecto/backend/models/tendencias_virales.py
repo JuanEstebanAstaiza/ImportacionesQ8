@@ -24,6 +24,7 @@ class Plataforma(str, enum.Enum):
     tiktok = "tiktok"
     instagram = "instagram"
     youtube = "youtube"
+    pinterest = "pinterest"
 
 
 class RolRemitente(str, enum.Enum):

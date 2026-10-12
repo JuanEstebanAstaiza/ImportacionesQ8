@@ -73,7 +73,7 @@ export function SeccionTendenciasLanding({ onAbrir, onVerTodas }: { onAbrir: (id
             <TrendingUp className="h-3.5 w-3.5" /> Tendencias
           </p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Lo que se está moviendo para importar</h2>
-          <p className="text-muted-foreground mt-2">Productos virales de TikTok, Instagram y YouTube, revisados por Zarpi.</p>
+          <p className="text-muted-foreground mt-2">Productos virales de TikTok, Instagram, YouTube y Pinterest, revisados por Zarpi.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">

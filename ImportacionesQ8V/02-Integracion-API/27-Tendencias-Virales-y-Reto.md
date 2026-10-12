@@ -11,15 +11,16 @@ Una sección con productos virales para importar, alimentada de tres lados:
 - **Las importadoras**, que recomiendan productos.
 - **La comunidad**, a la que se le paga por subir productos que terminen aprobados.
 
-Cada producto entra como un **enlace** a TikTok, Instagram o YouTube. El equipo aprobador decide si entra (nombre, categoría, textos) y lo manda a **diseño**: un **designer** de Zarpi le pone la portada y las imágenes con la identidad de marca, y lo publica. **Nunca se descarga ni se guarda el video** ni su miniatura. La ficha **no muestra precio**: su única acción es pedir propuestas.
+Cada producto entra como un **enlace** a TikTok, Instagram, YouTube o Pinterest. El equipo aprobador decide si entra (nombre, categoría, textos) y lo manda a **diseño**: un **designer** de Zarpi le pone la portada y las imágenes con la identidad de marca, y lo publica. **Nunca se descarga ni se guarda el video** ni su miniatura. La ficha **no muestra precio**: su única acción es pedir propuestas.
 
 ## Reglas que viven en el código
 
 | Regla | Dónde |
 |-------|-------|
-| Solo TikTok, Instagram y YouTube. Los enlaces cortos se resuelven sin salir de esos dominios (evita SSRF) | `enlaces_video.normalizar` / `resolver_corto` |
+| Solo TikTok, Instagram, YouTube y Pinterest. Los enlaces cortos (`vm.tiktok.com`, `pin.it`) se resuelven sin salir de esos dominios (evita SSRF). En Pinterest se aceptan los dominios por país (`co.pinterest.com`, `pinterest.es`…) y la forma `/pin/titulo--123…/`; todo se guarda como `https://www.pinterest.com/pin/{id}/` | `enlaces_video.normalizar` / `resolver_corto` |
+| **Dueño del contenido.** TikTok y YouTube: `author_name` del oEmbed. Pinterest: el oEmbed oficial más el widget de pines (`widgets.pinterest.com/v3/pidgets/pins/info`, el que usa el botón oficial), que dice quién creó el pin (`native_creator`); si Pinterest no lo sabe, la cuenta que lo publicó. Se guarda como «Nombre (@usuario)» en `autor_plataforma` | `enlaces_video.consultar_oembed` / `_dueno_pinterest` |
 | Mismo video con o sin parámetros = una sola ficha (`url_normalizada` UNIQUE). Al repetido se le responde quién lo subió, sin decir su nombre | `tendencias_virales.enviar` |
-| El reproductor es un iframe oficial armado desde el id validado. Nunca se inyecta el HTML del oEmbed. Para Instagram, el código pegado debe ser del mismo post | `enlaces_video.embed_url`, `tendencias_virales.editar` |
+| El reproductor es un iframe oficial armado desde el id validado. Nunca se inyecta el HTML del oEmbed. Para Instagram, el código pegado debe ser del mismo post. Pinterest usa `assets.pinterest.com/ext/embed.html?id=`; como el pin es una tarjeta (imagen + pie de ~100 px), la ficha trae `proporcion_pin` y el frontend (`MarcoPin`) arma el marco del tamaño justo | `enlaces_video.embed_url`, `tendencias_virales.editar` |
 | Aprobar no publica: pasa a `en_diseno` y se avisa a los designers. Publica el designer, con portada. El admin puede publicar directo (`publicar: true`) si ya hay portada | `tendencias_virales.aprobar` / `publicar_diseno` |
 | El designer solo usa imágenes que subió él o las que el producto ya tenía (la foto propuesta por la importadora); máximo 8 imágenes extra | `_validar_imagen_diseno` |
 | El feed no devuelve el reproductor; la ficha sí | `tarjeta` / `ficha` |
@@ -60,7 +61,7 @@ Cada producto entra como un **enlace** a TikTok, Instagram o YouTube. El equipo 
 ### Tarea diaria (`TENDENCIAS_TAREA_HORAS`, 24 por defecto)
 
 Corre en un solo worker gracias a un candado en Redis:
-- Vuelve a consultar el oEmbed de lo publicado en TikTok y YouTube; si el video ya no está, la ficha pasa a «caído» y se avisa a quien la aprobó.
+- Vuelve a consultar el oEmbed de lo publicado en TikTok, YouTube y Pinterest; si el video ya no está, la ficha pasa a «caído» y se avisa a quien la aprobó.
 - Avisa a quien lleva 7 días sin enviar.
 - Cierra las rondas vencidas.
 

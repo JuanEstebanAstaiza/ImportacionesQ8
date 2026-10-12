@@ -32,6 +32,7 @@ import {
   type FichaTendencia,
 } from "@/services/tendencias.service";
 
+import { MarcoPin } from "./MarcoPin";
 import { MuroPago } from "./MuroPago";
 import type { PrefillSolicitud } from "./prefill";
 import {
@@ -82,6 +83,16 @@ function BotonVolver({ onVolver }: { onVolver: () => void }) {
 
 function Reproductor({ ficha }: { ficha: FichaTendencia }) {
   const vertical = ficha.plataforma !== "youtube";
+  if (ficha.embed_url && ficha.plataforma === "pinterest") {
+    return (
+      <MarcoPin
+        src={ficha.embed_url}
+        titulo={`Pin de ${ficha.nombre} en Pinterest`}
+        proporcion={ficha.proporcion_pin}
+        className="shadow-sm"
+      />
+    );
+  }
   if (!ficha.embed_url) {
     return (
       <a
@@ -94,7 +105,7 @@ function Reproductor({ ficha }: { ficha: FichaTendencia }) {
         <ImagenPublica src={ficha.portada_url} alt={ficha.nombre} className="h-full w-full" />
         <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-sm font-semibold text-white">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5">
-            <ExternalLink className="h-4 w-4" /> Ver video en {ficha.plataforma_nombre}
+            <ExternalLink className="h-4 w-4" /> Ver en {ficha.plataforma_nombre}
           </span>
         </span>
       </a>
