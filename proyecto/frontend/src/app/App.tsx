@@ -9619,7 +9619,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
                 key={section.key}
                 onClick={()=>setActiveTab(section.key)}
                 className={clsx(
-                  "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  "px-3 py-1.5 rounded-full text-sm font-medium transition-colors",
                   activeTab === section.key 
                     ? "bg-primary text-white dark:bg-accent dark:text-accent-foreground" 
                     : "text-muted-foreground hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white"
