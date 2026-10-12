@@ -5,15 +5,15 @@ import type { EstadoRonda } from "@/services/reto.service";
 const ZONA = "America/Bogota";
 
 export const CLASE_INPUT =
-  "w-full rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70";
+  "w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70";
 
 export const CLASE_BOTON_PRIMARIO =
   "inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60";
 
 export const CLASE_BOTON_SECUNDARIO =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60";
 
-export const CLASE_TARJETA = "rounded-xl border border-border bg-white p-4 shadow-sm";
+export const CLASE_TARJETA = "rounded-xl border border-border bg-card p-4 shadow-sm";
 
 export function mensajeError(error: unknown, defecto: string): string {
   return error instanceof Error && error.message ? error.message : defecto;

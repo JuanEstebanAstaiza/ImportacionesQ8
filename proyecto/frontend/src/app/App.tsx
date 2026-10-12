@@ -9675,16 +9675,18 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 /** «acceso» es la lista privada: solo se llega por los botones de «Solicitar acceso». */
-type PestanaLanding=LandingSection|"acceso";
-const LANDING_TABS:{key:LandingSection;label:string}[]=[
+type PestanaLanding=LandingSection|"tendencias"|"reto"|"acceso";
+const LANDING_TABS:{key:Exclude<PestanaLanding,"acceso">;label:string}[]=[
   {key:"home",label:"Inicio"},
   {key:"about",label:"Quiénes somos"},
   {key:"how-it-works",label:"Cómo funciona"},
   {key:"news",label:"Novedades y aliados"},
   {key:"contact",label:"Contacto"},
+  {key:"tendencias",label:"Tendencias"},
+  {key:"reto",label:"Reto"},
 ];
 
-function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onReto,onAbrirTendencia}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[];onTendencias:()=>void;onReto:()=>void;onAbrirTendencia:(id:string)=>void}) {
+function LandingScreen({onLogin,onRegister,onPolicy,importers,onAbrirTendencia}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[];onAbrirTendencia:(id:string)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [activeTab,setActiveTab]=useState<PestanaLanding>("home");
@@ -9768,8 +9770,6 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
                 {section.label}
               </button>
             ))}
-            <button onClick={onTendencias} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Tendencias</button>
-            <button onClick={onReto} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Reto</button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -9945,7 +9945,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
       </section>
 
       {/* TENDENCIAS: lo último del catálogo (no aparece si no hay productos publicados) */}
-      <SeccionTendenciasLanding onAbrir={onAbrirTendencia} onVerTodas={onTendencias}/>
+      <SeccionTendenciasLanding onAbrir={onAbrirTendencia} onVerTodas={()=>setActiveTab("tendencias")}/>
 
       {/* FEATURED IMPORTERS */}
       <section className="py-20 px-6 bg-muted relative overflow-hidden">
@@ -10029,9 +10029,36 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
       )}
       {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={crearCuenta}/>}
+      {activeTab==="tendencias" && (
+        <main className="relative isolate overflow-hidden px-4 pt-24 pb-8">
+          <LandingBackground />
+          <div className="relative z-10 mx-auto max-w-6xl">
+            <TendenciasFeed
+              rol={null}
+              onAbrir={onAbrirTendencia}
+              onPedirPropuestas={onRegister}
+              onEnviarEnlace={onRegister}
+              onRegistrarse={onRegister}
+              onIniciarSesion={onLogin}
+            />
+          </div>
+        </main>
+      )}
+      {activeTab==="reto" && (
+        <main className="relative isolate overflow-hidden px-4 pt-24 pb-8">
+          <LandingBackground />
+          <div className="relative z-10 mx-auto max-w-6xl">
+            <RetoPagina
+              autenticado={false}
+              onIrARegistro={onRegister}
+              onEnviarEnlace={onRegister}
+            />
+          </div>
+        </main>
+      )}
       {activeTab==="acceso" && <LandingListaPrivadaSection onLogin={onLogin} onContacto={()=>irA("contact")}/>}
 
-      {activeTab!=="contact" && activeTab!=="acceso" && (
+      {activeTab!=="contact" && activeTab!=="acceso" && activeTab!=="tendencias" && activeTab!=="reto" && (
       <>
       {/* CTA BANNER */}
       <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
@@ -12878,7 +12905,7 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onAbrirTendencia={abrirTendencia}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters} onAbrirTendencia={abrirTendencia}/>;
   if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;

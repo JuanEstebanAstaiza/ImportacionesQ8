@@ -44,7 +44,7 @@ type Props = {
 };
 
 const CLASE_CTA =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#EDF953] px-3 py-2 text-sm font-semibold text-[#16151B] transition-colors hover:bg-[#f3fb8a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-[#EDF953] dark:text-[#16151B] dark:hover:bg-[#f3fb8a] dark:focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60";
 
 function Tarjeta({
   item,
@@ -74,7 +74,7 @@ function Tarjeta({
       onClick={onAbrir}
       onKeyDown={alTeclear}
       aria-label={`Ver ${item.nombre}`}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#18171C] text-white transition-colors hover:border-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EDF953]"
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-white/10 dark:bg-[#18171C] dark:text-white dark:hover:border-white/25 dark:focus-visible:ring-[#EDF953]"
     >
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-neutral-900">
         <ImagenPublica src={item.portada_url} alt={item.nombre} className="h-full w-full transition-transform duration-300 group-hover:scale-[1.03]" />
@@ -93,10 +93,10 @@ function Tarjeta({
       </div>
 
       <div className="flex flex-1 flex-col gap-1.5 p-3">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-[#EDF953]/90">{item.categoria}</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-primary dark:text-[#EDF953]/90">{item.categoria}</p>
         <h3 className="line-clamp-2 text-sm font-semibold leading-snug sm:text-base">{item.nombre}</h3>
-        <p className="line-clamp-1 text-xs text-white/60">{textoOrigen(item)}</p>
-        <p className="mt-auto flex items-center gap-1 pt-1 text-xs text-white/75">
+        <p className="line-clamp-1 text-xs text-muted-foreground dark:text-white/60">{textoOrigen(item)}</p>
+        <p className="mt-auto flex items-center gap-1 pt-1 text-xs text-muted-foreground dark:text-white/75">
           <Users className="h-3.5 w-3.5 shrink-0" />
           <span className="line-clamp-2">{textoCotizaciones(item.cotizaciones_semana)}</span>
         </p>
@@ -119,7 +119,7 @@ function Tarjeta({
 /** Hueco de lo que queda detrás del muro: portada difuminada y candado. */
 function TarjetaBloqueada({ portada, texto }: { portada: string | null; texto: string | null }) {
   return (
-    <div aria-hidden={texto ? undefined : true} className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-white/10 bg-[#18171C]">
+    <div aria-hidden={texto ? undefined : true} className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-border bg-card dark:border-white/10 dark:bg-[#18171C]">
       {portada ? <ImagenPublica src={portada} alt="" className="absolute inset-0 h-full w-full scale-125 opacity-60 blur-xl" /> : null}
       <span className="absolute inset-0 bg-gradient-to-br from-[#4F06EB]/35 via-black/50 to-black/80" />
       <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center">
@@ -193,31 +193,31 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-[#0F0F0F] text-white">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-sm dark:border-transparent dark:bg-[#0F0F0F] dark:text-white">
       <div className="space-y-5 px-4 py-6 sm:px-6 sm:py-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#EDF953]">Tendencias</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary dark:text-[#EDF953]">Tendencias</p>
             <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">Productos virales para importar</h1>
-            <p className="mt-2 text-sm leading-relaxed text-white/70">
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground dark:text-white/70">
               Lo que se está moviendo en TikTok, Instagram y YouTube, revisado por el equipo de Zarpi. Mira el video y pide
               propuestas a importadoras verificadas, sin compromiso.
             </p>
           </div>
-          <button type="button" onClick={onEnviarEnlace} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:border-white/50">
+          <button type="button" onClick={onEnviarEnlace} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-accent dark:border-white/20 dark:text-white dark:hover:border-accent">
             <Link2 className="h-4 w-4" /> Sube un producto viral
           </button>
         </header>
 
         <div className="flex flex-col gap-3">
           <label className="flex w-full items-center gap-2 sm:w-auto">
-            <CalendarDays className="h-4 w-4 shrink-0 text-white/60" />
+            <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground dark:text-white/60" />
             <span className="sr-only">Semana</span>
             <select
               value={semanaMostrada ?? ""}
               onChange={(e) => setSemana(e.target.value || null)}
               disabled={opcionesSemana.length === 0}
-              className="h-9 w-full rounded-lg border border-white/15 bg-[#18171C] px-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#EDF953] sm:w-auto"
+              className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary sm:w-auto dark:border-white/15 dark:bg-[#18171C] dark:text-white dark:focus:ring-[#EDF953]"
             >
               {opcionesSemana.length === 0 && semanaMostrada === null ? <option value="">Esta semana</option> : null}
               {opcionesSemana.map((s) => (
@@ -237,7 +237,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
                     aria-pressed={activa}
                     onClick={() => setCategoria(c)}
                     className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      activa ? "border-[#EDF953] bg-[#EDF953] text-[#16151B]" : "border-white/15 text-white/80 hover:border-white/40"
+                      activa ? "border-primary bg-primary text-primary-foreground dark:border-[#EDF953] dark:bg-[#EDF953] dark:text-[#16151B]" : "border-border text-muted-foreground hover:border-primary/40 dark:border-white/15 dark:text-white/80 dark:hover:border-white/40"
                     }`}
                   >
                     {c ?? "Todas"}
@@ -249,23 +249,23 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
         </div>
 
         {cargando && !datos ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/60">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground dark:text-white/60">
             <Loader2 className="h-4 w-4 animate-spin" /> Cargando tendencias…
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 px-4 py-12 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-border px-4 py-12 text-center">
             <AlertTriangle className="h-6 w-6 text-rose-400" />
-            <p className="max-w-md text-sm text-white/70">{error}</p>
-            <button type="button" onClick={() => setIntento((n) => n + 1)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:border-white/50">
+            <p className="max-w-md text-sm text-muted-foreground dark:text-white/70">{error}</p>
+            <button type="button" onClick={() => setIntento((n) => n + 1)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:border-primary/50 dark:border-white/20 dark:hover:border-white/50">
               <RefreshCw className="h-3.5 w-3.5" /> Reintentar
             </button>
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-white/15 px-4 py-12 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-12 text-center">
             <p className="text-base font-semibold">
               {categoria ? `No hay productos de ${categoria} esta semana` : "Todavía no hay productos esta semana"}
             </p>
-            <p className="max-w-md text-sm text-white/65">
+            <p className="max-w-md text-sm text-muted-foreground dark:text-white/65">
               ¿Viste un producto viral que valga la pena importar? Pásanos el enlace del video y lo revisamos.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -273,11 +273,11 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
                 <Link2 className="h-4 w-4" /> Enviar un enlace
               </button>
               {categoria ? (
-                <button type="button" onClick={() => setCategoria(null)} className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:border-white/50">
+                <button type="button" onClick={() => setCategoria(null)} className="rounded-lg border border-border px-3 py-2 text-sm hover:border-primary/50 dark:border-white/20 dark:hover:border-white/50">
                   Ver todas las categorías
                 </button>
               ) : otraSemana ? (
-                <button type="button" onClick={() => setSemana(otraSemana)} className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:border-white/50">
+                <button type="button" onClick={() => setSemana(otraSemana)} className="rounded-lg border border-border px-3 py-2 text-sm hover:border-primary/50 dark:border-white/20 dark:hover:border-white/50">
                   Ver {etiquetaSemana(otraSemana, semanaActual).toLowerCase()}
                 </button>
               ) : null}
@@ -316,17 +316,17 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
           />
         ) : null}
 
-        <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:bg-white/[0.03]">
           <div>
             <p className="text-sm font-semibold">¿Encontraste un producto viral? Súbelo</p>
-            <p className="text-xs text-white/60">Pega el enlace de TikTok, Instagram o YouTube. Lo revisamos en menos de 48 horas.</p>
+            <p className="text-xs text-muted-foreground dark:text-white/60">Pega el enlace de TikTok, Instagram o YouTube. Lo revisamos en menos de 48 horas.</p>
           </div>
           <button type="button" onClick={onEnviarEnlace} className={`${CLASE_CTA} shrink-0`}>
             <Link2 className="h-4 w-4" /> Enviar enlace
           </button>
         </div>
 
-        <p className="text-center text-[11px] text-white/45">
+        <p className="text-center text-[11px] text-muted-foreground dark:text-white/45">
           Los videos pertenecen a sus autores y se ven en la ficha de cada producto. {PIE_GENERAL}
         </p>
       </div>
