@@ -94,6 +94,11 @@ class Cotizacion(Base):
     # --- Créditos y recreación por error (Semana 4) ---
     # Créditos descontados al crear esta cotización (trazabilidad; ver MovimientoCredito).
     costo_creditos = Column(Float, nullable=True)
+    # Qué unidad se gastó al crearla con el cobro por cotización encendido:
+    # "gratis" (reto), "plan" o "token". Si en 72 horas no recibe propuestas,
+    # esa unidad se devuelve al mismo saldo y se marca `unidad_devuelta_en`.
+    unidad_cobrada = Column(String(10), nullable=True)
+    unidad_devuelta_en = Column(DateTime, nullable=True)
     # Si esta cotización nace como reemplazo de una cancelada por error, referencia
     # a la original (trazabilidad de "recreaciones").
     cotizacion_origen_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=True)

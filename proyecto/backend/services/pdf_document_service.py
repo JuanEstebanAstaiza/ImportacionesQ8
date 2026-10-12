@@ -174,11 +174,11 @@ def generate_order_documents(
         f"Incoterm: {propuesta.incoterm if propuesta else cotizacion.incoterm}",
     ]
     ord_lines = [
-        "Orden de Compra",
+        "Operacion de compra",
         f"Fecha: {now}",
-        f"Orden ID: {orden.id}",
+        f"Operacion ID: {orden.id}",
         f"Cotizacion ID: {orden.cotizacion_id}",
-        f"Solicitante ID: {orden.solicitante_id}",
+        f"Comprador ID: {orden.solicitante_id}",
         f"Importador ID: {orden.importador_id}",
         f"Precio acordado USD: {orden.precio_acordado_usd}",
         f"Estado: {orden.estado.value if hasattr(orden.estado, 'value') else orden.estado}",

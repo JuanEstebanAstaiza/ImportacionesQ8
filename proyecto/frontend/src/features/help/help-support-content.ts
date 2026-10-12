@@ -14,8 +14,8 @@ export interface HelpSupportRoleContent {
 
 export const HELP_SUPPORT_CONTENT: Record<HelpRole, HelpSupportRoleContent> = {
   solicitante: {
-    roleLabel: "Solicitante",
-    quickTopics: ["Cotizaciones", "Comparativa de propuestas", "Negociacion", "Ordenes"],
+    roleLabel: "Comprador",
+    quickTopics: ["Cotizaciones", "Comparativa de propuestas", "Negociacion", "Operaciones"],
     faqs: [
       {
         q: "Como creo una cotizacion efectiva?",
@@ -26,8 +26,8 @@ export const HELP_SUPPORT_CONTENT: Record<HelpRole, HelpSupportRoleContent> = {
         a: "Usa abierta si quieres comparar varias ofertas. Usa dirigida cuando ya conoces la empresa con la que quieres negociar.",
       },
       {
-        q: "Como paso de propuesta a orden?",
-        a: "En el detalle de respuesta acepta la oferta y continua por el chat para cerrar condiciones antes del seguimiento de orden.",
+        q: "Como paso de propuesta a operacion?",
+        a: "En el detalle de respuesta acepta la oferta y continua por el chat para cerrar condiciones antes del seguimiento de la operacion.",
       },
       {
         q: "Como comparo respuestas de distintas empresas?",
@@ -35,7 +35,7 @@ export const HELP_SUPPORT_CONTENT: Record<HelpRole, HelpSupportRoleContent> = {
       },
       {
         q: "Puedo retomar una negociacion mas tarde?",
-        a: "Si. El historial de chat se conserva por cotizacion u orden para continuar en contexto sin perder acuerdos previos.",
+        a: "Si. El historial de chat se conserva por cotizacion u operacion para continuar en contexto sin perder acuerdos previos.",
       },
       {
         q: "Que hago si no recibo propuestas?",
@@ -62,7 +62,7 @@ export const HELP_SUPPORT_CONTENT: Record<HelpRole, HelpSupportRoleContent> = {
       },
       {
         q: "Que buenas practicas mejoran el tiempo de respuesta?",
-        a: "Mantener catalogo claro, condiciones comerciales listas y plantillas de propuesta reduce tiempos y mejora experiencia del solicitante.",
+        a: "Mantener catalogo claro, condiciones comerciales listas y plantillas de propuesta reduce tiempos y mejora experiencia del comprador.",
       },
       {
         q: "Como doy seguimiento a chats con mi equipo?",
@@ -70,11 +70,11 @@ export const HELP_SUPPORT_CONTENT: Record<HelpRole, HelpSupportRoleContent> = {
       },
       {
         q: "Que informacion no debe faltar en una propuesta?",
-        a: "Incluye precio, entrega, incoterm, MOQ y condiciones adicionales para que el solicitante pueda decidir sin friccion.",
+        a: "Incluye precio, entrega, incoterm, MOQ y condiciones adicionales para que el comprador pueda decidir sin friccion.",
       },
       {
         q: "Como medir rendimiento de asesores?",
-        a: "Monitorea tiempos de primera respuesta, tasa de conversion propuesta-orden y volumen de conversaciones cerradas.",
+        a: "Monitorea tiempos de primera respuesta, tasa de conversion propuesta-operacion y volumen de conversaciones cerradas.",
       },
     ],
     tips: [

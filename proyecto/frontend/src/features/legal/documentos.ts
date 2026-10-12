@@ -420,11 +420,64 @@ const POLITICA_PAGOS: LegalDocument = {
   ],
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CONDICIONES DE LOS PLANES (PROVISIONAL)
+// ─────────────────────────────────────────────────────────────────────────────
+// Borrador armado con lo que dice el copy v1 (zarpi-home-copy-v1.md) mientras
+// llega el documento «Textos legales y de pantalla del módulo de Planes». Los
+// valores, lo que incluye cada plan y los cupos NO van aquí: salen de
+// Admin › Planes y se ven en la sección Planes del inicio.
+const CONDICIONES_PLANES: LegalDocument = {
+  titulo: "Condiciones de los planes",
+  resumen: "Qué incluye un plan de acceso, cómo se paga, cuándo se activa y cuánto dura.",
+  version: "Borrador",
+  vigenteDesde: "pendiente de aprobación",
+  tituloDatos: "Datos del prestador del servicio",
+  provisional: true,
+  secciones: [
+    {
+      titulo: "Qué es un plan de acceso",
+      bloques: [
+        "Zarpi funciona con planes de acceso para quienes importan. Cada plan indica su precio (más IVA), cuántas solicitudes de cotización incluye, su vigencia y lo que trae además. Los planes vigentes, su precio y los cupos disponibles se publican en la sección Planes del sitio, y el precio se conoce antes de pagar.",
+        "El precio de lanzamiento se mantiene mientras haya cupos. Cuando un plan no tiene cupos, se puede dejar los datos en la lista de espera.",
+      ],
+    },
+    {
+      titulo: "Qué es una solicitud",
+      bloques: [
+        "Una solicitud es una publicación con producto y cantidad que llega a las empresas importadoras. Cada solicitud publicada descuenta una unidad del saldo.",
+        "Si una solicitud no recibe propuestas en 72 horas, la unidad vuelve al saldo.",
+        "Las solicitudes del plan se pueden usar mientras el plan esté vigente; la vigencia se cuenta desde la activación. Las que no se usen dentro de la vigencia vencen con el plan.",
+      ],
+    },
+    {
+      titulo: "Pago y activación",
+      bloques: [
+        "El pago se hace por transferencia a la cuenta que Zarpi indica en el formulario de inscripción, y el comprobante se carga en ese mismo formulario.",
+        "Zarpi verifica el pago y activa el plan en máximo 2 horas en horario hábil. Al activarlo, envía al correo inscrito el acceso a la cuenta. Si el pago no se puede confirmar, Zarpi lo informa al mismo correo con el motivo.",
+      ],
+    },
+    {
+      titulo: "Lo que el plan no incluye",
+      bloques: [
+        "Zarpi es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige, y se paga directamente a esa empresa.",
+      ],
+    },
+    {
+      titulo: "Retracto, cancelaciones y reembolsos",
+      bloques: [
+        "Pendiente de redacción. Mientras tanto aplica la Política de Pagos, Cancelaciones y Reembolsos.",
+      ],
+    },
+  ],
+};
+
 export const DOCUMENTOS_LEGALES: Record<LegalPage, LegalDocument> = {
   terms: TERMINOS,
   data: POLITICA_DATOS,
   payments: POLITICA_PAGOS,
+  planes: CONDICIONES_PLANES,
 };
 
 /** Orden en que se enlazan los documentos entre sí y en los pies de página. */
-export const ORDEN_DOCUMENTOS: LegalPage[] = ["terms", "data", "payments"];
+export const ORDEN_DOCUMENTOS: LegalPage[] = ["terms", "data", "payments", "planes"];

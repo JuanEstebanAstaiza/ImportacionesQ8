@@ -124,6 +124,9 @@ COBRO_A_SOLICITANTES = os.getenv("COBRO_A_SOLICITANTES", "false").lower() == "tr
 # publicados sigan disponibles, avisa a los inactivos del reto y cierra las
 # rondas vencidas. 0 la desactiva (los tests llaman a los servicios).
 TENDENCIAS_TAREA_HORAS = int(os.getenv("TENDENCIAS_TAREA_HORAS", "0" if APP_ENV == "test" else "24"))
+# Cada cuántos minutos se devuelven las solicitudes que llevan 72 horas sin
+# propuestas (services/tokens_cotizacion.py). 0 la desactiva.
+DEVOLUCION_SOLICITUDES_MINUTOS = int(os.getenv("DEVOLUCION_SOLICITUDES_MINUTOS", "0" if APP_ENV == "test" else "60"))
 
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))
 CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DIRIGIDA", "5"))

@@ -33,7 +33,7 @@ interface LoginFormProps {
 // El backend guarda "importador", no "importadora": este selector es la única
 // pantalla donde ese desajuste de nombres tiene que traducirse antes de viajar.
 const ROLE_OPTIONS: Array<{ role: PortalRole; backendRole: BackendAuthRole; label: string; icon: React.ReactNode }> = [
-  { role: "solicitante", backendRole: "solicitante", label: "Solicitante", icon: <UserRound className="h-4 w-4" /> },
+  { role: "solicitante", backendRole: "solicitante", label: "Comprador", icon: <UserRound className="h-4 w-4" /> },
   { role: "importadora", backendRole: "importador", label: "Importadora", icon: <Building2 className="h-4 w-4" /> },
   { role: "asesor", backendRole: "asesor", label: "Asesor", icon: <Users className="h-4 w-4" /> },
 ];
@@ -189,7 +189,7 @@ export function LoginForm({
             <p>
               ¿No tienes cuenta?{"  "}
               <button type="button" onClick={onRegister} className="text-primary dark:text-accent hover:underline">
-                Solicita acceso a la lista privada
+                Solicita acceso
               </button>
             </p>
           )}

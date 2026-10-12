@@ -1,4 +1,4 @@
-export type LegalPage = "data" | "terms" | "payments";
+export type LegalPage = "data" | "terms" | "payments" | "planes";
 
 /**
  * Un bloque es un párrafo (texto) o una lista de viñetas (arreglo de textos).
@@ -21,5 +21,7 @@ export interface LegalDocument {
   tituloDatos: string;
   /** Los Términos incluyen la matrícula mercantil en ese cuadro. */
   mostrarMatricula?: boolean;
+  /** Borrador que todavía no aprobó el abogado: se muestra con un aviso. */
+  provisional?: boolean;
   secciones: LegalSection[];
 }

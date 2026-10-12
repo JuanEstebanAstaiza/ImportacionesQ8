@@ -4,7 +4,7 @@ import { BookOpen, Eye, EyeOff, Pencil, Plus, X } from "lucide-react";
 import { ayudaService, type ArticuloAyuda, type ArticuloAyudaPayload } from "@/services/ayuda.service";
 
 const PERFILES: Array<{ valor: string; etiqueta: string }> = [
-  { valor: "solicitante", etiqueta: "Solicitante" },
+  { valor: "solicitante", etiqueta: "Comprador" },
   { valor: "importadora", etiqueta: "Empresa" },
   { valor: "asesor", etiqueta: "Asesor" },
 ];
@@ -346,7 +346,7 @@ export function EditorDocumentacion() {
                   })}
                 </div>
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Acotar evita ruido: un artículo sobre el pool de cotizaciones no le dice nada a un solicitante
+                  Acotar evita ruido: un artículo sobre el pool de cotizaciones no le dice nada a un comprador
                   cuando busca otra cosa.
                 </p>
               </div>

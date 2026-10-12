@@ -45,10 +45,13 @@ import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
 import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
 import { AdminTendencias } from "@/features/tendencias/AdminTendencias";
-import { SeccionTendenciasLanding } from "@/features/tendencias/SeccionTendenciasLanding";
 import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
 import { RevisionPagos } from "@/features/admin/RevisionPagos";
 import { AccesosCursos } from "@/features/admin/AccesosCursos";
+import { RevisionPresentaciones } from "@/features/admin/RevisionPresentaciones";
+import { PlanesAdmin } from "@/features/admin/PlanesAdmin";
+import { SeccionPlanes } from "@/features/planes/SeccionPlanes";
+import { InscripcionPlan } from "@/features/planes/InscripcionPlan";
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
 import { fijarRegistro, registroAbierto } from "@/app/registro";
@@ -124,6 +127,7 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   data: "policy-data",
   terms: "policy-terms",
   payments: "policy-payments",
+  planes: "policy-planes",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,7 +149,7 @@ const BADGE_MAP: Record<BadgeVariant, { label: string; cls: string; dot: string 
 
   // 2. Orden activa: Destacado Neón / Glow con borde Accent
   "active-order": {
-    label: "Orden activa",
+    label: "Operación activa",
     cls: "bg-primary/15 text-primary border border-primary/40 dark:bg-accent/20 dark:text-accent dark:border-accent/60 dark:shadow-[0_0_8px_rgba(16,185,129,0.2)]",
     dot: "bg-primary dark:bg-accent",
   },
@@ -545,7 +549,7 @@ const ORDER_LIFECYCLE_STEPS=[
   {key:"solicitud_enviada",label:"Solicitud enviada",icon:<Send className="w-3.5 h-3.5"/>},
   {key:"proveedor_respondio",label:"Proveedor respondió",icon:<ClipboardList className="w-3.5 h-3.5"/>},
   {key:"negociacion_en_curso",label:"Negociación en curso",icon:<Scale className="w-3.5 h-3.5"/>},
-  {key:"orden_confirmada_produccion",label:"Orden confirmada / Producción",icon:<Factory className="w-3.5 h-3.5"/>},
+  {key:"orden_confirmada_produccion",label:"Operación confirmada / Producción",icon:<Factory className="w-3.5 h-3.5"/>},
   {key:"en_transito",label:"En tránsito",icon:<Ship className="w-3.5 h-3.5"/>},
   {key:"en_aduana",label:"En aduana",icon:<Anchor className="w-3.5 h-3.5"/>},
   {key:"en_bodega",label:"En bodega",icon:<Warehouse className="w-3.5 h-3.5"/>},
@@ -765,7 +769,7 @@ const NAV_ITEMS=[
   {icon:LibraryBig,   label:"Catálogos",    key:"catalogos"},
   {icon:ClipboardList,label:"Respuestas",   key:"responses"},
   {icon:MessageSquare,label:"Chats",        key:"chats"},
-  {icon:ShoppingCart, label:"Órdenes",      key:"orders"},
+  {icon:ShoppingCart, label:"Operaciones",  key:"orders"},
   {icon:BookOpen,     label:"Cursos",       key:"courses"},
   {icon:FolderOpen,   label:"Documentos",   key:"documentos"},
   {icon:CreditCard,   label:"Pagos",        key:"pagos"},
@@ -778,7 +782,7 @@ const NAV_IMPORTADORA=[
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
   {icon:LibraryBig,    label:"Catálogos",    key:"imp-catalogos"},
   {icon:Sparkles,      label:"Tendencias",   key:"tendencias"},
-  {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
+  {icon:ShoppingCart,  label:"Operaciones",  key:"orders"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
   {icon:BookOpen,      label:"Cursos",       key:"courses"},
   {icon:FolderOpen,    label:"Documentos",   key:"documentos"},
@@ -808,6 +812,7 @@ type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte"|"designer";
 const NAV_ADMIN=[
   {icon:LayoutGrid,    label:"Resumen",         key:"admin-dashboard"},
   {icon:Building2,     label:"Empresas",        key:"admin-empresas"},
+  {icon:Film,          label:"Presentaciones",  key:"admin-presentaciones"},
   {icon:GitCompare,    label:"Asignación",      key:"admin-asignacion"},
   {icon:Users,         label:"Usuarios",        key:"admin-usuarios"},
   {icon:WalletCards,   label:"Cotizantes",      key:"admin-cotizantes"},
@@ -821,6 +826,7 @@ const NAV_ADMIN=[
   {icon:Palette,       label:"Diseño",          key:"diseno"},
   {icon:Trophy,        label:"Reto",            key:"admin-reto"},
   {icon:CreditCard,    label:"Pagos",           key:"admin-pagos"},
+  {icon:WalletCards,   label:"Planes",          key:"admin-planes"},
   {icon:BookOpen,      label:"Cursos de Zarpi", key:"admin-cursos"},
   {icon:GraduationCap, label:"Accesos a cursos",key:"admin-cursos-accesos"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
@@ -1617,7 +1623,7 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
         </p>
         <Input
           label="Asunto"
-          placeholder="Ej. No puedo subir el packing list de mi orden"
+          placeholder="Ej. No puedo subir el packing list de mi operación"
           value={asunto}
           onChange={e=>setAsunto(e.target.value)}
         />
@@ -2423,7 +2429,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                 <Card padding="md">
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><FileText className="w-4 h-4 text-primary"/>Historial contigo</h3>
                   <div className="grid grid-cols-3 gap-4 text-center">
-                    {[["Cotizaciones",relQuotes.length,"text-blue-600"],["Órdenes",relOrders.length,"text-purple-600"],["Chats activos",relChats.filter(c=>c.status==="activa").length,"text-emerald-600"]].map(([l,v,c])=>(
+                    {[["Cotizaciones",relQuotes.length,"text-blue-600"],["Operaciones",relOrders.length,"text-purple-600"],["Chats activos",relChats.filter(c=>c.status==="activa").length,"text-emerald-600"]].map(([l,v,c])=>(
                       <div key={l as string} className="p-3 bg-muted/30 rounded-xl">
                         <p className={clsx("text-2xl font-semibold",c as string)}>{v as number}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{l as string}</p>
@@ -2655,7 +2661,7 @@ function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb,
                     <option value="directed">Dirigida</option>
                     <option value="open">Abierta</option>
                     <option value="accepted">Aceptada</option>
-                    <option value="active-order">Orden activa</option>
+                    <option value="active-order">Operación activa</option>
                     <option value="rejected-importer">Rechazada por importadora</option>
                   </Select>
                 </div>
@@ -2957,21 +2963,21 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
       name: solicitudDoc?.name || `Solicitud-${quote.code}.pdf`,
       status: solicitudDoc?.url ? "Disponible" : "Pendiente",
       url: solicitudDoc?.url || null,
-      source: solicitudDoc ? "Orden" : "Pendiente de generación",
+      source: solicitudDoc ? "Operación" : "Pendiente de generación",
     },
     {
       label: "Propuesta",
       name: propuestaDoc?.name || `Propuesta-${quote.code}.pdf`,
       status: propuestaDoc?.url ? "Disponible" : "Pendiente",
       url: propuestaDoc?.url || null,
-      source: propuestaDoc ? "Orden" : (activeProposal ? "Negociación" : "Sin propuesta aceptada"),
+      source: propuestaDoc ? "Operación" : (activeProposal ? "Negociación" : "Sin propuesta aceptada"),
     },
     {
-      label: "Orden",
-      name: ordenDoc?.name || `Orden-${quote.code}.pdf`,
+      label: "Operación",
+      name: ordenDoc?.name || `Operacion-${quote.code}.pdf`,
       status: ordenDoc?.url ? "Disponible" : "Pendiente",
       url: ordenDoc?.url || null,
-      source: relatedOrder ? "Orden activa" : "Aún no creada",
+      source: relatedOrder ? "Operación activa" : "Aún no creada",
     },
   ];
 
@@ -3016,7 +3022,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               <Card padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary dark:text-accent"/>Documentos del ciclo</h3>
-                  <span className="text-xs text-muted-foreground">Solicitud · Propuesta · Orden</span>
+                  <span className="text-xs text-muted-foreground">Solicitud · Propuesta · Operación</span>
                 </div>
                 <div className="space-y-2">
                   {lifecycleDocs.map((doc) => (
@@ -3280,12 +3286,12 @@ function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,
             <div className="flex flex-col items-center text-center gap-5 max-w-sm">
               <div className="w-16 h-16 rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-8 h-8 text-emerald-500"/></div>
               <div>
-                <h2 className="text-lg font-semibold">¡Orden creada!</h2>
+                <h2 className="text-lg font-semibold">¡Operación creada!</h2>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">Ambas partes aceptaron. La respuesta fue <span className="font-medium text-emerald-600">Seleccionada</span> y las demás propuestas quedaron <span className="font-medium text-slate-500">Canceladas</span>.</p>
               </div>
               <div className="flex gap-2 flex-wrap justify-center">
                 <Button variant="secondary" onClick={onBack}>Volver</Button>
-                <Button variant="primary" icon={<ShoppingCart className="w-4 h-4"/>} onClick={()=>sb.onNav("orders")}>Ir a la Orden</Button>
+                <Button variant="primary" icon={<ShoppingCart className="w-4 h-4"/>} onClick={()=>sb.onNav("orders")}>Ir a la operación</Button>
               </div>
             </div>
           </div>
@@ -3438,10 +3444,10 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Órdenes"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Órdenes</h1></div>
+          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Operaciones"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Operaciones</h1></div>
           <PendientesDeResena/>
           {orders.length===0 ? (
-            <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin órdenes</p><p className="text-sm text-muted-foreground">No tienes órdenes activas en backend.</p></div></Card>
+            <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin operaciones</p><p className="text-sm text-muted-foreground">No tienes operaciones activas en backend.</p></div></Card>
           ) : (
           <div className="space-y-3">{orders.map(ord=>{const imp=importers.find(i=>i.id===ord.importerId);return(
             <Card key={ord.id} padding="md" className="hover:shadow-md transition-all">
@@ -3485,7 +3491,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
         <Sidebar {...sb} active="orders"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin"/>Cargando detalle de orden...</div></Card></main>
+          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin"/>Cargando detalle de la operación...</div></Card></main>
         </div>
       </div>
     );
@@ -3497,7 +3503,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
         <Sidebar {...sb} active="orders"/>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Orden no disponible.</p></Card></main>
+          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Operación no disponible.</p></Card></main>
         </div>
       </div>
     );
@@ -3537,7 +3543,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
     setIsAdvancing(true);
     try{
       await onUpdateOrderStatus(order.id, siguienteEstadoOrden.key);
-      setAdvanceMessage(`Orden marcada como «${siguienteEstadoOrden.label}».`);
+      setAdvanceMessage(`Operación marcada como «${siguienteEstadoOrden.label}».`);
     }catch(error){
       setAdvanceError(error instanceof Error&&error.message.trim()?error.message:"No se pudo actualizar el estado.");
     }finally{
@@ -3555,7 +3561,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={USER} sb={sb}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Órdenes",onClick:onBack},{label:order.code}]}/>
+          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Operaciones",onClick:onBack},{label:order.code}]}/>
           <Card padding="md" className="mt-4 mb-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex flex-col gap-3">
@@ -3601,7 +3607,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                         </div>
                       ):(
                         <p className="text-xs text-muted-foreground">
-                          {order.status==="entregado"?"La orden está entregada: no hay más pasos.":"Sin siguiente estado disponible."}
+                          {order.status==="entregado"?"La operación está entregada: no hay más pasos.":"Sin siguiente estado disponible."}
                         </p>
                       )}
                       {advanceMessage&&<p className="text-xs text-emerald-600 mt-2">{advanceMessage}</p>}
@@ -3621,7 +3627,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                     </div>
                   </div>
                 ))}</div>
-                {documents.length===0&&<div className="py-10 text-center text-sm text-muted-foreground">No hay documentos adjuntos para esta orden.</div>}
+                {documents.length===0&&<div className="py-10 text-center text-sm text-muted-foreground">No hay documentos adjuntos para esta operación.</div>}
               </Card>
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary"/>Historial de eventos</h3>
                 <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
@@ -3650,7 +3656,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                 </div>
               </Card>
               <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">{order.status || "En seguimiento"}</span></div><p className="text-xs text-muted-foreground">Última actualización: {history.length>0?formatShortDate(history[history.length-1].fecha):"Reciente"}</p></Card>
-              {relChatId&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta orden</h3><p className="text-xs text-muted-foreground mb-3">Abrir conversación asociada a la orden.</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Abrir chat</Button></Card>}
+              {relChatId&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta operación</h3><p className="text-xs text-muted-foreground mb-3">Abrir conversación asociada a la operación.</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Abrir chat</Button></Card>}
             </div>
           </div>
         </main>
@@ -4102,7 +4108,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     setIsUpdatingOrderStatus(true);
     try {
       await onUpdateOrderStatus(refOrderId, siguienteEstado.key);
-      setOrderActionMessage(`Orden marcada como «${siguienteEstado.label}».`);
+      setOrderActionMessage(`Operación marcada como «${siguienteEstado.label}».`);
     } catch (error) {
       setOrderActionError(error instanceof Error && error.message.trim() ? error.message : "No se pudo actualizar el estado.");
     } finally {
@@ -4313,7 +4319,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
       ]
     : [
         {k:"all",label:"Todas"},
-        {k:"ordenes",label:"Órdenes"},
+        {k:"ordenes",label:"Operaciones"},
         {k:"cotizaciones",label:"Cotizaciones"},
         // La pestaña de equipo solo aparece si hay algún hilo interno: al
         // solicitante no le sirve de nada y nunca va a tener ninguno.
@@ -4645,7 +4651,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     {conv.type!=="soporte"&&(
                       <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
                         conv.type==="orden"?"bg-purple-50 text-purple-700":conv.type==="interno"?"bg-amber-50 text-amber-700":"bg-blue-50 text-blue-700")}>
-                        {conv.type==="orden"?`Orden · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
+                        {conv.type==="orden"?`Operación · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
                       </span>
                     )}
                     {conv.status==="activa"&&<span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>Activa</span>}
@@ -4656,7 +4662,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewQuote(refQuote.id)}>Ver cotización</Button>
                   )}
                   {conv.type==="orden"&&refOrderId&&(
-                    <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(refOrderId)}>Ver orden</Button>
+                    <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(refOrderId)}>Ver operación</Button>
                   )}
                   <button onClick={()=>setShowCtx(v=>!v)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -5018,7 +5024,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     <p className="text-[10px] font-semibold text-amber-800 uppercase tracking-wide mb-1">Canal interno</p>
                     <p className="text-[11px] text-amber-900 leading-snug">
                       Coordinación entre la empresa y {conv.counterpartName||"el asesor"}. Úsalo para indicar
-                      cuándo actualizar el estado de una orden. El solicitante no ve estos mensajes.
+                      cuándo actualizar el estado de una operación. El comprador no ve estos mensajes.
                     </p>
                   </div>
                 ):(
@@ -5116,7 +5122,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 {conv.type==="orden"&&refOrderId&&(<>
                   <div>
                     <input ref={orderDocumentInputRef} type="file" className="hidden" onChange={(event)=>{void handleOrderDocumentPick(event);}}/>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Orden</p>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Operación</p>
                     <div className="space-y-1.5">{[["Código",`ORD-${refOrderId.slice(0, 8).toUpperCase()}`],["Estado",orderStateLabel(refOrder?.status)],["Canal","Chat API"]].map(([k,v])=>(
                       <div key={k} className="flex justify-between items-start gap-1"><span className="text-[10px] text-muted-foreground">{k}</span><span className="text-[10px] font-medium text-foreground text-right">{v}</span></div>
                     ))}</div>
@@ -5129,7 +5135,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                           </Button>
                         ):(
                           <p className="text-[10px] text-muted-foreground">
-                            {refOrder?.status==="entregado"?"La orden ya está entregada.":"Sin siguiente estado disponible."}
+                            {refOrder?.status==="entregado"?"La operación ya está entregada.":"Sin siguiente estado disponible."}
                           </p>
                         )}
                         <Button variant="secondary" size="sm" fullWidth loading={isAttachingOrderDoc} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>orderDocumentInputRef.current?.click()}>
@@ -5142,7 +5148,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     {orderActionError&&<p className="text-[10px] text-destructive mt-2">{orderActionError}</p>}
 
                     <div className="mt-3 space-y-1.5">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos de la orden</p>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos de la operación</p>
                       {(refOrder?.documents || []).slice(0,6).map((doc)=>(
                         <button key={`${doc.name}-${doc.date}-${doc.url}`} type="button" onClick={()=>{void abrirArchivoEnPestana(doc.url);}} className="block w-full text-left rounded-lg border border-border px-2 py-1.5 hover:bg-muted transition-colors">
                           <p className="text-[11px] font-medium truncate">{doc.name}</p>
@@ -5152,7 +5158,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                       {(!refOrder?.documents || refOrder.documents.length===0)&&<p className="text-[10px] text-muted-foreground">Sin documentos adicionales.</p>}
                     </div>
 
-                    <Button variant="secondary" size="sm" fullWidth className="mt-2 text-xs" onClick={()=>onViewOrder(refOrderId)}>Ver orden</Button>
+                    <Button variant="secondary" size="sm" fullWidth className="mt-2 text-xs" onClick={()=>onViewOrder(refOrderId)}>Ver operación</Button>
                   </div>
                 </>)}
               </div>
@@ -7358,7 +7364,7 @@ function Step3Abierta() {
     <div className="space-y-4">
       <div><h2 className="text-base font-semibold">Solicitudes abiertas</h2><p className="text-sm text-muted-foreground mt-1">Una vez envíes, los importadores comenzarán a responder.</p></div>
       <Card padding="none"><div className="py-16 flex flex-col items-center text-center gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><ClipboardList className="w-6 h-6 text-muted-foreground/40"/></div><p className="font-medium text-sm">Todavía no hay propuestas</p><p className="text-xs text-muted-foreground">Aparecerán aquí cuando los importadores respondan.</p></div></Card>
-      <Card padding="md" className="border-primary dark:border-accent bg-primary/50 dark:bg-accent/50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-primary dark:text-accent mb-1.5">Información importante</p>{["La cotización se convierte en orden al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary dark:text-accent text-xs mt-0.5">•</span><p className="text-xs text-primary dark:text-accent leading-relaxed">{t}</p></div>)}</div></div></Card>
+      <Card padding="md" className="border-primary dark:border-accent bg-primary/50 dark:bg-accent/50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-primary dark:text-accent mb-1.5">Información importante</p>{["La cotización se convierte en operación al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary dark:text-accent text-xs mt-0.5">•</span><p className="text-xs text-primary dark:text-accent leading-relaxed">{t}</p></div>)}</div></div></Card>
     </div>
   );
 }
@@ -7554,7 +7560,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                         <p className="mt-1 text-xs text-muted-foreground">Lo recomienda {origen.nombreEmpresa||"una importadora"}: la solicitud va dirigida solo a ella.</p>
                       )}
                       {origen.revisarRequisitos&&(
-                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la nacionalizadora que lo revise en su propuesta.</p>
+                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la empresa importadora que lo revise en su propuesta.</p>
                       )}
                     </div>
                   )}
@@ -7728,7 +7734,7 @@ function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notificati
               <div className="px-5 py-10 text-center">
                 <Bell className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/>
                 <p className="text-sm font-medium">No tienes notificaciones pendientes</p>
-                <p className="text-xs text-muted-foreground mt-1">Cuando haya cambios en cotizaciones, propuestas, chats u órdenes aparecerán aquí.</p>
+                <p className="text-xs text-muted-foreground mt-1">Cuando haya cambios en cotizaciones, propuestas, chats u operaciones aparecerán aquí.</p>
               </div>
             )}
             {notifications.map(n=>(
@@ -8165,7 +8171,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
             <div>
               <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Mi empresa"}]}/>
               <h1 className="text-xl font-semibold mt-3">Perfil de la empresa</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Esta información es visible para los solicitantes.</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Esta información es visible para los compradores.</p>
             </div>
             <div className="flex items-center gap-3">
               {/* El formulario se guarda solo; el indicador es lo que le dice al
@@ -8559,7 +8565,7 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
                     <td className="px-3 py-3 text-xs hidden xl:table-cell">{a.avgResponse}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} title="Abrir canal interno para coordinar sus órdenes" onClick={()=>{void abrirCanal(a);}}/>
+                        <Button variant="ghost" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} title="Abrir canal interno para coordinar sus operaciones" onClick={()=>{void abrirCanal(a);}}/>
                         <Button variant="ghost" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>openEdit(a)}/>
                         <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Enviar enlace para restablecer la contraseña" onClick={()=>{void reiniciarClave(a);}}/>
                         <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>{void toggle(a.id);}}/>
@@ -8631,7 +8637,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
     setMensaje("");
     try{
       await onConfirmProposal(propuesta.id);
-      setMensaje(`Confirmaste la propuesta de ${quote.product}. La orden ya está creada y el seguimiento queda en el chat.`);
+      setMensaje(`Confirmaste la propuesta de ${quote.product}. La operación ya está creada y el seguimiento queda en el chat.`);
     }catch(err){
       setMensaje(err instanceof Error?err.message:"No se pudo confirmar la propuesta.");
     }finally{
@@ -8676,7 +8682,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
               <div className="px-5 py-3 border-b border-amber-200 bg-amber-50">
                 <p className="font-semibold text-sm text-amber-900">Esperan tu confirmación</p>
                 <p className="text-xs text-amber-800 mt-0.5">
-                  El cliente aceptó lo que negoció tu asesor. Revisa el chat y confirma para crear la orden.
+                  El cliente aceptó lo que negoció tu asesor. Revisa el chat y confirma para crear la operación.
                 </p>
               </div>
               <div className="divide-y divide-border">
@@ -8700,7 +8706,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
                       <Button variant="primary" size="sm" icon={<CheckCircle2 className="w-3.5 h-3.5"/>}
                         loading={confirmando===propuesta.id}
                         onClick={()=>{void confirmar(q);}}>
-                        Confirmar y crear orden
+                        Confirmar y crear operación
                       </Button>
                     </div>
                   );
@@ -8828,7 +8834,7 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
         </Card>
 
         <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Información registrada por el solicitante</h3>
+          <h3 className="text-sm font-semibold mb-3">Información registrada por el comprador</h3>
           <div className="space-y-3 text-sm">
             <div>
               <p className="text-xs text-muted-foreground">Descripción</p>
@@ -8899,7 +8905,7 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
     {label:"Mis cotizaciones",value:myQuotesCount.toString(),icon:<ClipboardList className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
     {label:"Respuestas enviadas",value:responsesSentCount.toString(),icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
     {label:"Chats activos",value:activeChatsCount.toString(),icon:<MessageSquare className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Órdenes en seguimiento",value:activeOrdersCount.toString(),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
+    {label:"Operaciones en seguimiento",value:activeOrdersCount.toString(),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
   ];
   const activity:{text:string;time:string}[]=[];
   return (
@@ -9326,7 +9332,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
         await businessService.updateProposal(existingProposal.id, payload);
         if(esBorradorPendienteDeEnvio){
           await businessService.sendProposal(existingProposal.id);
-          setSubmittedTitle("Propuesta enviada al solicitante");
+          setSubmittedTitle("Propuesta enviada al comprador");
         }else{
           setSubmittedTitle(userRole==="asesor"?"Borrador actualizado":"Propuesta actualizada");
         }
@@ -9419,7 +9425,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           {esBorradorPendienteDeEnvio&&(
             <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
-              <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el solicitante no la ve.</span>
+              <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el comprador no la ve.</span>
             </div>
           )}
           {prefill&&(
@@ -9434,7 +9440,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           {userRole==="asesor"&&(
             <div className="mb-6 p-3 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
-              <span>Tu respuesta se guarda como borrador. La cuenta de la empresa es quien la revisa y la envía al solicitante.</span>
+              <span>Tu respuesta se guarda como borrador. La cuenta de la empresa es quien la revisa y la envía al comprador.</span>
             </div>
           )}
           {/* Stepper */}
@@ -9641,27 +9647,104 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
-/** «acceso» es la lista privada: solo se llega por los botones de «Solicitar acceso». */
-type PestanaLanding=LandingSection|"acceso";
+// Textos: zarpi-home-copy-v1.md (raíz del repositorio). Los precios, lo que
+// incluye cada plan y los cupos NO están aquí: salen de Admin › Planes.
 const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"home",label:"Inicio"},
   {key:"about",label:"Quiénes somos"},
   {key:"how-it-works",label:"Cómo funciona"},
+];
+const LANDING_TABS_FINAL:{key:LandingSection;label:string}[]=[
   {key:"news",label:"Novedades y aliados"},
   {key:"contact",label:"Contacto"},
 ];
 
-function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onReto,onAbrirTendencia}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[];onTendencias:()=>void;onReto:()=>void;onAbrirTendencia:(id:string)=>void}) {
+type PreguntaLanding={q:string;a:string};
+const FAQ_ZARPI_IMPORTA:PreguntaLanding={q:"¿Zarpi importa mi producto?",a:"No. Las empresas importadoras importan a su nombre, nacionalizan y te facturan en Colombia como venta nacional. Zarpi conecta, ordena la información y registra el proceso."};
+const FAQ_A_QUIEN_PAGO:PreguntaLanding={q:"¿A quién le pago?",a:"Directamente a la empresa importadora que elegiste, a la cuenta que ves en la plataforma. Zarpi no recibe el dinero de tu importación."};
+const FAQ_CUANTO_CUESTA_IMPORTAR:PreguntaLanding={q:"¿Cómo sé cuánto me va a costar importar?",a:"Cada propuesta indica el precio final puesto en Colombia, qué incluye, qué no y los tiempos estimados. Antes de aceptar, revisa el punto de entrega y los supuestos que podrían mover el precio."};
+// Lo que Zarpi no hace se dice aquí, solo como respuesta: la portada habla de lo que sí hace.
+const FAQ_HOME:PreguntaLanding[]=[FAQ_ZARPI_IMPORTA,FAQ_A_QUIEN_PAGO,FAQ_CUANTO_CUESTA_IMPORTAR];
+const FAQ_COMPLETA:PreguntaLanding[]=[
+  FAQ_ZARPI_IMPORTA,
+  {q:"¿Cuánto cuesta?",a:"Zarpi funciona con planes de acceso para quienes importan. Los ves en la sección de planes y conoces el precio y las condiciones antes de pagar."},
+  FAQ_CUANTO_CUESTA_IMPORTAR,
+  {q:"¿Qué significa “empresa verificada”?",a:"Que confirmamos su existencia legal, su actividad importadora real y sus referencias antes de que entre, y que su cumplimiento se publica con las mismas métricas que el de todas las demás."},
+  {q:"¿Estoy obligado a aceptar una propuesta?",a:"No. Revisas las propuestas y eliges solo si alguna te sirve."},
+  {q:"¿Y si algo sale distinto a lo acordado?",a:"La empresa importadora responde directamente por su servicio. Zarpi exige respuesta en plazos cortos, documenta todo y hace seguimiento hasta que haya una solución."},
+  FAQ_A_QUIEN_PAGO,
+];
+const PARA_IMPORTADORAS=[
+  "Solicitudes de compradores verificados y comprometidos, sin ruido.",
+  "Cotizas solo lo que te interesa. Cotizar no tiene costo.",
+  "Un perfil con tu trayectoria y tus métricas, iguales para todas.",
+  "Programa Fundadoras: cupos limitados.",
+];
+
+function ListaChequeo({items}:{items:string[]}) {
+  return (
+    <ul className="space-y-2.5 text-sm text-muted-foreground">
+      {items.map(item=>(
+        <li key={item} className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 flex-shrink-0 text-primary dark:text-accent"/><span>{item}</span></li>
+      ))}
+    </ul>
+  );
+}
+
+function PreguntasLanding({items}:{items:PreguntaLanding[]}) {
+  const [abierta,setAbierta]=useState<number|null>(null);
+  return (
+    <div className="space-y-3">
+      {items.map((f,i)=>(
+        <div key={f.q} className="border border-border rounded-xl overflow-hidden bg-card backdrop-blur-sm">
+          <button onClick={()=>setAbierta(abierta===i?null:i)} aria-expanded={abierta===i}
+            className="group w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-muted/50 transition-colors">
+            <span className="font-medium text-sm">{f.q}</span>
+            <div className="w-7 h-7 rounded-full border border-border flex items-center justify-center flex-shrink-0 transition-colors duration-200 group-hover:bg-primary group-hover:border-primary dark:group-hover:bg-accent dark:group-hover:border-accent">
+              <ChevronDown className={clsx("w-4 h-4 text-muted-foreground transition-all duration-200 group-hover:text-white dark:group-hover:text-accent-foreground",abierta===i&&"rotate-180")}/>
+            </div>
+          </button>
+          {abierta===i&&<div className="px-5 pb-4"><p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p></div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
-  const [faqOpen,setFaqOpen]=useState<number|null>(null);
-  const [activeTab,setActiveTab]=useState<PestanaLanding>("home");
-  // Con el registro cerrado, «Crear cuenta» pasa a ser «Solicitar acceso» (lista privada).
-  const irA=(pestana:PestanaLanding)=>{setActiveTab(pestana);window.scrollTo({top:0});};
-  const crearCuenta=registroAbierto()?onRegister:()=>irA("acceso");
-  const textoCrearCuenta=registroAbierto()?"Crear cuenta gratis":"Solicitar acceso";
-  const [profileModalImporter,setProfileModalImporter]=useState<Importer|null>(null);
+  const [activeTab,setActiveTab]=useState<LandingSection>("home");
+  // Sección a la que hay que bajar después de cambiar de pestaña (`planes`, `preguntas`).
+  const [ancla,setAncla]=useState<string|null>(null);
+  const irA=(pestana:LandingSection,destino?:string)=>{
+    setActiveTab(pestana);
+    if(destino)setAncla(destino);
+    else window.scrollTo({top:0});
+  };
+  // «Solicitar acceso» lleva a la sección de planes del inicio (/#planes).
+  const irAPlanes=()=>irA("home","planes");
+  // «Aplicar como empresa importadora» abre Contacto con ese perfil ya marcado.
+  const [perfilContacto,setPerfilContacto]=useState<PerfilContacto>("comprador");
+  const contactar=(perfil:PerfilContacto)=>{setPerfilContacto(perfil);irA("contact");};
   const [dynamicContent,setDynamicContent]=useState<LandingDynamicContent|null>(null);
   const [dynamicContentError,setDynamicContentError]=useState("");
+
+  useEffect(()=>{
+    if(!ancla)return;
+    const t=window.setTimeout(()=>{
+      document.getElementById(ancla)?.scrollIntoView({behavior:"smooth",block:"start"});
+      setAncla(null);
+    },60);
+    return ()=>window.clearTimeout(t);
+  },[ancla,activeTab]);
+
+  // Un enlace a /#planes (correos, otras pantallas) abre directo la sección.
+  useEffect(()=>{
+    const revisar=()=>{if(window.location.hash==="#planes")irA("home","planes");};
+    revisar();
+    window.addEventListener("hashchange",revisar);
+    return ()=>window.removeEventListener("hashchange",revisar);
+  },[]);
 
   useEffect(()=>{
     // "Quiénes somos" también lo usa: su carrusel de videos vive en el CMS.
@@ -9671,73 +9754,45 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
       .catch(()=>setDynamicContentError("No se pudo cargar el contenido de novedades y aliados."));
   },[activeTab,dynamicContent]);
 
-  const featuredImporters=importers.filter(i=>i.verified||(i.platformCerts??[]).length>0).slice(0,6);
-  const uniqueCountries=[...new Set(importers.map((item)=>item.country).filter(Boolean))];
-  const uniqueCategories=[...new Set(importers.flatMap((item)=>item.categories).filter(Boolean))];
-  const stats=[
-    {value:importers.length.toString(),label:"Empresas importadoras"},
-    {value:uniqueCountries.length.toString(),label:"Países de origen"},
-    {value:importers.filter((item)=>item.verified).length.toString(),label:"Empresas verificadas"},
-    {value:uniqueCategories.length.toString(),label:"Líneas de producto"},
-  ];
   const benefits=[
-    {icon:<MoveRight className="w-6 h-6 text-primary"/>,title:"Abrimos caminos",desc:"Conectamos tus necesidades con productos y empresas que hacen posible llegar más lejos."},
-    {icon:<BadgeCheck className="w-6 h-6 text-primary"/>,title:"Confianza que se comprueba",desc:"Las empresas pasan por un proceso de verificación antes de aparecer en Zarpi."},
-    {icon:<Scale className="w-6 h-6 text-primary"/>,title:"Todo más claro",desc:"Cotizaciones, condiciones y negociaciones quedan ordenadas en un solo lugar."},
-    {icon:<ShoppingCart className="w-6 h-6 text-primary"/>,title:"Más posibilidades, menos barreras",desc:"Explora opciones globales, compara propuestas y sigue cada etapa de tu orden."},
+    {icon:<Receipt className="w-6 h-6 text-primary"/>,title:"Precio final en Colombia",desc:"Cada propuesta llega con el valor puesto en tu bodega y con lo que incluye y lo que no, por escrito."},
+    {icon:<BadgeCheck className="w-6 h-6 text-primary"/>,title:"Empresas con trayectoria",desc:"Antes de elegir sabes quién es cada empresa importadora: años importando, operaciones realizadas y cumplimiento."},
+    {icon:<ClipboardList className="w-6 h-6 text-primary"/>,title:"Todo queda registrado",desc:"Propuestas, acuerdos, documentos y avances de cada etapa, en un solo lugar."},
   ];
-  const brandPrinciples=[
-    {label:"Misión",title:"Acercar lo que mueve tus ideas",desc:"Hacemos más simple encontrar productos, empresas y oportunidades confiables en cualquier parte del mundo."},
-    {label:"Visión",title:"Un mundo más conectado",desc:"Imaginamos un comercio exterior claro, accesible y abierto a más personas y negocios."},
-    {label:"Valores",title:"Claridad, confianza y movimiento",desc:"Verificamos lo importante, mostramos las opciones y avanzamos contigo en cada decisión."},
+  const pasosCortos=[
+    {title:"Publica.",desc:"Cuéntanos qué producto buscas, la cantidad, las especificaciones y, si tienes, el enlace o la referencia."},
+    {title:"Recibe propuestas.",desc:"Empresas importadoras verificadas te envían precio final en Colombia, tiempos y condiciones."},
+    {title:"Elige.",desc:"Resuelve tus dudas por la plataforma, conoce a cada empresa y decide con quién trabajar. La operación se hace directamente con la empresa que elijas."},
+    {title:"Haz seguimiento.",desc:"Cada etapa, de la compra en origen a la entrega, queda documentada en un solo lugar."},
   ];
-  const brandVisuals=[
-    {src:"/brand/container-1.jpg",alt:"Contenedores Zarpi en tránsito",label:"Movemos lo que imaginas."},
-    {src:"/brand/shipping-1.jpg",alt:"Logística y shipping Zarpi",label:"Del mundo a tus manos."},
-    {src:"/brand/container-2.jpg",alt:"Operación de containers Zarpi",label:"Más cerca, en cada etapa."},
-    {src:"/brand/shipping-2.jpg",alt:"Envío de productos Zarpi",label:"Descubre. Compara. Elige."},
-    {src:"/brand/container-3.jpg",alt:"Operación de containers Zarpi",label:"Productos del mundo, más cerca."},
-    {src:"/brand/shipping-3.png",alt:"Envío de productos Zarpi",label:"Tu negocio. Tu elección."},
-  ];
-  const steps=[
-    {n:"01",title:"Crea tu solicitud",desc:"Describe el producto que necesitas importar, especifica cantidades, país de origen y demás detalles relevantes."},
-    {n:"02",title:"Recibe propuestas",desc:"Las empresas importadoras verificadas envían sus mejores ofertas. Compara precios, tiempos y condiciones."},
-    {n:"03",title:"Negocia directamente",desc:"Usa el chat integrado para negociar detalles directamente con el asesor asignado de cada empresa."},
-    {n:"04",title:"Confirma y rastrea",desc:"Una vez acordada la operación, se crea automáticamente la orden y puedes seguir cada etapa del proceso."},
-  ];
-  const faqs=[
-    {q:"¿Cuánto cuesta usar la plataforma?",a:registroAbierto()
-      ?"El registro y el uso básico de la plataforma son gratuitos para los solicitantes. Las empresas importadoras tienen planes según su volumen de operaciones."
-      :"Por ahora Zarpi funciona como lista privada y el acceso tiene un costo: te indicamos el valor al responder tu solicitud. Las empresas importadoras tienen planes según su volumen de operaciones."},
-    {q:"¿Cómo sé que las empresas importadoras son confiables?",a:"Todas las empresas pasan por un proceso de verificación documental realizado por nuestro equipo administrativo antes de ser listadas."},
-    {q:"¿Puedo enviar cotizaciones a múltiples empresas a la vez?",a:"Sí. Puedes crear cotizaciones abiertas que llegan a todas las empresas relevantes, o cotizaciones dirigidas a una empresa específica."},
-    {q:"¿Qué pasa si no recibo respuesta?",a:"El sistema notifica a las empresas automáticamente. Si no recibes respuesta en 48h, te recomendamos ampliar tu solicitud a más proveedores."},
-    {q:"¿Cómo funciona el seguimiento de la orden?",a:"Una vez creada la orden, el representante de la empresa importadora actualiza el estado en cada etapa: producción, tránsito, aduana y entrega."},
-  ];
+  const claseMenu=(activo:boolean)=>clsx(
+    "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+    activo
+      ?"bg-primary text-white dark:bg-accent dark:text-accent-foreground"
+      :"text-muted-foreground hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white",
+  );
+  const menu=(
+    <>
+      {LANDING_TABS.map(section=>(
+        <button key={section.key} onClick={()=>irA(section.key)} className={claseMenu(activeTab===section.key)}>{section.label}</button>
+      ))}
+      <button onClick={irAPlanes} className={claseMenu(false)}>Planes</button>
+      <button onClick={onTendencias} className={claseMenu(false)}>Tendencias</button>
+      <button onClick={onReto} className={claseMenu(false)}>Reto</button>
+      {LANDING_TABS_FINAL.map(section=>(
+        <button key={section.key} onClick={()=>irA(section.key)} className={claseMenu(activeTab===section.key)}>{section.label}</button>
+      ))}
+    </>
+  );
+  const enlacePie="hover:text-accent transition-colors text-left";
+
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-9xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-9xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <Logo/>
-          <div className="hidden md:flex items-center gap-1">
-            {LANDING_TABS.map(section=>(
-              <button
-                key={section.key}
-                onClick={()=>setActiveTab(section.key)}
-                className={clsx(
-                  "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                  activeTab === section.key 
-                    ? "bg-primary text-white dark:bg-accent dark:text-accent-foreground" 
-                    : "text-muted-foreground hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white"
-                )}
-              >
-                {section.label}
-              </button>
-            ))}
-            <button onClick={onTendencias} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Tendencias</button>
-            <button onClick={onReto} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Reto</button>
-          </div>
+          <div className="hidden xl:flex items-center gap-1">{menu}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleTheme}
@@ -9747,325 +9802,159 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
             >
               {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </button>
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              className="hover:bg-primary hover:text-white hover:border-primary dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:border-accent" 
-              onClick={onLogin}
-            >
+            <Button variant="secondary" size="sm" className="hidden sm:inline-flex hover:bg-primary hover:text-white hover:border-primary dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:border-accent" onClick={onLogin}>
               Iniciar sesión
             </Button>
-
-            <Button 
-              variant="primary" 
-              size="sm" 
-              className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" 
-              onClick={registroAbierto()?onRegister:()=>irA("acceso")}
-            >
-              {registroAbierto()?"Registrarse":"Solicitar acceso"}
+            <Button variant="primary" size="sm" className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={irAPlanes}>
+              Solicitar acceso
             </Button>
           </div>
+        </div>
+        {/* En pantallas angostas el menú va en una fila que se desliza. */}
+        <div className="xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2 -mt-1">
+          {menu}
+          <button onClick={onLogin} className={clsx(claseMenu(false),"sm:hidden")}>Iniciar sesión</button>
         </div>
       </nav>
 
       {activeTab==="home" && (
       <>
       {/* HERO */}
-      <section className="pt-32 pb-20 px-6 bg-foreground text-background relative overflow-hidden">
+      <section className="pt-40 xl:pt-32 pb-20 px-6 bg-foreground text-background relative overflow-hidden">
         <div className="absolute inset-0 bg-primary/25 pointer-events-none z-0"/>
         <div className="zarpi-blob zarpi-blob-violet absolute -top-24 -left-24 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-acid absolute top-20 -right-20 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-neutral absolute -bottom-36 left-1/3 z-0 pointer-events-none"/>
-        
         <div className="landing-hero-content relative z-10 max-w-5xl mx-auto text-center">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent text-accent-foreground rounded-full text-xs font-semibold mb-6"><BadgeCheck className="w-3.5 h-3.5"/>Del mundo a tus manos</span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent text-accent-foreground rounded-full text-xs font-semibold mb-6"><Ship className="w-3.5 h-3.5"/>Importaciones desde China</span>
           <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mb-5">
-            Un mundo de productos,<br/>
-            <span className="text-accent">más cerca.</span>
+            Tú dices qué importar.<br/>
+            <span className="text-accent">Zarpi encuentra quién lo trae.</span>
           </h1>
           <p className="text-lg text-background/75 max-w-2xl mx-auto leading-relaxed mb-8">
-            Descubre productos, compara cotizaciones y elige con claridad. Zarpi acerca lo que necesitas.
+            Publica lo que quieres importar y recibe propuestas de empresas importadoras verificadas, con precio final puesto en Colombia. Compara, elige y sigue todo el proceso en un solo lugar.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button variant="secondary" size="lg" icon={<LogIn className="w-4 h-4"/>} onClick={onLogin} className="px-8 bg-accent text-accent-foreground hover:bg-accent/85">Iniciar sesión</Button>
-            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={crearCuenta} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoCrearCuenta}</Button>
+            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={irAPlanes} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Solicitar acceso</Button>
+            <Button variant="secondary" size="lg" icon={<MoveRight className="w-4 h-4"/>} onClick={()=>irA("how-it-works")} className="px-8 bg-transparent text-background border-background/40 hover:bg-background/10">Cómo funciona</Button>
           </div>
-          <p className="mt-8 text-xs uppercase tracking-[0.18em] font-bold text-accent">
-            Descubre. Compara. Elige. Zarpi it.
+          <p className="mt-6 text-sm italic text-background/60 max-w-xl mx-auto">
+            Para comerciantes, emprendedores y empresas que quieren importar con más información y menos incertidumbre.
           </p>
         </div>
       </section>
 
-      {/* BRAND VISUALS (Infinite Carousel) */}
-      <section className="relative px-6 py-10 bg-background overflow-hidden">
-        {/* Degradados laterales para suavizar la entrada/salida */}
-        <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
-        <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
-
-        <div className="relative z-0 max-w-10xl mx-auto overflow-hidden">
-          <div className="flex w-max gap-4 animate-marquee hover:[animation-play-state:paused]">
-            {[...brandVisuals, ...brandVisuals].map((visual, index) => (
-              <figure 
-                key={`${visual.src}-${index}`} 
-                className="group relative w-64 md:w-80 shrink-0 overflow-hidden rounded-2xl border border-border bg-card aspect-[4/3]"
-              >
-                <img 
-                  src={visual.src} 
-                  alt={visual.alt} 
-                  loading="eager" 
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-102" 
-                />
-                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-3 pb-3 pt-8 text-xs font-semibold text-white">
-                  {visual.label}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* STATS */}
-      <section className="py-12 bg-card border-y border-border relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-8 relative z-10">
-          {stats.map((s,i)=>(
-            <div key={i} className="text-center">
-              <p className="text-3xl font-bold text-primary dark:text-accent">{s.value}</p>
-              <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
+      {/* TRES BLOQUES */}
+      <section className="py-16 px-6 bg-muted relative overflow-hidden">
+        <div className="zarpi-blob zarpi-blob-acid absolute -right-16 top-10 pointer-events-none opacity-30 scale-90" />
+        <div className="zarpi-blob zarpi-blob-violet absolute -left-20 bottom-10 pointer-events-none opacity-25 scale-75" />
+        <div className="max-w-6xl mx-auto relative z-10 grid gap-5 md:grid-cols-3">
+          {benefits.map((b, i) => (
+            <div key={b.title} className="landing-reveal bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 hover:shadow-md transition-shadow" style={{animationDelay:`${i*90}ms`}}>
+              <div className="landing-icon w-12 h-12 rounded-xl flex items-center justify-center mb-4 border bg-primary/10 border-primary/20 text-primary dark:bg-[#EDF953]/15 dark:border-[#EDF953]/30 dark:text-[#EDF953]">
+                {b.icon}
+              </div>
+              <h3 className="font-semibold mb-2">{b.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{b.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* BENEFITS */}
-      <section className="py-20 px-6 bg-muted relative overflow-hidden">
-        <div className="zarpi-blob zarpi-blob-acid absolute -right-16 top-10 pointer-events-none opacity-30 scale-90" />
-        <div className="zarpi-blob zarpi-blob-violet absolute -left-20 bottom-10 pointer-events-none opacity-25 scale-75" />
-
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight">Más cerca de lo que buscas</h2>
-            <p className="text-muted-foreground mt-2">Una forma más clara de encontrar, comparar y elegir.</p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {benefits.map((b, i) => (
-              <div key={i} className="landing-reveal bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 hover:shadow-md transition-shadow" style={{animationDelay:`${i*90}ms`}}>
-                <div className="landing-icon w-12 h-12 rounded-xl flex items-center justify-center mb-4 border bg-primary/10 border-primary/20 text-primary dark:bg-[#EDF953]/15 dark:border-[#EDF953]/30 dark:text-[#EDF953]">
-                  {b.icon}
-                </div>
-                <h3 className="font-semibold text-sm mb-2">{b.title}</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">{b.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* MISION, VISION Y VALORES */}
+      {/* CÓMO FUNCIONA (versión corta) */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
-        <div className="zarpi-blob zarpi-blob-violet absolute right-0 top-1/4 pointer-events-none opacity-50 scale-110" />
-        <div className="zarpi-blob zarpi-blob-acid absolute -left-16 bottom-0 pointer-events-none opacity-40 scale-90" />
-
-        <div className="relative z-10 max-w-5xl mx-auto">
-          <div className="max-w-2xl mb-10">
-            <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">La forma Zarpi</p>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Un comercio más cerca, más claro y más humano.</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {brandPrinciples.map((principle, i) => (
-              <article key={principle.label} className="landing-reveal relative overflow-hidden bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 landing-glow" style={{animationDelay:`${i*100}ms`}}>
-                <div className="relative">
-                  <p className="text-xs uppercase tracking-[0.16em] text-primary dark:text-accent font-semibold mb-5">{principle.label}</p>
-                  <h3 className="text-lg font-bold mb-3">{principle.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{principle.desc}</p>
-                </div>
-              </article>
+        <div className="max-w-5xl mx-auto relative z-10">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-12">De lo que quieres importar a una propuesta en firme.</h2>
+          <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {pasosCortos.map((paso,i)=>(
+              <li key={paso.title} className="rounded-2xl border border-border bg-card/80 p-5">
+                <span className="w-9 h-9 rounded-xl bg-accent text-accent-foreground text-sm font-bold flex items-center justify-center mb-4">{i+1}</span>
+                <h3 className="font-semibold mb-1.5">{paso.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{paso.desc}</p>
+              </li>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section className="py-20 px-6 bg-background relative overflow-hidden">
-        
-        <div className="max-w-5xl mx-auto relative z-10">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight">¿Cómo funciona?</h2>
-            <p className="text-muted-foreground mt-2">En cuatro pasos, desde la solicitud hasta la entrega</p>
-          </div>
-          
-          <div className="relative">
-            <div className="hidden lg:block absolute top-7 left-[0%] right-[0%] h-0.5 bg-border z-0" />
-
-            <div className="flex justify-center items-center gap-6 sm:gap-10">
-              {steps.map((s, i) => (
-                <div key={i} className="flex flex-col items-center text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-accent border border-accent flex items-center justify-center mb-4 shadow-sm relative z-10">
-                    <span className="text-lg font-bold text-accent-foreground">{s.n}</span>
-                  </div>
-                  <h3 className="font-semibold text-sm mb-1">{s.title}</h3>
-                  <p className="text-xs text-muted-foreground max-w-[200px]">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* TENDENCIAS: lo último del catálogo (no aparece si no hay productos publicados) */}
-      <SeccionTendenciasLanding onAbrir={onAbrirTendencia} onVerTodas={onTendencias}/>
-
-      {/* FEATURED IMPORTERS */}
-      <section className="py-20 px-6 bg-muted relative overflow-hidden">
-        <div className="zarpi-blob zarpi-blob-violet absolute -right-24 bottom-10 pointer-events-none opacity-35 scale-90" />
-        <div className="zarpi-blob zarpi-blob-acid absolute -left-20 top-10 pointer-events-none opacity-30 scale-75" />
-
-        <div className="max-w-5xl mx-auto relative z-10">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight">Empresas importadoras destacadas</h2>
-            <p className="text-muted-foreground mt-2">Verificadas, calificadas y listas para atenderte</p>
-          </div>
-          {featuredImporters.length===0?(
-            <Card padding="lg" className="border-dashed bg-card/60 backdrop-blur-sm">
-              <p className="text-sm text-muted-foreground text-center">No hay empresas visibles en este momento.</p>
-            </Card>
-          ):(
-            <div className="grid grid-flow-col auto-cols-[85%] gap-5 overflow-x-auto pb-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-3 sm:overflow-visible">
-              {featuredImporters.map(imp=>(
-                <ImporterCard key={imp.id} imp={imp} onViewProfile={()=>setProfileModalImporter(imp)} onCreateQuote={()=>onLogin()} featured/>
-              ))}
-            </div>
-          )}
+          </ol>
           <div className="text-center mt-8">
-            <Button variant="secondary"
-              className="text-white hover:text-white border-transparent hover:border-primary dark:hover:border-accent dark:text-accent-foreground bg-primary hover:bg-primary/80 dark:bg-accent dark:hover:bg-accent/80"
-              size="md" icon={<Building2 className="w-4 h-4"/>}
-              onClick={onLogin}>Ver todas las importadoras</Button>
+            <button type="button" onClick={()=>irA("how-it-works")} className="text-sm font-semibold text-primary dark:text-accent hover:underline">Ver el proceso completo →</button>
           </div>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="py-20 px-6 bg-background relative overflow-hidden">
-        {/* Blob Lima: visible únicamente en modo oscuro */}
-        <div className="hidden dark:block zarpi-blob zarpi-blob-acid absolute right-10 top-1/3 pointer-events-none opacity-25 scale-90" />
-        {/* Blob Violeta: visible únicamente en modo claro */}
-        <div className="block dark:hidden zarpi-blob zarpi-blob-violet absolute left-10 bottom-10 pointer-events-none opacity-25 scale-90" />
+      {/* PLANES (id `planes`): valores y cupos desde Admin › Planes */}
+      <SeccionPlanes onInscribirme={plan=>onInscribirse(plan.clave)} onCondiciones={()=>onPolicy("planes")}/>
 
+      {/* PARA EMPRESAS IMPORTADORAS */}
+      <section className="py-20 px-6 bg-background relative overflow-hidden">
+        <div className="max-w-3xl mx-auto relative z-10 rounded-2xl border border-border bg-card/80 p-6 sm:p-10">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Para empresas importadoras</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-6">Tu experiencia merece llegar a más compradores.</h2>
+          <ListaChequeo items={PARA_IMPORTADORAS}/>
+          <Button variant="primary" className="mt-7 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" icon={<Building2 className="w-4 h-4"/>} onClick={()=>contactar("nacionalizadora")}>Aplicar como empresa importadora</Button>
+          <p className="mt-3 text-xs text-muted-foreground">Cupos y beneficios sujetos a las condiciones vigentes del programa.</p>
+        </div>
+      </section>
+
+      {/* PREGUNTAS FRECUENTES (versión corta) */}
+      <section className="py-20 px-6 bg-muted relative overflow-hidden">
         <div className="max-w-3xl mx-auto relative z-10">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight">Preguntas frecuentes</h2>
-          </div>
-          <div className="space-y-3">
-            {faqs.map((f, i) => (
-              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card backdrop-blur-sm">
-                <button 
-                  onClick={() => setFaqOpen(faqOpen === i ? null : i)} 
-                  className="group w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors"
-                >
-                  <span className="font-medium text-sm">{f.q}</span>
-                  
-                  {/* Contenedor circular con bordes y hover por tema */}
-                  <div className={clsx(
-                    "w-7 h-7 rounded-full border border-border flex items-center justify-center flex-shrink-0 transition-colors duration-200",
-                    "group-hover:bg-primary group-hover:border-primary",
-                    "dark:group-hover:bg-accent dark:group-hover:border-accent"
-                  )}>
-                    <ChevronDown className={clsx(
-                      "w-4 h-4 text-muted-foreground transition-all duration-200",
-                      "group-hover:text-white dark:group-hover:text-accent-foreground",
-                      faqOpen === i && "rotate-180"
-                    )}/>
-                  </div>
-                </button>
-                {faqOpen === i && (
-                  <div className="px-5 pb-4">
-                    <p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p>
-                  </div>
-                )}
-              </div>
-            ))}
+          <h2 className="text-2xl font-bold tracking-tight text-center mb-10">Preguntas frecuentes</h2>
+          <PreguntasLanding items={FAQ_HOME}/>
+          <div className="text-center mt-6">
+            <button type="button" onClick={()=>irA("how-it-works","preguntas")} className="text-sm font-semibold text-primary dark:text-accent hover:underline">Todas las preguntas →</button>
           </div>
         </div>
       </section>
       </>
       )}
 
-      {activeTab==="about" && <LandingAboutSection content={dynamicContent}/>}
-      {activeTab==="how-it-works" && <LandingHowItWorksSection/>}
+      {activeTab==="about" && <LandingAboutSection content={dynamicContent} onSolicitarAcceso={irAPlanes}/>}
+      {activeTab==="how-it-works" && <LandingHowItWorksSection onVerPlanes={irAPlanes} onAplicarImportadora={()=>contactar("nacionalizadora")}/>}
       {activeTab==="news" && (
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
       )}
-      {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={crearCuenta}/>}
-      {activeTab==="acceso" && <LandingListaPrivadaSection onLogin={onLogin} onContacto={()=>irA("contact")}/>}
+      {activeTab==="contact" && <LandingContactSection key={perfilContacto} perfilInicial={perfilContacto} onLogin={onLogin} onRegister={irAPlanes}/>}
 
-      {activeTab!=="contact" && activeTab!=="acceso" && (
-      <>
-      {/* CTA BANNER */}
+      {activeTab!=="contact" && (
+      /* CIERRE */
       <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
-
         <div className="zarpi-blob zarpi-blob-violet absolute right-20 top-1/3 pointer-events-none opacity-25 scale-80" />
-
-        <div className="zarpi-blob zarpi-blob-violet absolute left-15 bottom-15 pointer-events-none opacity-25 scale-80 -rotate-[90deg]" />
         <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
-          <h2 className="text-2xl font-bold mb-3">Del mundo a tus manos</h2>
-          <p className="text-primary-foreground/75 mb-7 leading-relaxed">Empieza a descubrir oportunidades y encuentra todo más cerca.</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button 
-              variant="secondary" 
-              size="lg" 
-              onClick={crearCuenta} 
-              className="px-8 text-accent-foreground"
-            >
-              {textoCrearCuenta}
-            </Button>
-            <Button 
-              variant="secondary" 
-              size="lg" 
-              onClick={onLogin} 
-              className="px-8 text-accent-foreground"
-            >
-              Iniciar sesión
-            </Button>
-          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-3">Tu próxima importación empieza con una mejor decisión.</h2>
+          <p className="text-primary-foreground/80 mb-7 leading-relaxed">Publica lo que necesitas y elige la empresa importadora que mejor se ajuste a tu operación.</p>
+          <Button variant="secondary" size="lg" onClick={irAPlanes} className="px-8 text-accent-foreground">Solicitar acceso</Button>
+          <p className="mt-5 text-sm text-primary-foreground/80">
+            ¿Eres una empresa importadora?{" "}
+            <button type="button" onClick={()=>contactar("nacionalizadora")} className="font-semibold underline underline-offset-2 hover:text-white">Conoce cómo vincularte</button>
+          </p>
         </div>
       </section>
-      </>
       )}
 
-      {/* FOOTER */}
+      {/* PIE */}
       <footer className="bg-[#0F0F0F] text-white py-10 px-6 relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-neutral absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-15 scale-125" />
-        
-        <div className="mx-auto relative z-10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            <div>
-              <div className="mb-2">
-                <img src="/brand/zarpi-wordmark-acid.svg" alt="Zarpi" className="h-8 w-28 object-contain object-left" />
-              </div>
-              <p className="text-xs text-white/50">Un mundo de productos, más cerca.</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4 text-xs text-white/70">
-              <button onClick={()=>onPolicy("data")} className="hover:text-accent transition-colors text-left">Política de Tratamiento de Datos</button>
-              <button onClick={()=>onPolicy("terms")} className="hover:text-accent transition-colors text-left">Términos y Condiciones</button>
-              <button onClick={()=>onPolicy("payments")} className="hover:text-accent transition-colors text-left">Pagos y Reembolsos</button>
-              <button onClick={onLogin} className="hover:text-accent transition-colors text-left">Iniciar sesión</button>
-            </div>
+        <div className="mx-auto max-w-6xl relative z-10 space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <img src="/brand/zarpi-wordmark-acid.svg" alt="Zarpi" className="h-8 w-28 object-contain object-left" />
+            <p className="text-xs text-white/70"><span className="font-semibold text-white">{EMPRESA.razonSocial}</span> · NIT {EMPRESA.nit} · {EMPRESA.ciudad}, Colombia</p>
           </div>
-          <div className="border-t border-white/10 mt-8 pt-6 text-xs text-white/40 text-center space-y-1">
-            <p>{EMPRESA.razonSocial} · NIT {EMPRESA.nit} · {EMPRESA.domicilio}</p>
-            <p>{EMPRESA.telefono} · <a href={`mailto:${EMPRESA.correo}`} className="hover:text-accent transition-colors">{EMPRESA.correo}</a></p>
-            <p>© 2026 Zarpi. Todos los derechos reservados.</p>
-          </div>
+          <nav aria-label="Enlaces del pie" className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/70">
+            <button onClick={()=>irA("about")} className={enlacePie}>Quiénes somos</button>
+            <button onClick={()=>irA("how-it-works")} className={enlacePie}>Cómo funciona</button>
+            <button onClick={irAPlanes} className={enlacePie}>Planes</button>
+            <button onClick={onTendencias} className={enlacePie}>Tendencias</button>
+            <button onClick={()=>irA("contact")} className={enlacePie}>Contacto</button>
+            <button onClick={()=>onPolicy("planes")} className={enlacePie}>Condiciones de los planes</button>
+            <button onClick={()=>onPolicy("terms")} className={enlacePie}>Términos y condiciones</button>
+            <button onClick={()=>onPolicy("data")} className={enlacePie}>Política de tratamiento de datos</button>
+          </nav>
+          <p className="max-w-4xl text-xs leading-relaxed text-white/55">
+            <span className="font-semibold text-white/70">Aviso legal: </span>
+            Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
+          </p>
+          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
         </div>
       </footer>
-
-      <ImporterProfileModal
-        imp={profileModalImporter}
-        open={Boolean(profileModalImporter)}
-        onClose={()=>setProfileModalImporter(null)}
-        onLogin={onLogin}
-        onAbrirTendencia={onAbrirTendencia}
-      />
     </div>
   );
 }
@@ -10073,57 +9962,6 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onRet
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING — Perfil de empresa (QuickView) y subpáginas públicas
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileModal({imp,open,onClose,onLogin,onAbrirTendencia}:{imp:Importer|null;open:boolean;onClose:()=>void;onLogin:()=>void;onAbrirTendencia:(id:string)=>void}) {
-  if(!imp)return null;
-  const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
-  const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
-  const certs=imp.certs??[];
-  const platformCerts=imp.platformCerts??[];
-
-  return (
-    <Modal open={open} onClose={onClose} title={imp.name} width="max-w-2xl">
-      <div className="space-y-4">
-        {bannerUrl&&<img src={bannerUrl} alt="" className="h-32 w-full rounded-xl object-cover"/>}
-        <div className="flex items-center gap-3">
-          <Avatar initials={imp.initials} size="2xl" color={imp.color} src={logoUrl||undefined} variant="logo"/>
-          <div className="min-w-0">
-            <p className="font-semibold text-base truncate">{imp.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{imp.specialty} · {imp.country}</p>
-          </div>
-          {imp.verified&&(
-            <span className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold flex-shrink-0">
-              <BadgeCheck className="w-3.5 h-3.5"/>Verificada
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground leading-relaxed">{imp.description||"Esta empresa aún no ha publicado su descripción."}</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-          <div><p className="text-xs text-muted-foreground">Tiempo de respuesta</p><p className="font-medium">{imp.responseTime}</p></div>
-          <div><p className="text-xs text-muted-foreground">Miembro desde</p><p className="font-medium">{imp.memberSince}</p></div>
-          <div><p className="text-xs text-muted-foreground">Proyectos</p><p className="font-medium">{imp.projects}</p></div>
-        </div>
-        <RecomendadosEmpresa importadorId={imp.id} onAbrir={onAbrirTendencia}/>
-        {imp.categories.length>0&&(
-          <div>
-            <p className="text-xs text-muted-foreground mb-1.5">Especialidades</p>
-            <div className="flex flex-wrap gap-1.5">{imp.categories.map(c=><span key={c} className="px-2 py-1 rounded-full bg-muted text-xs">{c}</span>)}</div>
-          </div>
-        )}
-        {(certs.length>0||platformCerts.length>0)&&(
-          <div>
-            <p className="text-xs text-muted-foreground mb-1.5">Certificaciones</p>
-            <div className="flex flex-wrap gap-1.5">
-              {platformCerts.map(c=><span key={c.id} className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">{c.nombre}</span>)}
-              {certs.map(c=><span key={c} className="px-2 py-1 rounded-full bg-muted text-xs">{c}</span>)}
-            </div>
-          </div>
-        )}
-        <Button variant="primary" size="lg" fullWidth onClick={onLogin}>Solicitar cotización / Cotizar</Button>
-      </div>
-    </Modal>
-  );
-}
-
 function LandingBackground() {
   const particles = Array.from({ length: 15 }, (_, i) => {
     const random = (min: number, max: number) =>
@@ -10171,85 +10009,109 @@ function LandingBackground() {
   );
 }
 
-/** "Quiénes somos": los tres principios del negocio (Zarpi_Modelo_de_Monetizacion). */
-function LandingAboutSection({content}:{content:LandingDynamicContent|null}) {
+/** "Quiénes somos": de dónde nace Zarpi, qué hace, en qué cree y quién está detrás. */
+function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamicContent|null;onSolicitarAcceso:()=>void}) {
   const carrusel=leerVideosQuienesSomos(content?.blocks);
-  const principios=[
-    {title:"No somos importadores de registro",desc:"Conectamos solicitantes con empresas nacionalizadoras verificadas; no figuramos como importador de registro en ninguna operación."},
-    {title:"No custodiamos dinero de terceros",desc:"El pago del servicio se acuerda y se ejecuta entre el solicitante y la nacionalizadora; la plataforma no retiene ni administra esos fondos."},
-    {title:"Garantizamos verificación y trazabilidad documental",desc:"Cada empresa pasa por un proceso de verificación documental, y cada cotización, propuesta y orden queda registrada y trazable dentro de la plataforma."},
+  const creencias=[
+    {title:"Las mismas reglas para todas.",desc:"Cada empresa importadora se mide con las mismas métricas. Nadie compra una mejor reputación."},
+    {title:"El proceso a la vista.",desc:"Cada etapa deja evidencia en la plataforma."},
+    {title:"Tú decides.",desc:"Zarpi te muestra quién es quién; la elección es tuya."},
   ];
   return (
-    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+    <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
 
-      <div className="max-w-4xl mx-auto relative z-10">
-        <div className="text-center mb-12">
+      <div className="max-w-4xl mx-auto relative z-10 space-y-12">
+        <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Quiénes somos</p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Un modelo claro, desde el primer día</h1>
-          <p className="text-muted-foreground mt-3 max-w-xl mx-auto">Zarpi conecta, no custodia ni interviene como importador. Así protegemos tanto al solicitante como a la empresa importadora.</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Importar no debería depender de tener los contactos correctos.</h1>
         </div>
         {carrusel.activo&&carrusel.videos.length>0&&(
-          <CarruselVideos className="mb-12" videos={carrusel.videos} intervaloSegundos={carrusel.intervalo_segundos}/>
+          <CarruselVideos videos={carrusel.videos} intervaloSegundos={carrusel.intervalo_segundos}/>
         )}
-        <div className="grid sm:grid-cols-1 gap-5">
-          {principios.map((principio,i)=>(
-            <Card key={principio.title} padding="lg" className="border-primary/15">
-              <p className="text-xs font-semibold text-primary dark:text-accent mb-2">Principio {i+1}</p>
-              <h3 className="text-lg font-bold mb-2">{principio.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{principio.desc}</p>
-            </Card>
-          ))}
+        <div className="max-w-3xl mx-auto space-y-4 text-base leading-relaxed text-muted-foreground">
+          <p>Cuando empezamos a importar no sabíamos por dónde arrancar: si irnos a Buenaventura a buscar quién traía contenedores o irnos a China. Y estando en China, frente al producto, quedaban dos preguntas: cómo iba a llegar a la bodega y cuánto iba a costar realmente tenerlo en Colombia.</p>
+          <p>Con los años encontramos la respuesta: empresas importadoras que traen el producto a su nombre, lo nacionalizan y te lo entregan facturado en Colombia. Así importan desde quien hace su primer pedido hasta empresas que traen millones de dólares al mes. Algunas llevan más de treinta años yendo a China.</p>
+          <p>También entendimos que encontrar una buena empresa no debería depender de una recomendación, un contacto o una conversación por WhatsApp. <span className="font-semibold text-foreground">Zarpi existe para que esa respuesta esté a un clic de cualquier comerciante en Colombia.</span></p>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold mb-3">Qué hacemos</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">Conectamos a personas y empresas que quieren importar con empresas importadoras verificadas, ordenamos la información para que puedas decidir y guardamos la evidencia de cada etapa.</p>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold mb-4">En qué creemos</h2>
+          <div className="grid md:grid-cols-3 gap-5">
+            {creencias.map((c,i)=>(
+              <article key={c.title} className="landing-reveal bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6" style={{animationDelay:`${i*100}ms`}}>
+                <h3 className="text-base font-bold mb-2">{c.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{c.desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold mb-3">Quiénes estamos detrás</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">Zarpi S.A.S. nació en Cali en 2026, fundada por Juan Pablo Orozco, comerciante que lleva años importando para su propia operación de comercio electrónico. Creamos Zarpi para convertir una experiencia llena de incertidumbre en un proceso claro y documentado.</p>
+        </div>
+        <div className="text-center">
+          <Button variant="primary" size="lg" className="px-8 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={onSolicitarAcceso}>Solicitar acceso</Button>
         </div>
       </div>
     </section>
   );
 }
 
-/** "Cómo funciona": 8 pasos + condiciones de monetización para comprador y nacionalizadora. */
-function LandingHowItWorksSection() {
-  const pasos=[
-    "El solicitante crea su solicitud de cotización con los detalles del producto.",
-    "La solicitud llega a nacionalizadoras verificadas, dirigida o abierta.",
-    "Las nacionalizadoras envían sus propuestas con precio, tiempos y condiciones.",
-    "El solicitante compara y negocia por el chat integrado con el asesor asignado.",
-    "Al aceptar una propuesta, la plataforma crea la orden automáticamente.",
-    "La nacionalizadora actualiza el estado: producción, tránsito, aduana y bodega.",
-    "El solicitante y la nacionalizadora hacen seguimiento documental en cada etapa.",
-    "Se confirma la entrega y, si aplica, se declara el cierre de la operación.",
+/** "Cómo funciona": los pasos de una importación, lo que obtiene cada lado y las preguntas completas. */
+function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlanes:()=>void;onAplicarImportadora:()=>void}) {
+  const pasos:[string,string][]=[
+    ["Publicas tu solicitud:"," producto, cantidad, referencia o enlace."],
+    ["Tu solicitud llega a empresas importadoras verificadas.",""],
+    ["Recibes propuestas"," con precio final en Colombia, tiempos y condiciones."],
+    ["Resuelves dudas por el chat de la plataforma,"," conoces la trayectoria de cada empresa y eliges."],
+    ["Al aceptar una propuesta, la operación queda registrada"," y se abre el contacto directo con la empresa importadora."],
+    ["La empresa importadora actualiza cada etapa:"," producción, tránsito, aduana y entrega."],
+    ["Cada etapa queda documentada"," en la plataforma."],
+    ["Confirmas la entrega"," y calificas la experiencia."],
+  ];
+  const paraQuienImporta=[
+    "Publicas una vez y recibes propuestas de varias empresas.",
+    "Precio final puesto en Colombia, con lo que incluye y lo que no.",
+    "Conoces a cada empresa antes de elegir: trayectoria, cumplimiento y calificaciones.",
+    "Todo el proceso queda registrado.",
   ];
   return (
-    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+    <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
       <div className="max-w-5xl mx-auto relative z-10">
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Cómo funciona</p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Un flujo transparente, de principio a fin</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Así se importa con Zarpi</h1>
         </div>
-        <div className="grid sm:grid-cols-2 gap-4 mb-14">
-          {pasos.map((paso,i)=>(
-            <Card key={i} padding="md" className="flex items-start gap-3">
-              <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
-              <p className="text-sm text-muted-foreground leading-relaxed">{paso}</p>
-            </Card>
+        <ol className="grid sm:grid-cols-2 gap-4 mb-14">
+          {pasos.map(([fuerte,resto],i)=>(
+            <li key={i}>
+              <Card padding="md" className="flex h-full items-start gap-3">
+                <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{i+1}</span>
+                <p className="text-sm text-muted-foreground leading-relaxed"><strong className="font-semibold text-foreground">{fuerte}</strong>{resto}</p>
+              </Card>
+            </li>
           ))}
+        </ol>
+        <div className="grid md:grid-cols-2 gap-5 mb-16">
+          <Card padding="lg" className="flex flex-col">
+            <h2 className="text-base font-bold mb-3">Para quien importa</h2>
+            <div className="flex-1"><ListaChequeo items={paraQuienImporta}/></div>
+            <Button variant="primary" className="mt-5 self-start dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={onVerPlanes}>Ver planes</Button>
+          </Card>
+          <Card padding="lg" className="flex flex-col">
+            <h2 className="text-base font-bold mb-3">Para empresas importadoras</h2>
+            <div className="flex-1"><ListaChequeo items={PARA_IMPORTADORAS}/></div>
+            <Button variant="secondary" className="mt-5 self-start" icon={<Building2 className="w-4 h-4"/>} onClick={onAplicarImportadora}>Aplicar como empresa importadora</Button>
+          </Card>
         </div>
-        <div className="grid md:grid-cols-2 gap-5">
-          <Card padding="lg">
-            <h3 className="text-base font-bold mb-3">Para compradores</h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>• Primera cotización, gratis.</li>
-              <li>• COP 40.000 por cada cotización adicional dentro del mismo mes.</li>
-              <li>• 6 meses de cotizaciones gratis al declarar el cierre de una operación.</li>
-            </ul>
-          </Card>
-          <Card padding="lg">
-            <h3 className="text-base font-bold mb-3">Para nacionalizadoras</h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>• 5% de comisión sobre el servicio cobrado, vía bolsa prepagada.</li>
-              <li>• Founders Program: 5% de por vida para las primeras empresas aliadas.</li>
-            </ul>
-          </Card>
+        <div id="preguntas" className="scroll-mt-28 max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold tracking-tight text-center mb-8">Preguntas frecuentes</h2>
+          <PreguntasLanding items={FAQ_COMPLETA}/>
         </div>
       </div>
     </section>
@@ -10373,8 +10235,9 @@ function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:La
 }
 
 /** "Contacto": selector de perfil (comprador / nacionalizadora) + FAQ. */
-function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister:()=>void}) {
-  const [perfil,setPerfil]=useState<"comprador"|"nacionalizadora">("comprador");
+type PerfilContacto="comprador"|"nacionalizadora";
+function LandingContactSection({perfilInicial="comprador",onLogin,onRegister}:{perfilInicial?:PerfilContacto;onLogin:()=>void;onRegister:()=>void}) {
+  const [perfil,setPerfil]=useState<PerfilContacto>(perfilInicial);
   const [nombre,setNombre]=useState("");
   const [email,setEmail]=useState("");
   const [telefono,setTelefono]=useState("");
@@ -10384,10 +10247,10 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
   const [errorEnvio,setErrorEnvio]=useState("");
 
   const faqsContacto=[
-    {q:"¿Cómo empiezo si soy comprador?",a:registroAbierto()
+    {q:"¿Cómo empiezo si quiero importar?",a:registroAbierto()
       ?"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."
       :"Por ahora el acceso es por lista privada: pídelo con «Solicitar acceso» y te escribimos con el valor."},
-    {q:"¿Cómo empiezo si soy nacionalizadora?",a:"Escríbenos desde este formulario: el equipo revisa tu documentación antes del alta."},
+    {q:"¿Cómo empiezo si soy empresa importadora?",a:"Escríbenos desde este formulario: confirmamos tu existencia legal, tu actividad importadora real y tus referencias antes del alta. El Programa Fundadoras tiene cupos limitados."},
   ];
 
   async function enviarContacto(event:React.FormEvent){
@@ -10446,7 +10309,7 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
                         : "bg-white text-muted-foreground border-border hover:border-primary/40 dark:bg-transparent dark:hover:border-accent/40"
                     )}
                   >
-                    {opt === "comprador" ? "Soy comprador" : "Soy nacionalizadora"}
+                    {opt === "comprador" ? "Quiero importar" : "Soy empresa importadora"}
                   </button>
                 ))}
               </div>
@@ -10595,41 +10458,20 @@ function FormularioListaPrivada() {
   );
 }
 
-/** Pestaña «Solicitar acceso» de la landing. */
-function LandingListaPrivadaSection({onLogin,onContacto}:{onLogin:()=>void;onContacto:()=>void}) {
-  return (
-    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
-      <LandingBackground />
-      <div className="max-w-2xl mx-auto space-y-8 relative z-10">
-        <div className="text-center">
-          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Lista privada</p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Pide tu acceso a Zarpi</h1>
-          <p className="text-muted-foreground mt-3 leading-relaxed">
-            Por ahora abrimos Zarpi a un grupo reducido de cotizantes. Déjanos tus datos y cuéntanos por qué quieres entrar: revisamos cada solicitud y te escribimos.
-          </p>
-        </div>
-        <Card padding="lg"><FormularioListaPrivada/></Card>
-        <div className="text-center text-sm text-muted-foreground space-y-1">
-          <p>¿Ya tienes cuenta? <button type="button" onClick={onLogin} className="font-medium text-primary dark:text-accent hover:underline">Inicia sesión</button></p>
-          <p>¿Eres empresa importadora? <button type="button" onClick={onContacto} className="font-medium text-primary dark:text-accent hover:underline">Escríbenos desde Contacto</button></p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 /** Con el registro público cerrado (Admin › Módulos), se pide acceso a la lista privada. */
-function RegistroCerrado({onLogin,onLanding}:{onLogin:()=>void;onLanding:()=>void}) {
+function RegistroCerrado({onLogin,onLanding,onVerPlanes}:{onLogin:()=>void;onLanding:()=>void;onVerPlanes:()=>void}) {
   return (
     <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4 py-10">
       <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8 max-w-xl w-full relative z-10">
         <div className="text-center mb-6">
           <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
-          <h2 className="text-lg font-semibold mb-2">Zarpi está en lista privada</h2>
+          <h2 className="text-lg font-semibold mb-2">Zarpi funciona con planes de acceso</h2>
           <p className="text-sm text-muted-foreground">
-            Por ahora no hay registro abierto. Déjanos tus datos y cuéntanos por qué quieres entrar; te escribimos con los pasos.
+            Elige tu plan, paga por transferencia y activamos tu cuenta en máximo 2 horas en horario hábil.
           </p>
+          <Button variant="primary" className="mt-4 dark:bg-accent dark:text-accent-foreground" onClick={onVerPlanes}>Ver planes</Button>
         </div>
+        <p className="mb-3 text-center text-xs text-muted-foreground">¿Prefieres que te contactemos antes? Déjanos tus datos.</p>
         <FormularioListaPrivada/>
         <div className="mt-6 flex flex-col items-center gap-3">
           <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
@@ -10912,7 +10754,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                     )}
 
                     {t === "solicitante"
-                      ? "Soy solicitante"
+                      ? "Soy comprador"
                       : "Soy empresa importadora"}
                   </button>
                 ))}
@@ -11328,7 +11170,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 ))}
               </div>
               <div className="mt-4 rounded-lg border border-border p-3 text-xs text-muted-foreground">
-                Al abrir un ticket, incluye el código de cotización (COT-…) o de orden (ORD-…) y el mensaje de error
+                Al abrir un ticket, incluye el código de cotización (COT-…) o de operación (ORD-…) y el mensaje de error
                 completo. Con eso el equipo reproduce el caso sin tener que preguntarte.
               </div>
             </Card>
@@ -11375,6 +11217,8 @@ export default function App() {
   const [selectedOrderId,setSelectedOrderId]=useState(()=>idInicialDe("order"));
   const [selectedOrderDetail,setSelectedOrderDetail]=useState<Order|null>(null);
   const [selectedTendenciaId,setSelectedTendenciaId]=useState(()=>idInicialDe("tendencia"));
+  // Plan elegido en el inicio («Inscribirme»): viaja en la URL como ?plan=.
+  const [planElegido,setPlanElegido]=useState(()=>new URLSearchParams(window.location.search).get("plan")??"");
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
@@ -11459,7 +11303,10 @@ export default function App() {
     // El token de restablecimiento y el código de referido viajan en la query;
     // se conservan mientras se esté en las pantallas que los usan.
     const conservaQuery = screen === "reset-password" || screen === "landing" || screen === "register";
-    const url = `${rutaActual}${conservaQuery ? window.location.search : ""}`;
+    const query = screen === "planes-inscripcion"
+      ? (planElegido ? `?plan=${encodeURIComponent(planElegido)}` : "")
+      : conservaQuery ? window.location.search : "";
+    const url = `${rutaActual}${query}`;
 
     // Moverse dentro de la misma pantalla (abrir otra conversación del chat) no
     // merece una entrada de historial propia: se reemplaza.
@@ -11914,7 +11761,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "tendencias", "tendencia-detalle", "reto"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "tendencias", "tendencia-detalle", "reto"];
     if (!publicScreens.includes(screen)) {
       setScreen("landing");
     }
@@ -12145,6 +11992,8 @@ export default function App() {
   });
 
   function goTo(s:Screen){setPrevScreen(screen);setScreen(s);}
+  /** «Solicitar acceso» fuera de la landing: lleva a la sección Planes del inicio (/#planes). */
+  function irAPlanesDelInicio(){goTo("landing");window.setTimeout(()=>{window.location.hash="planes";},0);}
 
   // La estimación solo prellena la propuesta a la que se llegó desde el chat;
   // abrir después "Responder" por otro camino debe partir de cero.
@@ -12729,7 +12578,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "tendencias", "tendencia-detalle", "reto"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "tendencias", "tendencia-detalle", "reto"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -12747,6 +12596,8 @@ export default function App() {
     "admin-modulos": ["admin"],
     "admin-pagos": ["admin"],
     "admin-cursos-accesos": ["admin"],
+    "admin-presentaciones": ["admin"],
+    "admin-planes": ["admin"],
     "admin-cursos": ["admin"],
     "catalogos": ["solicitante"],
     "imp-catalogos": ["importadora", "asesor"],
@@ -12845,8 +12696,18 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onAbrirTendencia={abrirTendencia}/>;
-  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}}/>;
+  // Inscripción a un plan: pública; con sesión de comprador se precargan sus datos.
+  if(screen==="planes-inscripcion")return <InscripcionPlan
+    key={planElegido}
+    claveInicial={planElegido}
+    onVolver={()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing")}
+    onVerPlanes={irAPlanesDelInicio}
+    onCondiciones={()=>goTo("policy-planes")}
+    onPoliticaDatos={()=>goTo("policy-data")}
+    prefill={isAuthenticated&&currentUserProfile?{email:currentUserProfile.email,nombre:currentUserProfile.nombre??undefined,telefono:currentUserProfile.telefono??undefined}:undefined}
+  />;
+  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")} onVerPlanes={irAPlanesDelInicio}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
@@ -12901,6 +12762,8 @@ export default function App() {
     if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
     // Cursos propios de Zarpi: el mismo tablero y editor que usan las importadoras.
     if(screen==="admin-cursos")return <CoursesPortalScreen sb={sb} active="admin-cursos" role="importadora" headerUser={USER} companyName="Zarpi" cursosDeZarpi onGoDashboard={()=>goTo("admin-dashboard")}/>;
+    if(screen==="admin-planes")return <PantallaPortal sb={sb} active="admin-planes" titulo="Planes"><PlanesAdmin/></PantallaPortal>;
+    if(screen==="admin-presentaciones")return <PantallaPortal sb={sb} active="admin-presentaciones" titulo="Presentaciones de empresas"><RevisionPresentaciones/></PantallaPortal>;
     if(screen==="admin-cursos-accesos")return <PantallaPortal sb={sb} active="admin-cursos-accesos" titulo="Accesos a cursos"><AccesosCursos/></PantallaPortal>;
     if(screen==="admin-modulos")return <PantallaPortal sb={sb} active="admin-modulos" titulo="Módulos"><ModulosPlataforma onCambio={recargarPlatformConfig}/></PantallaPortal>;
     if(screen==="diseno")return <PantallaPortal sb={sb} active="diseno" titulo="Diseño"><PanelDiseno/></PantallaPortal>;

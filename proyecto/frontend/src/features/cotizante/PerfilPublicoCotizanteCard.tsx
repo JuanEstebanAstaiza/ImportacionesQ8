@@ -83,7 +83,7 @@ export function PerfilPublicoCotizanteCard({ solicitanteId }: PerfilPublicoCotiz
         <Metric icon={<ClipboardList className="h-4 w-4" />} label="Importaciones" value={`${number(cantidades.total)} (${number(cantidades.dentro_plataforma)} en plataforma)`} />
         <Metric icon={<DollarSign className="h-4 w-4" />} label="Promedio por importación" value={currency(perfil.valor_promedio_importacion_usd)} />
         <Metric icon={<ClipboardList className="h-4 w-4" />} label="Cotizaciones solicitadas" value={number(actividad.cotizaciones_solicitadas)} />
-        <Metric icon={<Package className="h-4 w-4" />} label="Órdenes generadas" value={number(actividad.ordenes_generadas)} />
+        <Metric icon={<Package className="h-4 w-4" />} label="Operaciones generadas" value={number(actividad.ordenes_generadas)} />
         <Metric icon={<DollarSign className="h-4 w-4" />} label="Promedio en plataforma" value={currency(actividad.valor_promedio_operaciones_usd)} />
       </div>
     </Card>

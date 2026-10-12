@@ -42,7 +42,7 @@ async def terminos_condiciones():
     """Versión vigente de los términos y condiciones de uso de la plataforma."""
     return _documento(
         "Términos y Condiciones de Uso",
-        "Zarpi es una plataforma de contacto entre solicitantes y empresas "
+        "Zarpi es una plataforma de contacto entre compradores y empresas "
         "importadoras: no es importador de registro ni custodia los pagos de la "
         "operación, que se acuerdan entre las partes.",
         "/terminos",

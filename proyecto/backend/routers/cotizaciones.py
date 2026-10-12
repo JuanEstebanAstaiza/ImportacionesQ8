@@ -671,7 +671,10 @@ async def crear_cotizacion(
     if cobra_tokens:
         db.flush()
         try:
-            tokens_cotizacion.cobrar(db, usuario_id=user_id_str, cotizacion_id=nuevo_cotizacion.id)
+            # Se guarda qué unidad se gastó: si en 72 horas no llegan propuestas,
+            # vuelve a ese mismo saldo.
+            nuevo_cotizacion.unidad_cobrada = tokens_cotizacion.cobrar(
+                db, usuario_id=user_id_str, cotizacion_id=nuevo_cotizacion.id)
         except tokens_cotizacion.SinTokens:
             db.rollback()
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -1526,7 +1529,7 @@ async def aceptar_propuesta(
             db,
             usuario_id=cotizacion.asesor_asignado_id,
             tipo="negociacion",
-            titulo="El solicitante quiere negociar",
+            titulo="El comprador quiere negociar",
             mensaje="Se abrió el canal de chat de una cotización que reclamaste.",
             data={
                 "tipo": "negociacion_iniciada",
@@ -1694,7 +1697,7 @@ async def pre_aceptar_propuesta(
             detail=(
                 "La aceptación final la confirma la cuenta dueña de la empresa. "
                 "Tu negociación queda registrada en el chat y es lo que revisará "
-                "antes de cerrar la orden."
+                "antes de cerrar la operación."
             )
         )
 
@@ -1707,7 +1710,7 @@ async def pre_aceptar_propuesta(
     if lado == "empresa" and (solicitud.motivo_eleccion or solicitud.motivo_detalle):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El motivo de la elección solo lo indica el solicitante"
+            detail="El motivo de la elección solo lo indica el comprador"
         )
 
     from services.eventos import TiposEvento, evento_propuesta
@@ -1733,11 +1736,11 @@ async def pre_aceptar_propuesta(
             db,
             importador_id=propuesta.importador_id,
             tipo="propuesta",
-            titulo="El solicitante aceptó la propuesta" if solicitud.aceptar else "El solicitante retiró su aceptación",
+            titulo="El comprador aceptó la propuesta" if solicitud.aceptar else "El comprador retiró su aceptación",
             mensaje=(
                 f"Cotización de {cotizacion.nombre_producto}. "
                 + (
-                    "Revisa el chat de la negociación y confírmala desde la cuenta de la empresa para cerrar la orden."
+                    "Revisa el chat de la negociación y confírmala desde la cuenta de la empresa para cerrar la operación."
                     if solicitud.aceptar
                     else "La negociación sigue abierta."
                 )
@@ -1893,7 +1896,7 @@ async def pre_aceptar_propuesta(
                 conversacion_id=conversacion.id,
                 remitente_id=responsable_id or user_id_str,
                 contenido=(
-                    "La empresa confirmó la propuesta y se creó la orden. "
+                    "La empresa confirmó la propuesta y se creó la operación. "
                     "Esta conversación pasa a ser el seguimiento del embarque: "
                     "aquí se irán informando los cambios de estado."
                 ),
@@ -1917,10 +1920,10 @@ async def pre_aceptar_propuesta(
             db,
             usuario_id=cotizacion.solicitante_id,
             tipo="orden",
-            titulo="Tu cotización ya es una orden de compra",
+            titulo="Tu cotización ya es una operación",
             mensaje=(
                 f"{_nombre_empresa(db, propuesta.importador_id)} confirmó la propuesta para "
-                f"{cotizacion.nombre_producto} y se creó la orden de compra.{precio} "
+                f"{cotizacion.nombre_producto} y se creó la operación.{precio} "
                 "Te avisaremos de cada cambio de estado del embarque."
             ),
             data={"cotizacion_id": str(cotizacion.id), "orden_id": str(nueva_orden.id)},
@@ -1982,7 +1985,7 @@ async def rechazar_cotizacion(
                             EstadoCotizacion.abierta.value, EstadoCotizacion.propuestas_recibidas.value)
     if cotizacion.estado not in abiertas_a_respuesta:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail="Esta cotización ya no se puede rechazar (ya tiene orden o se cerró)")
+                            detail="Esta cotización ya no se puede rechazar (ya tiene operación o se cerró)")
 
     responsable = cotizacion.asesor_asignado_id
     if current_user["rol"] == "asesor" and responsable and responsable != user_id_str:

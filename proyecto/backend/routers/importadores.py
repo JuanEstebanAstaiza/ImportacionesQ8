@@ -834,6 +834,12 @@ async def crear_evidencia(
         estado=EstadoEvidenciaImportador.pendiente.value,
     )
     db.add(ev)
+    db.flush()
+    # Sin este aviso el material quedaba «en revisión» sin que nadie del equipo
+    # se enterara de que había algo que revisar.
+    from services.presentacion_empresa import avisar_nueva
+
+    avisar_nueva(db, ev)
     db.commit()
     db.refresh(ev)
     return ev
@@ -1073,7 +1079,7 @@ async def listar_ordenes_activas_importador(
     if importador_id_str != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No autorizado - Solo puede ver sus propias órdenes"
+            detail="No autorizado - Solo puede ver sus propias operaciones"
         )
     
     

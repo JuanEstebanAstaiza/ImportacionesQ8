@@ -18,7 +18,7 @@ MAX_FOTOS_POR_PRODUCTO = 5
 DESCRIPCION_CRITERIO = {
     CriterioCatalogo.manual.value: "Solo los clientes que la empresa elige",
     CriterioCatalogo.tier_minimo.value: "Clientes con nivel de cotizante {tier} o superior",
-    CriterioCatalogo.clientes_con_orden.value: "Clientes con al menos una orden con la empresa",
+    CriterioCatalogo.clientes_con_orden.value: "Clientes con al menos una operación con la empresa",
     CriterioCatalogo.suscriptores_zarpi.value: "Suscriptores de Tendencias de Zarpi",
 }
 

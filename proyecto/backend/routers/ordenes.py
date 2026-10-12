@@ -199,7 +199,7 @@ async def listar_ordenes_activas_importador(
     if importador_id_str != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No autorizado - Solo puede ver sus propias órdenes"
+            detail="No autorizado - Solo puede ver sus propias operaciones"
         )
     
     # Listar órdenes activas (estado diferente a "entregado")
@@ -267,7 +267,7 @@ async def obtener_orden(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="ID de orden inválido"
+            detail="ID de operación inválido"
         )
     
     orden = db.query(Orden).filter(Orden.id == orden_id_str).first()
@@ -275,7 +275,7 @@ async def obtener_orden(
     if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Orden no encontrada"
+            detail="Operación no encontrada"
         )
     
     # Verificar que el usuario tiene acceso a esta orden
@@ -284,14 +284,14 @@ async def obtener_orden(
     if rol == "solicitante" and orden.solicitante_id != user_id_str:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes acceso a esta orden"
+            detail="No tienes acceso a esta operación"
         )
     
     # Importador/asesor solo puede ver si la orden es de su empresa
     if rol in ("importador", "asesor") and orden.importador_id != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes acceso a esta orden"
+            detail="No tienes acceso a esta operación"
         )
     
     return OrdenResponse(
@@ -358,7 +358,7 @@ async def actualizar_estado_orden(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="ID de orden inválido"
+            detail="ID de operación inválido"
         )
 
     # Verificar que la orden existe y pertenece a la empresa del usuario autenticado
@@ -370,13 +370,13 @@ async def actualizar_estado_orden(
     if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Orden no encontrada o no asignada a este importador"
+            detail="Operación no encontrada o no asignada a este importador"
         )
 
     if current_user["rol"] == "asesor" and str(orden.asesor_asignado_id or "") != str(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el asesor asignado a esta orden puede actualizar su estado"
+            detail="Solo el asesor asignado a esta operación puede actualizar su estado"
         )
 
     # Verificar que el nuevo estado es válido (transición permitida)
@@ -427,9 +427,9 @@ async def actualizar_estado_orden(
         db,
         usuario_id=orden.solicitante_id,
         tipo="orden",
-        titulo=f"Tu orden ahora está: {ETIQUETAS_ESTADO.get(nuevo_estado_valor, nuevo_estado_valor)}",
+        titulo=f"Nuevo estado de tu operación: {ETIQUETAS_ESTADO.get(nuevo_estado_valor, nuevo_estado_valor)}",
         mensaje=(
-            f"Tu orden{_de_producto(db, orden)} pasó de «{ETIQUETAS_ESTADO.get(estado_actual, estado_actual)}» "
+            f"Tu operación{_de_producto(db, orden)} pasó de «{ETIQUETAS_ESTADO.get(estado_actual, estado_actual)}» "
             f"a «{ETIQUETAS_ESTADO.get(nuevo_estado_valor, nuevo_estado_valor)}»."
         ),
         data={
@@ -483,7 +483,7 @@ async def agregar_documento_orden(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="ID de orden inválido"
+            detail="ID de operación inválido"
         )
     
     # Verificar que la orden existe y pertenece a la empresa del usuario autenticado
@@ -495,7 +495,7 @@ async def agregar_documento_orden(
     if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Orden no encontrada o no asignada a este importador"
+            detail="Operación no encontrada o no asignada a este importador"
         )
     
     # Crear nuevo documento
@@ -551,7 +551,7 @@ async def obtener_orden_por_cotizacion(
     if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Orden no encontrada para esta cotización"
+            detail="Operación no encontrada para esta cotización"
         )
     
     # Verificar que el usuario tiene acceso a esta orden
@@ -560,14 +560,14 @@ async def obtener_orden_por_cotizacion(
     if rol == "solicitante" and orden.solicitante_id != user_id_str:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes acceso a esta orden"
+            detail="No tienes acceso a esta operación"
         )
     
     # Importador/asesor solo puede ver si la orden es de su empresa
     if rol in ("importador", "asesor") and orden.importador_id != current_user.get("importador_id"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes acceso a esta orden"
+            detail="No tienes acceso a esta operación"
         )
     
     return OrdenResponse(
@@ -624,7 +624,7 @@ async def reportar_problema_orden(
     try:
         orden_id_str = str(PyUUID(orden_id))
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de orden inválido")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de operación inválido")
 
     orden = db.query(Orden).filter(
         Orden.id == orden_id_str,
@@ -632,11 +632,11 @@ async def reportar_problema_orden(
     ).first()
 
     if not orden:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operación no encontrada")
 
     existente = db.query(Disputa).filter(Disputa.orden_id == orden_id_str).first()
     if existente and existente.estado not in (EstadoDisputa.resuelta.value, EstadoDisputa.cerrada.value):
-        raise HTTPException(status_code=400, detail="Ya existe una disputa abierta para esta orden")
+        raise HTTPException(status_code=400, detail="Ya existe una disputa abierta para esta operación")
 
     orden.en_disputa = True
     orden.motivo_disputa = datos.motivo

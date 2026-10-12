@@ -17,6 +17,7 @@ const ETIQUETA: Record<LegalPage, string> = {
   terms: "Términos y Condiciones",
   data: "Tratamiento de Datos",
   payments: "Pagos y Reembolsos",
+  planes: "Condiciones de los planes",
 };
 
 function idSeccion(indice: number) {
@@ -77,6 +78,11 @@ export function LegalPolicyScreen({ page, onBack, onOpen }: LegalPolicyScreenPro
           ))}
         </nav>
 
+        {documento.provisional ? (
+          <p role="note" className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+            Texto provisional, pendiente de revisión legal. Puede cambiar antes de su versión definitiva.
+          </p>
+        ) : null}
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{documento.titulo}</h1>
         {documento.resumen && <p className="text-muted-foreground mt-3">{documento.resumen}</p>}
         <p className="text-xs text-muted-foreground mt-3">

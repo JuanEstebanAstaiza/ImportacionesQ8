@@ -53,11 +53,14 @@ from .tendencias_virales import TendenciaItem
 # la tabla de ayuda y la migración 0017 ya no corría: 500 en /ayuda.
 from .ayuda import ArticuloAyuda
 from .categoria_cotizante import CategoriaCotizante
+from .plan import InscripcionPlan, Plan
 
 __all__ = [
     "Usuario",
     "ArticuloAyuda",
     "CategoriaCotizante",
+    "Plan",
+    "InscripcionPlan",
     "Importador",
     "Cotizacion",
     "EstadoCotizacion",

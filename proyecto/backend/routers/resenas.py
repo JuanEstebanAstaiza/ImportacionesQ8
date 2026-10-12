@@ -162,11 +162,11 @@ async def crear_resena(
 ):
     """Publica una reseña sobre la empresa de una orden propia ya entregada."""
     user_id = str(UUID(current_user["user_id"]))
-    orden_id = _uuid_o_404(datos.orden_id, "Orden")
+    orden_id = _uuid_o_404(datos.orden_id, "Operación")
 
     orden = db.query(Orden).filter(Orden.id == orden_id).first()
     if not orden:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operación no encontrada")
 
     if orden.solicitante_id != user_id:
         raise HTTPException(
@@ -178,7 +178,7 @@ async def crear_resena(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Todavía no se puede reseñar esta orden: la valoración se habilita "
+                "Todavía no se puede reseñar esta operación: la valoración se habilita "
                 "cuando la mercancía llega a bodega o se entrega."
             ),
         )
@@ -202,7 +202,7 @@ async def crear_resena(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ya publicaste una reseña sobre esta orden. Puedes editarla.",
+            detail="Ya publicaste una reseña sobre esta operación. Puedes editarla.",
         )
 
     recalcular_calificacion(db, orden.importador_id)
