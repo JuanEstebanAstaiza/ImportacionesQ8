@@ -78,6 +78,31 @@
   --sidebar-ring: #edf953;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: zarpi-theme-wave 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes zarpi-theme-wave {
+  from {
+    clip-path: circle(0 at var(--zarpi-theme-x) var(--zarpi-theme-y));
+  }
+  to {
+    clip-path: circle(var(--zarpi-theme-radius) at var(--zarpi-theme-x) var(--zarpi-theme-y));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) {
+    animation-duration: 1ms;
+  }
+}
+
 .dark .bg-white {
   background-color: var(--card);
 }
