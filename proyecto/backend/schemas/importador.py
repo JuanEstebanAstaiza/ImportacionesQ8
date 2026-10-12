@@ -26,6 +26,15 @@ CLAVES_IMAGEN_PERFIL = ("banner_url", "banner")
 # No existe un esquema de "crear solo la ficha": ese camino dejaba importadoras
 # sin representante legal y por eso no se expone.
 
+class AsesorPublicoResponse(BaseModel):
+    """Quién atiende en la empresa, tal como sale en su ficha pública."""
+    id: str
+    nombre: str
+    # "asesor", o "importador" para la cuenta responsable cuando la empresa
+    # todavía no tiene asesores activos.
+    rol: str
+
+
 class ImportadorResponse(BaseModel):
     id: str
     nombre_empresa: str
@@ -37,6 +46,8 @@ class ImportadorResponse(BaseModel):
     # Órdenes que la empresa llevó hasta "entregado". La ficha pública lo enseña
     # como "N proyectos"; antes el frontend dibujaba un 0 fijo para todas.
     proyectos_completados: int = 0
+    # Personas reales que atienden (ver `services/asesores_publicos.py`).
+    asesores: List[AsesorPublicoResponse] = Field(default_factory=list)
     especialidad_producto: List[str]
     paises_origen: List[str]
     calificacion_promedio: float

@@ -989,13 +989,27 @@ function etiquetaSitioWeb(valor: string | null | undefined): string {
     .replace(/\/+$/, "");
 }
 
-function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | undefined, companyName: string) {
+const ROL_ASESOR_PUBLICO: Record<string, string> = { asesor: "Asesor", importador: "Responsable de la cuenta" };
+
+/**
+ * Contacto principal de la empresa. Manda lo que la empresa escribió en su
+ * perfil; si no escribió nada, la primera persona real que atiende (antes
+ * aparecía el texto de relleno «Asesor asignado»), y si no hay nadie, la propia
+ * empresa.
+ */
+function resolveImporterAdvisorProfile(
+  perfil: Record<string, unknown> | null | undefined,
+  companyName: string,
+  asesores: BackendImporter["asesores"] = [],
+) {
+  const principal = asesores?.[0];
   const advisorName =
     readPerfilPublicoString(perfil, "advisor_name", "asesor_nombre", "contact_name", "nombre_contacto") ||
-    "Asesor asignado";
+    principal?.nombre ||
+    companyName;
   const advisorRole =
     readPerfilPublicoString(perfil, "advisor_role", "asesor_rol", "cargo_contacto", "contact_role") ||
-    "Asesor";
+    (principal ? ROL_ASESOR_PUBLICO[principal.rol] || "Asesor" : "Equipo comercial");
   const advisorEmail = readPerfilPublicoString(perfil, "advisor_email", "asesor_email", "email", "correo");
   const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono");
 
@@ -1014,7 +1028,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
   const name = imp.nombre_empresa;
   const perfil = imp.perfil_publico ?? null;
   const tierMinimoRequerido = readPerfilPublicoString(perfil, "tier_minimo_requerido") || imp.tier_minimo_requerido || "Bronze";
-  const advisorProfile = resolveImporterAdvisorProfile(perfil, name);
+  const advisorProfile = resolveImporterAdvisorProfile(perfil, name, imp.asesores);
   return {
     description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
     certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
@@ -1052,6 +1066,13 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
     tierMinimoRequerido: ["Bronze", "Silver", "Gold", "Élite"].includes(tierMinimoRequerido) ? tierMinimoRequerido as Importer["tierMinimoRequerido"] : "Bronze",
     shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
+    advisors: (imp.asesores ?? []).map((asesor) => ({
+      id: asesor.id,
+      name: asesor.nombre,
+      role: ROL_ASESOR_PUBLICO[asesor.rol] || "Asesor",
+      initials: initialsFromName(asesor.nombre),
+      color: "bg-slate-600",
+    })),
     advisor: {
       name: advisorProfile.advisorName,
       role: advisorProfile.advisorRole,
@@ -2307,10 +2328,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
 
-  const ADVISORS=[
-    imp.advisor,
-    {name:"Suplente "+imp.advisor.name.split(" ")[1], role:"Asesor Jr.", initials:imp.advisor.initials[0]+"S", color:"bg-slate-500", email:"suplente@"+imp.id+".co"},
-  ];
+  // Las personas reales que atienden en la empresa. Antes se añadía un
+  // «Suplente / Asesor Jr.» inventado con un correo que no existía. El correo
+  // es el de contacto de la empresa: el de cada asesor no se publica.
+  const correoEmpresa=imp.email||imp.advisor.email||"";
+  const ADVISORS=(imp.advisors&&imp.advisors.length>0?imp.advisors:[imp.advisor]).map(adv=>({...adv,email:correoEmpresa}));
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -2438,7 +2460,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 
               {/* Advisors */}
               <Card padding="md">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesores disponibles</h3>
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>{ADVISORS.length===1?"Quién te atiende":"Asesores disponibles"}</h3>
                 <div className="space-y-3">
                   {ADVISORS.map((adv,i)=>(
                     <div key={i} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
@@ -2446,11 +2468,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{adv.name}</p>
                         <p className="text-xs text-muted-foreground">{adv.role}</p>
-                        <p className="text-xs text-primary mt-0.5">{adv.email}</p>
+                        {adv.email&&<p className="text-xs text-primary mt-0.5">{adv.email}</p>}
                       </div>
                       <div className="flex gap-1.5">
                         <ContactBtn type="chat" size="sm" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
-                        <ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                        {adv.email&&<ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>}
                       </div>
                     </div>
                   ))}

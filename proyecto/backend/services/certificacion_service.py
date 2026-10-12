@@ -84,14 +84,17 @@ def adjuntar_certificaciones(db: Session, importadores: List) -> List:
     exactamente la misma forma que el catálogo público. Además de los sellos
     adjunta `proyectos_completados`, que la ficha pública muestra como
     trayectoria de la empresa: ambos datos se resuelven por lotes para que
-    serializar el catálogo entero siga siendo tres consultas y no 2·N.
+    serializar el catálogo entero siga siendo cuatro consultas y no 3·N.
+    También adjunta `asesores`: quién atiende en la empresa.
     """
     from schemas.importador import ImportadorResponse
+    from services.asesores_publicos import asesores_publicos_por_importador
     from services.proyectos_empresa import proyectos_completados_por_importador
 
     ids = [imp.id for imp in importadores]
     por_empresa = certificaciones_por_importador(db, ids)
     proyectos = proyectos_completados_por_importador(db, ids)
+    asesores = asesores_publicos_por_importador(db, ids)
     respuestas = []
     for imp in importadores:
         certificaciones = por_empresa.get(str(imp.id), [])
@@ -99,5 +102,6 @@ def adjuntar_certificaciones(db: Session, importadores: List) -> List:
         respuesta.certificaciones = certificaciones
         respuesta.puntaje_publicidad = puntaje_de(certificaciones)
         respuesta.proyectos_completados = proyectos.get(str(imp.id), 0)
+        respuesta.asesores = asesores.get(str(imp.id), [])
         respuestas.append(respuesta)
     return respuestas
