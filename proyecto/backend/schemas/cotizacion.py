@@ -92,8 +92,7 @@ class CotizacionCreate(BaseModel):
     origen: Literal["directa", "tendencias", "catalogo"] = Field(
         default="directa", description="De dónde sale la solicitud: formulario, Tendencias o catálogo de una empresa"
     )
-    tendencia_edicion_id: Optional[str] = None
-    tendencia_producto_id: Optional[str] = None
+    tendencia_item_id: Optional[str] = None
     catalogo_producto_id: Optional[str] = None
 
     @field_validator("fotos_producto")
@@ -172,8 +171,7 @@ class CotizacionResponse(BaseModel):
     foto_producto: Optional[str]
     fotos_producto: List[str] = Field(default_factory=list, validate_default=True)
     origen: str = "directa"
-    tendencia_edicion_id: Optional[str] = None
-    tendencia_producto_id: Optional[str] = None
+    tendencia_item_id: Optional[str] = None
     catalogo_producto_id: Optional[str] = None
 
     @field_validator("fotos_producto", mode="before")
@@ -212,6 +210,7 @@ class CotizacionResponse(BaseModel):
     cotizacion_origen_id: Optional[str] = None
     cancelada_por_error: Optional[str] = None
     motivo_cancelacion: Optional[str] = None
+    motivo_rechazo: Optional[str] = None
     motivo_eleccion: Optional[str] = None
     motivo_eleccion_detalle: Optional[str] = None
     # --- Navegación cruzada (Fase 7): saltar de la cotización al chat/contacto ---
@@ -274,6 +273,11 @@ class PropuestaResponse(BaseModel):
     contacto_asesor: Optional[ContactoAsignadoResponse] = None
 
     model_config = {"from_attributes": True}
+
+class RechazoCotizacionRequest(BaseModel):
+    """Por qué la empresa no toma la cotización. Le llega al cotizante."""
+    motivo: str = Field(..., min_length=10, max_length=1000)
+
 
 class PropuestaAceptadaRequest(BaseModel):
     importador_id: str  # ID del importador cuya propuesta se acepta

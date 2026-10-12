@@ -51,6 +51,14 @@ ETIQUETAS_ESTADO = {
 }
 
 
+def _de_producto(db: Session, orden) -> str:
+    """« de <producto>» para los avisos al cotizante, si se conoce."""
+    from models.cotizacion import Cotizacion
+
+    nombre = db.query(Cotizacion.nombre_producto).filter(Cotizacion.id == orden.cotizacion_id).scalar()
+    return f" de {nombre}" if nombre else ""
+
+
 def _anotar_cambio_estado_en_chat(
     db: Session,
     *,
@@ -419,8 +427,11 @@ async def actualizar_estado_orden(
         db,
         usuario_id=orden.solicitante_id,
         tipo="orden",
-        titulo="Actualización de tu orden",
-        mensaje=f"La orden pasó de {estado_actual} a {nuevo_estado_valor}.",
+        titulo=f"Tu orden ahora está: {ETIQUETAS_ESTADO.get(nuevo_estado_valor, nuevo_estado_valor)}",
+        mensaje=(
+            f"Tu orden{_de_producto(db, orden)} pasó de «{ETIQUETAS_ESTADO.get(estado_actual, estado_actual)}» "
+            f"a «{ETIQUETAS_ESTADO.get(nuevo_estado_valor, nuevo_estado_valor)}»."
+        ),
         data={
             "orden_id": orden_id_str,
             "estado_anterior": estado_actual,

@@ -97,10 +97,37 @@ Para actualizar recreando los volúmenes (`down -v`), sigue el procedimiento de 
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | Activan la configuración de producción |
 | `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES=1440` | JWT. El frontend no renueva el token, por eso dura 24 h |
 | `SMTP_*` (Resend), `CONTACT_EMAIL` | Correo transaccional y formulario de contacto |
+| `PAGOS_EMAIL`, `MAX_ADJUNTO_CORREO_BYTES` | Buzón que recibe copia de cada comprobante de pago, con el comprobante y el concepto adjuntos (por defecto `pagos@zarpi.co`), y el tamaño máximo de un adjunto (10 MB). |
+| `PAGO_MANUAL_CURSOS` | Valor por defecto del módulo «Pago manual de cursos» (Admin › Módulos manda sobre él). |
+| `LISTA_PRIVADA_EMAIL` | Buzón que recibe las solicitudes de la lista privada de la landing (por defecto `admin@zarpi.co`); se responden desde ahí. |
+| `EMAIL_FROM_NOREPLY` (códigos de acceso), `EMAIL_FROM_NOTIFICACIONES`, `EMAIL_FROM_CONTACTO`, `EMAIL_FROM_PAGOS`, `EMAIL_FROM_ADMIN` | Remitentes por buzón; ver «Desde qué buzón sale cada correo» en `02-Integracion-API/16-Notificaciones.md`. Por defecto sale `notificaciones@` y sus respuestas van a `EMAIL_REPLY_TO`; en los demás buzones las respuestas vuelven al mismo buzón. `SMTP_FROM` queda como legado. El formulario de contacto llega a `CONTACT_EMAIL`, y al responderlo se le escribe a quien lo llenó. Prueba de un buzón: `python scripts/diagnostico_correo.py tu@correo.com pagos`. |
+| `EMAIL_PROVIDER` | `resend` (API HTTPS, puerto 443), `smtp`, o vacío = automático (API de Resend si `SMTP_HOST` es de Resend y la key empieza por `re_`) |
 | `WOMPI_SIMULATE`, `WOMPI_*` | Pagos (simulados mientras no haya llaves reales) |
 | `BACKUP_RETENCION`, `BACKUP_REMOTO`, `MAX_BACKUP_UPLOAD_BYTES` | Backups. Ver [[Backups-y-Restauracion]] |
 | `CUPO_COTIZACIONES_UTC_OFFSET_HORAS` | Zona horaria del cupo diario (−5, Colombia) |
 | `ASIGNACION_COTIZACIONES`, `ASIGNACION_CUPO_POR_SOLICITUD` | Valor inicial del modo de asignación de abiertas (`manual` en el piloto) y del cupo de empresas por solicitud (3). El admin los cambia luego desde el panel. Ver [[23-Asignacion-de-Solicitudes]] |
-| `TRM_CONSULTA_AUTOMATICA`, `TRM_URL`, `TRM_TIMEOUT_SEGUNDOS`, `TRM_RESPALDO_COP` | TRM oficial diaria desde datos.gov.co para guardar montos en pesos. El servidor necesita salida HTTPS a `www.datos.gov.co`; si no la tiene, usa el respaldo del admin. Ver [[24-Eventos-y-Panel-Empresa]] |
+| `TRM_CONSULTA_AUTOMATICA`, `TRM_GOOGLE_FINANCE_URL`, `TRM_URL`, `TRM_REFRESCO_MINUTOS`, `TRM_TIMEOUT_SEGUNDOS`, `TRM_RESPALDO_COP` | Dólar para guardar montos en pesos: Google Finance (USD/COP, cada hora) y, si falla, la TRM oficial de datos.gov.co. El servidor necesita salida HTTPS a `www.google.com` y `www.datos.gov.co`; sin ninguna, usa el respaldo del admin. Ver [[24-Eventos-y-Panel-Empresa]] |
 
 ← [[Indice-Backend]] · [[Estado-del-proyecto]]
+
+## Si no llegan los correos (OTP, notificaciones)
+
+Corre el diagnóstico dentro del backend:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend     python scripts/diagnostico_correo.py tu-correo@ejemplo.com
+```
+
+El script revisa cuatro cosas:
+- La configuración que ve el backend, sin imprimir la API key.
+- Si el servidor deja salir conexiones a los puertos SMTP y a `api.resend.com:443`.
+- El estado del dominio en Resend.
+- Un envío de prueba real, con el motivo exacto si Resend lo rechaza.
+
+Causas habituales:
+- **El VPS bloquea los puertos SMTP:** pasa en muchos proveedores. Con Resend, el backend ya usa su API HTTPS, que no depende de ellos.
+- **El dominio del remitente no está verificado en Resend:** el de `SMTP_FROM`, por ejemplo `zarpi.co`. Hay que verificarlo con sus registros DNS en resend.com/domains.
+- **La key está mal escrita o le sobran comillas:** pasa al editarla en el `.env`.
+- **El `.env` cambió con el contenedor ya levantado:** el contenedor sigue con los valores viejos. Hay que recrearlo con `docker compose ... up -d --force-recreate backend`.
+
+Los errores de envío quedan en `docker compose logs backend`, en las líneas que empiezan por «Resend rechazó» o «Error enviando correo».

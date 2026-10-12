@@ -4,7 +4,8 @@ export type LandingBlockType = "heading" | "paragraph" | "image" | "video" | "bu
 export type LandingBlockAlign = "left" | "center" | "right";
 export type LandingButtonAction = "open_login" | "open_register" | "external_link";
 export type LandingBrandToken = "primary" | "surface" | "border" | "foreground" | "muted";
-export type LandingFontFamily = "elvellon" | "avenor";
+/** "titulos"/"texto" siguen a la tipografía de la plataforma; "elvellon"/"avenor" son las de marca fijas. */
+export type LandingFontFamily = "titulos" | "texto" | "elvellon" | "avenor";
 export type LandingSection = "home" | "about" | "how-it-works" | "news" | "contact";
 
 export interface LandingBlock {
@@ -58,6 +59,16 @@ export interface LandingContactPayload {
   telefono?: string;
   perfil: "comprador" | "nacionalizadora";
   mensaje: string;
+}
+
+/** Solicitud para entrar a la lista privada (con el registro cerrado). */
+export interface ListaPrivadaPayload {
+  nombre: string;
+  email: string;
+  telefono: string;
+  ciudad?: string;
+  empresa?: string;
+  motivo: string;
 }
 
 export interface LandingContactResponse {
@@ -150,5 +161,10 @@ export const landingService = {
   /** Formulario de contacto público de la Landing. Sin autenticación. */
   sendContact(payload: LandingContactPayload): Promise<LandingContactResponse> {
     return apiRequest<LandingContactResponse>("/landing/contacto", { method: "POST", body: payload });
+  },
+
+  /** Lista privada: llega a admin@, que responde con el valor del acceso. Sin autenticación. */
+  solicitarListaPrivada(payload: ListaPrivadaPayload): Promise<LandingContactResponse> {
+    return apiRequest<LandingContactResponse>("/landing/lista-privada", { method: "POST", body: payload });
   },
 };

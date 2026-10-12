@@ -99,6 +99,10 @@ from models.tendencias import (  # noqa: F401
     GuardadoTendencia, ProductoTendencia, SuscripcionAvisoTendencias, Temporada,
 )
 from models.catalogo import AccesoCatalogo, CatalogoEmpresa, ProductoCatalogo  # noqa: F401
+from models.reto import CuentaPago, RetoListaEspera, RetoParticipacion, RetoRonda  # noqa: F401
+from models.comprobante import ComprobantePago  # noqa: F401
+from models.tendencias_virales import TendenciaItem  # noqa: F401
+from models.categoria_cotizante import CategoriaCotizante  # noqa: F401
 
 # Crear tablas en la base de datos de test (después de importar los modelos)
 Base.metadata.create_all(bind=engine)
@@ -577,6 +581,14 @@ def cleanup_test_db(db_session):
         db_session.query(MovimientoCredito).delete()
         db_session.query(SolicitudRecreacion).delete()
 
+        # Tendencias v2 y reto: las fichas apuntan a participaciones y estas a rondas.
+        db_session.query(TendenciaItem).delete()
+        db_session.query(ComprobantePago).delete()
+        db_session.query(CuentaPago).delete()
+        db_session.query(RetoListaEspera).delete()
+        db_session.query(RetoParticipacion).delete()
+        db_session.query(RetoRonda).delete()
+
         # Tendencias y catálogos: referencian usuarios, pagos y empresas.
         db_session.query(AccesoTendencias).delete()
         db_session.query(GuardadoTendencia).delete()
@@ -623,6 +635,7 @@ def cleanup_test_db(db_session):
         db_session.query(Certificacion).delete()
         db_session.query(Importador).delete()
         db_session.query(Usuario).delete()
+        db_session.query(CategoriaCotizante).delete()
         db_session.commit()
     except Exception:
         # Si las tablas no existen (ej. test falló antes de crearlas), ignorar

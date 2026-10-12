@@ -1,51 +1,35 @@
 """Valida de dónde viene una solicitud: formulario, Tendencias o un catálogo.
 
-Una solicitud que dice venir de Tendencias o de un catálogo solo se acepta si
-el comprador de verdad tiene acceso a ese producto. Si no, cualquiera podría
-inflar las métricas de una edición o colarse en el catálogo de una empresa.
+Una solicitud que dice venir de Tendencias queda atribuida a esa ficha (la
+métrica del módulo); si la ficha la recomienda una importadora, la solicitud
+va solo a ella: el cliente que la cotiza es suyo, no de la competencia. Desde
+un catálogo, solo si el comprador tiene acceso a él.
 """
-from typing import Optional
-
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.catalogo import CatalogoEmpresa, ProductoCatalogo
-from models.tendencias import EdicionProducto, EdicionTendencias, EstadoEdicion, ProductoTendencia
+from models.tendencias_virales import EstadoTendencia, TendenciaItem
 from models.usuario import Usuario
-from services import catalogos, tendencias
+from services import catalogos
 
 
 def validar_origen(db: Session, solicitante: Usuario, datos) -> dict:
     """Devuelve los campos de origen a guardar en la cotización."""
     origen = datos.origen or "directa"
-    vacio = {"origen": "directa", "tendencia_edicion_id": None,
-             "tendencia_producto_id": None, "catalogo_producto_id": None}
+    vacio = {"origen": "directa", "tendencia_item_id": None, "catalogo_producto_id": None}
 
     if origen == "tendencias":
-        producto = None
-        if datos.tendencia_producto_id:
-            producto = db.query(ProductoTendencia).filter(ProductoTendencia.id == datos.tendencia_producto_id).first()
-        if producto is None:
+        item = None
+        if datos.tendencia_item_id:
+            item = db.query(TendenciaItem).filter(TendenciaItem.id == datos.tendencia_item_id).first()
+        if item is None or item.estado != EstadoTendencia.publicado.value:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="El producto de Tendencias no existe")
-        if not tendencias.tiene_acceso(db, solicitante):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                                detail="Necesitas una suscripción vigente a Tendencias")
-        edicion_id: Optional[str] = datos.tendencia_edicion_id
-        if edicion_id:
-            en_edicion = (
-                db.query(EdicionProducto)
-                .join(EdicionTendencias, EdicionTendencias.id == EdicionProducto.edicion_id)
-                .filter(EdicionProducto.edicion_id == edicion_id,
-                        EdicionProducto.producto_id == producto.id,
-                        EdicionTendencias.estado.in_((EstadoEdicion.publicada.value, EstadoEdicion.archivada.value)))
-                .first()
-            )
-            if en_edicion is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail="El producto no pertenece a esa edición de Tendencias")
-        return {**vacio, "origen": "tendencias", "tendencia_edicion_id": edicion_id,
-                "tendencia_producto_id": producto.id}
+                                detail="El producto de Tendencias no existe o ya no está publicado")
+        if item.importador_id and (datos.modalidad != "dirigida" or datos.importador_id != item.importador_id):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Este producto lo recomienda una importadora: la solicitud va dirigida a ella")
+        return {**vacio, "origen": "tendencias", "tendencia_item_id": item.id}
 
     if origen == "catalogo":
         fila = None
@@ -70,3 +54,11 @@ def validar_origen(db: Session, solicitante: Usuario, datos) -> dict:
         return {**vacio, "origen": "catalogo", "catalogo_producto_id": producto.id}
 
     return vacio
+
+
+def contar_solicitud(db: Session, campos_origen: dict) -> None:
+    """Suma la solicitud al contador de la ficha (UPDATE atómico)."""
+    item_id = campos_origen.get("tendencia_item_id")
+    if item_id:
+        db.query(TendenciaItem).filter(TendenciaItem.id == item_id).update(
+            {TendenciaItem.cotizaciones_count: TendenciaItem.cotizaciones_count + 1}, synchronize_session=False)

@@ -1,7 +1,8 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
+from utils.dependencies import get_db
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +34,9 @@ from routers.landing import router as landing_router
 from routers.tendencias import router as tendencias_router
 from routers.catalogos import router as catalogos_router
 from routers.tipografia import router as tipografia_router
+from routers.tendencias_virales import router as tendencias_virales_router
+from routers.reto import router as reto_router
+from routers.comprobantes import router as comprobantes_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -65,28 +69,32 @@ async def _recalcular_tiers_periodicamente(intervalo_minutos: int) -> None:
         await asyncio.sleep(intervalo_minutos * 60)
 
 
-async def _publicar_tendencias_periodicamente(intervalo_minutos: int) -> None:
-    """Publica las ediciones de Tendencias cuya hora programada ya llegó. Corre
-    en cada worker; la transición es un UPDATE condicionado, así que solo uno
-    publica cada edición y envía su aviso."""
+async def _tarea_tendencias_periodica(intervalo_horas: int) -> None:
+    """Tarea diaria de Tendencias. Corre en cada worker, pero un candado en
+    Redis deja que solo uno la ejecute en cada vuelta."""
+    import config
     from database import SessionLocal
-    from services.tendencias import publicar_pendientes
+    from services.tendencias_virales import tarea_diaria
 
     def _pasada() -> None:
+        try:
+            if config.redis_client is not None and not config.redis_client.set(
+                    "lock:tendencias_tarea", "1", nx=True, ex=max(intervalo_horas * 3600 - 60, 60)):
+                return
+        except Exception:
+            logger.warning("Sin Redis para el candado de la tarea de Tendencias; se ejecuta igual")
         db = SessionLocal()
         try:
-            publicadas = publicar_pendientes(db)
-            if publicadas:
-                logger.info("Ediciones de Tendencias publicadas: %s", publicadas)
+            logger.info("Tarea de Tendencias: %s", tarea_diaria(db))
         except Exception:
             db.rollback()
-            logger.exception("Falló la publicación programada de Tendencias")
+            logger.exception("Falló la tarea diaria de Tendencias")
         finally:
             db.close()
 
     while True:
         await asyncio.to_thread(_pasada)
-        await asyncio.sleep(intervalo_minutos * 60)
+        await asyncio.sleep(intervalo_horas * 3600)
 
 
 @asynccontextmanager
@@ -106,10 +114,8 @@ async def lifespan(app: FastAPI):
         tarea_tiers = asyncio.create_task(_recalcular_tiers_periodicamente(config.TIER_RECALCULO_MINUTOS))
 
     tarea_tendencias = None
-    if config.TENDENCIAS_PUBLICACION_MINUTOS > 0:
-        tarea_tendencias = asyncio.create_task(
-            _publicar_tendencias_periodicamente(config.TENDENCIAS_PUBLICACION_MINUTOS)
-        )
+    if config.TENDENCIAS_TAREA_HORAS > 0:
+        tarea_tendencias = asyncio.create_task(_tarea_tendencias_periodica(config.TENDENCIAS_TAREA_HORAS))
 
     yield
 
@@ -267,6 +273,9 @@ app.include_router(landing_router)
 app.include_router(tendencias_router)
 app.include_router(catalogos_router)
 app.include_router(tipografia_router)
+app.include_router(tendencias_virales_router)
+app.include_router(reto_router)
+app.include_router(comprobantes_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
@@ -278,7 +287,7 @@ async def root():
     }
 
 @app.get("/configuracion-publica", tags=["Salud"])
-async def configuracion_publica():
+def configuracion_publica(db=Depends(get_db)):
     """Flags que el frontend necesita conocer antes de dibujar la navegación.
 
     Fuente única de verdad: el frontend no duplica estas banderas en su propio
@@ -287,8 +296,19 @@ async def configuracion_publica():
     import config as app_config
     from utils.security_middleware import MAX_UPLOAD_BYTES
 
+    from services import modulos
+
+    # Los módulos los enciende el admin en tiempo real (configuracion_plataforma).
+    modulo_educativo = modulos.activo(db, "academico")
+    registro_abierto = modulos.activo(db, "registro")
+    cobro_cotizaciones = modulos.activo(db, "cobro_cotizaciones")
+
     return {
-        "modulo_educativo_habilitado": app_config.MODULO_EDUCATIVO_HABILITADO,
+        "modulo_educativo_habilitado": modulo_educativo,
+        # Registro público abierto; si no, las cuentas las crea el equipo.
+        "registro_abierto": registro_abierto,
+        "cobro_cotizaciones": cobro_cotizaciones,
+        "correo_contacto": app_config.CONTACT_EMAIL,
         "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
         "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
         # Para que el frontend avise ANTES de subir en vez de dejar que el usuario

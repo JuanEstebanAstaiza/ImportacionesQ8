@@ -18,7 +18,7 @@ import {
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
   LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
-  Sparkles, LibraryBig, Type,
+  Sparkles, LibraryBig, Type, Trophy, Palette, ToggleRight, Flame, GraduationCap,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -38,8 +38,24 @@ import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
 import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { TendenciasComprador } from "@/features/tendencias/TendenciasComprador";
-import { PanelCurador } from "@/features/tendencias/PanelCurador";
+import { TendenciasFeed } from "@/features/tendencias/Feed";
+import { TendenciaFicha } from "@/features/tendencias/Ficha";
+import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
+import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
+import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
+import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
+import { AdminTendencias } from "@/features/tendencias/AdminTendencias";
+import { SeccionTendenciasLanding } from "@/features/tendencias/SeccionTendenciasLanding";
+import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
+import { RevisionPagos } from "@/features/admin/RevisionPagos";
+import { AccesosCursos } from "@/features/admin/AccesosCursos";
+import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
+import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
+import { fijarRegistro, registroAbierto } from "@/app/registro";
+import { RetoPagina } from "@/features/reto/RetoPagina";
+import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
+import { BloqueLanding } from "@/features/landing/BloqueLanding";
+import { RetoAdmin } from "@/features/reto/RetoAdmin";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
 import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
 import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
@@ -101,7 +117,8 @@ import { RUTA_RESTABLECER, destinoDe, esPantalla, rutaDe, type ParamRuta, type S
 import type { UrgenciaSoporte } from "@/services/business.service";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
-const SHOW_PAYMENTS_MODULE = false;
+/** Producto de Tendencias que un visitante quiso cotizar antes de registrarse. */
+const CLAVE_PREFILL_PENDIENTE = "zarpi:prefill-pendiente";
 /** Pantalla (y por tanto URL) de cada documento legal. */
 const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   data: "policy-data",
@@ -744,6 +761,7 @@ const NAV_ITEMS=[
   {icon:LayoutGrid,   label:"Dashboard",    key:"dashboard"},
   {icon:FileText,     label:"Cotizaciones", key:"quotes"},
   {icon:Sparkles,     label:"Tendencias",   key:"tendencias"},
+  {icon:Trophy,       label:"Reto",         key:"reto"},
   {icon:LibraryBig,   label:"Catálogos",    key:"catalogos"},
   {icon:ClipboardList,label:"Respuestas",   key:"responses"},
   {icon:MessageSquare,label:"Chats",        key:"chats"},
@@ -759,6 +777,7 @@ const NAV_IMPORTADORA=[
   {icon:Users,         label:"Asesores",     key:"imp-advisors"},
   {icon:Building2,     label:"Mi empresa",   key:"imp-profile"},
   {icon:LibraryBig,    label:"Catálogos",    key:"imp-catalogos"},
+  {icon:Sparkles,      label:"Tendencias",   key:"tendencias"},
   {icon:ShoppingCart,  label:"Órdenes",      key:"orders"},
   {icon:MessageSquare, label:"Chats",        key:"chats"},
   {icon:BookOpen,      label:"Cursos",       key:"courses"},
@@ -770,6 +789,7 @@ const NAV_ASESOR=[
   {icon:Zap,           label:"Disponibles",     key:"adv-available"},
   {icon:ClipboardList, label:"Mis cotizaciones",key:"adv-my-quotes"},
   {icon:LibraryBig,    label:"Catálogos",       key:"imp-catalogos"},
+  {icon:Sparkles,      label:"Tendencias",      key:"tendencias"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
 ];
 
@@ -777,7 +797,10 @@ const NAV_ASESOR=[
 // "soporte" es el equipo de atención al cliente de la plataforma: atiende los
 // tickets y resuelve incidentes, pero no administra (ni empresas, ni cuentas,
 // ni certificaciones, ni copias de seguridad).
-type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte";
+// "designer" es el equipo de diseño: pone portada e imágenes con la identidad de
+// Zarpi a lo aprobado en Tendencias y lo publica. Está en el canal del equipo,
+// pero no ve soporte ni clientes.
+type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte"|"designer";
 
 // Cada área del panel es una entrada del sidebar, igual que en los demás
 // perfiles: así se navega con el mismo mecanismo que el resto de la aplicación
@@ -793,8 +816,15 @@ const NAV_ADMIN=[
   {icon:Award,         label:"Certificaciones", key:"admin-certificaciones"},
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
-  {icon:Sparkles,      label:"Tendencias",      key:"curaduria"},
+  {icon:Flame,         label:"Tendencias",      key:"admin-tendencias"},
+  {icon:Sparkles,      label:"Aprobación",      key:"tendencias-aprobacion"},
+  {icon:Palette,       label:"Diseño",          key:"diseno"},
+  {icon:Trophy,        label:"Reto",            key:"admin-reto"},
+  {icon:CreditCard,    label:"Pagos",           key:"admin-pagos"},
+  {icon:BookOpen,      label:"Cursos de Zarpi", key:"admin-cursos"},
+  {icon:GraduationCap, label:"Accesos a cursos",key:"admin-cursos-accesos"},
   {icon:Type,          label:"Tipografía",      key:"admin-tipografia"},
+  {icon:ToggleRight,   label:"Módulos",         key:"admin-modulos"},
   {icon:MessageSquare, label:"Chats",           key:"chats"},
   {icon:FolderOpen,    label:"Documentos",      key:"documentos"},
 ];
@@ -807,7 +837,19 @@ const NAV_SOPORTE=[
   {icon:FolderOpen,    label:"Documentos",  key:"documentos"},
 ];
 
-type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin" | "soporte";
+// Diseño: su trabajo (la cola), Tendencias para ver cómo queda publicado y
+// sus archivos. El canal del equipo va en el botón de la cabecera.
+const NAV_DISENO=[
+  {icon:Palette,       label:"Diseño",      key:"diseno"},
+  {icon:Sparkles,      label:"Tendencias",  key:"tendencias"},
+  {icon:FolderOpen,    label:"Documentos",  key:"documentos"},
+];
+
+// Pantallas a las que entra un designer. Lo demás (cotizaciones, órdenes,
+// chats de clientes) no es suyo: se le devuelve a su inicio.
+const PANTALLAS_DESIGNER:Screen[]=["diseno","team-channel","user-profile","notifications","documentos","tendencias","tendencia-detalle"];
+
+type StoredRole = "solicitante" | "importador" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
 
 function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
   if (!role) {
@@ -833,7 +875,7 @@ function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
     return "admin";
   }
 
-  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte") {
+  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte" || normalizedRole === "designer") {
     return normalizedRole;
   }
 
@@ -853,6 +895,9 @@ function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   if (role === "soporte") {
     // Su trabajo empieza en la bandeja de incidentes y tickets.
     return "admin-soporte";
+  }
+  if (role === "designer") {
+    return "diseno";
   }
   return "dashboard";
 }
@@ -1024,6 +1069,8 @@ function backendEstadoToUi(estado: string): Quote["status"] {
       return "accepted";
     case "orden_activa":
       return "active-order";
+    case "rechazada":
+      return "rejected-importer";
     default:
       return "created";
   }
@@ -1045,6 +1092,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     importadorId: cot.importador_id,
     mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
     status: backendEstadoToUi(cot.estado),
+    motivoRechazo: cot.motivo_rechazo ?? null,
     updatedAt: formatShortDate(cot.fecha_actualizacion),
     country: cot.pais_importacion,
     productLine: cot.linea_producto,
@@ -1354,7 +1402,7 @@ interface AppNotification {
   title:string;body:string;date:string;read:boolean;
   cotizacionId?:string;conversationId?:string;approval?:boolean;
   /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
-  destino?:"tendencias"|"catalogos";
+  destino?:"tendencias-enviar"|"catalogos"|"reto"|"diseno"|"pagos"|"admin-pagos";
 }
 
 const INIT_NOTIFICATIONS:AppNotification[]=[];
@@ -1388,7 +1436,12 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
     cotizacionId,
     conversationId,
     approval,
-    destino: notification.tipo === "tendencias" ? "tendencias" : notification.tipo === "catalogo" ? "catalogos" : undefined,
+    // "Para diseñar" lleva a la cola de diseño; el resto de Tendencias, a mis envíos.
+    destino: notification.tipo === "tendencias" ? (notification.data?.evento === "para_disenar" ? "diseno" : "tendencias-enviar")
+      : notification.tipo === "reto" ? "reto"
+      // Comprobantes: el admin revisa los nuevos; el usuario ve el resultado en Pagos.
+      : notification.tipo === "pagos" ? (notification.data?.evento === "comprobante_nuevo" ? "admin-pagos" : "pagos")
+      : notification.tipo === "catalogo" ? "catalogos" : undefined,
   };
 }
 
@@ -1752,19 +1805,25 @@ function CoursesPortalScreen({
   headerUser,
   companyName,
   onGoDashboard,
+  onComprarAcceso,
+  active = "courses",
+  cursosDeZarpi = false,
 }:{
   sb: SidebarCtrl;
   role: "solicitante" | "importadora";
   headerUser: { name: string; company: string; initials: string };
   companyName: string;
   onGoDashboard: () => void;
+  onComprarAcceso?: (courseId: string) => void;
+  active?: string;
+  cursosDeZarpi?: boolean;
 }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="courses"/>
+      <Sidebar {...sb} active={active}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser} sb={sb}/>
-        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard}/>
+        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard} onComprarAcceso={onComprarAcceso} cursosDeZarpi={cursosDeZarpi}/>
       </div>
     </div>
   );
@@ -2194,8 +2253,8 @@ function DatosDeContactoEmpresa({imp}:{imp:Importer}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PROFILE SCREEN — read-only public profile for the requester
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,onAbrirTendencia}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];onAbrirTendencia:(id:string)=>void;
 }) {
   const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
   // Lo que la empresa configuró en su perfil manda; los textos de ejemplo solo
@@ -2290,6 +2349,9 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
               {/* Presentacion en video y fotos que sube la propia empresa. El
                   componente no pinta nada si todavia no hay material aprobado. */}
               <PresentacionPublica importadorId={imp.id}/>
+              {/* Productos de Tendencias que recomienda la empresa: cotizarlos
+                  le llega solo a ella. No pinta nada si no tiene. */}
+              <RecomendadosEmpresa importadorId={imp.id} onAbrir={onAbrirTendencia}/>
 
               <Card padding="md">
                 <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Star className="w-4 h-4 text-primary"/>Reseñas de clientes</h3>
@@ -2936,6 +2998,12 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
               </div>
             </div>
           </Card>
+          {quote.status==="rejected-importer"&&quote.motivoRechazo&&(
+            <Card padding="md" className="mb-5 border-rose-300/60 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30">
+              <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">{quote.importer} rechazó esta cotización</p>
+              <p className="mt-1 text-sm text-rose-800/90 dark:text-rose-200 whitespace-pre-line">Motivo: {quote.motivoRechazo}</p>
+            </Card>
+          )}
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
               <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
@@ -4428,7 +4496,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 <div>
                   <p className="text-sm font-semibold">Canal del equipo</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Administración y soporte. Los clientes y las empresas no entran aquí.
+                    Administración, soporte y diseño. Los clientes y las empresas no entran aquí.
                   </p>
                 </div>
                 <select
@@ -4444,7 +4512,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   <option value="">Hablar en privado con…</option>
                   {miembrosEquipo.map((m)=>(
                     <option key={m.id} value={m.id}>
-                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:" · administración"}
+                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:m.rol==="designer"?" · diseño":" · administración"}
                     </option>
                   ))}
                 </select>
@@ -5007,9 +5075,10 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 </div>
                 <div className="border-t border-border"/>
                 {/* Transferir solo tiene sentido en el hilo con el cliente: el
-                    canal interno es de un asesor concreto por definición, y un
-                    ticket de soporte no se pasa a una empresa. */}
-                {conv.type!=="interno"&&conv.type!=="soporte"&&(<>
+                    canal interno es de un asesor concreto por definición, un
+                    ticket de soporte no se pasa a una empresa y el canal del
+                    equipo de Zarpi no tiene asesores a quién pasarlo. */}
+                {conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">
@@ -6353,6 +6422,28 @@ function DocumentosScreen({
   );
 }
 
+/** Armazón de las pantallas públicas (Tendencias y el reto) para quien no tiene sesión. */
+function PantallaPublica({activa,onLanding,onLogin,onRegister,onTendencias,onReto,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;children:React.ReactNode}) {
+  const pestana=(clave:"tendencias"|"reto",texto:string,onClick:()=>void)=>(
+    <button type="button" onClick={onClick} className={clsx("px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",activa===clave?"bg-primary text-white dark:bg-accent dark:text-accent-foreground":"text-muted-foreground hover:bg-foreground/10")}>{texto}</button>
+  );
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+          <button type="button" onClick={onLanding} aria-label="Ir al inicio"><Logo/></button>
+          <nav className="flex items-center gap-1">{pestana("tendencias","Tendencias",onTendencias)}{pestana("reto","Reto",onReto)}</nav>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
+            <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+    </div>
+  );
+}
+
 /** Armazón común (sidebar, cabecera, migas) para las pantallas que viven en `features/`. */
 function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:string;titulo:string;children:React.ReactNode}) {
   return (
@@ -6369,41 +6460,6 @@ function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:strin
   );
 }
 
-function PagosScreen({sb}:{sb:SidebarCtrl}) {
-  if (!SHOW_PAYMENTS_MODULE) {
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="pagos"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3 mb-6">Pagos</h1>
-            <Card padding="lg" className="border-dashed max-w-lg"><div className="flex flex-col items-center text-center py-8 gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><CreditCard className="w-6 h-6 text-muted-foreground/50"/></div><div><p className="font-semibold">Módulo en construcción</p><p className="text-sm text-muted-foreground mt-1 leading-relaxed">Próximamente habilitaremos pagos y conciliaciones para órdenes.</p></div><span className="px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">Próximamente</span></div></Card>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  const mp=[{id:"PAG-001",amount:"$4,600 USD",concept:"Orden #ORD-2025-0042",date:"10 Mar 2025",status:"Completado"},{id:"PAG-002",amount:"$3,200 USD",concept:"Orden #ORD-2025-0038",date:"02 Mar 2025",status:"Pendiente"},{id:"PAG-003",amount:"$8,900 USD",concept:"Orden #ORD-2025-0031",date:"22 Feb 2025",status:"Parcial"}];
-  const sc:Record<string,string>={"Completado":"bg-emerald-50 text-emerald-700","Pendiente":"bg-orange-50 text-orange-700","Parcial":"bg-blue-50 text-blue-700"};
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="pagos"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Pagos"}]}/><div className="flex items-center justify-between mt-3"><h1 className="text-xl font-semibold">Pagos</h1><span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">Módulo en definición · Integración de pagos pendiente</span></div></div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{[["Total pagado","$16,700 USD","text-emerald-600"],["Pendiente","$3,200 USD","text-orange-600"],["En liberación parcial","$8,900 USD","text-blue-600"]].map(([l,v,c])=><Card key={l as string} padding="md"><p className="text-xs text-muted-foreground">{l as string}</p><p className={clsx("text-2xl font-semibold mt-1",c as string)}>{v as string}</p></Card>)}</div>
-          <Card padding="none"><div className="px-5 py-3.5 border-b border-border flex items-center justify-between"><p className="text-sm font-semibold">Historial de pagos</p><span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">Visual mockup</span></div>
-            <table className="w-full text-sm"><thead><tr className="border-b border-border">{["ID","Concepto","Fecha","Estado","Monto"].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>)}</tr></thead>
-            <tbody>{mp.map((p,i)=><tr key={p.id} className={clsx("border-b border-border/60 hover:bg-muted/30",i%2===0?"bg-white":"bg-slate-50/50")}><td className="px-4 py-3 font-mono text-xs font-medium">{p.id}</td><td className="px-4 py-3">{p.concept}</td><td className="px-4 py-3 text-muted-foreground">{p.date}</td><td className="px-4 py-3"><span className={clsx("px-2 py-0.5 rounded-md text-xs font-medium",sc[p.status])}>{p.status}</span></td><td className="px-4 py-3 font-semibold">{p.amount}</td></tr>)}</tbody>
-            </table>
-          </Card>
-        </main>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEW QUOTE WIZARD
@@ -7312,15 +7368,19 @@ interface OrigenSolicitud {
   origen:"tendencias"|"catalogo";
   nombre:string;
   revisarRequisitos:boolean;
-  tendenciaEdicionId?:string|null;
-  tendenciaProductoId?:string;
+  tendenciaItemId?:string;
+  /** Si la ficha la recomienda una importadora, la solicitud va solo a ella. */
+  importadorId?:string;
+  nombreEmpresa?:string;
   catalogoProductoId?:string;
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null,cobroTokens=false,cotizacionesGratis=0,onIrAPagos}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null;cobroTokens?:boolean;cotizacionesGratis?:number;onIrAPagos?:()=>void}) {
   const [step,setStep]=useState(1);
   const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
+  // Producto recomendado por una importadora: la solicitud solo puede ir a ella.
+  const dirigidaFija=origen?.origen==="tendencias"&&!!origen.importadorId&&selectedId===origen.importadorId;
   // `prefill` llega al duplicar una cotización existente: se copian sus datos
   // y el usuario solo ajusta lo que cambie.
   const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
@@ -7337,7 +7397,10 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
   const si=importers.find(i=>i.id===selectedId)??null;
   const tierCotizante = cotizanteTier;
   const tierRequerido = si?.tierMinimoRequerido || "Bronze";
-  const tierBloqueado = Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
+  // Con el cobro por tokens, el token de la cotización también desbloquea la empresa de nivel superior.
+  const tierBloqueado = !cobroTokens && Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
+  const saldoTokens = creditos + cotizacionesGratis;
+  const sinTokens = cobroTokens && saldoTokens < 1;
   const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
   useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
   // El backend exige una descripcion de al menos 10 caracteres. Se comprueba
@@ -7373,6 +7436,10 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     }
     if(tierBloqueado && creditos < 1){
       setStepError("No tienes créditos suficientes para desbloquear esta cotización.");
+      return;
+    }
+    if(sinTokens){
+      setStepError("No tienes tokens de cotización. Cárgalos en Pagos y te los acreditamos al revisar el comprobante.");
       return;
     }
 
@@ -7420,8 +7487,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
       ...(origen?.origen==="tendencias"?{
         origen:"tendencias" as const,
-        tendencia_edicion_id:origen.tendenciaEdicionId??null,
-        tendencia_producto_id:origen.tendenciaProductoId,
+        tendencia_item_id:origen.tendenciaItemId,
       }:{}),
       // Desde un catálogo solo vale si va dirigida a la empresa dueña; si el
       // comprador cambió de empresa, la solicitud pasa a ser directa.
@@ -7484,13 +7550,19 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                         {origen.origen==="tendencias"?"Desde Tendencias":"Desde el catálogo de la empresa"}: {origen.nombre}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">Ya cargamos el producto. Completa la cantidad, la calidad y lo que haga falta.</p>
+                      {origen.origen==="tendencias"&&origen.importadorId&&(
+                        <p className="mt-1 text-xs text-muted-foreground">Lo recomienda {origen.nombreEmpresa||"una importadora"}: la solicitud va dirigida solo a ella.</p>
+                      )}
                       {origen.revisarRequisitos&&(
                         <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la nacionalizadora que lo revise en su propuesta.</p>
                       )}
                     </div>
                   )}
                   <div style={slideStyle}>
-                    {step===1 && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
+                    {step===1 && dirigidaFija && (
+                      <Card padding="md"><div className="flex items-start gap-3"><Lock className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-sm font-semibold">Cotización dirigida a {origen?.nombreEmpresa||"la importadora que lo recomienda"}</p><p className="text-xs text-muted-foreground mt-1">Este producto lo recomendó esa importadora, así que la solicitud va solo a ella. Para pedir propuestas a otras empresas, crea una cotización nueva desde Cotizaciones.</p></div></div></Card>
+                    )}
+                    {step===1 && !dirigidaFija && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
                     {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>{
                       const url=toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
                       if(prev.productPhotoUrls.length>=MAX_FOTOS_PRODUCTO||prev.productPhotoUrls.includes(url))return prev;
@@ -7513,6 +7585,20 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                 <RightPanel step={step} modalidad={modalidad} si={si} form={form}/>
               </div>
             </div>
+
+            {cobroTokens && (
+              <div className={clsx("mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2.5",
+                sinTokens ? "border-amber-200 bg-amber-50 dark:border-accent/30 dark:bg-accent/10" : "border-border bg-muted/40")}>
+                <p className={clsx("text-xs", sinTokens ? "font-semibold text-amber-900 dark:text-accent" : "text-muted-foreground")}>
+                  {sinTokens
+                    ? "No tienes tokens de cotización. Cada cotización usa 1."
+                    : `Esta cotización usa 1 token. Tienes ${creditos} ${creditos===1?"token":"tokens"}${cotizacionesGratis>0?` y ${cotizacionesGratis} ${cotizacionesGratis===1?"cotización gratis":"cotizaciones gratis"} (se usan primero)`:""}.`}
+                </p>
+                {sinTokens && onIrAPagos && (
+                  <Button variant="secondary" size="sm" icon={<WalletCards className="w-3.5 h-3.5"/>} onClick={onIrAPagos}>Cargar tokens</Button>
+                )}
+              </div>
+            )}
 
             {tierBloqueado && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-accent/30 dark:bg-accent/10">
@@ -7558,7 +7644,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                       size="md"
                       icon={<Send className="w-4 h-4" />}
                       loading={submitting}
-                      disabled={tierBloqueado}
+                      disabled={tierBloqueado || sinTokens}
                       onClick={() => {
                         void handleSubmit(false);
                       }}
@@ -8516,8 +8602,9 @@ function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisor
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>}) {
+function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
   const [search,setSearch]=useState("");
   const [detalle,setDetalle]=useState<Quote|null>(null);
   const [asignando,setAsignando]=useState<Quote|null>(null);
@@ -8653,6 +8740,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
                         <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
                         <Button variant="ghost" size="sm" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
                         <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                         <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>
@@ -8661,6 +8749,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
               </tbody>
             </table>
             {filtered.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No hay cotizaciones para este filtro.</div>}
+            <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
           </Card>
           {mensaje&&<div className="p-3 rounded-lg border border-border bg-muted/40 text-sm">{mensaje}</div>}
         </main>
@@ -8885,11 +8974,17 @@ function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSe
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
 // ─────────────────────────────────────────────────────────────────────────────
+/** La empresa todavía puede rechazar la cotización: no hay orden ni rechazo previo. */
+function puedeRechazarse(q: Quote): boolean {
+  return q.status === "created" || q.status === "directed" || q.status === "open";
+}
+
 function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
   const [claimingId,setClaimingId]=useState<string|null>(null);
   const [discardingId,setDiscardingId]=useState<string|null>(null);
   const [claimError,setClaimError]=useState("");
   const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
 
   async function handleClaim(quoteId: string){
     try{
@@ -8960,7 +9055,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
                 <div className="grid grid-cols-1 gap-2">
                   <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Revisar y aceptar</Button>
                   <div className="grid grid-cols-1 gap-2">
-                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>{void handleDiscard(q);}}>{q.mode==="Abierta"?"Descartar":"Rechazar"}</Button>
+                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>setRechazando(q)}>Rechazar</Button>
                   </div>
                 </div>
               </div>
@@ -8969,6 +9064,7 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
         </main>
       </div>
       <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)} onAccept={handleAcceptFromDetail} accepting={Boolean(selectedQuote && claimingId===selectedQuote.id)}/>
+      <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={()=>rechazando?handleDiscard(rechazando):undefined}/>
     </div>
   );
 }
@@ -8976,8 +9072,9 @@ function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:
 // ─────────────────────────────────────────────────────────────────────────────
 // ADVISOR PORTAL — MY QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void}) {
+function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat,onRechazada}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onRechazada:()=>Promise<void>}) {
   const myQuotes=quotes.slice(0,20);
+  const [rechazando,setRechazando]=useState<Quote|null>(null);
   // Al crearse la orden el hilo pasa a tipo "orden" y `refId` apunta a ella,
   // pero sigue siendo la misma conversacion con el cliente: sin buscar tambien
   // por `quoteId`, el asesor perdia el acceso al chat justo al cerrar el trato.
@@ -9023,6 +9120,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
                         ) : (
                           <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Crear Respuesta</Button>
                         )}
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                       </div>
                     </td>
                   </tr>
@@ -9031,6 +9129,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
             </table>
             {myQuotes.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No tienes cotizaciones asignadas.</div>}
           </Card>
+          <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
         </main>
       </div>
       <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
@@ -9542,6 +9641,8 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
+/** «acceso» es la lista privada: solo se llega por los botones de «Solicitar acceso». */
+type PestanaLanding=LandingSection|"acceso";
 const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"home",label:"Inicio"},
   {key:"about",label:"Quiénes somos"},
@@ -9550,10 +9651,14 @@ const LANDING_TABS:{key:LandingSection;label:string}[]=[
   {key:"contact",label:"Contacto"},
 ];
 
-function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[]}) {
+function LandingScreen({onLogin,onRegister,onPolicy,importers,onTendencias,onReto,onAbrirTendencia}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;importers:Importer[];onTendencias:()=>void;onReto:()=>void;onAbrirTendencia:(id:string)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
-  const [activeTab,setActiveTab]=useState<LandingSection>("home");
+  const [activeTab,setActiveTab]=useState<PestanaLanding>("home");
+  // Con el registro cerrado, «Crear cuenta» pasa a ser «Solicitar acceso» (lista privada).
+  const irA=(pestana:PestanaLanding)=>{setActiveTab(pestana);window.scrollTo({top:0});};
+  const crearCuenta=registroAbierto()?onRegister:()=>irA("acceso");
+  const textoCrearCuenta=registroAbierto()?"Crear cuenta gratis":"Solicitar acceso";
   const [profileModalImporter,setProfileModalImporter]=useState<Importer|null>(null);
   const [dynamicContent,setDynamicContent]=useState<LandingDynamicContent|null>(null);
   const [dynamicContentError,setDynamicContentError]=useState("");
@@ -9601,7 +9706,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
     {n:"04",title:"Confirma y rastrea",desc:"Una vez acordada la operación, se crea automáticamente la orden y puedes seguir cada etapa del proceso."},
   ];
   const faqs=[
-    {q:"¿Cuánto cuesta usar la plataforma?",a:"El registro y el uso básico de la plataforma son gratuitos para los solicitantes. Las empresas importadoras tienen planes según su volumen de operaciones."},
+    {q:"¿Cuánto cuesta usar la plataforma?",a:registroAbierto()
+      ?"El registro y el uso básico de la plataforma son gratuitos para los solicitantes. Las empresas importadoras tienen planes según su volumen de operaciones."
+      :"Por ahora Zarpi funciona como lista privada y el acceso tiene un costo: te indicamos el valor al responder tu solicitud. Las empresas importadoras tienen planes según su volumen de operaciones."},
     {q:"¿Cómo sé que las empresas importadoras son confiables?",a:"Todas las empresas pasan por un proceso de verificación documental realizado por nuestro equipo administrativo antes de ser listadas."},
     {q:"¿Puedo enviar cotizaciones a múltiples empresas a la vez?",a:"Sí. Puedes crear cotizaciones abiertas que llegan a todas las empresas relevantes, o cotizaciones dirigidas a una empresa específica."},
     {q:"¿Qué pasa si no recibo respuesta?",a:"El sistema notifica a las empresas automáticamente. Si no recibes respuesta en 48h, te recomendamos ampliar tu solicitud a más proveedores."},
@@ -9628,6 +9735,8 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
                 {section.label}
               </button>
             ))}
+            <button onClick={onTendencias} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Tendencias</button>
+            <button onClick={onReto} className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white">Reto</button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -9651,9 +9760,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
               variant="primary" 
               size="sm" 
               className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" 
-              onClick={onRegister}
+              onClick={registroAbierto()?onRegister:()=>irA("acceso")}
             >
-              Registrarse
+              {registroAbierto()?"Registrarse":"Solicitar acceso"}
             </Button>
           </div>
         </div>
@@ -9679,7 +9788,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="secondary" size="lg" icon={<LogIn className="w-4 h-4"/>} onClick={onLogin} className="px-8 bg-accent text-accent-foreground hover:bg-accent/85">Iniciar sesión</Button>
-            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={onRegister} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Crear cuenta gratis</Button>
+            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={crearCuenta} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoCrearCuenta}</Button>
           </div>
           <p className="mt-8 text-xs uppercase tracking-[0.18em] font-bold text-accent">
             Descubre. Compara. Elige. Zarpi it.
@@ -9802,6 +9911,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
         </div>
       </section>
 
+      {/* TENDENCIAS: lo último del catálogo (no aparece si no hay productos publicados) */}
+      <SeccionTendenciasLanding onAbrir={onAbrirTendencia} onVerTodas={onTendencias}/>
+
       {/* FEATURED IMPORTERS */}
       <section className="py-20 px-6 bg-muted relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-violet absolute -right-24 bottom-10 pointer-events-none opacity-35 scale-90" />
@@ -9883,9 +9995,10 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
       {activeTab==="news" && (
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
       )}
-      {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={onRegister}/>}
+      {activeTab==="contact" && <LandingContactSection onLogin={onLogin} onRegister={crearCuenta}/>}
+      {activeTab==="acceso" && <LandingListaPrivadaSection onLogin={onLogin} onContacto={()=>irA("contact")}/>}
 
-      {activeTab!=="contact" && (
+      {activeTab!=="contact" && activeTab!=="acceso" && (
       <>
       {/* CTA BANNER */}
       <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
@@ -9900,10 +10013,10 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
             <Button 
               variant="secondary" 
               size="lg" 
-              onClick={onRegister} 
+              onClick={crearCuenta} 
               className="px-8 text-accent-foreground"
             >
-              Crear cuenta gratis
+              {textoCrearCuenta}
             </Button>
             <Button 
               variant="secondary" 
@@ -9951,6 +10064,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
         open={Boolean(profileModalImporter)}
         onClose={()=>setProfileModalImporter(null)}
         onLogin={onLogin}
+        onAbrirTendencia={onAbrirTendencia}
       />
     </div>
   );
@@ -9959,7 +10073,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,importers}:{onLogin:()=>void
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING — Perfil de empresa (QuickView) y subpáginas públicas
 // ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open:boolean;onClose:()=>void;onLogin:()=>void}) {
+function ImporterProfileModal({imp,open,onClose,onLogin,onAbrirTendencia}:{imp:Importer|null;open:boolean;onClose:()=>void;onLogin:()=>void;onAbrirTendencia:(id:string)=>void}) {
   if(!imp)return null;
   const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
   const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
@@ -9988,6 +10102,7 @@ function ImporterProfileModal({imp,open,onClose,onLogin}:{imp:Importer|null;open
           <div><p className="text-xs text-muted-foreground">Miembro desde</p><p className="font-medium">{imp.memberSince}</p></div>
           <div><p className="text-xs text-muted-foreground">Proyectos</p><p className="font-medium">{imp.projects}</p></div>
         </div>
+        <RecomendadosEmpresa importadorId={imp.id} onAbrir={onAbrirTendencia}/>
         {imp.categories.length>0&&(
           <div>
             <p className="text-xs text-muted-foreground mb-1.5">Especialidades</p>
@@ -10143,63 +10258,26 @@ function LandingHowItWorksSection() {
 
 /** "Novedades y aliados": bloques dinámicos, miniblog y muro de aliados del CMS. */
 const LANDING_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80";
-// Tokens de marca con su variante clara/oscura resuelta vía Tailwind `dark:`,
-// nunca HEX fijo en lo renderizado (ver Zarpi_Modelo_de_Monetizacion).
-const LANDING_TOKEN_TEXT_CLASS:Record<string,string>={
-  primary:"text-[#4F06EB] dark:text-[#EDF953]",
-  surface:"text-black dark:text-white",
-  border:"text-slate-400 dark:text-zinc-500",
-  foreground:"text-black dark:text-white",
-  muted:"text-slate-500 dark:text-zinc-400",
-};
-const LANDING_TOKEN_BUTTON_CLASS:Record<string,string>={
-  primary:"bg-[#4F06EB] text-white dark:bg-[#EDF953] dark:text-black",
-  surface:"bg-white text-black dark:bg-[#0F0F0F] dark:text-white",
-  border:"bg-transparent border border-slate-200 dark:border-zinc-800",
-  foreground:"bg-black text-white dark:bg-white dark:text-black",
-  muted:"bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300",
-};
-const LANDING_FONT_CLASS:Record<string,string>={elvellon:"font-elvellon",avenor:"font-avenor"};
-const LANDING_HEADING_SIZE_CLASS:Record<string,string>={xl:"text-3xl font-bold",lg:"text-2xl font-bold",md:"text-xl font-semibold",sm:"text-lg font-semibold"};
-const LANDING_TEXT_SIZE_CLASS:Record<string,string>={lg:"text-base",md:"text-sm",sm:"text-xs"};
-const LANDING_ALIGN_CLASS:Record<string,string>={left:"text-left",center:"text-center",right:"text-right"};
-
-/** Un bloque del CMS renderizado con las mismas reglas que la previsualización del admin. */
+/** Un bloque del CMS: mismas reglas que la vista previa del editor (features/landing/BloqueLanding). */
 function LandingDynamicBlock({block,onLogin,onRegister}:{block:LandingBlock;onLogin:()=>void;onRegister:()=>void}) {
-  const alignClass=LANDING_ALIGN_CLASS[block.alineacion]||"text-left";
-  const tokenTextClass=LANDING_TOKEN_TEXT_CLASS[block.token_color]||LANDING_TOKEN_TEXT_CLASS.foreground;
-  const tokenButtonClass=LANDING_TOKEN_BUTTON_CLASS[block.token_color]||LANDING_TOKEN_BUTTON_CLASS.primary;
-  const fontClass=LANDING_FONT_CLASS[block.fuente]||LANDING_FONT_CLASS.avenor;
-
-  if(block.tipo==="heading"){
-    return <p className={clsx(alignClass,tokenTextClass,fontClass,LANDING_HEADING_SIZE_CLASS[block.tamano_fuente]||LANDING_HEADING_SIZE_CLASS.md)}>{block.contenido}</p>;
-  }
-  if(block.tipo==="paragraph"){
-    return <p className={clsx(alignClass,tokenTextClass,fontClass,LANDING_TEXT_SIZE_CLASS[block.tamano_fuente]||LANDING_TEXT_SIZE_CLASS.md)}>{block.contenido}</p>;
-  }
-  if(block.tipo==="image"){
-    if(!block.contenido)return null;
-    return (
-      <div className={alignClass}>
+  const onBoton=block.accion_boton==="open_register"?onRegister
+    :block.accion_boton==="external_link"&&block.accion_url?()=>window.open(block.accion_url as string,"_blank","noopener,noreferrer")
+    :onLogin;
+  return (
+    <BloqueLanding
+      block={block}
+      onBoton={onBoton}
+      imagen={(ruta,className)=>(
         <img
-          src={safeHttpUrl(resolveApiUrl(block.contenido),LANDING_IMAGE_FALLBACK)}
+          src={safeHttpUrl(resolveApiUrl(ruta),LANDING_IMAGE_FALLBACK)}
           alt=""
-          className="inline-block max-h-80 rounded-xl border border-slate-200 dark:border-zinc-800 object-cover"
+          className={className}
           onError={(event)=>{event.currentTarget.src=LANDING_IMAGE_FALLBACK;}}
         />
-      </div>
-    );
-  }
-  if(block.tipo==="video"){
-    return block.contenido?<div className={alignClass}><video src={resolveApiUrl(block.contenido)} controls className="inline-block max-h-80 w-full max-w-2xl rounded-xl border border-slate-200 dark:border-zinc-800"/></div>:null;
-  }
-  if(block.tipo==="button"){
-    const handleClick=block.accion_boton==="open_register"?onRegister
-      :block.accion_boton==="external_link"&&block.accion_url?()=>window.open(block.accion_url as string,"_blank","noopener,noreferrer")
-      :onLogin;
-    return <div className={alignClass}><button type="button" onClick={handleClick} className={clsx("inline-flex items-center rounded-lg px-6 py-3 text-sm font-semibold",tokenButtonClass)}>{block.contenido||"Continuar"}</button></div>;
-  }
-  return null;
+      )}
+      video={(ruta,className)=><video src={resolveApiUrl(ruta)} controls className={className}/>}
+    />
+  );
 }
 
 function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:LandingDynamicContent|null;error:string;onLogin:()=>void;onRegister:()=>void}) {
@@ -10306,7 +10384,9 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
   const [errorEnvio,setErrorEnvio]=useState("");
 
   const faqsContacto=[
-    {q:"¿Cómo empiezo si soy comprador?",a:"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."},
+    {q:"¿Cómo empiezo si soy comprador?",a:registroAbierto()
+      ?"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."
+      :"Por ahora el acceso es por lista privada: pídelo con «Solicitar acceso» y te escribimos con el valor."},
     {q:"¿Cómo empiezo si soy nacionalizadora?",a:"Escríbenos desde este formulario: el equipo revisa tu documentación antes del alta."},
   ];
 
@@ -10424,7 +10504,7 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button variant="secondary" size="lg" onClick={onRegister}>Crear cuenta gratis</Button>
+          <Button variant="secondary" size="lg" onClick={onRegister}>{registroAbierto()?"Crear cuenta gratis":"Solicitar acceso"}</Button>
           <Button variant="primary" size="lg" onClick={onLogin}>Iniciar sesión</Button>
         </div>
       </div>
@@ -10435,6 +10515,131 @@ function LandingContactSection({onLogin,onRegister}:{onLogin:()=>void;onRegister
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
+const CLASE_CAMPO_LISTA="focus:border-primary dark:focus:border-accent";
+
+/**
+ * Lista privada: con el registro cerrado, los cotizantes dejan sus datos y por
+ * qué quieren entrar. Llega a admin@ (`/landing/lista-privada`), que les responde
+ * con el valor del acceso; las credenciales se crean cuando se registra el pago.
+ */
+function FormularioListaPrivada() {
+  const [nombre,setNombre]=useState("");
+  const [email,setEmail]=useState("");
+  const [telefono,setTelefono]=useState("");
+  const [ciudad,setCiudad]=useState("");
+  const [empresa,setEmpresa]=useState("");
+  const [motivo,setMotivo]=useState("");
+  const [enviado,setEnviado]=useState(false);
+  const [enviando,setEnviando]=useState(false);
+  const [error,setError]=useState("");
+
+  async function enviar(event:React.FormEvent){
+    event.preventDefault();
+    setError("");
+    if(motivo.trim().length<20){setError("Cuéntanos un poco más por qué quieres entrar (mínimo 20 caracteres).");return;}
+    setEnviando(true);
+    try{
+      await landingService.solicitarListaPrivada({
+        nombre:nombre.trim(),
+        email:email.trim(),
+        telefono:telefono.trim(),
+        ciudad:ciudad.trim()||undefined,
+        empresa:empresa.trim()||undefined,
+        motivo:motivo.trim(),
+      });
+      setEnviado(true);
+    }catch(err){
+      setError(err instanceof Error&&err.message.trim()?err.message:"No se pudo enviar tu solicitud. Intenta nuevamente.");
+    }finally{
+      setEnviando(false);
+    }
+  }
+
+  if(enviado)return (
+    <div className="text-center py-6">
+      <CheckCircle2 className="w-10 h-10 text-accent mx-auto mb-3"/>
+      <p className="font-semibold">Recibimos tu solicitud.</p>
+      <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto leading-relaxed">
+        Te escribiremos a {email} con el valor del acceso. Cuando registremos el pago, creamos tus credenciales y te las enviamos.
+      </p>
+    </div>
+  );
+
+  return (
+    <form className="space-y-4 text-left" onSubmit={(event)=>{void enviar(event);}}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input label="Nombre completo" value={nombre} onChange={e=>setNombre(e.target.value)} required minLength={2} maxLength={150} autoComplete="name" className={CLASE_CAMPO_LISTA}/>
+        <Input label="Correo" type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email" className={CLASE_CAMPO_LISTA}/>
+        <Input label="Teléfono o WhatsApp" type="tel" value={telefono} onChange={e=>setTelefono(e.target.value)} required minLength={7} maxLength={40} autoComplete="tel" className={CLASE_CAMPO_LISTA}/>
+        <Input label="Ciudad (opcional)" value={ciudad} onChange={e=>setCiudad(e.target.value)} maxLength={100} autoComplete="address-level2" className={CLASE_CAMPO_LISTA}/>
+      </div>
+      <Input label="Empresa o emprendimiento (opcional)" value={empresa} onChange={e=>setEmpresa(e.target.value)} maxLength={150} autoComplete="organization" className={CLASE_CAMPO_LISTA}/>
+      <Textarea
+        label="¿Por qué quieres entrar?"
+        rows={4}
+        value={motivo}
+        onChange={e=>setMotivo(e.target.value)}
+        required
+        maxLength={2000}
+        placeholder="Qué vendes o quieres vender, qué te gustaría importar y cómo te ayudaría Zarpi."
+        className={CLASE_CAMPO_LISTA}
+      />
+      {error?<p className="text-sm text-destructive">{error}</p>:null}
+      <Button type="submit" variant="primary" fullWidth loading={enviando} className="dark:bg-accent dark:hover:bg-accent/80 dark:text-accent-foreground">
+        {enviando?"Enviando...":"Solicitar acceso"}
+      </Button>
+      <p className="text-xs text-muted-foreground leading-relaxed text-center">
+        El acceso a la lista privada tiene un costo. Te indicaremos el valor al responder tu solicitud, y tus credenciales se crean una vez registremos el pago.
+      </p>
+    </form>
+  );
+}
+
+/** Pestaña «Solicitar acceso» de la landing. */
+function LandingListaPrivadaSection({onLogin,onContacto}:{onLogin:()=>void;onContacto:()=>void}) {
+  return (
+    <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+      <LandingBackground />
+      <div className="max-w-2xl mx-auto space-y-8 relative z-10">
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Lista privada</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Pide tu acceso a Zarpi</h1>
+          <p className="text-muted-foreground mt-3 leading-relaxed">
+            Por ahora abrimos Zarpi a un grupo reducido de cotizantes. Déjanos tus datos y cuéntanos por qué quieres entrar: revisamos cada solicitud y te escribimos.
+          </p>
+        </div>
+        <Card padding="lg"><FormularioListaPrivada/></Card>
+        <div className="text-center text-sm text-muted-foreground space-y-1">
+          <p>¿Ya tienes cuenta? <button type="button" onClick={onLogin} className="font-medium text-primary dark:text-accent hover:underline">Inicia sesión</button></p>
+          <p>¿Eres empresa importadora? <button type="button" onClick={onContacto} className="font-medium text-primary dark:text-accent hover:underline">Escríbenos desde Contacto</button></p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Con el registro público cerrado (Admin › Módulos), se pide acceso a la lista privada. */
+function RegistroCerrado({onLogin,onLanding}:{onLogin:()=>void;onLanding:()=>void}) {
+  return (
+    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4 py-10">
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8 max-w-xl w-full relative z-10">
+        <div className="text-center mb-6">
+          <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
+          <h2 className="text-lg font-semibold mb-2">Zarpi está en lista privada</h2>
+          <p className="text-sm text-muted-foreground">
+            Por ahora no hay registro abierto. Déjanos tus datos y cuéntanos por qué quieres entrar; te escribimos con los pasos.
+          </p>
+        </div>
+        <FormularioListaPrivada/>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
+          <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:LegalPage)=>void}) {
   const [userType,setUserType]=useState<RegUserType>("solicitante");
   const [personType,setPersonType]=useState<RegPersonType>("natural");
@@ -10442,6 +10647,15 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
   const [loading,setLoading]=useState(false);
   const [success,setSuccess]=useState(false);
   const [registeredEmail,setRegisteredEmail]=useState("");
+  // El correo con el código puede no salir (SMTP caído): se avisa y se deja reenviar.
+  const [correoEnviado,setCorreoEnviado]=useState(true);
+  const [reenviando,setReenviando]=useState(false);
+  const [esperaReenvio,setEsperaReenvio]=useState(0);
+  useEffect(()=>{
+    if(esperaReenvio<=0)return;
+    const t=window.setTimeout(()=>setEsperaReenvio(s=>s-1),1000);
+    return ()=>window.clearTimeout(t);
+  },[esperaReenvio]);
   const [otpCode,setOtpCode]=useState("");
   const [otpLoading,setOtpLoading]=useState(false);
   const [otpError,setOtpError]=useState("");
@@ -10529,13 +10743,31 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 
     try{
       setLoading(true);
-      await authService.register(payload);
+      const respuesta=await authService.register(payload);
       setRegisteredEmail(email);
+      setCorreoEnviado(respuesta.correo_enviado!==false);
+      setEsperaReenvio(respuesta.correo_enviado===false?0:60);
       setSuccess(true);
     }catch(error){
       setSubmitError(getErrorMessage(error));
     }finally{
       setLoading(false);
+    }
+  }
+
+  async function reenviarCodigo(){
+    if(!registeredEmail||reenviando||esperaReenvio>0)return;
+    try{
+      setReenviando(true);
+      setOtpError("");
+      await authService.resendOtp({ email: registeredEmail, proposito: "verificacion_email" });
+      setCorreoEnviado(true);
+      setEsperaReenvio(60);
+      toast.success("Te enviamos un código nuevo. Revisa también la carpeta de spam.");
+    }catch(error){
+      setOtpError(getErrorMessage(error));
+    }finally{
+      setReenviando(false);
     }
   }
 
@@ -10577,7 +10809,11 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
           <>
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
             <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
-            <p className="text-sm text-muted-foreground mb-4">Te enviamos un codigo OTP de 6 digitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>.</p>
+            {correoEnviado?(
+              <p className="text-sm text-muted-foreground mb-4">Te enviamos un código de 6 dígitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>. Si no llega en un par de minutos, revisa la carpeta de spam.</p>
+            ):(
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">Creamos tu cuenta, pero no pudimos enviarte el código a <span className="font-medium">{registeredEmail||"tu correo"}</span>. Pide uno nuevo abajo.</p>
+            )}
 
             <form onSubmit={verifyOtp} className="space-y-3 text-left">
               <Input
@@ -10594,6 +10830,15 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                 {!otpLoading&&"Activar cuenta"}
               </Button>
             </form>
+
+            <button
+              type="button"
+              onClick={()=>{void reenviarCodigo();}}
+              disabled={reenviando||esperaReenvio>0}
+              className="mt-3 text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline dark:text-accent"
+            >
+              {reenviando?"Enviando…":esperaReenvio>0?`Reenviar código en ${esperaReenvio} s`:"Reenviar código"}
+            </button>
 
             <button type="button" onClick={onBack} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
           </>
@@ -11094,77 +11339,6 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   );
 }
 
-function UserProfileScreen({sb,profile,onSave,onBack,headerUser}:{sb:SidebarCtrl;profile:{nombre:string;telefono:string;email:string;fotoUrl:string};onSave:(payload:{nombre:string;telefono:string;foto_url?:string})=>Promise<void>;onBack:()=>void;headerUser:{name:string;company:string;initials:string}}) {
-  const [form,setForm]=useState(profile);
-  const [saving,setSaving]=useState(false);
-  const [saved,setSaved]=useState(false);
-  const [error,setError]=useState("");
-
-  useEffect(()=>{
-    setForm(profile);
-  },[profile]);
-
-  async function save(){
-    setSaving(true);
-    setError("");
-    try{
-      await onSave({
-        nombre:form.nombre,
-        telefono:form.telefono,
-        foto_url:form.fotoUrl?.trim()||undefined,
-      });
-      setSaved(true);
-      setTimeout(()=>setSaved(false),3000);
-    }catch(err){
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el perfil.");
-    }finally{
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="dashboard"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Editar perfil"}]}/>
-              <h1 className="text-xl font-semibold mt-3">Editar perfil</h1>
-            </div>
-            <Button variant="primary" loading={saving} icon={saved?<CheckCircle2 className="w-4 h-4"/>:<Save className="w-4 h-4"/>} onClick={()=>{void save();}}>{saved?"Guardado":"Guardar cambios"}</Button>
-          </div>
-          {error&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{error}</p></Card>}
-          {/* Solo aparece para el rol solicitante: el propio componente se
-              oculta si el backend no le devuelve codigo. */}
-          <div className="max-w-2xl"><TarjetaReferidos/></div>
-          <Card padding="md" className="max-w-2xl">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Input label="Nombre" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>
-              <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))}/>
-              <Input label="Email" value={form.email} disabled/>
-              <div className="sm:col-span-2">
-                <Input label="Foto de perfil" value={form.fotoUrl} onChange={e=>setForm(p=>({...p,fotoUrl:e.target.value}))} placeholder="URL del archivo"/>
-                <div className="mt-2 flex gap-2">
-                  <DocumentUploadButton
-                    label="Subir foto"
-                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                    origen="perfil-usuario"
-                    onUploaded={(fileItem)=>setForm((prev)=>({...prev,fotoUrl:toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`)}))}
-                    onError={(message)=>setError(message)}
-                  />
-                  {form.fotoUrl&&<Button variant="secondary" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.fotoUrl);}}>Ver foto</Button>}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </main>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -11200,12 +11374,18 @@ export default function App() {
   const [responseFromQuoteId,setResponseFromQuoteId]=useState("");
   const [selectedOrderId,setSelectedOrderId]=useState(()=>idInicialDe("order"));
   const [selectedOrderDetail,setSelectedOrderDetail]=useState<Order|null>(null);
+  const [selectedTendenciaId,setSelectedTendenciaId]=useState(()=>idInicialDe("tendencia"));
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
   // Producto de Tendencias o de un catálogo del que sale la solicitud en curso.
   const [origenSolicitud,setOrigenSolicitud]=useState<OrigenSolicitud|null>(null);
+  // «Comprar acceso» en Cursos (pago manual): Pagos abre la ventana de ese curso.
+  const [cursoAPagar,setCursoAPagar]=useState<string|null>(null);
+  // Muro de pago de Tendencias: Pagos abre en la carpeta de la suscripción.
+  const [carpetaPagos,setCarpetaPagos]=useState<"suscripcion"|null>(null);
+  function pagarSuscripcionTendencias(){setCarpetaPagos("suscripcion");goTo("pagos");}
   const [initialChatConvId,setInitialChatConvId]=useState<string|undefined>(
     ()=>idInicialDe("conversation") || undefined,
   );
@@ -11236,7 +11416,9 @@ export default function App() {
   const [miembrosEquipo,setMiembrosEquipo]=useState<BackendMiembroEquipo[]>([]);
   // Conversación abierta en pantalla: es la única que necesita canal en vivo.
   const [activeChatId,setActiveChatId]=useState<string|null>(null);
-  const { config: platformConfig, isLoading: platformConfigLoading } = usePlatformConfig();
+  const { config: platformConfig, isLoading: platformConfigLoading, recargar: recargarPlatformConfig } = usePlatformConfig();
+  // Lo leen los botones de «Crear cuenta» de toda la app (ver app/registro.ts).
+  fijarRegistro(platformConfig.registro_abierto, platformConfig.correo_contacto);
   const moduloEducativoHabilitado = platformConfig.modulo_educativo_habilitado;
   const [chatMessagesByConversation,setChatMessagesByConversation]=useState<Record<string, ChatMsg[]>>({});
   const [chatAttachmentsByConversation,setChatAttachmentsByConversation]=useState<Record<string, BackendChatAttachmentItem[]>>({});
@@ -11257,6 +11439,7 @@ export default function App() {
     : screen === "response-detail" ? selectedResponseId
     : screen === "order-detail" ? selectedOrderId
     : screen === "importer-profile" ? selectedImporterId
+    : screen === "tendencia-detalle" ? selectedTendenciaId
     : screen === "chats" ? (activeChatId || initialChatConvId || "")
     : "";
 
@@ -11304,6 +11487,7 @@ export default function App() {
       if (destino.param === "response") setSelectedResponseId(id);
       if (destino.param === "order") { setSelectedOrderDetail(null); setSelectedOrderId(id); }
       if (destino.param === "importer") setSelectedImporterId(id);
+      if (destino.param === "tendencia") setSelectedTendenciaId(id);
       if (destino.param === "conversation") setInitialChatConvId(id || undefined);
     }
 
@@ -11730,7 +11914,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "tendencias", "tendencia-detalle", "reto"];
     if (!publicScreens.includes(screen)) {
       setScreen("landing");
     }
@@ -11986,29 +12170,25 @@ export default function App() {
   function getNavItems():NavItem[]{
     const base = userRole==="admin" ? NAV_ADMIN
       : userRole==="soporte" ? NAV_SOPORTE
+      : userRole==="designer" ? NAV_DISENO
       : userRole==="importadora" ? NAV_IMPORTADORA
       : userRole==="asesor" ? NAV_ASESOR
       : NAV_ITEMS;
     // Con el módulo educativo apagado en el backend, "Cursos" desaparece del
     // menú: dejarlo visible llevaría a una pantalla cuya API responde 404.
-    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses");
+    let items = moduloEducativoHabilitado ? base : base.filter(item=>item.key!=="courses"&&item.key!=="admin-cursos"&&item.key!=="admin-cursos-accesos");
     // El curador de Tendencias es una capacidad, no un rol: se le suma la
     // entrada del panel a su menú, sea soporte, asesor o cualquier otro.
-    if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="curaduria")){
-      items=[...items,{icon:Sparkles,label:"Curaduría",key:"curaduria"}];
+    if(currentUserProfile?.es_curador&&!items.some(item=>item.key==="tendencias-aprobacion")){
+      items=[...items,{icon:Sparkles,label:"Aprobación",key:"tendencias-aprobacion"}];
     }
     return items as NavItem[];
   }
 
   function handleProfileClick(){
-    if(userRole==="importadora"){
-      goTo("imp-profile");
-      return;
-    }
-    if(userRole==="solicitante"||userRole==="asesor"){
-      goTo("user-profile");
-      return;
-    }
+    // El perfil personal es para todos; la empresa importadora llega desde ahí
+    // (o desde «Mi empresa» en el menú) a los datos de su empresa.
+    goTo("user-profile");
   }
 
   function handleHelpClick(){
@@ -12070,9 +12250,9 @@ export default function App() {
     // canal de los usuarios con la plataforma. Antes el botón seguía saliendo
     // para soporte, y al pulsarlo el backend respondía 403.
     onSoporte:()=>setSoporteAbierto(true),
-    showSoporte:userRole!=="admin"&&userRole!=="soporte",
+    showSoporte:userRole!=="admin"&&userRole!=="soporte"&&userRole!=="designer",
     onCanalEquipo:()=>{void abrirCanalEquipo();},
-    showCanalEquipo:userRole==="admin"||userRole==="soporte",
+    showCanalEquipo:userRole==="admin"||userRole==="soporte"||userRole==="designer",
     profileSubtitle:headerSubtitle,
     profilePhotoUrl:currentUserProfile?.foto_url || null,
     onLogout:()=>{void handleLogout();},
@@ -12087,7 +12267,7 @@ export default function App() {
   // Los miembros del equipo solo se piden con una sesión interna: para
   // cualquier otro rol el endpoint responde 403, y pedirlo sería ruido.
   useEffect(()=>{
-    if(userRole!=="admin"&&userRole!=="soporte"){
+    if(userRole!=="admin"&&userRole!=="soporte"&&userRole!=="designer"){
       setMiembrosEquipo([]);
       return;
     }
@@ -12178,6 +12358,17 @@ export default function App() {
    * catálogo la solicitud va dirigida a la empresa dueña.
    */
   function pedirPropuestasDesde(p:PrefillSolicitud){
+    if(!isAuthenticated){
+      // Se guarda el producto y se retoma al iniciar sesión (efecto de abajo).
+      try { sessionStorage.setItem(CLAVE_PREFILL_PENDIENTE, JSON.stringify(p)); } catch { /* sin almacenamiento: se pide de nuevo */ }
+      toast.info("Crea tu cuenta gratis para pedir propuestas. Al terminar seguimos con este producto.");
+      goTo("register");
+      return;
+    }
+    if(userRole!=="solicitante"){
+      toast.info("Las propuestas las piden las cuentas de comprador.");
+      return;
+    }
     setQuotePrefill({
       productName:p.nombre,
       description:p.descripcion,
@@ -12191,13 +12382,29 @@ export default function App() {
       origen:p.origen,
       nombre:p.nombre,
       revisarRequisitos:Boolean(p.revisarRequisitos),
-      tendenciaEdicionId:p.tendenciaEdicionId??null,
-      tendenciaProductoId:p.tendenciaProductoId,
+      tendenciaItemId:p.tendenciaItemId,
+      importadorId:p.importadorId,
+      nombreEmpresa:p.importadorId?marketplaceImporters.find(i=>i.id===p.importadorId)?.name:undefined,
       catalogoProductoId:p.catalogoProductoId,
     });
     setPreselectedImporterId(p.importadorId);
     goTo("new-quote");
   }
+
+  // Al iniciar sesión como comprador, retoma el «Pedir propuestas» que quedó
+  // pendiente antes del registro.
+  const prefillRetomado=useRef(0);
+  useEffect(()=>{
+    if(!isAuthenticated||isInitializing||userRole!=="solicitante")return;
+    let pendiente:string|null=null;
+    try { pendiente=sessionStorage.getItem(CLAVE_PREFILL_PENDIENTE); sessionStorage.removeItem(CLAVE_PREFILL_PENDIENTE); } catch { pendiente=null; }
+    if(!pendiente)return;
+    try { pedirPropuestasDesde(JSON.parse(pendiente) as PrefillSolicitud); prefillRetomado.current=Date.now(); } catch { /* dato corrupto: se ignora */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[isAuthenticated,isInitializing,userRole]);
+
+  const rolPortal:UserRole|null=isAuthenticated?(userRole as UserRole):null;
+  function abrirTendencia(id:string){setSelectedTendenciaId(id);goTo("tendencia-detalle");}
 
   /**
    * Duplicar una cotización: se abre el formulario con sus datos copiados.
@@ -12263,31 +12470,17 @@ export default function App() {
     goTo("chats");
   }
 
-  async function discardAdvisorQuote(quote: Quote){
-    const companyId = currentUserProfile?.importador_id || "unknown-company";
-    if (quote.mode === "Abierta") {
-      const current = hiddenOpenQuotesByCompany[companyId] || [];
-      const nextByCompany = {
-        ...hiddenOpenQuotesByCompany,
-        [companyId]: Array.from(new Set([...current, quote.id])),
-      };
-      setHiddenOpenQuotesByCompany(nextByCompany);
-      saveHiddenOpenQuotesByCompany(nextByCompany);
-      return;
-    }
-
-    const nextOverrides = {
-      ...quoteStatusOverrides,
-      [quote.id]: "rejected-importer" as Quote["status"],
-    };
-    setQuoteStatusOverrides(nextOverrides);
-    saveQuoteStatusOverrides(nextOverrides);
-
-    await refreshQuoteLists();
-  }
-
   function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
+    // Si hay un producto de Tendencias por retomar, el efecto de arriba lleva al
+    // formulario: no se pisa esa navegación con la pantalla de inicio. Según el
+    // orden de los renders, el efecto corre antes (marca prefillRetomado hace un
+    // instante) o después (el producto sigue guardado).
+    if(role==="solicitante"){
+      let pendiente:string|null=null;
+      try { pendiente=sessionStorage.getItem(CLAVE_PREFILL_PENDIENTE); } catch { pendiente=null; }
+      if(pendiente||Date.now()-prefillRetomado.current<3000){ prefillRetomado.current=0; return; }
+    }
     goTo(getHomeScreenForRole(role));
   }
 
@@ -12357,11 +12550,6 @@ export default function App() {
     await businessService.updateImporterById(currentUserProfile.importador_id, payload);
     await reloadCurrentUserProfile();
     await reloadImporters();
-  }
-
-  async function handleSaveUserProfile(payload:{nombre:string;telefono:string;foto_url?:string}) {
-    await businessService.updateMyUserProfile(payload);
-    await reloadCurrentUserProfile();
   }
 
   async function handleSendChatMessage(conversationId: string, contenido: string, metadata?: Record<string, unknown>) {
@@ -12541,7 +12729,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "tendencias", "tendencia-detalle", "reto"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -12551,15 +12739,22 @@ export default function App() {
     "adv-dashboard": ["asesor"],
     "adv-available": ["asesor"],
     "adv-my-quotes": ["asesor"],
-    "user-profile": ["solicitante", "asesor"],
+    // Perfil personal: cualquier cuenta con sesión.
+    "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte", "designer"],
     "help-support": ["solicitante", "importadora", "asesor"],
-    "tendencias": ["solicitante"],
+    "admin-reto": ["admin"],
+    "admin-tendencias": ["admin"],
+    "admin-modulos": ["admin"],
+    "admin-pagos": ["admin"],
+    "admin-cursos-accesos": ["admin"],
+    "admin-cursos": ["admin"],
     "catalogos": ["solicitante"],
     "imp-catalogos": ["importadora", "asesor"],
     // Canal interno de la plataforma. Sin esta entrada, un cliente o una
     // empresa que escribiera /equipo veía el armazón de la pantalla (título y
     // selector), aunque vacío y con el backend negándole los datos.
-    "team-channel": ["admin", "soporte"],
+    "team-channel": ["admin", "soporte", "designer"],
+    "diseno": ["designer", "admin"],
     "admin-dashboard": ["admin"],
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
@@ -12585,11 +12780,16 @@ export default function App() {
   }, [platformConfigLoading, moduloEducativoHabilitado, screen, userRole]);
 
   useEffect(() => {
-    if (!isAuthenticated || isInitializing || !appRole || !allowedRoles) {
+    if (!isAuthenticated || isInitializing || !appRole) {
       return;
     }
+    // El designer solo entra a lo suyo; para el resto de roles, una pantalla
+    // sin entrada en la tabla es de libre acceso.
+    const bloqueada = allowedRoles
+      ? !allowedRoles.includes(userRole)
+      : userRole==="designer" && !PANTALLAS_DESIGNER.includes(screen);
 
-    if (!allowedRoles.includes(userRole)) {
+    if (bloqueada) {
       const home = getHomeScreenForRole(userRole);
       if (screen !== home) {
         setScreen(home);
@@ -12645,7 +12845,8 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} importers={marketplaceImporters} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onAbrirTendencia={abrirTendencia}/>;
+  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
@@ -12659,12 +12860,12 @@ export default function App() {
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany}/>;
+    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany} onRechazada={refreshQuoteLists}/>;
 
     // ── Advisor portal ────────────────────────────────────────────────────────
     if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
-    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={discardAdvisorQuote} headerUser={advisorHeaderUser}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat}/>;
+    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={async()=>{await refreshQuoteLists();}} headerUser={advisorHeaderUser}/>;
+    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>;
 
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
@@ -12679,24 +12880,33 @@ export default function App() {
         headerUser={userRole === "importadora" ? importerHeaderUser : USER}
         companyName={userRole === "importadora" ? (companyProfile?.nombre_empresa || importerHeaderUser.company) : ""}
         onGoDashboard={() => goTo(userRole === "importadora" ? "imp-dashboard" : "dashboard")}
+        onComprarAcceso={(courseId) => { setCursoAPagar(courseId); goTo("pagos"); }}
       />
     );
 
     // ── Solicitante portal ────────────────────────────────────────────────────
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaProductoId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud}/>;
-    if(screen==="tendencias"){
-      const consulta=new URLSearchParams(window.location.search);
-      return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasComprador onPedirPropuestas={pedirPropuestasDesde} edicionInicialId={consulta.get("edicion")} desdeAviso={consulta.get("src")==="aviso"}/></PantallaPortal>;
-    }
+    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} onIrAPagos={()=>goTo("pagos")}/>;
+    if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
+    if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
+    if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
+    if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
+    if(screen==="admin-reto")return <PantallaPortal sb={sb} active="admin-reto" titulo="Reto · Rondas y pagos"><RetoAdmin/></PantallaPortal>;
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
-    if(screen==="curaduria"){
+    if(screen==="admin-tendencias")return <PantallaPortal sb={sb} active="admin-tendencias" titulo="Tendencias"><AdminTendencias/></PantallaPortal>;
+    if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
+    // Cursos propios de Zarpi: el mismo tablero y editor que usan las importadoras.
+    if(screen==="admin-cursos")return <CoursesPortalScreen sb={sb} active="admin-cursos" role="importadora" headerUser={USER} companyName="Zarpi" cursosDeZarpi onGoDashboard={()=>goTo("admin-dashboard")}/>;
+    if(screen==="admin-cursos-accesos")return <PantallaPortal sb={sb} active="admin-cursos-accesos" titulo="Accesos a cursos"><AccesosCursos/></PantallaPortal>;
+    if(screen==="admin-modulos")return <PantallaPortal sb={sb} active="admin-modulos" titulo="Módulos"><ModulosPlataforma onCambio={recargarPlatformConfig}/></PantallaPortal>;
+    if(screen==="diseno")return <PantallaPortal sb={sb} active="diseno" titulo="Diseño"><PanelDiseno/></PantallaPortal>;
+    if(screen==="tendencias-aprobacion"){
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
-      return <PantallaPortal sb={sb} active="curaduria" titulo="Tendencias · Curaduría"><PanelCurador esAdmin={userRole==="admin"}/></PantallaPortal>;
+      return <PantallaPortal sb={sb} active="tendencias-aprobacion" titulo="Tendencias · Aprobación"><PanelAprobacion esAdmin={userRole==="admin"}/></PantallaPortal>;
     }
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
@@ -12706,10 +12916,29 @@ export default function App() {
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
-    if(screen==="pagos")return <PagosScreen sb={sb}/>;
-    if(screen==="user-profile")return <UserProfileScreen sb={sb} profile={{nombre:currentUserProfile?.nombre||"",telefono:currentUserProfile?.telefono||"",email:currentUserProfile?.email||"",fotoUrl:currentUserProfile?.foto_url||""}} onSave={handleSaveUserProfile} onBack={()=>goTo(userRole==="asesor"?"adv-dashboard":"dashboard")} headerUser={userRole==="asesor"?advisorHeaderUser:USER}/>;
+    if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)} carpetaInicial={carpetaPagos}/></PantallaPortal>;
+    if(screen==="user-profile")return (
+      <PantallaPortal sb={sb} active="user-profile" titulo="Mi perfil">
+        <PerfilUsuario
+          onActualizado={async()=>{await Promise.allSettled([reloadCurrentUserProfile(),refreshUser()]);}}
+          onIrAEmpresa={userRole==="importadora"?()=>goTo("imp-profile"):undefined}
+          // Solo aparece para el cotizante: el componente se oculta si el backend no le devuelve código.
+          extra={userRole==="solicitante"?<TarjetaReferidos/>:undefined}
+        />
+      </PantallaPortal>
+    );
     return null;
   };
+
+  if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
+    return (
+      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")}>
+        {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
+        {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
+        {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}
+      </PantallaPublica>
+    );
+  }
 
   return (
     <ProtectedRoute

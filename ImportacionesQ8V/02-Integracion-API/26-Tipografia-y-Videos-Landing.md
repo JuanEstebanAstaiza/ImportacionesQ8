@@ -31,6 +31,14 @@ Se usa la API pública de [Fontsource](https://fontsource.org/docs/api) (`api.fo
 
 `texto_id` vacío vuelve a la tipografía de marca (Elvellon para títulos y AT Avenor para texto). `titulos_id` vacío usa la fuente del texto también para títulos.
 
+**Bloques de la landing.** Cada bloque de texto guarda `fuente`:
+- `titulos` o `texto`: siguen a la tipografía de la plataforma. Usan las clases `.fuente-titulos` y `.fuente-texto`, que leen `--font-display` y `--font-avenor`.
+- `elvellon` o `avenor`: las fuentes de marca, fijas.
+
+Las fijas usan `.fuente-marca-*` y no las utilitarias `.font-elvellon`/`.font-avenor`, porque la hoja del gestor las pisa con `!important`. Antes las dos opciones del editor se veían iguales.
+
+La landing pública y la vista previa del editor dibujan los bloques con el mismo componente (`features/landing/BloqueLanding.tsx`). Ese componente respeta el color elegido y los saltos de línea. Migración `20261009_0033`.
+
 ### Seguridad
 
 - Solo se habla con `api.fontsource.org` y `cdn.jsdelivr.net/fontsource/`. Las URLs que devuelve la API se validan contra esa lista antes de descargar, para evitar SSRF.

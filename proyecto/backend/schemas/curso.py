@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -79,7 +79,8 @@ class CursoCreate(BaseModel):
     titulo: str = Field(..., min_length=3, max_length=255)
     descripcion: str = Field(default="", max_length=5000)
     portada_url: Optional[str] = Field(default=None, max_length=500)
-    precio: float = Field(default=0.0, ge=0, le=1_000_000)
+    # En COP (los cursos se pagan por transferencia mientras no hay pasarela).
+    precio: float = Field(default=0.0, ge=0, le=100_000_000)
     nivel: NivelCursoLiteral = "Principiante"
     categoria: str = Field(default="General", min_length=1, max_length=120)
     modulos: List[ModuloCreate] = Field(..., min_length=1, max_length=MAX_MODULOS)
@@ -101,7 +102,7 @@ class CursoUpdate(BaseModel):
     titulo: Optional[str] = Field(default=None, min_length=3, max_length=255)
     descripcion: Optional[str] = Field(default=None, max_length=5000)
     portada_url: Optional[str] = Field(default=None, max_length=500)
-    precio: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    precio: Optional[float] = Field(default=None, ge=0, le=100_000_000)
     nivel: Optional[NivelCursoLiteral] = None
     categoria: Optional[str] = Field(default=None, min_length=1, max_length=120)
     estado: Optional[Literal["borrador", "publicado", "archivado"]] = None
@@ -162,18 +163,23 @@ class CursoListItem(BaseModel):
     precio: float
     nivel: str
     categoria: str
-    importador_id: str
+    # Vacío en los cursos propios de Zarpi (importadora_nombre = «Zarpi»).
+    importador_id: Optional[str] = None
     importadora_nombre: Optional[str] = None
     rating: float
     estudiantes_count: int
     estado: str
     fecha_creacion: Optional[datetime] = None
+    # Con el pago manual de cursos: se paga subiendo el comprobante en Pagos.
+    pago_manual: bool = False
 
 
 class CursoDetailResponse(CursoListItem):
     """Detalle con temario y módulos."""
     modulos: List[ModuloResponse] = Field(default_factory=list)
     comprado: bool = False
+    # Ya subió el comprobante de este curso y lo estamos revisando.
+    comprobante_pendiente: bool = False
     lecciones_completadas: List[str] = Field(default_factory=list)
     progreso_pct: float = 0.0
 
@@ -187,6 +193,13 @@ class CompraCursoResponse(BaseModel):
     precio_pagado: float
     fecha_compra: datetime
     curso: Optional[CursoListItem] = None
+
+
+class AccesoCursoCreate(BaseModel):
+    """El admin le da acceso a un curso a una cuenta (p. ej. pagó por fuera)."""
+    curso_id: str = Field(..., min_length=36, max_length=36)
+    email: EmailStr
+    nota: Optional[str] = Field(None, max_length=300)
 
 
 class CertificadoCursoResponse(BaseModel):

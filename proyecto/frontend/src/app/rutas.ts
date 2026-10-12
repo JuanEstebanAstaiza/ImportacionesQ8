@@ -57,11 +57,21 @@ export type Screen =
   | "tendencias"
   | "catalogos"
   | "imp-catalogos"
-  | "curaduria"
+  | "tendencia-detalle"
+  | "tendencias-enviar"
+  | "tendencias-aprobacion"
+  | "diseno"
+  | "reto"
+  | "admin-reto"
+  | "admin-tendencias"
+  | "admin-modulos"
+  | "admin-pagos"
+  | "admin-cursos-accesos"
+  | "admin-cursos"
   | "admin-tipografia";
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
-export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation";
+export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia";
 
 export interface Ruta {
   screen: Screen;
@@ -93,7 +103,24 @@ export const RUTAS: Ruta[] = [
   { screen: "orders", path: "/ordenes" },
   { screen: "order-detail", path: "/ordenes", param: "order" },
   { screen: "importer-profile", path: "/empresas", param: "importer" },
+  // Tendencias: feed y ficha públicos. Las rutas fijas van antes que la ficha
+  // (/tendencias/<id>) para que "enviar" no se lea como un identificador.
   { screen: "tendencias", path: "/tendencias" },
+  { screen: "tendencias-enviar", path: "/tendencias/enviar" },
+  { screen: "tendencias-aprobacion", path: "/tendencias/aprobacion" },
+  { screen: "tendencia-detalle", path: "/tendencias", param: "tendencia" },
+  { screen: "reto", path: "/reto" },
+  // Espacio del designer: portadas e imágenes de lo aprobado en Tendencias.
+  { screen: "diseno", path: "/diseno" },
+  // Admin: catálogo del equipo, muro de pago y precio de Tendencias; y los módulos.
+  { screen: "admin-tendencias", path: "/admin/tendencias" },
+  { screen: "admin-modulos", path: "/admin/modulos" },
+  // Revisión de comprobantes de pago (tokens y suscripción) mientras llega la pasarela.
+  { screen: "admin-pagos", path: "/admin/pagos" },
+  // Dar o quitar el acceso a un curso a mano (pago manual de cursos).
+  { screen: "admin-cursos-accesos", path: "/admin/accesos-cursos" },
+  // Cursos propios de Zarpi: los crea y edita el admin.
+  { screen: "admin-cursos", path: "/admin/cursos" },
   { screen: "catalogos", path: "/catalogos" },
 
   // Comunes
@@ -134,9 +161,7 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-landing", path: "/admin/landing" },
   { screen: "admin-correos", path: "/admin/correos" },
   { screen: "admin-tipografia", path: "/admin/tipografia" },
-  // Panel del curador de Tendencias: lo usan el admin y quien tenga la
-  // capacidad de curador, sea cual sea su rol.
-  { screen: "curaduria", path: "/curaduria" },
+  { screen: "admin-reto", path: "/admin/reto" },
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";

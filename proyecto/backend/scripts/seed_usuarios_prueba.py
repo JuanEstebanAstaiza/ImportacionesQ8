@@ -71,6 +71,11 @@ ADMINS = [
     {"email": "admin@q8demo.com", "nombre": "Admin Q8"},
 ]
 
+# Equipo de diseño: portadas e imágenes de Tendencias.
+DESIGNERS = [
+    {"email": "designer@q8demo.com", "nombre": "Dani Diseño"},
+]
+
 
 def _upsert_usuario(db, *, email, rol, nombre=None, apellido=None, importador_id=None):
     """Deja la cuenta en un estado utilizable sin tocar su historial."""
@@ -137,6 +142,10 @@ def main() -> None:
         for datos in ADMINS:
             usuario, creado = _upsert_usuario(db, email=datos["email"], rol="admin", nombre=datos["nombre"])
             filas.append(("admin", datos["email"], "—", creado))
+
+        for datos in DESIGNERS:
+            usuario, creado = _upsert_usuario(db, email=datos["email"], rol="designer", nombre=datos["nombre"])
+            filas.append(("designer", datos["email"], "—", creado))
 
         for datos in SOLICITANTES:
             usuario, creado = _upsert_usuario(

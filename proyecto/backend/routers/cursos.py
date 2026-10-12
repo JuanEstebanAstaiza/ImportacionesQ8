@@ -19,8 +19,9 @@ from models.importador import Importador
 from schemas.curso import (
     CursoCreate, CursoUpdate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
     ProgresoLeccionRequest, ProgresoLeccionResponse, ModuloResponse, LeccionResponse,
-    RecursoLeccionResponse, CertificadoCursoResponse,
+    RecursoLeccionResponse, CertificadoCursoResponse, AccesoCursoCreate,
 )
+from services import acceso_cursos
 from services.notificacion_service import crear_notificacion_best_effort
 from services.documental_service import extract_document_file_id_from_url, ensure_folder_path
 from utils.dependencies import (
@@ -36,15 +37,16 @@ from utils.query_safety import like_contains_pattern, clamp_str
 logger = logging.getLogger("importacionesq8")
 
 
-def _modulo_educativo_activo() -> None:
-    """Apaga el módulo LMS entero desde `MODULO_EDUCATIVO_HABILITADO`.
+def _modulo_educativo_activo(db: Session = Depends(get_db)) -> None:
+    """Apaga el módulo LMS entero: lo decide el admin en *Módulos* (y, si nunca
+    lo tocó, `MODULO_EDUCATIVO_HABILITADO` del `.env`).
 
     Se responde 404 (no 403) para que la sección sea indistinguible de una que
     no existe cuando el cliente decide no ofrecer formación.
     """
-    import config as app_config
+    from services import modulos
 
-    if not app_config.MODULO_EDUCATIVO_HABILITADO:
+    if not modulos.activo(db, "academico"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="El módulo de cursos no está habilitado en esta instalación",
@@ -71,17 +73,41 @@ def _slug_unico(db: Session, titulo: str) -> str:
     return slug
 
 
+# Así se muestran los cursos propios de la plataforma (sin empresa).
+NOMBRE_ZARPI = "Zarpi"
+
+
+def _es_de_zarpi(curso: Curso) -> bool:
+    return curso.importador_id is None
+
+
+def _puede_editar(curso: Curso, current_user: dict) -> bool:
+    """Los cursos de Zarpi los edita el admin; los de una empresa, su dueño."""
+    if _es_de_zarpi(curso):
+        return current_user.get("rol") == "admin"
+    return current_user.get("rol") == "importador" and current_user.get("importador_id") == curso.importador_id
+
+
+def _es_del_autor(curso: Curso, current_user: Optional[dict]) -> bool:
+    """Quien puede ver el curso aunque esté en borrador."""
+    if not current_user:
+        return False
+    if _es_de_zarpi(curso):
+        return current_user.get("rol") == "admin"
+    return current_user.get("importador_id") == curso.importador_id
+
+
 def _nombres_importadoras(db: Session, importador_ids: List[str]) -> dict:
     """Batch load — evita N+1 en catálogo de cursos."""
-    if not importador_ids:
-        return {}
-    rows = db.query(Importador.id, Importador.nombre_empresa).filter(
-        Importador.id.in_(list(set(importador_ids)))
-    ).all()
-    return {r[0]: r[1] for r in rows}
+    ids = {i for i in importador_ids if i}
+    if not ids:
+        return {None: NOMBRE_ZARPI}
+    rows = db.query(Importador.id, Importador.nombre_empresa).filter(Importador.id.in_(list(ids))).all()
+    return {None: NOMBRE_ZARPI, **{r[0]: r[1] for r in rows}}
 
 
-def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Session] = None) -> CursoListItem:
+def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Session] = None,
+                  pago_manual: bool = False) -> CursoListItem:
     nombre = None
     if nombres is not None:
         nombre = nombres.get(curso.importador_id)
@@ -102,6 +128,7 @@ def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Ses
         estudiantes_count=int(curso.estudiantes_count or 0),
         estado=curso.estado,
         fecha_creacion=curso.fecha_creacion,
+        pago_manual=pago_manual and float(curso.precio or 0) > 0,
     )
 
 
@@ -406,7 +433,8 @@ async def listar_cursos(
 
     cursos = query.offset(offset).limit(limit).all()
     nombres = _nombres_importadoras(db, [c.importador_id for c in cursos])
-    return [_to_list_item(c, nombres=nombres) for c in cursos]
+    manual = acceso_cursos.pago_manual_activo(db)
+    return [_to_list_item(c, nombres=nombres, pago_manual=manual) for c in cursos]
 
 
 @router.get("/cursos/{id_o_slug}", response_model=CursoDetailResponse)
@@ -420,12 +448,12 @@ async def obtener_curso(
     if not curso or curso.estado == EstadoCurso.archivado.value or curso.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    if curso.estado == EstadoCurso.borrador.value:
-        if not current_user or current_user.get("importador_id") != curso.importador_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+    if curso.estado == EstadoCurso.borrador.value and not _es_del_autor(curso, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    item = _to_list_item(curso, db=db)
+    item = _to_list_item(curso, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     comprado = False
+    comprobante_pendiente = False
     lecciones_completadas: List[str] = []
     progreso_pct = 0.0
 
@@ -439,12 +467,16 @@ async def obtener_curso(
             lecciones_completadas, _, progreso_pct = _progreso_usuario(
                 db, current_user["user_id"], curso.id
             )
+        elif item.pago_manual:
+            comprobante_pendiente = acceso_cursos.comprobante_pendiente(
+                db, current_user["user_id"], curso.id) is not None
 
     acceso = _puede_ver_contenido_completo(curso, current_user, comprado)
     return CursoDetailResponse(
         **item.model_dump(),
         modulos=_modulos_response(curso, acceso_completo=acceso),
         comprado=comprado,
+        comprobante_pendiente=comprobante_pendiente,
         lecciones_completadas=lecciones_completadas,
         progreso_pct=progreso_pct,
     )
@@ -456,22 +488,25 @@ async def crear_curso(
     request: Request,
     datos: CursoCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "admin")),
 ):
     """
     Publica un curso con módulos, lecciones, URLs de video y archivos adjuntos.
-    Solo la cuenta dueña de la empresa importadora.
+    La cuenta dueña de la empresa importadora, o el admin para los cursos
+    propios de Zarpi (sin empresa).
     """
-    importador_id = current_user.get("importador_id")
-    if not importador_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La cuenta no está asociada a ninguna empresa importadora",
-        )
+    importador_id = None
+    if current_user.get("rol") != "admin":
+        importador_id = current_user.get("importador_id")
+        if not importador_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La cuenta no está asociada a ninguna empresa importadora",
+            )
 
-    importador = db.query(Importador).filter(Importador.id == importador_id).first()
-    if not importador:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
+        importador = db.query(Importador).filter(Importador.id == importador_id).first()
+        if not importador:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importador no encontrado")
 
     curso_id = str(uuid4())
     curso = Curso(
@@ -496,7 +531,7 @@ async def crear_curso(
 
     db.commit()
     curso = _cargar_curso_detalle(db, curso_id)
-    item = _to_list_item(curso, db=db)
+    item = _to_list_item(curso, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     return CursoDetailResponse(
         **item.model_dump(),
         modulos=_modulos_response(curso, acceso_completo=True),
@@ -522,8 +557,10 @@ async def comprar_curso(
     restringirlo al rol "solicitante" devolvía 403 a los asesores y dueños de
     empresa que quisieran tomar un curso de otra importadora.
 
-    Nota de seguridad: MVP sin pasarela — no hay cobro real. Ver residual en
-    auditoría 2026-07-28 (A04 diseño de pagos).
+    Con el pago manual de cursos encendido (Admin › Módulos), un curso con
+    precio no se compra aquí: responde 402 y el usuario sube el comprobante en
+    Pagos; el acceso llega cuando el equipo lo aprueba (services/acceso_cursos).
+    Los cursos gratis siguen siendo de inscripción directa.
     """
     from sqlalchemy.exc import IntegrityError
 
@@ -547,6 +584,11 @@ async def comprar_curso(
         CompraCurso.curso_id == curso.id,
         CompraCurso.usuario_id == usuario_id,
     ).first()
+    if not existente and acceso_cursos.requiere_comprobante(db, curso):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Este curso se paga por transferencia: sube el comprobante en Pagos y te damos acceso al aprobarlo.",
+        )
     if existente:
         return CompraCursoResponse(
             id=str(existente.id),
@@ -611,6 +653,47 @@ async def comprar_curso(
         fecha_compra=compra.fecha_compra,
         curso=_to_list_item(curso, db=db),
     )
+
+
+# ── Admin: accesos a cursos ──────────────────────────────────────────────────
+
+@router.get("/admin/cursos/catalogo")
+def catalogo_para_accesos(db: Session = Depends(get_db), current_user: dict = Depends(require_rol("admin"))):
+    """Cursos publicados, para elegir a cuál dar acceso."""
+    return acceso_cursos.catalogo_publicado(db)
+
+
+@router.get("/admin/cursos/accesos")
+def listar_accesos_cursos(
+    curso_id: Optional[str] = Query(None, max_length=36),
+    q: Optional[str] = Query(None, max_length=120, description="Buscar por correo"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Quién tiene acceso a cada curso y de dónde salió (inscripción, comprobante o a mano)."""
+    return acceso_cursos.listar_accesos(db, curso_id=curso_id, q=q)
+
+
+@router.post("/admin/cursos/accesos", status_code=status.HTTP_201_CREATED)
+def dar_acceso_curso(datos: AccesoCursoCreate, db: Session = Depends(get_db),
+                     current_user: dict = Depends(require_rol("admin"))):
+    """Da acceso a un curso a la cuenta de ese correo (p. ej. confirmamos el pago
+    por fuera). Le llega un correo desde pagos@."""
+    from models.usuario import Usuario
+
+    admin = db.query(Usuario).filter(Usuario.id == current_user["user_id"]).first()
+    acceso = acceso_cursos.dar_acceso_manual(db, admin, curso_id=datos.curso_id, email=datos.email, nota=datos.nota)
+    db.commit()
+    return next(a for a in acceso_cursos.listar_accesos(db, curso_id=acceso.curso_id) if a["id"] == acceso.id)
+
+
+@router.delete("/admin/cursos/accesos/{acceso_id}")
+def quitar_acceso_curso(acceso_id: str, db: Session = Depends(get_db),
+                        current_user: dict = Depends(require_rol("admin"))):
+    """Quita el acceso (el progreso queda guardado por si se vuelve a dar)."""
+    acceso_cursos.quitar_acceso(db, acceso_id)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/mis-cursos", response_model=List[CursoDetailResponse])
@@ -771,7 +854,7 @@ async def obtener_certificado_curso(
             db,
             curso=curso,
             usuario=usuario,
-            empresa_nombre=_nombres_importadoras(db, [curso.importador_id]).get(curso.importador_id),
+            empresa_nombre=_nombres_importadoras(db, [curso.importador_id]).get(curso.importador_id) or NOMBRE_ZARPI,
         )
         certificado = CertificadoCurso(
             id=str(uuid4()),
@@ -800,13 +883,13 @@ async def actualizar_curso(
     curso_id: str,
     datos: CursoUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "admin")),
 ):
     curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id), Curso.deleted_at.is_(None)).first()
     if not curso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    if curso.importador_id != current_user.get("importador_id"):
+    if not _puede_editar(curso, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para actualizar este curso")
 
     if datos.titulo is not None:
@@ -835,7 +918,7 @@ async def actualizar_curso(
     db.commit()
 
     refreshed = _cargar_curso_detalle(db, str(curso.id))
-    item = _to_list_item(refreshed, db=db)
+    item = _to_list_item(refreshed, db=db, pago_manual=acceso_cursos.pago_manual_activo(db))
     return CursoDetailResponse(
         **item.model_dump(),
         modulos=_modulos_response(refreshed, acceso_completo=True),
@@ -851,13 +934,13 @@ async def eliminar_curso(
     request: Request,
     curso_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_rol("importador")),
+    current_user: dict = Depends(require_rol_in("importador", "admin")),
 ):
     curso = db.query(Curso).filter(or_(Curso.id == curso_id, Curso.slug == curso_id), Curso.deleted_at.is_(None)).first()
     if not curso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
 
-    if curso.importador_id != current_user.get("importador_id"):
+    if not _puede_editar(curso, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para eliminar este curso")
 
     now = datetime.utcnow()

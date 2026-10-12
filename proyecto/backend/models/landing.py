@@ -29,8 +29,9 @@ ACCIONES_BOTON = ("open_login", "open_register", "external_link")
 # Únicos tokens de marca seleccionables: se evita un picker HEX libre para no
 # romper la identidad visual en modo claro/oscuro (ver Zarpi_Modelo_de_Monetizacion).
 TOKENS_COLOR_MARCA = ("primary", "surface", "border", "foreground", "muted")
-# Únicas dos familias de marca: Elvellon para títulos, AT Avenor para cuerpo/acentos.
-FUENTES_BLOQUE_LANDING = ("elvellon", "avenor")
+# "titulos" y "texto" siguen a la tipografía de la plataforma (gestor del admin);
+# "elvellon" y "avenor" son las fuentes de marca fijas.
+FUENTES_BLOQUE_LANDING = ("titulos", "texto", "elvellon", "avenor")
 
 class LandingBlock(Base):
     """Un bloque de contenido de una sección pública de la Landing."""
@@ -45,7 +46,7 @@ class LandingBlock(Base):
     accion_boton = Column(String(20), nullable=True)
     accion_url = Column(String(500), nullable=True)
     token_color = Column(String(20), nullable=False, default="foreground")
-    fuente = Column(String(20), nullable=False, default="avenor")
+    fuente = Column(String(20), nullable=False, default="texto")
     orden = Column(Integer, nullable=False, default=100)
     activo = Column(Boolean, nullable=False, default=True)
 

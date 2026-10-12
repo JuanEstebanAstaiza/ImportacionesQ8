@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { History, Save, Search, WalletCards } from "lucide-react";
 
 import { TierBadge } from "@/features/cotizante/TierBadge";
+import { CategoriasCotizante, textoCategoria } from "@/features/admin/CategoriasCotizante";
 import {
   adminService,
   type AdminCotizante,
+  type CategoriaCotizante,
   type AdminPointMovement,
   type AdminTierThreshold,
 } from "@/services/admin.service";
@@ -35,6 +37,7 @@ function updateThreshold(rows: AdminTierThreshold[], tier: string, key: keyof Ad
 
 export function GestionCotizantes() {
   const [cotizantes, setCotizantes] = useState<AdminCotizante[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaCotizante[]>([]);
   const [thresholds, setThresholds] = useState<AdminTierThreshold[]>(EMPTY_THRESHOLDS);
   const [selected, setSelected] = useState<AdminCotizante | null>(null);
   const [movements, setMovements] = useState<AdminPointMovement[]>([]);
@@ -50,11 +53,13 @@ export function GestionCotizantes() {
     setLoading(true);
     setError("");
     try {
-      const [users, config] = await Promise.all([
+      const [users, config, cats] = await Promise.all([
         adminService.listCotizantes(search),
         adminService.getTierThresholds(),
+        adminService.listarCategoriasCotizante(),
       ]);
       setCotizantes(users);
+      setCategorias(cats);
       setThresholds(config.length ? sortThresholds(config) : EMPTY_THRESHOLDS);
       if (selected) setSelected(users.find((user) => user.id === selected.id) || null);
     } catch (requestError) {
@@ -75,6 +80,21 @@ export function GestionCotizantes() {
       [user.nombre || "", user.email, user.tier].some((value) => value.toLowerCase().includes(query))
     );
   }, [cotizantes, search]);
+
+  async function asignarCategoria(usuario: AdminCotizante, categoria: CategoriaCotizante) {
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await adminService.asignarCategoriaCotizante(usuario.id, categoria.id);
+      setCotizantes((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+      setCategorias(await adminService.listarCategoriasCotizante());
+      setMessage(`${updated.email} quedó en «${categoria.nombre}» (${textoCategoria(categoria)}).`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo asignar la categoría.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function cambiarTier(usuario: AdminCotizante, tier: string) {
     setSaving(true);
@@ -145,6 +165,11 @@ export function GestionCotizantes() {
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
       {message && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-accent/30 dark:bg-accent/10 dark:text-accent">{message}</div>}
 
+      <CategoriasCotizante
+        categorias={categorias}
+        onCambio={(c) => setCategorias((rows) => (rows.some((r) => r.id === c.id) ? rows.map((r) => (r.id === c.id ? c : r)) : [...rows, c]))}
+      />
+
       <section className="rounded-xl border border-border bg-card p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -169,6 +194,7 @@ export function GestionCotizantes() {
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-3">Cotizante</th>
                 <th className="px-3 py-3">Tier</th>
+                <th className="px-3 py-3">Categoría</th>
                 <th className="px-3 py-3">Puntos</th>
                 <th className="px-3 py-3">Acciones</th>
               </tr>
@@ -185,6 +211,23 @@ export function GestionCotizantes() {
                       <TierBadge tier={user.tier} />
                       {user.tier_manual && <span className="text-[11px] text-muted-foreground">Manual</span>}
                     </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <select
+                      value=""
+                      disabled={saving || categorias.every((c) => !c.activa)}
+                      onChange={(event) => {
+                        const categoria = categorias.find((c) => c.id === event.target.value);
+                        if (categoria) void asignarCategoria(user, categoria);
+                      }}
+                      title="Aplicar una categoría: tier fijo y días de Tendencias"
+                      className="h-8 max-w-[11rem] rounded-md border border-border bg-card px-2 text-xs focus:border-primary dark:focus:border-accent"
+                    >
+                      <option value="">{user.categoria ?? "Sin categoría"}</option>
+                      {categorias.filter((c) => c.activa).map((c) => (
+                        <option key={c.id} value={c.id}>Aplicar «{c.nombre}»</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-3 py-3 font-semibold">{user.puntos_cotizacion}</td>
                   <td className="px-3 py-3">

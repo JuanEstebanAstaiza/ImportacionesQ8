@@ -36,6 +36,8 @@ import {
   VIDEOS_QUIENES_SOMOS_VACIO,
   leerVideosQuienesSomos,
 } from "@/services/landing.service";
+import { tipografiaService, type TipografiaActiva } from "@/services/tipografia.service";
+import { BloqueLanding, claseFuente, TAMANOS_TEXTO, TAMANOS_TITULO } from "@/features/landing/BloqueLanding";
 
 const MAX_VIDEOS_QUIENES_SOMOS = 10;
 const VIDEO_PESADO_BYTES = 30 * 1024 * 1024;
@@ -89,19 +91,9 @@ const BUTTON_ACTIONS: { key: LandingButtonAction; label: string }[] = [
   { key: "external_link", label: "Enlace externo" },
 ];
 
-const FONT_OPTIONS: { key: LandingFontFamily; label: string; sample: string; className: string }[] = [
-  { key: "elvellon", label: "Elvellon · Titulos", sample: "Zarpi", className: "font-elvellon" },
-  { key: "avenor", label: "AT Avenor · Cuerpo", sample: "Aa texto", className: "font-avenor" },
-];
-
-const HEADING_SIZES = ["xl", "lg", "md", "sm"];
-const TEXT_SIZES = ["lg", "md", "sm"];
+// Tamaños de muestra del selector (más chicos que los reales para que quepan).
 const HEADING_SIZE_PREVIEW: Record<string, string> = { xl: "1.75rem", lg: "1.4rem", md: "1.15rem", sm: "0.95rem" };
 const TEXT_SIZE_PREVIEW: Record<string, string> = { lg: "1rem", md: "0.875rem", sm: "0.75rem" };
-const HEADING_SIZE_CLASS: Record<string, string> = { xl: "text-3xl font-bold", lg: "text-2xl font-bold", md: "text-xl font-semibold", sm: "text-lg font-semibold" };
-const TEXT_SIZE_CLASS: Record<string, string> = { lg: "text-base", md: "text-sm", sm: "text-xs" };
-const ALIGN_CLASS: Record<string, string> = { left: "text-left", center: "text-center", right: "text-right" };
-const FONT_CLASS: Record<LandingFontFamily, string> = { elvellon: "font-elvellon", avenor: "font-avenor" };
 
 function newTempId(): string {
   return `new-${Math.random().toString(36).slice(2)}-${Date.now()}`;
@@ -221,31 +213,48 @@ function ProtectedVideo({ path, className }: { path: string; className?: string 
   return <video src={objectUrl} controls className={className} />;
 }
 
-function FontFamilyPicker({ value, onChange }: { value: LandingFontFamily; onChange: (font: LandingFontFamily) => void }) {
+/**
+ * Fuente de un bloque. Las dos primeras siguen a la tipografía que el admin
+ * elige en «Tipografía» (si mañana cambia, el bloque cambia con ella); las de
+ * marca quedan fijas. Cada muestra se dibuja con la fuente real.
+ */
+function FontFamilyPicker({ value, onChange, tipografia }: { value: LandingFontFamily; onChange: (font: LandingFontFamily) => void; tipografia: TipografiaActiva | null }) {
+  const texto = tipografia?.texto?.familia ?? "AT Avenor";
+  const titulos = tipografia?.titulos?.familia ?? tipografia?.texto?.familia ?? "Elvellon";
+  const opciones: { key: LandingFontFamily; sample: string; label: string }[] = [
+    { key: "titulos", sample: "Zarpi", label: `Títulos · ${titulos}` },
+    { key: "texto", sample: "Aa texto", label: `Texto · ${texto}` },
+    { key: "elvellon", sample: "Zarpi", label: "Elvellon · marca fija" },
+    { key: "avenor", sample: "Aa texto", label: "AT Avenor · marca fija" },
+  ];
+  const actual = opciones.some((o) => o.key === value) ? value : "texto";
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {FONT_OPTIONS.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          onClick={() => onChange(option.key)}
-          className={clsx(
-            "rounded-lg border px-2.5 py-1.5 text-left leading-none transition-colors",
-            value === option.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
-          )}
-        >
-          <span className={clsx(option.className, "block text-base")}>{option.sample}</span>
-          <span className="text-[10px] text-muted-foreground">{option.label}</span>
-        </button>
-      ))}
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {opciones.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => onChange(option.key)}
+            className={clsx(
+              "rounded-lg border px-2.5 py-1.5 text-left leading-none transition-colors",
+              actual === option.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+            )}
+          >
+            <span className={clsx(claseFuente(option.key), "block text-base")}>{option.sample}</span>
+            <span className="text-[10px] text-muted-foreground">{option.label}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">Títulos y Texto siguen a la tipografía de la plataforma; las de marca no cambian.</p>
     </div>
   );
 }
 
 function FontSizeSelector({ tipo, fuente, value, onChange }: { tipo: "heading" | "paragraph"; fuente: LandingFontFamily; value: string; onChange: (size: string) => void }) {
-  const sizes = tipo === "heading" ? HEADING_SIZES : TEXT_SIZES;
+  const sizes = tipo === "heading" ? TAMANOS_TITULO : TAMANOS_TEXTO;
   const previewSize = tipo === "heading" ? HEADING_SIZE_PREVIEW : TEXT_SIZE_PREVIEW;
-  const fontClass = FONT_CLASS[fuente] || FONT_CLASS.avenor;
+  const fontClass = claseFuente(fuente);
   const sampleText = tipo === "heading" ? "Zarpi" : "Aa texto";
 
   return (
@@ -301,6 +310,7 @@ function TokenColorPicker({ value, onChange }: { value: LandingBrandToken; onCha
 function LandingLivePreview({ blocks, allies }: { blocks: LandingBlock[]; allies: LandingAlly[] }) {
   const [dark, setDark] = useState(false);
   const ordered = [...blocks].filter((block) => block.activo).sort((a, b) => a.orden - b.orden);
+  const modo = dark ? "oscuro" : "claro";
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm text-foreground">
@@ -311,105 +321,43 @@ function LandingLivePreview({ blocks, allies }: { blocks: LandingBlock[]; allies
           onClick={() => setDark((current) => !current)}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-foreground"
         >
-          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} 
+          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           {dark ? "Ver en claro" : "Ver en oscuro"}
         </button>
       </div>
 
-      {/* Contenedor con fondo e iluminación forzada vía style */}
-      <div 
-        style={{
-          backgroundColor: dark ? "#0F0F0F" : "#FFFFFF",
-          color: dark ? "#FFFFFF" : "#000000",
-        }}
-        className={clsx(
-          "rounded-xl border p-6 transition-colors duration-200 space-y-4",
-          dark ? "border-zinc-800" : "border-slate-200"
-        )}
+      {/* Fondo forzado (claro u oscuro) sin depender del tema de la sesión; los
+          bloques se dibujan con el mismo componente que la landing pública. */}
+      <div
+        style={{ backgroundColor: dark ? "#0F0F0F" : "#FFFFFF", color: dark ? "#FFFFFF" : "#000000" }}
+        className={clsx("rounded-xl border p-6 transition-colors duration-200 space-y-5", dark ? "border-zinc-800" : "border-slate-200")}
       >
-        {ordered.map((block) => (
-          <div key={block.id} className={ALIGN_CLASS[block.alineacion] || "text-left"}>
-            {block.tipo === "heading" ? (
-              <p
-                className={clsx(
-                  HEADING_SIZE_CLASS[block.tamano_fuente] || HEADING_SIZE_CLASS.md,
-                  FONT_CLASS[block.fuente],
-                  dark ? "text-accent" : "text-primary"
-                )}
-              >
-                {block.contenido || "Encabezado de ejemplo"}
-              </p>
-            ) : null}
-
-            {block.tipo === "paragraph" ? (
-              <p
-                className={clsx(
-                  TEXT_SIZE_CLASS[block.tamano_fuente] || TEXT_SIZE_CLASS.md,
-                  FONT_CLASS[block.fuente],
-                  dark ? "text-white" : "text-black"
-                )}
-              >
-                {block.contenido || "Texto de ejemplo."}
-              </p>
-            ) : null}
-
-            {block.tipo === "image" && block.contenido ? (
-              <ProtectedImage
-                path={block.contenido}
-                alt=""
-                className={clsx(
-                  "inline-block max-h-40 rounded-lg border object-cover",
-                  dark ? "border-zinc-800" : "border-slate-200"
-                )}
-              />
-            ) : null}
-
-            {block.tipo === "video" && block.contenido ? (
-              <ProtectedVideo 
-                path={block.contenido} 
-                className={clsx(
-                  "inline-block max-h-40 rounded-lg border",
-                  dark ? "border-zinc-800" : "border-slate-200"
-                )} 
-              />
-            ) : null}
-
-            {block.tipo === "button" ? (
-              <span
-                className={clsx(
-                  "inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
-                  dark ? "bg-accent text-accent-foreground" : "bg-primary text-primary-foreground"
-                )}
-              >
-                {block.contenido || "Boton"}
-              </span>
-            ) : null}
-
-            {block.tipo === "allies_grid" ? (
-              <div className="grid grid-cols-3 gap-3">
-                {allies.filter((a) => a.activo).slice(0, 6).map((ally) => (
-                  <div 
-                    key={ally.id} 
-                    style={{ backgroundColor: dark ? "#171717" : "#FFFFFF" }}
-                    className={clsx(
-                      "rounded-lg border p-2 text-center text-xs",
-                      dark ? "border-zinc-800 text-white" : "border-slate-200 text-black"
-                    )}
-                  >
-                    {ally.logo_url ? (
-                      <ProtectedImage path={ally.logo_url} alt={ally.nombre} className="mx-auto h-8 object-contain" />
-                    ) : ally.nombre}
-                  </div>
-                ))}
-                {allies.length === 0 ? (
-                  <p className={clsx("col-span-3 text-xs", dark ? "text-zinc-400" : "text-slate-500")}>
-                    Sin aliados
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ))}
+        {ordered.map((block) =>
+          block.tipo === "allies_grid" ? (
+            <div key={block.id} className="grid grid-cols-3 gap-3">
+              {allies.filter((a) => a.activo).slice(0, 6).map((ally) => (
+                <div
+                  key={ally.id}
+                  style={{ backgroundColor: dark ? "#171717" : "#FFFFFF" }}
+                  className={clsx("rounded-lg border p-2 text-center text-xs", dark ? "border-zinc-800 text-white" : "border-slate-200 text-black")}
+                >
+                  {ally.logo_url ? <ProtectedImage path={ally.logo_url} alt={ally.nombre} className="mx-auto h-8 object-contain" /> : ally.nombre}
+                </div>
+              ))}
+              {allies.length === 0 ? (
+                <p className={clsx("col-span-3 text-xs", dark ? "text-zinc-400" : "text-slate-500")}>Sin aliados</p>
+              ) : null}
+            </div>
+          ) : (
+            <BloqueLanding
+              key={block.id}
+              block={{ ...block, contenido: block.contenido || (block.tipo === "heading" ? "Encabezado de ejemplo" : block.tipo === "paragraph" ? "Texto de ejemplo." : block.contenido) }}
+              modo={modo}
+              imagen={(ruta, className) => <ProtectedImage path={ruta} alt="" className={className} />}
+              video={(ruta, className) => <ProtectedVideo path={ruta} className={className} />}
+            />
+          ),
+        )}
 
         {ordered.length === 0 ? (
           <p className={clsx("text-sm", dark ? "text-zinc-400" : "text-slate-500")}>
@@ -432,6 +380,11 @@ export function LandingCmsEditor() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  // Nombres de las fuentes activas para el selector de cada bloque.
+  const [tipografia, setTipografia] = useState<TipografiaActiva | null>(null);
+  useEffect(() => {
+    tipografiaService.activa().then(setTipografia).catch(() => setTipografia(null));
+  }, []);
 
   // Selector de multimedia estilo Cursos: navegación por carpetas + subida.
   const [resourcePickerOpen, setResourcePickerOpen] = useState(false);
@@ -486,7 +439,7 @@ export function LandingCmsEditor() {
         accion_boton: null,
         accion_url: null,
         token_color: "foreground",
-        fuente: "avenor",
+        fuente: "texto",
         orden: maxOrden + 10,
         activo: true,
       },
@@ -1058,7 +1011,7 @@ export function LandingCmsEditor() {
                 {(block.tipo === "heading" || block.tipo === "paragraph") ? (
                   <div>
                     <p className="mb-1.5 text-xs font-medium text-muted-foreground">Tipografia</p>
-                    <FontFamilyPicker value={block.fuente} onChange={(font) => updateBlock(block.id, { fuente: font })} />
+                    <FontFamilyPicker value={block.fuente} tipografia={tipografia} onChange={(font) => updateBlock(block.id, { fuente: font })} />
                   </div>
                 ) : null}
               </div>

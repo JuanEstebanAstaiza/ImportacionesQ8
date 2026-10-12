@@ -46,6 +46,7 @@ from schemas.documental import (
 )
 from services import acceso_chat
 from services.documental_service import (
+    carpeta_por_origen,
     clonar_archivo_para_chat,
     create_document_file,
     ensure_file_not_linked_to_active_course,
@@ -379,7 +380,7 @@ async def crear_archivo(
         db,
         owner_user_id=user_id,
         nombre=payload.nombre,
-        carpeta_id=payload.carpeta_id,
+        carpeta_id=payload.carpeta_id or carpeta_por_origen(db, owner_user_id=user_id, origen=payload.origen),
         extension=payload.extension,
         mime_type=payload.mime_type,
         size_bytes=payload.size_bytes,
@@ -454,7 +455,7 @@ async def subir_archivo(
         db,
         owner_user_id=user_id,
         nombre=original_name,
-        carpeta_id=carpeta_id,
+        carpeta_id=carpeta_id or carpeta_por_origen(db, owner_user_id=user_id, origen=origen),
         extension=extension,
         mime_type=archivo.content_type or None,
         size_bytes=size_bytes,
@@ -1015,19 +1016,42 @@ def _tiene_acceso_por_curso(db: Session, archivo_id: str, current_user: dict) ->
 
 def _es_foto_de_producto_visible(db: Session, archivo_id: str, user_id: str) -> bool:
     """Fotos de producto que suben unos y ven otros: las de una cotización (las
-    ve la empresa que la cotiza), las de Tendencias (quien tiene acceso) y las
-    de un catálogo de empresa (los clientes a quienes se lo desbloqueó)."""
+    ve la empresa que la cotiza), las portadas propuestas en Tendencias (el
+    equipo aprobador) y las de un catálogo de empresa (sus clientes)."""
     from services.catalogos import es_foto_de_catalogo_visible, es_foto_de_cotizacion_visible
-    from services.tendencias import es_foto_de_tendencias_visible
+    from services.tendencias_virales import es_portada_visible
 
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if usuario is None:
         return False
     return (
         es_foto_de_cotizacion_visible(db, archivo_id, usuario)
-        or es_foto_de_tendencias_visible(db, archivo_id, usuario)
+        or es_portada_visible(db, archivo_id, usuario)
         or es_foto_de_catalogo_visible(db, archivo_id, usuario)
     )
+
+
+def _es_foto_de_perfil(db: Session, archivo_id: str) -> bool:
+    """La foto de perfil en uso de cualquier cuenta: se ve en la cabecera, en
+    los chats y en las propuestas, con un `<img>` que no manda el token. Solo
+    la imagen que el dueño puso como foto; el resto de sus archivos sigue privado."""
+    try:
+        PyUUID(archivo_id)
+    except ValueError:
+        return False
+    ruta = f"/documentos/archivos/{archivo_id}/descargar"
+    return db.query(Usuario.id).filter(Usuario.foto_url == ruta).first() is not None
+
+
+def _es_portada_publica_de_tendencia(db: Session, archivo_id: str) -> bool:
+    """Las portadas de productos publicados en Tendencias: el feed es público."""
+    from services.tendencias_virales import es_portada_publica
+
+    try:
+        PyUUID(archivo_id)
+    except ValueError:
+        return False
+    return es_portada_publica(db, archivo_id)
 
 
 @router.get("/archivos/{archivo_id}/descargar")
@@ -1044,7 +1068,15 @@ async def descargar_archivo(
         _es_recurso_publico_de_curso(db, archivo_id)
         or _es_imagen_publica_de_empresa(db, archivo_id)
         or _es_recurso_publico_de_landing(db, archivo_id)
+        or _es_portada_publica_de_tendencia(db, archivo_id)
+        or (file_row.tipo_recurso == "imagen" and _es_foto_de_perfil(db, archivo_id))
     )
+
+    if not allowed and current_user is not None:
+        # Comprobantes de pago: los ve quien pagó (o recibió el pago del reto) y el admin.
+        from services.comprobantes import puede_ver_archivo
+
+        allowed = puede_ver_archivo(db, archivo_id, _current_user_id(current_user), current_user.get("rol", ""))
 
     if not allowed and current_user is not None:
         user_id = _current_user_id(current_user)

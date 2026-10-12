@@ -56,6 +56,7 @@ def esta_asignada(db: Session, importador_id: Optional[str], cotizacion_id: str)
         RecepcionCotizacion.importador_id == str(importador_id),
         RecepcionCotizacion.cotizacion_id == str(cotizacion_id),
         RecepcionCotizacion.entregada.is_(True),
+        RecepcionCotizacion.rechazada_en.is_(None),
     ).first() is not None
 
 
@@ -65,6 +66,7 @@ def cotizaciones_asignadas(db: Session, importador_id: Optional[str]) -> Set[str
     filas = db.query(RecepcionCotizacion.cotizacion_id).filter(
         RecepcionCotizacion.importador_id == str(importador_id),
         RecepcionCotizacion.entregada.is_(True),
+        RecepcionCotizacion.rechazada_en.is_(None),
     ).all()
     return {cotizacion_id for (cotizacion_id,) in filas}
 

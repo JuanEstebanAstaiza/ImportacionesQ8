@@ -67,10 +67,44 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_API_KEY = os.getenv("SMTP_API_KEY") or os.getenv("SMTP_PASSWORD")
 SMTP_PASSWORD = SMTP_API_KEY
+# Legado: el remitente ahora depende del buzón (EMAIL_FROM_*, abajo). Si está,
+# sirve de valor para EMAIL_FROM_NOREPLY.
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@zarpi.co")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+# Cómo sale el correo: "resend" (API HTTPS de Resend, puerto 443), "smtp", o
+# vacío = automático (API de Resend si SMTP_HOST es de Resend y hay una API key
+# "re_…"; si no, SMTP). La API evita los puertos SMTP, que muchos VPS bloquean.
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
 # Buzón que recibe los mensajes del formulario de contacto de la Landing.
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@zarpi.co")
+# Buzón que recibe las solicitudes de la lista privada (registro cerrado); desde
+# ahí se le responde a cada persona con el valor del acceso.
+LISTA_PRIVADA_EMAIL = os.getenv("LISTA_PRIVADA_EMAIL", "admin@zarpi.co").strip()
+# Buzón al que llega copia de cada comprobante de pago que sube un usuario
+# (con el comprobante y el concepto adjuntos).
+PAGOS_EMAIL = os.getenv("PAGOS_EMAIL", "pagos@zarpi.co").strip()
+# Adjuntos más grandes no se mandan por correo: van como enlace a la plataforma.
+MAX_ADJUNTO_CORREO_BYTES = int(os.getenv("MAX_ADJUNTO_CORREO_BYTES", str(10 * 1024 * 1024)))
+# A dónde llegan las respuestas a los correos de notificaciones@ (por defecto,
+# al buzón de contacto, que lo lee una persona).
+EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", CONTACT_EMAIL).strip()
+# Remitentes por buzón (del dominio verificado en el proveedor; ver
+# utils/email.py::remitente_de). Salvo notificaciones, las respuestas vuelven
+# al mismo buzón que envía.
+# - No-reply: solo los códigos de acceso (OTP de registro y de inicio de sesión,
+#   recuperación de contraseña). Es un alias sin buzón: las respuestas van a EMAIL_REPLY_TO.
+EMAIL_FROM_NOREPLY = (os.getenv("EMAIL_FROM_NOREPLY") or os.getenv("SMTP_FROM") or "Zarpi <no-reply@zarpi.co>").strip()
+# - Notificaciones: eventos del usuario (códigos, soporte resuelto, aprobaciones
+#   del reto…), estado de la plataforma y cambios de términos. Es el de por defecto.
+#   (Los códigos de acceso no: salen de no-reply.)
+EMAIL_FROM_NOTIFICACIONES = os.getenv("EMAIL_FROM_NOTIFICACIONES", "Zarpi <notificaciones@zarpi.co>").strip()
+# - Contacto: lo que tiene que ver con el formulario de contacto.
+EMAIL_FROM_CONTACTO = os.getenv("EMAIL_FROM_CONTACTO", "Zarpi <contacto@zarpi.co>").strip()
+# - Pagos: comprobantes, retiros del reto, aprobaciones y transferencias.
+EMAIL_FROM_PAGOS = os.getenv("EMAIL_FROM_PAGOS", "Zarpi Pagos <pagos@zarpi.co>").strip()
+# - Admin: el equipo y los correos directos a empresas (verificación, urgentes).
+EMAIL_FROM_ADMIN = os.getenv("EMAIL_FROM_ADMIN", "Zarpi <admin@zarpi.co>").strip()
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://zarpi.co").rstrip("/")
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "15"))
 OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "15"))
@@ -86,9 +120,10 @@ TIER_RECALCULO_MINUTOS = int(os.getenv("TIER_RECALCULO_MINUTOS", "0" if APP_ENV 
 
 COBRO_A_SOLICITANTES = os.getenv("COBRO_A_SOLICITANTES", "false").lower() == "true"
 
-# Cada cuántos minutos se revisan las ediciones de Tendencias programadas para
-# publicarlas. 0 lo desactiva (los tests publican llamando al servicio).
-TENDENCIAS_PUBLICACION_MINUTOS = int(os.getenv("TENDENCIAS_PUBLICACION_MINUTOS", "0" if APP_ENV == "test" else "1"))
+# Cada cuántas horas corre la tarea de Tendencias: revisa que los videos
+# publicados sigan disponibles, avisa a los inactivos del reto y cierra las
+# rondas vencidas. 0 la desactiva (los tests llaman a los servicios).
+TENDENCIAS_TAREA_HORAS = int(os.getenv("TENDENCIAS_TAREA_HORAS", "0" if APP_ENV == "test" else "24"))
 
 CREDITO_COSTO_COTIZACION_ABIERTA = float(os.getenv("CREDITO_COSTO_COTIZACION_ABIERTA", "10"))
 CREDITO_COSTO_COTIZACION_DIRIGIDA = float(os.getenv("CREDITO_COSTO_COTIZACION_DIRIGIDA", "5"))
@@ -106,14 +141,17 @@ ASIGNACION_COTIZACIONES = os.getenv("ASIGNACION_COTIZACIONES", "manual").strip()
 # Máximo de empresas que reciben una misma solicitud.
 ASIGNACION_CUPO_POR_SOLICITUD = int(os.getenv("ASIGNACION_CUPO_POR_SOLICITUD", "3"))
 
-# --- TRM (pesos por dólar) para guardar los montos en COP ---
-# La oficial se consulta una vez al día en datos.gov.co (Superfinanciera). Si la
-# consulta falla se usa el valor de respaldo que fije el admin, luego la última
-# oficial conocida y, como último recurso, TRM_RESPALDO_COP.
+# --- Dólar (pesos por dólar) para guardar los montos en COP ---
+# Se consulta en Google Finance (USD/COP) cada TRM_REFRESCO_MINUTOS; si falla, la
+# TRM oficial de datos.gov.co (Superfinanciera). Si las dos fallan se usa el valor
+# de respaldo que fije el admin, luego la última cotización conocida y, como
+# último recurso, TRM_RESPALDO_COP. Ver services/trm.py.
 TRM_CONSULTA_AUTOMATICA = os.getenv(
     "TRM_CONSULTA_AUTOMATICA", "false" if APP_ENV == "test" else "true"
 ).lower() == "true"
+TRM_GOOGLE_FINANCE_URL = os.getenv("TRM_GOOGLE_FINANCE_URL", "https://www.google.com/finance/quote/USD-COP")
 TRM_URL = os.getenv("TRM_URL", "https://www.datos.gov.co/resource/32sa-8pi3.json")
+TRM_REFRESCO_MINUTOS = int(os.getenv("TRM_REFRESCO_MINUTOS", "60"))
 TRM_TIMEOUT_SEGUNDOS = float(os.getenv("TRM_TIMEOUT_SEGUNDOS", "4"))
 TRM_RESPALDO_COP = float(os.getenv("TRM_RESPALDO_COP", "4000"))
 CREDITO_USD_POR_UNIDAD = float(os.getenv("CREDITO_USD_POR_UNIDAD", "0.1"))
@@ -138,6 +176,16 @@ NOTIFICACIONES_EMAIL = os.getenv("NOTIFICACIONES_EMAIL", "true").lower() == "tru
 # Módulo educativo (cursos/LMS). Apagarlo deja la API de cursos en 404 y el
 # frontend oculta la sección; no borra ningún dato.
 MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").lower() == "true"
+# Registro público de cotizantes (el admin lo puede cerrar en Módulos).
+REGISTRO_PUBLICO_HABILITADO = os.getenv("REGISTRO_PUBLICO_HABILITADO", "true").lower() == "true"
+# Mientras no hay pasarela, cada curso con precio se desbloquea cuando el equipo
+# aprueba el comprobante de pago (o da el acceso a mano). Apagado en tests: los
+# de cursos se inscriben directo.
+PAGO_MANUAL_CURSOS = os.getenv(
+    "PAGO_MANUAL_CURSOS", "false" if APP_ENV == "test" else "true").lower() == "true"
+# Cada cotización consume 1 token. Apagado en tests: casi todas crean cotizaciones sin saldo.
+COBRO_COTIZACIONES_TOKENS = os.getenv(
+    "COBRO_COTIZACIONES_TOKENS", "false" if APP_ENV == "test" else "true").lower() == "true"
 
 TRANSLATION_ENABLED = os.getenv("TRANSLATION_ENABLED", "false").lower() == "true"
 GOOGLE_TRANSLATE_API_KEY = os.getenv("GOOGLE_TRANSLATE_API_KEY")

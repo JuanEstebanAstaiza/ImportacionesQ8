@@ -40,7 +40,8 @@ class Curso(Base):
     precio = Column(Float, nullable=False, default=0.0)
     nivel = Column(String(30), nullable=False, default=NivelCurso.principiante.value)
     categoria = Column(String(120), nullable=False, default="General", index=True)
-    importador_id = Column(String(36), ForeignKey("importadores.id"), nullable=False, index=True)
+    # Empresa que lo publica. Vacío: curso propio de Zarpi (lo crea el admin).
+    importador_id = Column(String(36), ForeignKey("importadores.id"), nullable=True, index=True)
     creado_por_usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
     rating = Column(Float, nullable=False, default=0.0)
     estudiantes_count = Column(Integer, nullable=False, default=0)
@@ -121,8 +122,17 @@ class RecursoLeccion(Base):
         return f"<RecursoLeccion(id={self.id}, nombre={self.nombre})>"
 
 
+class OrigenAccesoCurso(str, enum.Enum):
+    # Compra o inscripción directa (curso gratis, o sin pago manual).
+    inscripcion = "inscripcion"
+    # El admin aprobó el comprobante de pago.
+    comprobante = "comprobante"
+    # El admin dio el acceso a mano (Accesos a cursos).
+    manual = "manual"
+
+
 class CompraCurso(Base):
-    """Inscripción/compra de un curso por un solicitante (u otro usuario autenticado)."""
+    """Acceso de un usuario a un curso: compra, inscripción o acceso dado por el equipo."""
     __tablename__ = "compras_curso"
     __table_args__ = (
         UniqueConstraint("curso_id", "usuario_id", name="unique_compra_curso_usuario"),
@@ -134,6 +144,10 @@ class CompraCurso(Base):
     usuario_id = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
     precio_pagado = Column(Float, nullable=False, default=0.0)
     fecha_compra = Column(DateTime, default=datetime.utcnow)
+    origen = Column(String(20), nullable=False, default=OrigenAccesoCurso.inscripcion.value)
+    otorgado_por = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
+    comprobante_id = Column(String(36), nullable=True)
+    nota = Column(String(300), nullable=True)
 
     curso = relationship("Curso", back_populates="compras")
 

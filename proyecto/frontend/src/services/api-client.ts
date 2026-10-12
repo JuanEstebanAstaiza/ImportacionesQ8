@@ -260,7 +260,14 @@ function isProtectedPath(pathname: string): boolean {
     "/admin",
     "/tendencias",
     "/catalogos",
+    "/reto",
   ];
+  // Excepciones públicas dentro de prefijos protegidos: el feed y la ficha de
+  // Tendencias y la página del reto se ven sin sesión.
+  const publicPrefixes = ["/tendencias/feed", "/tendencias/items/", "/reto/rondas/abierta", "/reto/lista-espera"];
+  if (publicPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix))) {
+    return false;
+  }
 
   return protectedPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`));
 }
@@ -309,6 +316,23 @@ export function getStoredRole(): string | null {
   return localStorage.getItem(ROLE_STORAGE_KEY);
 }
 
+/**
+ * Error de una respuesta HTTP no exitosa. Sigue siendo un `Error` con el mensaje
+ * legible de siempre; además conserva el código y el `detail` del backend, para
+ * casos como el 402 del muro de pago de Tendencias.
+ */
+export class ApiError extends Error {
+  status: number;
+  detail: unknown;
+
+  constructor(message: string, status: number, detail: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, token: providedToken, headers = {} } = options;
 
@@ -340,7 +364,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     const errorPayload = (await response.json().catch(() => ({}))) as AuthErrorResponse & {
       detail?: unknown;
     };
-    throw new Error(formatErrorDetail(errorPayload.detail) || fallbackMessage);
+    throw new ApiError(formatErrorDetail(errorPayload.detail) || fallbackMessage, response.status, errorPayload.detail);
   }
 
   if (response.status === 204) {

@@ -154,6 +154,15 @@ class AdminCrearImportadorRequest(BaseModel):
     email_dueño: EmailStr = Field(..., description="Email de la cuenta dueña de la empresa")
     password_dueño: str = Field(..., min_length=9, description="Contraseña inicial de la cuenta dueña")
     nombre_dueño: Optional[str] = None
+    # Datos legales de la empresa y de su representante (los del registro de
+    # persona jurídica). Se guardan en la cuenta dueña.
+    nit: Optional[str] = Field(None, max_length=50)
+    razon_social: Optional[str] = Field(None, max_length=255)
+    apellido_dueño: Optional[str] = Field(None, max_length=120)
+    tipo_documento_dueño: Optional[str] = Field(None, max_length=30)
+    numero_documento_dueño: Optional[str] = Field(None, max_length=50)
+    indicativo_dueño: Optional[str] = Field(None, pattern=r"^\+\d{1,4}$")
+    telefono_dueño: Optional[str] = Field(None, max_length=30)
 
     @field_validator("tier_minimo_requerido")
     @classmethod

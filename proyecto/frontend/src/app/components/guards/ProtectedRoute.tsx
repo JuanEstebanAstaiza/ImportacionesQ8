@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type GuardRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
+type GuardRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
 
 interface ProtectedRouteProps {
   isInitializing: boolean;

@@ -12,7 +12,7 @@ import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 import type { LegalPage } from "@/features/legal/types";
 
 type AuthView = "login" | "forgot" | "otp";
-export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
+export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
 
 interface AuthScreenProps {
   onLogin: (role: PortalRole) => void;

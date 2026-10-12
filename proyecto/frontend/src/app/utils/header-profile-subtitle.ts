@@ -1,4 +1,4 @@
-export type HeaderSubtitleRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte";
+export type HeaderSubtitleRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
 
 export interface ResolveHeaderSubtitleInput {
   role: HeaderSubtitleRole;
@@ -32,6 +32,10 @@ export function resolveHeaderSubtitle(input: ResolveHeaderSubtitleInput): string
   // caía en el valor por defecto.
   if (role === "soporte") {
     return "Equipo de soporte de la plataforma";
+  }
+
+  if (role === "designer") {
+    return "Equipo de diseño";
   }
 
   return "Solicitante";

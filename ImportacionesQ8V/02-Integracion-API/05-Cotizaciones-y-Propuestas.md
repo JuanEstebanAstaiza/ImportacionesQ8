@@ -595,6 +595,29 @@ Array de `PropuestaResponse`:
 
 ---
 
+### `POST /cotizaciones/{cotizacion_id}/rechazar`
+
+- **Resumen:** La empresa no toma la cotización y explica por qué (desde 2026-10-12)
+- **Auth:** Bearer JWT (`importador` o `asesor`)
+- **Códigos:** 200, 403, 404, 409, 422
+- **Path params:** `cotizacion_id`
+- **Body:** `{ "motivo": string }` (10–1000 caracteres; obligatorio)
+
+**Efectos:**
+- **Dirigida a la empresa:** pasa a `estado="rechazada"` y el motivo queda en `motivo_rechazo` (lo ve el cotizante en el detalle).
+- **Abierta asignada a la empresa:** sale de su bandeja (`recepciones_cotizacion.rechazada_en`) y sigue para las demás; el estado no cambia.
+- Un borrador o una propuesta pendiente de la empresa sobre esa cotización pasa a `rechazada`, y si el responsable era de la empresa se libera.
+- Al cotizante le llega el motivo por correo (desde notificaciones@) y en la campana (tipo `cotizacion`, evento `cotizacion_rechazada`).
+
+**Errores:**
+- 403: un asesor intenta rechazar una cotización que atiende otro asesor.
+- 404: la cotización no es de la empresa.
+- 409: ya tiene orden, ya se rechazó o está cerrada.
+
+**Respuesta:** `CotizacionResponse` (incluye `motivo_rechazo`).
+
+---
+
 ### `POST /cotizaciones/{cotizacion_id}/vista`
 
 - **Resumen:** Marcar Cotizacion Vista

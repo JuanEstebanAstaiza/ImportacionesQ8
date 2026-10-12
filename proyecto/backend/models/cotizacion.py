@@ -32,6 +32,7 @@ class EstadoCotizacion(str, enum.Enum):
     cotizacion_aceptada = "cotizacion_aceptada"
     orden_activa = "orden_activa"
     cancelada = "cancelada"  # Semana 4: anulada por error tras una SolicitudRecreacion aprobada
+    rechazada = "rechazada"  # La empresa a la que iba dirigida la rechazó (ver motivo_rechazo)
 
 class Cotizacion(Base):
     __tablename__ = "cotizaciones"
@@ -76,8 +77,11 @@ class Cotizacion(Base):
     # De dónde salió la solicitud: "directa" (formulario), "tendencias" o
     # "catalogo". Permite medir cuántas solicitudes trae cada edición y producto.
     origen = Column(String(20), nullable=False, default="directa", server_default="directa")
+    # Tendencias v1 (ediciones semanales, retirada): se conservan por historia.
     tendencia_edicion_id = Column(String(36), nullable=True, index=True)
     tendencia_producto_id = Column(String(36), nullable=True, index=True)
+    # Tendencias v2: ficha de la que nace la solicitud.
+    tendencia_item_id = Column(String(36), nullable=True, index=True)
     catalogo_producto_id = Column(String(36), nullable=True, index=True)
     # Valores de los campos personalizados definidos por el importador (solo aplica
     # a empresas con solo_cotizaciones_directas=True), como {campo_id: valor}.
@@ -95,6 +99,8 @@ class Cotizacion(Base):
     cotizacion_origen_id = Column(String(36), ForeignKey("cotizaciones.id"), nullable=True)
     cancelada_por_error = Column(String(20), nullable=True)  # NULL, o quien fue responsable: "solicitante"/"importador"
     motivo_cancelacion = Column(Text, nullable=True)
+    # Por qué la rechazó la empresa a la que iba dirigida (lo ve el cotizante).
+    motivo_rechazo = Column(Text, nullable=True)
 
     # --- Por qué el cliente eligió una propuesta sobre las demás ---
     # Lo indica al aceptar ("precio", "tiempo", "condiciones" u "otro"). Al

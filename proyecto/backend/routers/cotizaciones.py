@@ -11,7 +11,8 @@ from uuid import UUID
 import config
 from schemas.cotizacion import (
     CotizacionCreate, CotizacionResponse, PropuestaCreate, PropuestaResponse,
-    PropuestaAceptadaRequest, PreaceptarPropuestaRequest, ImportadorPendienteResponse, MatchingStatusResponse
+    PropuestaAceptadaRequest, PreaceptarPropuestaRequest, ImportadorPendienteResponse, MatchingStatusResponse,
+    RechazoCotizacionRequest,
 )
 from schemas.credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse
 from models.cotizacion import Cotizacion, EstadoCotizacion
@@ -188,6 +189,7 @@ async def listar_pool_empresa(
 
     query = db.query(Cotizacion).filter(
         Cotizacion.asesor_asignado_id.is_(None),
+        Cotizacion.estado != EstadoCotizacion.rechazada.value,
         or_(
             Cotizacion.importador_id == importador_id_str,
             and_(
@@ -481,6 +483,15 @@ async def crear_cotizacion(
     tier_requerido = "Bronze"
     requiere_desbloqueo = False
 
+    # Cada cotización consume 1 token (primero las gratis del reto). El token
+    # también desbloquea la empresa de nivel superior: no se cobra dos veces.
+    from services import modulos as modulos_svc
+    from services import tokens_cotizacion
+
+    cobra_tokens = solicitante.rol == "solicitante" and modulos_svc.activo(db, "cobro_cotizaciones")
+    if cobra_tokens and tokens_cotizacion.saldo(solicitante) < 1:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=tokens_cotizacion.MENSAJE_SIN_TOKENS)
+
     # Modelo actual: no se cobra al solicitante (natural/jurídica).
     # Si COBRO_A_SOLICITANTES=true, se restaura el débito de créditos al crear.
     if config.COBRO_A_SOLICITANTES:
@@ -586,7 +597,7 @@ async def crear_cotizacion(
 
         tier_requerido = importador.tier_minimo_requerido or "Bronze"
         requiere_desbloqueo = tier_insuficiente(solicitante.tier, tier_requerido)
-        if requiere_desbloqueo and int(solicitante.puntos_cotizacion or 0) < 1:
+        if requiere_desbloqueo and int(solicitante.puntos_cotizacion or 0) < 1 and not cobra_tokens:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MENSAJE_SIN_PUNTOS)
 
     # Crear nueva cotización - usar el importador_id como string directamente
@@ -632,6 +643,10 @@ async def crear_cotizacion(
         datos={k: v for k, v in campos_origen.items() if v},
     )
 
+    from services.origen_cotizacion import contar_solicitud
+
+    contar_solicitud(db, campos_origen)
+
     if nuevo_cotizacion.modalidad == "dirigida" and nuevo_cotizacion.importador_id:
         from services.cupo_cotizaciones import registrar_recepcion
 
@@ -653,7 +668,15 @@ async def crear_cotizacion(
             descripcion=f"Creación de cotización {cotizacion_data.modalidad}",
         )
 
-    if requiere_desbloqueo:
+    if cobra_tokens:
+        db.flush()
+        try:
+            tokens_cotizacion.cobrar(db, usuario_id=user_id_str, cotizacion_id=nuevo_cotizacion.id)
+        except tokens_cotizacion.SinTokens:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                                detail=tokens_cotizacion.MENSAJE_SIN_TOKENS)
+    elif requiere_desbloqueo:
         from services.tier_service import SinPuntosParaDesbloquear, consumir_punto_desbloqueo
 
         # Se gasta en la misma transacción que crea la cotización: o quedan las
@@ -829,7 +852,7 @@ def _notificar_cotizacion_en_pool(db: Session, *, cotizacion: Cotizacion, import
             db,
             importador_id=importador_id,
             tipo="cotizacion",
-            titulo="Nueva cotización disponible",
+            titulo="Tienes una nueva solicitud de cotización",
             mensaje=f"Cotización {etiqueta}: {cotizacion.nombre_producto}.",
             data={"cotizacion_id": str(cotizacion.id), "modalidad": cotizacion.modalidad},
             enlace_relativo="/cotizaciones",
@@ -1726,15 +1749,17 @@ async def pre_aceptar_propuesta(
         propuesta.preaceptada_por_empresa = solicitud.aceptar
         from services.notificacion_service import notificar as _notificar_usuario
 
-        _notificar_usuario(
-            db,
-            usuario_id=cotizacion.solicitante_id,
-            tipo="propuesta",
-            titulo="La empresa confirmó la propuesta" if solicitud.aceptar else "La empresa retiró su confirmación",
-            mensaje=f"Cotización de {cotizacion.nombre_producto}.",
-            data={"cotizacion_id": str(cotizacion.id), "propuesta_id": str(propuesta.id)},
-            enlace_relativo="/cotizaciones",
-        )
+        # Si con esta confirmación se cierra la orden, el aviso es el de la orden (abajo).
+        if not (solicitud.aceptar and propuesta.preaceptada_por_solicitante):
+            _notificar_usuario(
+                db,
+                usuario_id=cotizacion.solicitante_id,
+                tipo="propuesta",
+                titulo="La empresa confirmó la propuesta" if solicitud.aceptar else "La empresa retiró su confirmación",
+                mensaje=f"Cotización de {cotizacion.nombre_producto}.",
+                data={"cotizacion_id": str(cotizacion.id), "propuesta_id": str(propuesta.id)},
+                enlace_relativo="/cotizaciones",
+            )
 
     evento_propuesta(
         db, TiposEvento.PROPUESTA_PREACEPTADA, propuesta, cotizacion, usuario=current_user,
@@ -1884,6 +1909,24 @@ async def pre_aceptar_propuesta(
             except Exception:
                 logger.warning("No se pudo publicar notificación de doble aceptación para %s", cotizacion.id)
 
+        # El cotizante se entera por correo (notificaciones@) de que ya hay orden de compra.
+        from services.notificacion_service import notificar as _notificar_orden
+
+        precio = f" Precio acordado: US${propuesta.precio_ofrecido_usd:,.2f}." if propuesta.precio_ofrecido_usd else ""
+        _notificar_orden(
+            db,
+            usuario_id=cotizacion.solicitante_id,
+            tipo="orden",
+            titulo="Tu cotización ya es una orden de compra",
+            mensaje=(
+                f"{_nombre_empresa(db, propuesta.importador_id)} confirmó la propuesta para "
+                f"{cotizacion.nombre_producto} y se creó la orden de compra.{precio} "
+                "Te avisaremos de cada cambio de estado del embarque."
+            ),
+            data={"cotizacion_id": str(cotizacion.id), "orden_id": str(nueva_orden.id)},
+            enlace_relativo="/ordenes",
+        )
+
         # Una orden nueva suma al desempeño del cotizante (órdenes y valor USD).
         from services.tier_service import recalcular_tier_best_effort
 
@@ -1893,6 +1936,105 @@ async def pre_aceptar_propuesta(
     db.refresh(propuesta)
 
     return propuesta
+
+# ==================== Rechazo de una cotización por la empresa ====================
+
+@router.post("/{cotizacion_id}/rechazar", response_model=CotizacionResponse)
+async def rechazar_cotizacion(
+    cotizacion_id: str,
+    datos: RechazoCotizacionRequest,
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+    db: Session = Depends(get_db),
+):
+    """La empresa (dueño o asesor) no toma la cotización y explica por qué. El
+    motivo le llega al cotizante por correo (notificaciones@) y en la campana.
+
+    - Dirigida: pasa a `rechazada` y el motivo queda en la cotización.
+    - Abierta: sale de la bandeja de esta empresa y sigue para las demás.
+
+    Un asesor solo rechaza las que no tienen responsable o tiene él. Con orden
+    creada ya no se puede; un borrador o una propuesta pendiente de la empresa
+    se retira.
+    """
+    from models.recepcion_cotizacion import RecepcionCotizacion
+    from services.notificacion_service import notificar
+
+    importador_id_str = current_user.get("importador_id")
+    if not importador_id_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="La cuenta no está asociada a ninguna empresa importadora")
+    user_id_str = str(UUID(current_user["user_id"]))
+    try:
+        cotizacion_id_str = str(UUID(cotizacion_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    cotizacion = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id_str).first()
+    if not cotizacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+
+    dirigida_a_mi = cotizacion.modalidad == "dirigida" and cotizacion.importador_id == importador_id_str
+    from services.asignacion import esta_asignada
+
+    if not dirigida_a_mi and not (cotizacion.modalidad == "abierta"
+                                  and esta_asignada(db, importador_id_str, cotizacion_id_str)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    abiertas_a_respuesta = (EstadoCotizacion.creada.value, EstadoCotizacion.dirigida.value,
+                            EstadoCotizacion.abierta.value, EstadoCotizacion.propuestas_recibidas.value)
+    if cotizacion.estado not in abiertas_a_respuesta:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Esta cotización ya no se puede rechazar (ya tiene orden o se cerró)")
+
+    responsable = cotizacion.asesor_asignado_id
+    if current_user["rol"] == "asesor" and responsable and responsable != user_id_str:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Esta cotización la atiende otro asesor de tu empresa")
+
+    ahora = datetime.utcnow()
+    motivo = datos.motivo.strip()
+    recepcion = db.query(RecepcionCotizacion).filter(
+        RecepcionCotizacion.importador_id == importador_id_str,
+        RecepcionCotizacion.cotizacion_id == cotizacion_id_str,
+    ).first()
+    if recepcion is None:
+        recepcion = RecepcionCotizacion(importador_id=importador_id_str, cotizacion_id=cotizacion_id_str,
+                                        modalidad=cotizacion.modalidad, origen="dirigida")
+        db.add(recepcion)
+    recepcion.rechazada_en = ahora
+    recepcion.rechazada_por = user_id_str
+    recepcion.motivo_rechazo = motivo
+
+    # Lo que la empresa tenía en curso sobre esta cotización se retira.
+    for propuesta in db.query(Propuesta).filter(
+        Propuesta.cotizacion_id == cotizacion_id_str,
+        Propuesta.importador_id == importador_id_str,
+        Propuesta.estado.in_([EstadoPropuesta.borrador.value, EstadoPropuesta.pendiente.value]),
+    ).all():
+        propuesta.estado = EstadoPropuesta.rechazada
+
+    if responsable:
+        cuenta = db.query(Usuario).filter(Usuario.id == responsable).first()
+        if cuenta and cuenta.importador_id == importador_id_str:
+            cotizacion.asesor_asignado_id = None
+
+    empresa = _nombre_empresa(db, importador_id_str)
+    if dirigida_a_mi:
+        cotizacion.estado = EstadoCotizacion.rechazada.value
+        cotizacion.motivo_rechazo = motivo
+        titulo = f"{empresa} rechazó tu cotización"
+        mensaje = f"Cotización de {cotizacion.nombre_producto}. Motivo: {motivo}"
+    else:
+        titulo = f"{empresa} no tomará tu cotización"
+        mensaje = (f"Cotización de {cotizacion.nombre_producto}. Motivo: {motivo} "
+                   "Tu cotización sigue abierta para las demás empresas.")
+    notificar(
+        db, usuario_id=cotizacion.solicitante_id, tipo="cotizacion", titulo=titulo, mensaje=mensaje,
+        data={"evento": "cotizacion_rechazada", "cotizacion_id": cotizacion_id_str, "importador_id": importador_id_str},
+        enlace_relativo="/cotizaciones", whatsapp=False,
+    )
+    db.commit()
+    db.refresh(cotizacion)
+    return _vista_para_empresa(cotizacion, importador_id_str)
+
 
 # ==================== Recreación de cotización por error (Fase 3 - créditos) ====================
 
