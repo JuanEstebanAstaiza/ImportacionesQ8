@@ -38,5 +38,5 @@ export function resolveHeaderSubtitle(input: ResolveHeaderSubtitleInput): string
     return "Equipo de diseño";
   }
 
-  return "Solicitante";
+  return "Comprador";
 }

@@ -875,11 +875,22 @@ Array de `AgenteSoporteItem`:
 
 ---
 
+### `GET /admin/evidencias`
+
+- **Resumen:** Cola de revisión del material de presentación de las empresas (video, fotos, certificados que suben desde «Mi empresa»). Pantalla: Admin › Presentaciones (`/admin/presentaciones`).
+- **Auth:** Bearer JWT (admin)
+- **Query:** `estado` = `pendiente` | `aprobada` | `rechazada` (opcional). Las pendientes salen de la más antigua a la más reciente.
+- **Respuesta:** `{ "items": [{ id, importador_id, empresa, tipo, titulo, descripcion, url, estado, nota_revision, fecha_creacion, fecha_revision }], "contadores": { "pendiente": n, "aprobada": n, "rechazada": n } }`
+
+Cada vez que una empresa sube material (`POST /importadores/evidencias`) los admins reciben una notificación in-app (`tipo=presentacion_empresa`) que enlaza a esta pantalla.
+
+---
+
 ### `PUT /admin/evidencias/{evidencia_id}/revisar`
 
-- **Resumen:** Revisar Evidencia Importador
+- **Resumen:** Revisar Evidencia Importador. `aprobada` la publica en la ficha pública; `rechazada` la saca (sirve también para despublicar algo ya aprobado). Se notifica al dueño de la empresa (in-app y correo) con el resultado.
 - **Auth:** Bearer JWT
-- **Códigos:** 200, 422
+- **Códigos:** 200, 404, 422 (rechazo sin `nota_revision`)
 - **Path params:** `evidencia_id`
 
 **Body (`RevisarEvidenciaRequest`)**

@@ -121,7 +121,7 @@ def construir_expediente(db: Session, importador) -> dict:
         {
             "clave": "sin_incidentes",
             "titulo": "Sin incidentes abiertos",
-            "detalle": "No hay órdenes suyas en disputa ahora mismo.",
+            "detalle": "No hay operaciones suyas en disputa ahora mismo.",
             "cumple": disputas_abiertas == 0,
             "valor": "Ninguno" if disputas_abiertas == 0 else f"{disputas_abiertas} en disputa",
         },
@@ -159,9 +159,9 @@ def construir_expediente(db: Session, importador) -> dict:
         {
             "clave": "actividad",
             "titulo": "Actividad en la plataforma",
-            "detalle": "Propuestas enviadas y órdenes gestionadas.",
+            "detalle": "Propuestas enviadas y operaciones gestionadas.",
             "cumple": propuestas > 0,
-            "valor": f"{propuestas} propuestas · {ordenes} órdenes",
+            "valor": f"{propuestas} propuestas · {ordenes} operaciones",
         },
         {
             "clave": "resenas",

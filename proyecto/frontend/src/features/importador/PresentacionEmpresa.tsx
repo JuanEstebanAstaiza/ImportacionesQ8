@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Clock, Film, ImageIcon, Trash2 } from "lucide-react";
 
 import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import {
   businessService,
   type BackendEvidenciaImportador,
@@ -248,10 +250,12 @@ export function EditorPresentacion() {
           {visibles.map((pieza) => (
             <div key={pieza.id} className="rounded-xl border border-border overflow-hidden">
               <div className="aspect-video bg-slate-100 flex items-center justify-center">
+                {/* Lo que está en revisión no es público: un <video>/<img> directo no
+                    manda la sesión y daba 401, así que se carga con el token. */}
                 {esVideo(pieza) ? (
-                  <video src={resolveApiUrl(pieza.url)} controls preload="metadata" className="w-full h-full object-cover" />
+                  <ProtectedVideoPlayer url={pieza.url} className="w-full h-full object-cover" mensajeSinAcceso="No se pudo cargar el video." />
                 ) : (
-                  <img src={resolveApiUrl(pieza.url)} alt={pieza.titulo} className="w-full h-full object-cover" loading="lazy" />
+                  <ImagenArchivo src={pieza.url} alt={pieza.titulo} className="w-full h-full" />
                 )}
               </div>
               <div className="px-3 py-2 flex items-start justify-between gap-2">
@@ -262,10 +266,10 @@ export function EditorPresentacion() {
                   </p>
                   <div className="mt-1 flex items-center gap-2">
                     <EtiquetaEstado estado={pieza.estado} />
-                    {pieza.estado === "rechazada" && pieza.nota_revision ? (
-                      <span className="text-[11px] text-muted-foreground truncate">{pieza.nota_revision}</span>
-                    ) : null}
                   </div>
+                  {pieza.estado === "rechazada" && pieza.nota_revision ? (
+                    <p className="mt-1 text-[11px] text-red-700">Motivo: {pieza.nota_revision}</p>
+                  ) : null}
                 </div>
                 <button
                   type="button"

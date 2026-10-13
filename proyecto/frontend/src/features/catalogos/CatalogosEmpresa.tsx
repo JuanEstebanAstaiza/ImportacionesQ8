@@ -848,8 +848,8 @@ function SeccionAcceso({
                   <span className="flex shrink-0 flex-col items-end gap-0.5 text-[11px] text-muted-foreground">
                     <InsigniaTier tier={c.tier} />
                     {c.ordenes_con_empresa > 0
-                      ? `${c.ordenes_con_empresa} ${c.ordenes_con_empresa === 1 ? "orden" : "órdenes"} contigo`
-                      : "Sin órdenes aún"}
+                      ? `${c.ordenes_con_empresa} ${c.ordenes_con_empresa === 1 ? "operación" : "operaciones"} contigo`
+                      : "Sin operaciones aún"}
                   </span>
                 </div>
               )}

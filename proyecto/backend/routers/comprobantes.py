@@ -56,13 +56,15 @@ def _usuario(db: Session, current_user: dict) -> Usuario:
 @router.get("/resumen")
 def resumen(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Cómo pagar y el saldo: precio por token, datos de la cuenta, suscripción."""
-    from services import acceso_cursos
+    from services import acceso_cursos, planes
 
     usuario = _usuario(db, current_user)
     return {
         # Los cursos con precio se pagan subiendo el comprobante (carpeta «Cursos»).
         "cursos_pago_manual": acceso_cursos.pago_manual_activo(db),
-        "precio_token_cop": svc.precio_token(db),
+        # Con un plan que tenga precio propio de solicitud adicional (VIP), ese es el que paga.
+        "precio_token_cop": planes.precio_solicitud_adicional(db, usuario) or svc.precio_token(db),
+        "plan": planes.plan_del_usuario(db, usuario),
         "datos_pago": svc.datos_pago(db),
         "tokens": int(usuario.puntos_cotizacion or 0),
         "cotizaciones_gratis": int(usuario.cotizaciones_gratis or 0),

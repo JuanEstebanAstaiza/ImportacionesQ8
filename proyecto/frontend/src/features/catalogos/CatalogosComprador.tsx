@@ -59,7 +59,7 @@ function motivoAcceso(c: Catalogo): string {
     case "tier_minimo":
       return `Para cotizantes ${c.tier_minimo ?? ""} o superior`.replace("  ", " ");
     case "clientes_con_orden":
-      return "Para clientes con orden";
+      return "Para clientes con operación";
     case "suscriptores_zarpi":
       return "Para suscriptores de Tendencias";
     default:

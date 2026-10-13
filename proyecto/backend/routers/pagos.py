@@ -84,7 +84,7 @@ async def comprar_creditos(
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail=(
-                "La compra de créditos para solicitantes está deshabilitada. "
+                "La compra de créditos para compradores está deshabilitada. "
                 "Crear cotizaciones no requiere pago. El cobro aplica a empresas importadoras."
             ),
         )

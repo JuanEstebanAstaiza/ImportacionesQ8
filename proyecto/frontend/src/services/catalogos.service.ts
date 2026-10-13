@@ -8,7 +8,7 @@ export type TierCotizante = "Bronze" | "Silver" | "Gold" | "Élite";
 export const CRITERIOS: { valor: CriterioCatalogo; etiqueta: string; ayuda: string }[] = [
   { valor: "manual", etiqueta: "Clientes que yo elija", ayuda: "Solo los compradores que agregues a mano." },
   { valor: "tier_minimo", etiqueta: "Por nivel de cotizante", ayuda: "Compradores con el nivel elegido o superior." },
-  { valor: "clientes_con_orden", etiqueta: "Clientes con orden", ayuda: "Compradores con al menos una orden con tu empresa." },
+  { valor: "clientes_con_orden", etiqueta: "Clientes con operación", ayuda: "Compradores con al menos una operación con tu empresa." },
   { valor: "suscriptores_zarpi", etiqueta: "Suscriptores de Zarpi", ayuda: "Compradores con suscripción vigente a Tendencias." },
 ];
 

@@ -112,6 +112,12 @@ class Usuario(Base):
     # Cotizaciones gratis ganadas en el reto de Tendencias. Se descuentan cuando
     # se active el cobro por cotización (hoy crear cotizaciones no se cobra).
     cotizaciones_gratis = Column(Integer, nullable=False, default=0, server_default="0")
+    # Plan de acceso (models/plan.py): solicitudes de cotización del plan, que
+    # solo valen hasta `plan_vence_en`. Se gastan después de las gratis del reto
+    # y antes de los tokens comprados sueltos (que no vencen).
+    plan_id = Column(String(36), ForeignKey("planes.id"), nullable=True)
+    plan_vence_en = Column(DateTime, nullable=True)
+    solicitudes_plan = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Permite desactivar una cuenta (por el dueño de la empresa a un asesor, o
     # por un admin a cualquier cuenta) sin borrar su historial. Una cuenta inactiva

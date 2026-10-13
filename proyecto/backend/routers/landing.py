@@ -83,7 +83,7 @@ async def enviar_contacto(request: Request, datos: ContactoRequest):
     en silencio); aquí solo se propaga si el envío SMTP real fue intentado y
     falló, para que el formulario no diga "enviado" cuando no fue así.
     """
-    perfil_label = "Nacionalizadora" if datos.perfil == "nacionalizadora" else "Comprador"
+    perfil_label = "Empresa importadora" if datos.perfil == "nacionalizadora" else "Comprador"
     asunto = f"Contacto Landing Zarpi — {perfil_label} — {datos.nombre.strip()}"
     cuerpo_texto = (
         f"Nuevo mensaje desde el formulario de contacto de la Landing.\n\n"

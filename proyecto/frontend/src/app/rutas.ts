@@ -19,6 +19,9 @@ export type Screen =
   | "policy-data"
   | "policy-terms"
   | "policy-payments"
+  | "policy-planes"
+  | "planes-inscripcion"
+  | "admin-planes"
   | "dashboard"
   | "importer-profile"
   | "quotes"
@@ -67,6 +70,7 @@ export type Screen =
   | "admin-modulos"
   | "admin-pagos"
   | "admin-cursos-accesos"
+  | "admin-presentaciones"
   | "admin-cursos"
   | "admin-tipografia";
 
@@ -92,6 +96,9 @@ export const RUTAS: Ruta[] = [
   { screen: "policy-data", path: "/politica-de-datos" },
   { screen: "policy-terms", path: "/terminos" },
   { screen: "policy-payments", path: "/politica-de-pagos" },
+  { screen: "policy-planes", path: "/condiciones-de-los-planes" },
+  // Inscripción a un plan (pública): /planes/inscripcion?plan=importador
+  { screen: "planes-inscripcion", path: "/planes/inscripcion" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },
@@ -119,6 +126,10 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-pagos", path: "/admin/pagos" },
   // Dar o quitar el acceso a un curso a mano (pago manual de cursos).
   { screen: "admin-cursos-accesos", path: "/admin/accesos-cursos" },
+  // Planes de acceso: precios, cupos e inscripciones por activar.
+  { screen: "admin-planes", path: "/admin/planes" },
+  // Video y fotos que suben las empresas desde «Mi empresa»: se aprueban aquí.
+  { screen: "admin-presentaciones", path: "/admin/presentaciones" },
   // Cursos propios de Zarpi: los crea y edita el admin.
   { screen: "admin-cursos", path: "/admin/cursos" },
   { screen: "catalogos", path: "/catalogos" },

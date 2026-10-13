@@ -664,7 +664,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     setIsResolvingDispute(true);
     try {
       await adminService.resolveDispute(resolvingDispute.id, texto);
-      setStatusMessage(`Incidente de la orden ${resolvingDispute.id.slice(0, 8).toUpperCase()} resuelto.`);
+      setStatusMessage(`Incidente de la operación ${resolvingDispute.id.slice(0, 8).toUpperCase()} resuelto.`);
       setResolvingDispute(null);
       setDisputeResolution("");
       await reloadAdminData();
@@ -1015,7 +1015,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <Shield className="h-4 w-4" /> Salud operativa
             </div>
             <p className="text-2xl font-semibold text-foreground">{metrics?.ordenes_en_disputa ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Ordenes en disputa</p>
+            <p className="text-xs text-muted-foreground">Operaciones en disputa</p>
           </div>
         </div>
 
@@ -1252,7 +1252,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
 
             <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
               <p className="text-base font-semibold">Resumen rápido</p>
-              <p className="mt-1 text-xs text-muted-foreground">La creación directa soportada por API actual es para solicitantes e importadores.</p>
+              <p className="mt-1 text-xs text-muted-foreground">La creación directa soportada por API actual es para compradores e importadores.</p>
               <div className="mt-4 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
                 <p className="mb-1 font-medium text-foreground">Distribucion actual por rol:</p>
                 {Object.entries(usersByRole).map(([role, total]) => (
@@ -1289,7 +1289,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               Soporte y gestión de incidentes
             </p>
             <p className="text-sm text-muted-foreground">
-              Atiende dudas de solicitantes y media en incidentes con empresas importadoras. Puedes responder
+              Atiende dudas de compradores y media en incidentes con empresas importadoras. Puedes responder
               dentro de la conversación como equipo de la plataforma.
             </p>
           </div>
@@ -1397,7 +1397,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
-                        Orden {dispute.id.slice(0, 8).toUpperCase()} · estado {dispute.estado}
+                        Operación {dispute.id.slice(0, 8).toUpperCase()} · estado {dispute.estado}
                       </p>
                       <p className="mt-0.5 text-xs text-amber-900">{dispute.motivo_disputa || "Sin motivo indicado"}</p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -1548,7 +1548,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
           </p>
           <p className="text-sm text-muted-foreground">
             Sellos con los que respaldas a una empresa. El <strong>peso publicitario</strong> es lo que decide
-            qué tan arriba aparece en el catálogo del solicitante: a mayor peso, más visibilidad.
+            qué tan arriba aparece en el catálogo del comprador: a mayor peso, más visibilidad.
           </p>
         </div>
 
@@ -1922,7 +1922,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   {openConversation.cotizacion_id
                     ? `Cotización ${openConversation.cotizacion_id.slice(0, 8).toUpperCase()}`
                     : "Canal interno de la empresa"}
-                  {openConversation.orden_id ? ` · Orden ${openConversation.orden_id.slice(0, 8).toUpperCase()}` : ""}
+                  {openConversation.orden_id ? ` · Operación ${openConversation.orden_id.slice(0, 8).toUpperCase()}` : ""}
                 </p>
               </div>
               <button
@@ -2150,7 +2150,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <div>
                 <h2 className="text-lg font-semibold">Resolver incidente</h2>
                 <p className="text-xs text-muted-foreground">
-                  Orden {resolvingDispute.id.slice(0, 8).toUpperCase()}
+                  Operación {resolvingDispute.id.slice(0, 8).toUpperCase()}
                 </p>
               </div>
               <button
@@ -2175,7 +2175,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               value={disputeResolution}
               onChange={(event) => setDisputeResolution(event.target.value)}
               rows={4}
-              placeholder="Qué se hizo para resolverlo. Queda registrado en la orden y en la sala del incidente."
+              placeholder="Qué se hizo para resolverlo. Queda registrado en la operación y en la sala del incidente."
               className="w-full resize-none rounded-lg border border-border px-3 py-2 text-sm"
             />
 

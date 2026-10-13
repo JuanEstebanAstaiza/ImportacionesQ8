@@ -55,6 +55,54 @@ class TestEvidenciasImportador:
         assert pub.status_code == 200
         assert any(e["id"] == eid for e in pub.json())
 
+    def test_cola_de_revision_del_admin_con_avisos(self, client, db_session):
+        from models.notificacion import Notificacion
+
+        importador, dueño = crear_empresa_importadora(db_session)
+        admin, admin_h = crear_usuario_con_token(db_session, rol="admin")
+
+        r = client.post(
+            "/importadores/evidencias",
+            json={"tipo": "video_presentacion", "titulo": "Recorrido por el taller",
+                  "url": "/documentos/archivos/abc/descargar"},
+            headers=auth_headers_for(dueño),
+        )
+        assert r.status_code == 201
+        eid = r.json()["id"]
+        # El equipo se entera de que hay algo por revisar.
+        assert db_session.query(Notificacion).filter(
+            Notificacion.usuario_id == admin.id, Notificacion.tipo == "presentacion_empresa",
+        ).count() == 1
+
+        cola = client.get("/admin/evidencias?estado=pendiente", headers=admin_h)
+        assert cola.status_code == 200
+        fila = next(e for e in cola.json()["items"] if e["id"] == eid)
+        assert fila["empresa"] == importador.nombre_empresa
+        assert fila["tipo"] == "video_presentacion"
+        assert cola.json()["contadores"]["pendiente"] >= 1
+        # Solo el admin ve la cola.
+        assert client.get("/admin/evidencias", headers=auth_headers_for(dueño)).status_code == 403
+
+        # Rechazar exige motivo: es lo que la empresa ve para corregirlo.
+        sin_motivo = client.put(f"/admin/evidencias/{eid}/revisar", json={"estado": "rechazada"}, headers=admin_h)
+        assert sin_motivo.status_code == 422
+        rechazo = client.put(
+            f"/admin/evidencias/{eid}/revisar",
+            json={"estado": "rechazada", "nota_revision": "El video se ve borroso"},
+            headers=admin_h,
+        )
+        assert rechazo.status_code == 200
+        aviso = db_session.query(Notificacion).filter(
+            Notificacion.usuario_id == dueño.id, Notificacion.tipo == "presentacion_empresa",
+        ).first()
+        assert aviso is not None and "borroso" in aviso.mensaje
+        assert not any(e["id"] == eid for e in client.get(f"/importadores/{importador.id}/evidencias").json())
+
+        # Se puede reconsiderar y aprobar después: queda publicado.
+        assert client.put(f"/admin/evidencias/{eid}/revisar", json={"estado": "aprobada"}, headers=admin_h).status_code == 200
+        assert any(e["id"] == eid for e in client.get(f"/importadores/{importador.id}/evidencias").json())
+        assert client.get("/admin/evidencias?estado=pendiente", headers=admin_h).json()["contadores"]["pendiente"] == 0
+
 
 class TestOrganizacionCreditos:
     def test_registro_juridica_crea_org_wallet(self, client, db_session, monkeypatch):

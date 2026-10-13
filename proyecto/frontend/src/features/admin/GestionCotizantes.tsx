@@ -303,7 +303,7 @@ export function GestionCotizantes() {
                 />
               </label>
               <label className="mb-2 block text-xs text-muted-foreground">
-                Órdenes mínimas
+                Operaciones mínimas
                 <input
                   type="number"
                   min="0"

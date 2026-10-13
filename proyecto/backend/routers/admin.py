@@ -1048,11 +1048,11 @@ async def resolver_disputa(
     try:
         orden_id_str = str(PyUUID(orden_id))
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de orden inválido")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de operación inválido")
 
     orden = db.query(Orden).filter(Orden.id == orden_id_str).first()
     if not orden:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operación no encontrada")
 
     orden.en_disputa = False
     orden.motivo_disputa = f"[RESUELTO] {orden.motivo_disputa or ''} — Resolución: {datos.resolucion}"
@@ -1124,6 +1124,24 @@ async def resolver_disputa_por_id(
     return {"success": True, "disputa_id": disputa.id, "estado": disputa.estado}
 
 
+# ==================== Presentación de empresas (moderación) ====================
+
+@router.get("/evidencias")
+async def listar_evidencias_importadores(
+    estado: Optional[str] = Query(None, pattern="^(pendiente|aprobada|rechazada)$"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("admin")),
+):
+    """Material que suben las empresas desde «Mi empresa» (video, fotos,
+    certificados). Nada sale en la ficha pública sin pasar por aquí."""
+    from services import presentacion_empresa
+
+    return {
+        "items": presentacion_empresa.listar(db, estado),
+        "contadores": presentacion_empresa.contadores(db),
+    }
+
+
 @router.put("/evidencias/{evidencia_id}/revisar", response_model=dict)
 async def revisar_evidencia_importador(
     evidencia_id: str,
@@ -1131,17 +1149,10 @@ async def revisar_evidencia_importador(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("admin")),
 ):
-    from models.evidencia import EvidenciaImportador, EstadoEvidenciaImportador
+    """Aprueba (se publica en la ficha) o rechaza con motivo. Se le avisa a la empresa."""
+    from services import presentacion_empresa
 
-    ev = db.query(EvidenciaImportador).filter(EvidenciaImportador.id == evidencia_id).first()
-    if not ev:
-        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
-    if datos.estado not in (EstadoEvidenciaImportador.aprobada.value, EstadoEvidenciaImportador.rechazada.value):
-        raise HTTPException(status_code=400, detail="Estado inválido")
-    ev.estado = datos.estado
-    ev.nota_revision = datos.nota_revision
-    ev.revisado_por_admin_id = current_user["user_id"]
-    ev.fecha_revision = datetime.utcnow()
+    ev = presentacion_empresa.revisar(db, evidencia_id, datos.estado, datos.nota_revision, current_user["user_id"])
     db.commit()
     return {"success": True, "id": ev.id, "estado": ev.estado}
 
