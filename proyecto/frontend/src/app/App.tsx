@@ -6164,7 +6164,7 @@ function DocumentosScreen({
                         isHoveredForUpload
                           ? "border-primary bg-primary/20 scale-[1.01]"
                           : isProtectedFolder(folder.id)
-                          ? "doc-system-folder"
+                          ? "doc-system-folder dark:!bg-accent/20"
                           : "doc-folder",
                         viewMode === "grid"
                           ? "min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
