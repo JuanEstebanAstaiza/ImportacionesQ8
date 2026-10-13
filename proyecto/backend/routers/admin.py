@@ -710,7 +710,6 @@ async def verificar_importador(
             data={"importador_id": str(importador.id)},
             enlace_relativo="/empresa/perfil",
             whatsapp=False,
-            buzon="admin",
         )
     db.commit()
     db.refresh(importador)
@@ -770,7 +769,6 @@ async def retirar_verificacion_importador(
             mensaje=datos.motivo.strip()[:160],
             data={"importador_id": str(importador.id)},
             enlace_relativo="/empresa/perfil",
-            buzon="admin",
         )
 
     db.commit()

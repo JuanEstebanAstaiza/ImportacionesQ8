@@ -4,7 +4,8 @@
   códigos), el aviso del formulario de contacto, estado de la plataforma.
 - contacto@: lo del formulario de contacto (se elige en Admin › Correos).
 - pagos@: comprobantes, retiros del reto, aprobaciones y transferencias.
-- admin@: el equipo y los correos directos a empresas (verificación).
+- admin@: solo las campañas que el admin manda a mano desde Admin › Correos.
+  Ningún aviso automático sale de ahí: las respuestas a admin@ vuelven a admin@.
 
 En Admin › Correos se elige el buzón."""
 from datetime import datetime, timedelta
@@ -134,17 +135,18 @@ def test_admin_elige_el_buzon_de_la_campana(client, db_session, monkeypatch):
 
 # ── Correos automáticos ──────────────────────────────────────────────────────
 
-def test_notificaciones_al_equipo_salen_de_admin(db_session, correos):
+def test_notificaciones_al_equipo_tambien_salen_de_notificaciones(db_session, correos):
     from services.notificacion_service import notificar
 
     usuario, _ = crear_usuario_con_token(db_session)
     designer, _ = crear_usuario_con_token(db_session, rol="designer")
     notificar(db_session, usuario_id=usuario.id, tipo="soporte", titulo="Tu solicitud de soporte quedó resuelta")
     notificar(db_session, usuario_id=designer.id, tipo="tendencias", titulo="Nuevo producto para diseñar")
-    assert [(c["para"], c["buzon"]) for c in correos] == [(usuario.email, "notificaciones"), (designer.email, "admin")]
+    assert [(c["para"], c["buzon"]) for c in correos] == [
+        (usuario.email, "notificaciones"), (designer.email, "notificaciones")]
 
 
-def test_verificacion_de_empresa_sale_de_admin(client, db_session, correos):
+def test_verificacion_de_empresa_sale_de_notificaciones(client, db_session, correos):
     admin, _ = crear_usuario_con_token(db_session, rol="admin")
     importador, dueño = crear_empresa_importadora(db_session, nombre_empresa="Verificable SAS",
                                                   email_dueño="dueno_buzon@example.com")
@@ -158,7 +160,7 @@ def test_verificacion_de_empresa_sale_de_admin(client, db_session, correos):
     r = client.post(f"/admin/importadores/{importador.id}/verificar", headers=auth_headers_for(admin))
     assert r.status_code == 200, r.text
     assert [(c["para"], c["titulo"], c["buzon"]) for c in correos] == [
-        (dueño.email, "Tu empresa quedó verificada", "admin")]
+        (dueño.email, "Tu empresa quedó verificada", "notificaciones")]
 
 
 def _aprobar_enlace(client, db_session, umbral=1):

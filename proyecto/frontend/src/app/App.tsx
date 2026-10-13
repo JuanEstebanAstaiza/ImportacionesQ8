@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Film,
   Star,
@@ -663,6 +663,8 @@ interface ChatConv {
   advisorPhone?:string;
   advisorInitials?:string;
   advisorColor?:string;
+  // Solo en el chat de un asesor visto por la cuenta dueña de la empresa.
+  atiendeNombre?:string;
   status:"activa"|"archivada";unread:number;lastMsg:string;lastDate:string;
 }
 type MsgFileType="pdf"|"excel"|"word"|"image";
@@ -672,11 +674,18 @@ interface ChatMsg {
   time:string;read:boolean;dateGroup?:string;
   // Precio estimado enviado con la calculadora (`tipo: "estimacion"`).
   estimate?:EstimacionEnMensaje;
+  // Nombre de quien lo escribió, cuando no es quien mira.
+  authorName?:string;
 }
 
-/** `sender: "client"` es el usuario que mira la pantalla, sea del rol que sea. */
+/**
+ * `sender: "client"` es el lado de quien mira la pantalla: lo suyo y, en una
+ * negociación, lo de su empresa (la dueña que abre el chat de su asesor ve al
+ * asesor a la derecha y al cliente a la izquierda). Lo decide el backend con
+ * `de_mi_lado`; sin él, solo lo propio.
+ */
 function mapBackendChatMessage(
-  message:{id:string;remitente_id:string;contenido:string;tipo:string;fecha_envio:string;metadata:Record<string,unknown>|null},
+  message:{id:string;remitente_id:string;contenido:string;tipo:string;fecha_envio:string;metadata:Record<string,unknown>|null;remitente_nombre?:string|null;de_mi_lado?:boolean|null},
   currentUserId:string|undefined,
 ):ChatMsg{
   const estimacion=message.tipo==="estimacion"?message.metadata?.estimacion:undefined;
@@ -685,7 +694,8 @@ function mapBackendChatMessage(
     :undefined;
   return {
     id:message.id,
-    sender:message.remitente_id===currentUserId?"client":"provider",
+    sender:(message.de_mi_lado??message.remitente_id===currentUserId)?"client":"provider",
+    authorName:message.remitente_id!==currentUserId?(message.remitente_nombre||undefined):undefined,
     text:message.contenido,
     time:new Date(message.fecha_envio).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),
     read:true,
@@ -3802,12 +3812,14 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
   return Boolean(tier) && esCotizante && esRolAutorizado;
 }
 
-function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<void>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
   const [filter,setFilter]=useState<string>("all");
   const [searchConv,setSearchConv]=useState("");
+  // Persona del equipo cuyo hilo privado se está creando.
+  const [abriendoHilo,setAbriendoHilo]=useState("");
   const [msgs,setMsgs]=useState<Record<string,ChatMsg[]>>(messagesByConversation);
   const [input,setInput]=useState("");
   const [sending,setSending]=useState(false);
@@ -3881,6 +3893,13 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     }
   }, [selectedId, conversations, initialConvId]);
 
+  // Si desde fuera se pide abrir otra conversación (p. ej. un hilo privado del
+  // equipo recién creado) estando ya en esta pantalla, se cambia a ella. Antes
+  // la pantalla no se volvía a montar y seguía en el chat anterior.
+  useEffect(()=>{
+    if(initialConvId) setSelectedId(initialConvId);
+  },[initialConvId]);
+
   useEffect(() => {
     if (selectedId) {
       setResourceTargetConversationId(selectedId);
@@ -3901,6 +3920,10 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const chatAdvisorColor = conv?.advisorColor || imp?.advisor.color || "bg-slate-500";
 
   const filteredConvs=conversations.filter(c=>{
+    // Los chats de los asesores no se mezclan con los propios: van en su
+    // pestaña, agrupados por asesor.
+    if(filter==="asesores")return Boolean(c.atiendeNombre)&&(!searchConv||[c.atiendeNombre,c.refCode,c.counterpartName||""].some(t=>t.toLowerCase().includes(searchConv.toLowerCase())));
+    if(c.atiendeNombre)return false;
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
     if(filter==="interno"&&c.type!=="interno")return false;
@@ -3920,6 +3943,73 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     }
     return true;
   });
+
+  const convsEnLista=filter==="asesores"
+    ?[...filteredConvs].sort((a,b)=>(a.atiendeNombre||"").localeCompare(b.atiendeNombre||""))
+    :filteredConvs;
+
+  /**
+   * Canal del equipo: la sala común y, debajo, cada persona del equipo. Elegir
+   * a alguien abre su hilo privado (o lo crea). Antes había un desplegable que
+   * creaba el hilo pero dejaba la pantalla en la conversación anterior, y los
+   * hilos salían en la lista sin decir con quién eran.
+   */
+  function renderListaEquipo(){
+    const q=searchConv.trim().toLowerCase();
+    const rolEquipo=(rol:string,nivel?:number|null)=>rol==="soporte"?`Soporte N${nivel??1}`:rol==="designer"?"Diseño":"Administración";
+    const salas=conversations.filter(c=>c.counterpartRole==="plataforma");
+    const hiloDe=(id:string)=>conversations.find(c=>c.counterpartId===id&&c.counterpartRole!=="plataforma");
+    const soloNoLeidas=filter==="no-leidas";
+    const personas=miembrosEquipo
+      .filter(m=>!q||[m.nombre||"",m.email,rolEquipo(m.rol,m.nivel_soporte)].some(t=>t.toLowerCase().includes(q)))
+      .filter(m=>!soloNoLeidas||(hiloDe(m.id)?.unread||0)>0);
+    // Hilos con alguien que ya no está en el equipo (desactivado): se conservan.
+    const huerfanos=conversations.filter(c=>c.counterpartRole!=="plataforma"&&!miembrosEquipo.some(m=>m.id===c.counterpartId))
+      .filter(c=>(!q||(c.counterpartName||"").toLowerCase().includes(q))&&(!soloNoLeidas||c.unread>0));
+    const fila=(clave:string,{nombre,detalle,colorId,activo,unread,ultimo,onClick,cargando}:{nombre:string;detalle:string;colorId:string;activo:boolean;unread:number;ultimo?:string;onClick:()=>void;cargando?:boolean})=>(
+      <button key={clave} onClick={onClick} disabled={cargando}
+        className={clsx("w-full text-left px-3 py-2.5 border-b border-border/50 transition-colors flex gap-2.5 items-center",
+          activo?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
+        <Avatar initials={initialsFromName(nombre)} size="md" color={importerColorFromId(colorId)}/>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <p className={clsx("text-xs font-semibold truncate",activo?"text-primary":"text-foreground")}>{nombre}</p>
+            {unread>0&&<span className="w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">{unread}</span>}
+          </div>
+          <p className="text-[11px] text-muted-foreground truncate">{detalle}</p>
+          <p className="text-[11px] text-muted-foreground/80 truncate">{cargando?"Abriendo…":ultimo||"Escribirle en privado"}</p>
+        </div>
+      </button>
+    );
+    return (
+      <>
+        {salas.map(c=>fila(c.id,{nombre:"Sala del equipo",detalle:"Todo el equipo",colorId:"sala-equipo",activo:selectedId===c.id,unread:c.unread,ultimo:c.lastMsg,onClick:()=>setSelectedId(c.id)}))}
+        <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Personas del equipo</p>
+        {personas.length===0&&huerfanos.length===0&&(
+          <p className="px-3 py-4 text-xs text-muted-foreground">{q||soloNoLeidas?"Nadie coincide.":"No hay más personas en el equipo."}</p>
+        )}
+        {personas.map(m=>{
+          const hilo=hiloDe(m.id);
+          return fila(m.id,{
+            nombre:m.nombre||m.email,
+            detalle:rolEquipo(m.rol,m.nivel_soporte),
+            colorId:m.id,
+            activo:Boolean(hilo&&selectedId===hilo.id),
+            unread:hilo?.unread||0,
+            ultimo:hilo?hilo.lastMsg:undefined,
+            cargando:abriendoHilo===m.id,
+            onClick:()=>{
+              if(hilo){setSelectedId(hilo.id);return;}
+              if(!onAbrirHiloEquipo)return;
+              setAbriendoHilo(m.id);
+              void onAbrirHiloEquipo(m.id).then(id=>{if(id)setSelectedId(id);}).finally(()=>setAbriendoHilo(""));
+            },
+          });
+        })}
+        {huerfanos.map(c=>fila(c.id,{nombre:c.counterpartName||"Hilo privado",detalle:"Ya no está en el equipo",colorId:c.counterpartId||c.id,activo:selectedId===c.id,unread:c.unread,ultimo:c.lastMsg,onClick:()=>setSelectedId(c.id)}))}
+      </>
+    );
+  }
 
   async function sendMsg(){
     if(!input.trim()||!selectedId)return;
@@ -4381,6 +4471,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
         ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"}]:[]),
         ...(conversations.some(c=>c.type==="soporte")?[{k:"soporte",label:"Soporte"}]:[]),
         {k:"no-leidas",label:"No leídas"},
+        ...(conversations.some(c=>c.atiendeNombre)?[{k:"asesores",label:"De mis asesores"}]:[]),
       ];
   const pickerVisibleFiles = resourceSearchResults?.files ?? resourceExplorer.archivos;
   const pickerVisibleFolders = resourceSearchResults
@@ -4557,30 +4648,13 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 <div>
                   <p className="text-sm font-semibold">Canal del equipo</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Administración, soporte y diseño. Los clientes y las empresas no entran aquí.
+                    Elige a quién escribirle. La sala la lee todo el equipo; un hilo privado, solo ustedes dos.
                   </p>
                 </div>
-                <select
-                  aria-label="Abrir un hilo con alguien del equipo"
-                  className="w-full rounded-lg border border-border bg-white px-2 py-1.5 text-xs"
-                  value=""
-                  onChange={(e)=>{
-                    const id=e.target.value;
-                    if(id&&onAbrirHiloEquipo){void onAbrirHiloEquipo(id);}
-                    e.target.value="";
-                  }}
-                >
-                  <option value="">Hablar en privado con…</option>
-                  {miembrosEquipo.map((m)=>(
-                    <option key={m.id} value={m.id}>
-                      {(m.nombre||m.email)}{m.rol==="soporte"?` · soporte N${m.nivel_soporte??1}`:m.rol==="designer"?" · diseño":" · administración"}
-                    </option>
-                  ))}
-                </select>
               </div>
             )}
             <div className="px-3 pt-3 pb-2 border-b border-border">
-              <Input placeholder={modoEquipo?"Buscar en el canal...":"Buscar por código, empresa, asesor..."} value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
+              <Input placeholder={modoEquipo?"Buscar persona del equipo...":"Buscar por código, empresa, asesor..."} value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
             </div>
             <div className="flex gap-1 px-3 py-2 border-b border-border overflow-x-auto">
               {FILTERS.map(f=>(
@@ -4592,12 +4666,12 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
               ))}
             </div>
             <div className="flex-1 overflow-y-auto">
-              {filteredConvs.length===0?(
+              {modoEquipo?renderListaEquipo():filteredConvs.length===0?(
                 <div className="flex flex-col items-center justify-center py-12 gap-2 px-4 text-center">
                   <MessageSquare className="w-8 h-8 text-muted-foreground/30"/>
                   <p className="text-sm text-muted-foreground">No hay conversaciones</p>
                 </div>
-              ):filteredConvs.map(c=>{
+              ):convsEnLista.map((c,i)=>{
                 const cImp=importers.find(i=>i.id===c.importerId);
                 // En el hilo interno la contraparte es una persona del equipo,
                 // no una empresa cliente; en soporte, quien pidió ayuda.
@@ -4609,8 +4683,15 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 const urgencia = c.type==="soporte" ? URGENCIA_SOPORTE[c.urgency||""] : undefined;
                 const isSelected=selectedId===c.id;
                 const suContraparte=resolverContraparteChat(c,cImp||null);
+                const nuevoGrupo=filter==="asesores"&&(i===0||convsEnLista[i-1].atiendeNombre!==c.atiendeNombre);
                 return (
-                  <button key={c.id} onClick={()=>setSelectedId(c.id)}
+                  <Fragment key={c.id}>
+                  {nuevoGrupo&&(
+                    <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted/40 border-b border-border/50">
+                      Chats de {c.atiendeNombre}
+                    </p>
+                  )}
+                  <button onClick={()=>setSelectedId(c.id)}
                     className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
                       isSelected?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
                     {/* El avatar es de la PERSONA y el distintivo pequeño dice de
@@ -4650,6 +4731,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                       {c.status==="archivada"&&<span className="text-[10px] text-muted-foreground/60 font-medium">Archivada</span>}
                     </div>
                   </button>
+                  </Fragment>
                 );
               })}
             </div>
@@ -4727,12 +4809,25 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 </div>
               </div>
 
+              {conv.atiendeNombre&&(
+                <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800">
+                  Chat de <strong>{conv.atiendeNombre}</strong> con {contraparte.nombre}. Lo ves como cuenta de la empresa:
+                  a la derecha lo que escribió tu equipo, a la izquierda el cliente.
+                </div>
+              )}
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-slate-50/40">
                 {convMsgs.map((msg,i)=>{
                   const isClient=msg.sender==="client";
                   const prevMsg=i>0?convMsgs[i-1]:null;
                   const messageAttachments=attachmentsByMessage[msg.id]||[];
+                  // Donde escribe más de una persona por lado (la empresa con
+                  // asesor y dueña, la sala del equipo, un ticket que pasó por
+                  // varios agentes) cada grupo de mensajes lleva el nombre.
+                  const enSalaEquipo=conv.type==="equipo"&&conv.counterpartRole==="plataforma";
+                  const mostrarAutor=Boolean(msg.authorName)
+                    &&(isClient||enSalaEquipo||conv.type==="soporte"||Boolean(conv.atiendeNombre))
+                    &&(!prevMsg||prevMsg.authorName!==msg.authorName||prevMsg.sender!==msg.sender);
                   return (
                     <div key={msg.id}>
                       {msg.dateGroup&&(
@@ -4743,8 +4838,11 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                         </div>
                       )}
                       <div className={clsx("flex gap-2 items-end mb-0.5",isClient?"justify-end":"justify-start")}>
-                        {!isClient&&<Avatar initials={contraparte.iniciales} size="sm" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>}
+                        {!isClient&&(enSalaEquipo&&msg.authorName
+                          ?<Avatar initials={initialsFromName(msg.authorName)} size="sm" color={importerColorFromId(msg.authorName)}/>
+                          :<Avatar initials={contraparte.iniciales} size="sm" color={contraparte.color} src={contraparte.fotoUrl||undefined}/>)}
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
+                          {mostrarAutor&&<span className="text-[10px] font-semibold text-muted-foreground px-1">{msg.authorName}</span>}
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
                           {messageAttachments.length>0 && (
                             <div className={clsx("grid gap-2", messageAttachments.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1", isClient ? "justify-items-end" : "justify-items-start")}>
@@ -4810,7 +4908,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                             )}
                           </div>
                         </div>
-                        {isClient&&<Avatar initials="AG" size="sm"/>}
+                        {isClient&&<Avatar initials={msg.authorName?initialsFromName(msg.authorName):"AG"} size="sm"/>}
                       </div>
                     </div>
                   );
@@ -11682,6 +11780,7 @@ export default function App() {
         advisorPhone: importer?.advisor.phone,
         advisorInitials: importer?.advisor.initials,
         advisorColor: importer?.advisor.color,
+        atiendeNombre: row.asesor_nombre ?? undefined,
         status: "activa",
         // Lo calcula el backend contra la marca de lectura del usuario; antes
         // estaba escrito a cero y el filtro de no leídas no filtraba nada.
@@ -12231,15 +12330,17 @@ export default function App() {
   }
 
   /** Abre el hilo privado con una persona del equipo, dentro de la misma pantalla. */
-  async function abrirHiloEquipo(miembroId:string){
+  async function abrirHiloEquipo(miembroId:string):Promise<string|undefined>{
     try{
       const hilo=await businessService.openTeamChannel(miembroId);
       await reloadChatData();
       setInitialChatConvId(hilo.id);
       goTo("team-channel");
+      return hilo.id;
     }catch(error){
       const mensaje=error instanceof Error?error.message:"No se pudo abrir el hilo";
       toast.error(mensaje);
+      return undefined;
     }
   }
 

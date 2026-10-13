@@ -23,7 +23,7 @@ const REMITENTES_POR_DEFECTO: RemitenteCorreo[] = [
   { buzon: "notificaciones", direccion: "notificaciones@zarpi.co", uso: "Avisos a usuarios: estado de la plataforma, cambios en los términos, soporte resuelto, aprobaciones." },
   { buzon: "contacto", direccion: "contacto@zarpi.co", uso: "Lo que tiene que ver con el formulario de contacto." },
   { buzon: "pagos", direccion: "pagos@zarpi.co", uso: "Pagos: comprobantes, tokens, suscripción a Tendencias y recompensas del reto." },
-  { buzon: "admin", direccion: "admin@zarpi.co", uso: "El equipo y correos directos a empresas: verificación de cuentas y avisos urgentes." },
+  { buzon: "admin", direccion: "admin@zarpi.co", uso: "Campañas que el equipo manda a mano. Ningún aviso automático sale de aquí." },
 ];
 
 type CampaignForm = {
