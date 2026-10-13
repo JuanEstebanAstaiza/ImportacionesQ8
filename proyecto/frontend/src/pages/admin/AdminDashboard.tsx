@@ -978,7 +978,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
       ) : null}
 
       {isLoading ? (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">Cargando datos administrativos...</div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:!bg-accent/20">Cargando datos administrativos...</div>
       ) : null}
 
       {statusMessage ? (
@@ -1036,7 +1036,10 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               </thead>
               <tbody>
                 {openQuotes.slice(0, 12).map((quote) => (
-                  <tr key={quote.id} className="border-t border-border">
+                  <tr 
+                    key={quote.id} 
+                    className="border-t border-border transition-colors hover:bg-primary/12 dark:hover:!bg-accent/12"
+                  >
                     <td className="px-3 py-2 font-medium text-foreground">{quote.nombre_producto}</td>
                     <td className="px-3 py-2 text-muted-foreground">{quote.pais_importacion}</td>
                     <td className="px-3 py-2 text-muted-foreground">{quote.linea_producto}</td>
@@ -1103,7 +1106,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                     <td className="px-4 py-3 text-muted-foreground">{leerPerfilPublico(company, "address", "direccion") || companyUiDetails[company.id]?.direccion || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{company.paises_origen[0] || "N/A"}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${company.estado === "activo" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${company.estado === "activo" ? "bg-emerald-100 text-emerald-700 dark:!bg-accent/20" : "bg-slate-100 text-slate-700 dark:!bg-accent/20"}`}>
                         {company.estado || "activo"}
                       </span>
                     </td>
@@ -1129,7 +1132,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                           className={`rounded-md border px-2.5 py-1.5 text-xs font-medium ${
                             company.verificado
                               ? "border-border hover:bg-muted"
-                              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:!bg-accent/20 dark:hover:!bg-accent"
                           }`}
                         >
                           {company.verificado ? "Ver expediente" : "Verificar"}

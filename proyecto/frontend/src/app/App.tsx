@@ -6594,7 +6594,7 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="flex w-full min-h-16 items-center justify-between gap-3 px-4 sm:px-6">
           <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
           <nav className="hidden xl:flex items-center gap-1">
             {LANDING_TABS.map(section=>{
@@ -10049,7 +10049,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={abrirAcceso} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoAcceso}</Button>
-            <Button variant="secondary" size="lg" icon={<MoveRight className="w-4 h-4"/>} onClick={()=>irA("how-it-works")} className="px-8 bg-transparent text-background border-background/40 hover:bg-background/10">Cómo funciona</Button>
+            <Button variant="secondary" size="lg" icon={<MoveRight className="w-4 h-4"/>} onClick={()=>irA("how-it-works")} className="px-8 text-black bg-accent border-background/40 hover:bg-accent/85 ">Cómo funciona</Button>
           </div>
           <p className="mt-6 text-sm italic text-background/60 max-w-xl mx-auto">
             Para comerciantes, emprendedores y empresas que quieren importar con más información y menos incertidumbre.
