@@ -982,7 +982,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
       ) : null}
 
       {statusMessage ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{statusMessage}</div>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:!bg-accent/15">{statusMessage}</div>
       ) : null}
 
       {tab === "metricas" ? (
@@ -1071,7 +1071,8 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             <button
               type="button"
               onClick={() => setShowCompanyModal(true)}
-              className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-lg bg-primary dark:bg-accent px-3 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80 disabled:opacity-60"
+
             >
               + Crear Empresa
             </button>
@@ -1094,7 +1095,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               </thead>
               <tbody>
                 {companies.map((company) => (
-                  <tr key={company.id} className="border-t border-border">
+                  <tr key={company.id} className="border-t border-border hover:!bg-primary/8 dark:hover:!bg-accent/8">
                     <td className="px-4 py-3">
                       <div className="font-medium text-foreground">{company.nombre_empresa}</div>
                       <div className="text-xs text-muted-foreground">{company.especialidad_producto.join(", ") || "General"}</div>
@@ -1164,7 +1165,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             <button
               type="button"
               onClick={() => setShowUserModal(true)}
-              className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-lg bg-primary dark:bg-accent px-3 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80"
             >
               + Crear / Invitar Usuario
             </button>
@@ -1181,7 +1182,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   <select
                     value={userRoleFilter}
                     onChange={(event) => setUserRoleFilter(event.target.value as RoleFilter)}
-                    className="h-9 rounded-lg border border-border px-2 text-sm"
+                    className="h-9 rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
                   >
                     {ROLE_OPTIONS.map((role) => (
                       <option key={role} value={role}>
@@ -1192,7 +1193,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   <select
                     value={userActiveFilter}
                     onChange={(event) => setUserActiveFilter(event.target.value as ActiveFilter)}
-                    className="h-9 rounded-lg border border-border px-2 text-sm"
+                    className="h-9 rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
                   >
                     <option value="todos">todos</option>
                     <option value="activos">activos</option>
@@ -1215,7 +1216,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   </thead>
                   <tbody>
                     {users.map((user) => (
-                      <tr key={user.id} className="border-t border-border">
+                      <tr key={user.id} className="border-t border-border hover:!bg-primary/10 dark:hover:!bg-accent/10">
                         <td className="px-3 py-2">
                           <div className="font-medium text-foreground">{user.nombre || user.email}</div>
                           <div className="text-xs text-muted-foreground">{user.email}</div>
@@ -1223,7 +1224,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                         <td className="px-3 py-2 text-muted-foreground">{user.importador_id ? companyNameById[user.importador_id] || user.importador_id : "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">{user.rol}</td>
                         <td className="px-3 py-2">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${user.activo ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
+                          <span className={`rounded-full px-2 py-1 text-xs font-medium dark:!bg-accent/15 ${user.activo ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>
                             {user.activo ? "Activo" : "Inactivo"}
                           </span>
                         </td>
@@ -1234,7 +1235,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                             onClick={() => {
                               void handleToggleUserStatus(user);
                             }}
-                            className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                            className="rounded-md border border-primary/40 dark:border-accent/40 hover:!bg-primary dark:hover:!bg-accent hover:!text-white dark:hover:!text-black px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
                           >
                             {user.activo ? "Desactivar" : "Activar"}
                           </button>
