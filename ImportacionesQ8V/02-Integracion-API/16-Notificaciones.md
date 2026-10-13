@@ -120,10 +120,10 @@ Redis Pub/Sub sigue existiendo para tiempo real; la bandeja REST es la fuente de
 | Buzón | Qué sale de ahí |
 |-------|-----------------|
 | `no-reply` | Solo los códigos de acceso: OTP de registro y de inicio de sesión, y recuperación de contraseña. Es el alias de Resend sin buzón; las respuestas van a `EMAIL_REPLY_TO`. No se ofrece en Admin › Correos. |
-| `notificaciones` | **Por defecto.** Eventos del usuario: soporte resuelto, aprobaciones del reto, cotizaciones, órdenes y rechazos. También el aviso del formulario de contacto, el estado de la plataforma y los cambios de términos. Las respuestas llegan a `EMAIL_REPLY_TO` (contacto@). |
+| `notificaciones` | **Por defecto, para todo aviso automático**, también los que van al equipo (admin, soporte, diseño) y a las empresas (verificación de cuenta y retiro del sello). Eventos del usuario: soporte resuelto, aprobaciones del reto, cotizaciones, órdenes y rechazos. También el aviso del formulario de contacto, el estado de la plataforma y los cambios de términos. Las respuestas llegan a `EMAIL_REPLY_TO` (contacto@). |
 | `contacto` | Lo que tiene que ver con el formulario de contacto; se elige en Admin › Correos. |
 | `pagos` | Comprobantes (acuse, aprobación, rechazo), retiros del reto y transferencias. |
-| `admin` | El equipo (si no se indica buzón y el destinatario es admin, soporte o designer) y los correos directos a empresas: verificación de cuenta y retiro del sello. |
+| `admin` | Solo las campañas que el admin manda a mano desde Admin › Correos y el acuse de la lista privada (que se responde desde admin@). Antes los avisos al equipo y la verificación de empresas salían de aquí, y como las respuestas a admin@ vuelven a admin@, ese buzón se llenaba de notificaciones. |
 
 En Admin › Correos (`POST /admin/correos/masivo`, campo `buzon`) se elige el remitente; `GET /admin/correos/remitentes` lista los buzones con su dirección y su uso.
 

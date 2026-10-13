@@ -43,7 +43,7 @@ BUZONES = {
                       "soporte resuelto, aprobaciones y demás eventos de su cuenta.",
     "contacto": "Lo que tiene que ver con el formulario de contacto.",
     "pagos": "Pagos: comprobantes, tokens, suscripción a Tendencias y recompensas del reto.",
-    "admin": "El equipo y correos directos a empresas: verificación de cuentas y avisos urgentes.",
+    "admin": "Campañas que el equipo manda a mano. Ningún aviso automático sale de aquí.",
 }
 BUZON_POR_DEFECTO = "notificaciones"
 # Solo para los códigos de acceso (OTP y recuperación de contraseña); no se

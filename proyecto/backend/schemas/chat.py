@@ -22,6 +22,12 @@ class MensajeChatResponse(BaseModel):
     fecha_envio: datetime
     # No usar from_attributes sobre "metadata": en SQLAlchemy es MetaData del registry.
     metadata: Optional[Dict[str, Any]] = None
+    # Quién lo escribió y si va del lado de quien mira (ver
+    # `routers/chat.py::_lado_de`). Sin esto, la cuenta dueña de una empresa que
+    # abría el chat de su asesor veía todo en una sola columna: lo del asesor y
+    # lo del cliente salían igual, porque ninguno de los dos era ella.
+    remitente_nombre: Optional[str] = None
+    de_mi_lado: Optional[bool] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -86,6 +92,10 @@ class ConversacionChatResponse(BaseModel):
     agente_asignado_id: Optional[str] = None
     agente_nombre: Optional[str] = None
     agente_nivel: Optional[int] = None
+    # Cuando la cuenta dueña de la empresa mira el chat de uno de sus asesores:
+    # quién lo atiende. Nulo en los chats propios.
+    asesor_id: Optional[str] = None
+    asesor_nombre: Optional[str] = None
     # Calificación del servicio, si quien pidió ayuda ya puntuó.
     calificacion: Optional[int] = None
     comentario_calificacion: Optional[str] = None
