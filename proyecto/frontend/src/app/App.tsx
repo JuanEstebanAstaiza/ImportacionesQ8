@@ -5510,6 +5510,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   variant={resourceViewMode === "list" ? "secondary" : "ghost"}
                   size="sm"
                   onClick={() => setResourceViewMode("list")}
+                  className={resourceViewMode === "list" ? "!bg-primary !text-white dark:!bg-accent dark:!text-black" : "hover:!bg-primary/20 hover:!text-primary dark:hover:!bg-accent/20 dark:hover:!text-accent"}
                 >
                   Lista
                 </Button>
@@ -5518,6 +5519,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   size="sm"
                   icon={<LayoutGrid className="w-3.5 h-3.5" />}
                   onClick={() => setResourceViewMode("grid")}
+                  className={resourceViewMode === "grid" ? "!bg-primary !text-white dark:!bg-accent dark:!text-black" : "hover:!bg-primary/20 hover:!text-primary dark:hover:!bg-accent/20 dark:hover:!text-accent"}
                 >
                   Cuadrícula
                 </Button>
@@ -5537,7 +5539,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 <button
                   key={`${node.id || "root"}-${index}`}
                   onClick={()=>{void jumpResourceTrail(index);}}
-                  className={clsx("text-xs px-2 py-1 rounded-md border",index===resourceFolderTrail.length-1?"bg-primary/10 text-primary border-primary/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
+                  className={clsx("text-xs px-2 py-1 rounded-md border",index===resourceFolderTrail.length-1?"bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent border-primary/20 dark:border-accent/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
                 >
                   {node.name}
                 </button>
@@ -5584,8 +5586,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   className={clsx(
                     "rounded-xl border text-left transition-colors w-full",
                     folder.is_protected || folder.is_system
-                      ? "doc-system-folder"
-                      : "border-border bg-sky-50/40 hover:bg-sky-50",
+                      ? "doc-system-folder dark:!bg-accent/10 dark:hover:!bg-accent/20"
+                      : "border-border dark:!border-sky-200/40 bg-sky-600/20 hover:bg-sky-600/40",
                     resourceViewMode === "grid" ? "p-4" : "px-3 py-2.5 flex items-center justify-between gap-3"
                   )}
                 >
@@ -5617,7 +5619,12 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {new Date(file.created_at).toLocaleDateString("es-CO")}</p>
                   </div>
                   <div className={clsx("flex items-center gap-1.5", resourceViewMode === "grid" ? "mt-3" : "flex-shrink-0")}>
-                    <Button size="sm" variant="secondary" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadResource(file.storage_url, file.nombre);}}>Descargar</Button>
+                    <Button size="sm"
+                      variant="secondary"
+                      icon={<Download className="w-3.5 h-3.5"/>}
+                      onClick={()=>{void handleDownloadResource(file.storage_url, file.nombre);}}>
+                        Descargar
+                      </Button>
                     <Button size="sm" variant="secondary" onClick={()=>{void handleOpenResource(file.storage_url, file.nombre);}}>Abrir</Button>
                     <Button size="sm" onClick={()=>{void handleShareExistingResourceToChat(file);}}>Compartir</Button>
                   </div>

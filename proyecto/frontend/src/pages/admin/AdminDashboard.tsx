@@ -1071,7 +1071,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             <button
               type="button"
               onClick={() => setShowCompanyModal(true)}
-              className="rounded-lg bg-primary dark:bg-accent px-3 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80 disabled:opacity-60"
+              className="rounded-lg px-3 py-2 text-sm font-medium bg-primary dark:bg-accent !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80 disabled:opacity-60"
 
             >
               + Crear Empresa
@@ -1347,14 +1347,14 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                             onChange={(event) => {
                               void handleChangeAgentLevel(agente.id, Number(event.target.value));
                             }}
-                            className="h-8 rounded-lg border border-border px-2 text-xs"
+                            className="h-8 rounded-lg border border-border bg-background px-2 text-xs text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
                           >
                             <option value={1}>Nivel 1</option>
                             <option value={2}>Nivel 2</option>
                             <option value={3}>Nivel 3</option>
                           </select>
                         ) : (
-                          <span className="text-xs">Nivel {agente.nivel ?? 1}</span>
+                          <span className="text-xs text-foreground">Nivel {agente.nivel ?? 1}</span>
                         )}
                       </td>
                       <td className="py-2.5 pr-3 text-right">{agente.tickets_asignados}</td>
@@ -1457,7 +1457,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               </thead>
               <tbody>
                 {conversations.map((conversation) => (
-                  <tr key={conversation.id} className="border-b border-border/60 align-top">
+                  <tr key={conversation.id} className="border-b border-border/60 align-top hover:!bg-muted dark:hover:!bg-muted">
                     <td className="py-3 pr-3">
                       {conversation.tipo === "interna" ? (
                         <span className="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:!bg-accent/20">
@@ -1495,7 +1495,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                         onClick={() => {
                           void openConversationDetail(conversation);
                         }}
-                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium bg-primary dark:bg-accent hover:!border-primary dark:hover:!border-accent !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80"
                       >
                         Ver conversación
                       </button>
@@ -1933,7 +1933,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <button
                 type="button"
                 onClick={() => setOpenConversation(null)}
-                className="rounded-md border border-border p-1.5 hover:bg-muted"
+                className="rounded-md border border-border p-1.5 hover:!bg-primary hover:!text-white hover:!border-primary dark:hover:!bg-accent dark:hover:!text-black dark:hover:!border-accent"
                 aria-label="Cerrar"
               >
                 <X className="h-4 w-4" />
@@ -1954,10 +1954,10 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                     key={message.id}
                     className={`rounded-lg border p-3 ${
                       message.tipo === "sistema"
-                        ? "border-border bg-muted/50"
+                        ? "border-border bg-muted/50 dark:!border-border dark:!bg-muted/50"
                         : esSolicitante
-                          ? "border-blue-100 bg-blue-50"
-                          : "border-emerald-100 bg-emerald-50"
+                          ? "border-blue-100 bg-blue-50 dark:!border-primary/20 dark:!bg-primary/30"
+                          : "border-emerald-100 bg-emerald-50 dark:!border-accent/20 dark:!bg-accent/20"
                     }`}
                   >
                     <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
