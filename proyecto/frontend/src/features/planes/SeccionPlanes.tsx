@@ -68,11 +68,11 @@ export function SeccionPlanes({ onInscribirme, onCondiciones }: {
   return (
     <section id="planes" className="scroll-mt-20 py-20 px-6 bg-muted relative overflow-hidden">
       <div className="zarpi-blob zarpi-blob-violet absolute -right-24 top-10 pointer-events-none opacity-30 scale-90" />
-      <div className="max-w-5xl mx-auto relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Precio de lanzamiento</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Elige cómo entrar a Zarpi</h2>
-          <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
             Cupos limitados para los primeros compradores. El precio de lanzamiento se mantiene mientras haya cupos.
           </p>
         </div>
@@ -87,7 +87,7 @@ export function SeccionPlanes({ onInscribirme, onCondiciones }: {
             {planes.map((plan) => <Tarjeta key={plan.id} plan={plan} onInscribirme={onInscribirme} />)}
           </div>
         )}
-        <p className="mt-8 max-w-3xl mx-auto text-center text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-8 max-w-5xl mx-auto text-center text-xs leading-relaxed text-muted-foreground">
           Una solicitud es una publicación con producto y cantidad que llega a las empresas importadoras. Si no recibe
           propuestas en 72 horas, la unidad vuelve a tu saldo. Pago por transferencia; activamos tu plan en máximo 2 horas
           en horario hábil.{" "}

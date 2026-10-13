@@ -1487,9 +1487,24 @@ type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
+  const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
   const floating=!pinned&&hovered;
   const isExpanded=pinned||hovered;
+  const isAdminNavigation=navItems.some(item=>item.key==="admin-dashboard");
+  const adminGroups=[
+    {key:"gestion",label:"Gestión",icon:Building2,items:["admin-empresas","admin-presentaciones","admin-asignacion","admin-usuarios","admin-cotizantes"]},
+    {key:"comunicacion",label:"Comunicación",icon:MessageSquare,items:["admin-correos","admin-soporte","chats","documentos"]},
+    {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","tendencias-aprobacion","diseno","admin-reto"]},
+    {key:"finanzas",label:"Finanzas y formación",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
+    {key:"configuracion",label:"Configuración",icon:ToggleRight,items:["admin-certificaciones","admin-respaldos","admin-tipografia","admin-modulos"]},
+  ] as const;
+
+  useEffect(()=>{
+    if(!isAdminNavigation)return;
+    const activeGroup=adminGroups.find(group=>group.items.includes(active));
+    if(activeGroup)setOpenAdminGroup(activeGroup.key);
+  },[active,isAdminNavigation]);
 
   function onEnter(){timer.current=setTimeout(()=>setHovered(true),60);}
   function onLeave(){if(timer.current)clearTimeout(timer.current);setHovered(false);}
@@ -1511,8 +1526,91 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
           <img src={dark ? (isExpanded ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-isotipo-acid.svg") : (isExpanded ? "/brand/zarpi-wordmark.svg" : "/brand/zarpi-isotipo.svg")} alt="Zarpi" className={clsx("object-contain object-left transition-all duration-200",isExpanded?"h-8 w-28":"h-8 w-8")} />
         </div>
 
-        <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1">
-          {navItems.map(({ icon: Icon, label, key }) => {
+        <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1 overflow-y-auto">
+          {isAdminNavigation ? (
+            <>
+              {navItems.filter(item=>item.key==="admin-dashboard").map(({icon:Icon,label,key})=>{
+                const isActive=active===key;
+                return (
+                  <button
+                    key={key}
+                    onClick={()=>onNav(key)}
+                    className={clsx(
+                      "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
+                      isActive
+                        ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                      isExpanded ? "gap-2.5" : "justify-center gap-0"
+                    )}
+                    title={!isExpanded ? label : undefined}
+                  >
+                    <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary dark:text-accent")}/>
+                    <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                      <span className="whitespace-nowrap">{label}</span>
+                    </div>
+                    {isExpanded&&isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0"/>}
+                  </button>
+                );
+              })}
+              {adminGroups.map(group=>{
+                const GroupIcon=group.icon;
+                const groupItems=navItems.filter(item=>group.items.includes(item.key));
+                if(groupItems.length===0)return null;
+                const isOpen=openAdminGroup===group.key;
+                const hasActiveItem=groupItems.some(item=>item.key===active);
+                return (
+                  <div key={group.key} className="mt-1">
+                    <button
+                      type="button"
+                      onClick={()=>isExpanded&&setOpenAdminGroup(current=>current===group.key?null:group.key)}
+                      className={clsx(
+                        "flex items-center rounded-lg px-2.5 py-2 text-sm font-semibold transition-all duration-150 w-full",
+                        hasActiveItem
+                          ? "text-primary dark:text-accent"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                        isExpanded?"gap-2.5":"justify-center gap-0"
+                      )}
+                      title={!isExpanded?group.label:undefined}
+                      aria-expanded={isExpanded?isOpen:undefined}
+                    >
+                      <GroupIcon className="w-4 h-4 flex-shrink-0"/>
+                      <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                        <span className="whitespace-nowrap">{group.label}</span>
+                      </div>
+                      {isExpanded&&<ChevronDown className={clsx("ml-auto w-4 h-4 transition-transform duration-200",isOpen&&"rotate-180")}/>}
+                    </button>
+                    {isExpanded&&(
+                      <div className={clsx("grid transition-[grid-template-rows] duration-200",isOpen?"grid-rows-[1fr]":"grid-rows-[0fr]")}>
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="ml-2 border-l border-border pl-2 pt-0.5">
+                            {groupItems.map(({icon:Icon,label,key})=>{
+                              const isActive=active===key;
+                              return (
+                                <button
+                                  key={key}
+                                  onClick={()=>onNav(key)}
+                                  className={clsx(
+                                    "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full gap-2.5",
+                                    isActive
+                                      ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  )}
+                                >
+                                  <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary dark:text-accent")}/>
+                                  <span className="whitespace-nowrap">{label}</span>
+                                  {isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0"/>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          ) : navItems.map(({ icon: Icon, label, key }) => {
             const isActive = active === key;
             return (
               <button
@@ -5040,7 +5138,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
               </div>
               <div className="p-3 space-y-3 flex-1">
                 {conv.type==="soporte"?(
-                  <div className={clsx("rounded-lg border px-2.5 py-2 space-y-1.5",conv.closed?"bg-emerald-50 border-emerald-200":"bg-rose-50 border-rose-200")}>
+                  <div className={clsx("rounded-lg border px-2.5 py-2 space-y-1.5 dark:!bg-accent/20",conv.closed?"bg-emerald-50 border-emerald-200":"bg-rose-50 border-rose-200")}>
                     <p
                       className={clsx(
                         "text-[10px] font-semibold uppercase tracking-wide",
@@ -5095,7 +5193,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
 
                     {/* Cerrar es de quien atiende; reabrir, también de quien lo pidió. */}
                     {!conv.closed&&esEquipoPlataforma&&(
-                      <div className="pt-1.5 border-t border-rose-200 space-y-1.5">
+                      <div className="pt-1.5 border-t border-rose-200 dark:border-border space-y-1.5">
                         {/* Escalar: el nivel inicial se dedujo de la urgencia, que
                             dice cuánta prisa corre y no lo difícil que es. */}
                         {(conv.level||1)<3&&(
@@ -5109,11 +5207,17 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                           onChange={(e)=>setResolucionTicket(e.target.value)}
                           rows={3}
                           placeholder="Qué se hizo para resolverlo…"
-                          className="w-full resize-none rounded-md border border-rose-200 px-2 py-1.5 text-[11px] bg-white"
+                          className="w-full resize-none rounded-md border border-rose-200 dark:border-border px-2 py-1.5 text-[11px] bg-white dark:bg-background text-foreground"
                         />
-                        <Button variant="primary" size="sm" fullWidth loading={cerrandoTicket}
+                        <Button 
+                          variant="primary" 
+                          size="sm" 
+                          fullWidth 
+                          loading={cerrandoTicket}
                           disabled={resolucionTicket.trim().length<5}
-                          onClick={()=>{void cerrarTicket();}}>
+                          onClick={()=>{void cerrarTicket();}}
+                          className="bg-primary text-white dark:bg-accent dark:text-black dark:hover:bg-accent/80"
+                        >
                           Cerrar ticket
                         </Button>
                       </div>
@@ -10038,20 +10142,20 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
         <div className="zarpi-blob zarpi-blob-violet absolute -top-24 -left-24 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-acid absolute top-20 -right-20 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-neutral absolute -bottom-36 left-1/3 z-0 pointer-events-none"/>
-        <div className="landing-hero-content relative z-10 max-w-5xl mx-auto text-center">
+        <div className="landing-hero-content relative z-10 max-w-7xl mx-auto text-center">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent text-accent-foreground rounded-full text-xs font-semibold mb-6"><Ship className="w-3.5 h-3.5"/>Importaciones desde China</span>
           <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mb-5">
             Tú dices qué importar.<br/>
             <span className="text-accent">Zarpi encuentra quién lo trae.</span>
           </h1>
-          <p className="text-lg text-background/75 max-w-2xl mx-auto leading-relaxed mb-8">
+          <p className="text-lg text-background/75 max-w-4xl mx-auto leading-relaxed mb-8">
             Publica lo que quieres importar y recibe propuestas de empresas importadoras verificadas, con precio final puesto en Colombia. Compara, elige y sigue todo el proceso en un solo lugar.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={abrirAcceso} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoAcceso}</Button>
             <Button variant="secondary" size="lg" icon={<MoveRight className="w-4 h-4"/>} onClick={()=>irA("how-it-works")} className="px-8 text-black bg-accent border-background/40 hover:bg-accent/85 ">Cómo funciona</Button>
           </div>
-          <p className="mt-6 text-sm italic text-background/60 max-w-xl mx-auto">
+          <p className="mt-6 text-sm italic text-background/60 max-w-2xl mx-auto">
             Para comerciantes, emprendedores y empresas que quieren importar con más información y menos incertidumbre.
           </p>
         </div>
@@ -10061,7 +10165,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       <section className="py-16 px-6 bg-muted relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-acid absolute -right-16 top-10 pointer-events-none opacity-30 scale-90" />
         <div className="zarpi-blob zarpi-blob-violet absolute -left-20 bottom-10 pointer-events-none opacity-25 scale-75" />
-        <div className="max-w-6xl mx-auto relative z-10 grid gap-5 md:grid-cols-3">
+        <div className="max-w-7xl mx-auto relative z-10 grid gap-5 md:grid-cols-3">
           {benefits.map((b, i) => (
             <div key={b.title} className="landing-reveal bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 hover:shadow-md transition-shadow" style={{animationDelay:`${i*90}ms`}}>
               <div className="landing-icon w-12 h-12 rounded-xl flex items-center justify-center mb-4 border bg-primary/10 border-primary/20 text-primary dark:bg-[#EDF953]/15 dark:border-[#EDF953]/30 dark:text-[#EDF953]">
@@ -10076,7 +10180,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 
       {/* CÓMO FUNCIONA (versión corta) */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-7xl mx-auto relative z-10">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-12">De lo que quieres importar a una propuesta en firme.</h2>
           <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {pasosCortos.map((paso,i)=>(
@@ -10098,7 +10202,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 
       {/* PARA EMPRESAS IMPORTADORAS */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
-        <div className="max-w-3xl mx-auto relative z-10 rounded-2xl border border-border bg-card/80 p-6 sm:p-10">
+        <div className="max-w-5xl mx-auto relative z-10 rounded-2xl border border-border bg-card/80 p-6 sm:p-10">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Para empresas importadoras</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-6">Tu experiencia merece llegar a más compradores.</h2>
           <ListaChequeo items={PARA_IMPORTADORAS}/>
@@ -10109,7 +10213,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 
       {/* PREGUNTAS FRECUENTES (versión corta) */}
       <section className="py-20 px-6 bg-muted relative overflow-hidden">
-        <div className="max-w-3xl mx-auto relative z-10">
+        <div className="max-w-5xl mx-auto relative z-10">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-10">Preguntas frecuentes</h2>
           <PreguntasLanding items={FAQ_HOME}/>
           <div className="text-center mt-6">
@@ -10131,7 +10235,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       /* CIERRE */
       <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-violet absolute right-20 top-1/3 pointer-events-none opacity-25 scale-80" />
-        <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
+        <div className="max-w-5xl mx-auto text-center text-primary-foreground relative z-10">
           <h2 className="text-2xl sm:text-3xl font-bold mb-3">Tu próxima importación empieza con una mejor decisión.</h2>
           <p className="text-primary-foreground/80 mb-7 leading-relaxed">Publica lo que necesitas y elige la empresa importadora que mejor se ajuste a tu operación.</p>
           <Button variant="secondary" size="lg" onClick={abrirAcceso} className="px-8 text-accent-foreground">{textoAcceso}</Button>
@@ -10146,7 +10250,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       {/* PIE */}
       <footer className="bg-[#0F0F0F] text-white py-10 px-6 relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-neutral absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-15 scale-125" />
-        <div className="mx-auto max-w-6xl relative z-10 space-y-6">
+        <div className="mx-auto max-w-7xl relative z-10 space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <img src="/brand/zarpi-wordmark-acid.svg" alt="Zarpi" className="h-8 w-28 object-contain object-left" />
             <p className="text-xs text-white/70"><span className="font-semibold text-white">{EMPRESA.razonSocial}</span> · NIT {EMPRESA.nit} · {EMPRESA.ciudad}, Colombia</p>
@@ -10161,7 +10265,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
             <button onClick={()=>onPolicy("terms")} className={enlacePie}>Términos y condiciones</button>
             <button onClick={()=>onPolicy("data")} className={enlacePie}>Política de tratamiento de datos</button>
           </nav>
-          <p className="max-w-4xl text-xs leading-relaxed text-white/55">
+          <p className="max-w-5xl text-xs leading-relaxed text-white/55">
             <span className="font-semibold text-white/70">Aviso legal: </span>
             Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
           </p>
@@ -10234,7 +10338,7 @@ function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamic
     <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
 
-      <div className="max-w-4xl mx-auto relative z-10 space-y-12">
+      <div className="max-w-7xl mx-auto relative z-10 space-y-12">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Quiénes somos</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Importar no debería depender de tener los contactos correctos.</h1>
@@ -10242,7 +10346,7 @@ function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamic
         {carrusel.activo&&carrusel.videos.length>0&&(
           <CarruselVideos videos={carrusel.videos} intervaloSegundos={carrusel.intervalo_segundos}/>
         )}
-        <div className="max-w-3xl mx-auto space-y-4 text-base leading-relaxed text-muted-foreground">
+        <div className="max-w-5xl mx-auto space-y-4 text-base leading-relaxed text-muted-foreground">
           <p>Cuando empezamos a importar no sabíamos por dónde arrancar: si irnos a Buenaventura a buscar quién traía contenedores o irnos a China. Y estando en China, frente al producto, quedaban dos preguntas: cómo iba a llegar a la bodega y cuánto iba a costar realmente tenerlo en Colombia.</p>
           <p>Con los años encontramos la respuesta: empresas importadoras que traen el producto a su nombre, lo nacionalizan y te lo entregan facturado en Colombia. Así importan desde quien hace su primer pedido hasta empresas que traen millones de dólares al mes. Algunas llevan más de treinta años yendo a China.</p>
           <p>También entendimos que encontrar una buena empresa no debería depender de una recomendación, un contacto o una conversación por WhatsApp. <span className="font-semibold text-foreground">Zarpi existe para que esa respuesta esté a un clic de cualquier comerciante en Colombia.</span></p>
@@ -10295,7 +10399,7 @@ function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlane
   return (
     <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
-      <div className="max-w-5xl mx-auto relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Cómo funciona</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Así se importa con Zarpi</h1>
@@ -10322,7 +10426,7 @@ function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlane
             <Button variant="secondary" className="mt-5 self-start" icon={<Building2 className="w-4 h-4"/>} onClick={onAplicarImportadora}>Aplicar como empresa importadora</Button>
           </Card>
         </div>
-        <div id="preguntas" className="scroll-mt-28 max-w-3xl mx-auto">
+        <div id="preguntas" className="scroll-mt-28 max-w-5xl mx-auto">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8">Preguntas frecuentes</h2>
           <PreguntasLanding items={FAQ_COMPLETA}/>
         </div>
@@ -10361,7 +10465,7 @@ function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:La
   return (
     <section className="pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
-      <div className="max-w-5xl mx-auto space-y-14 relative z-10">
+      <div className="max-w-7xl mx-auto space-y-14 relative z-10">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Novedades y aliados</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Lo último de Zarpi</h1>
@@ -10489,7 +10593,7 @@ function LandingContactSection({perfilInicial="comprador",onLogin,onRegister}:{p
   return (
     <section className="pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
-      <div className="max-w-3xl mx-auto space-y-12 relative z-10">
+      <div className="max-w-4xl mx-auto space-y-12 relative z-10">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Contacto</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Hablemos</h1>
