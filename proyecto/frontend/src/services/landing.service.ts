@@ -6,7 +6,7 @@ export type LandingButtonAction = "open_login" | "open_register" | "external_lin
 export type LandingBrandToken = "primary" | "surface" | "border" | "foreground" | "muted";
 /** "titulos"/"texto" siguen a la tipografía de la plataforma; "elvellon"/"avenor" son las de marca fijas. */
 export type LandingFontFamily = "titulos" | "texto" | "elvellon" | "avenor";
-export type LandingSection = "home" | "about" | "how-it-works" | "news" | "contact";
+export type LandingSection = "home" | "about" | "how-it-works" | "news" | "contact" | "planes" | "stats" | "dare";
 
 export interface LandingBlock {
   id: string;

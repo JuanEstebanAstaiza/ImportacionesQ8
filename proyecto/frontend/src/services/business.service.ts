@@ -20,6 +20,11 @@ export interface BackendImporter {
   puntaje_publicidad?: number;
   /** Órdenes que la empresa llevó hasta "entregado" (trayectoria pública). */
   proyectos_completados?: number;
+  /**
+   * Quién atiende en la empresa: sus asesores activos o, si no tiene, la
+   * cuenta responsable ("importador"). Solo el nombre: la ficha es pública.
+   */
+  asesores?: Array<{ id: string; nombre: string; rol: "asesor" | "importador" | string }>;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;

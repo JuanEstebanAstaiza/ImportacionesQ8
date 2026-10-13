@@ -152,7 +152,7 @@ function NuevaRonda({ nombreSugerido, onCreada, onCancelar }: { nombreSugerido: 
         Presupuesto máximo: <strong className="text-foreground">{pesos(datos.max_participantes * datos.recompensa_cop)}</strong> ({datos.max_participantes} cupos × {pesos(datos.recompensa_cop)})
       </p>
       {error ? (
-        <p role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-accent dark:bg-accent/20 dark:text-accent">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
         </p>
       ) : null}
@@ -592,7 +592,7 @@ export function RetoAdmin() {
         ) : null}
       </div>
 
-      <p className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+      <p className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-800 dark:border-accent dark:bg-accent/20 dark:text-accent">
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <span>La plataforma no mueve dinero: transferí desde Bancolombia y registrá aquí la referencia.</span>
       </p>
@@ -600,7 +600,7 @@ export function RetoAdmin() {
       {creando ? (
         <>
           {hayAbierta ? (
-            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-accent dark:bg-accent/20 dark:text-accent">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> Ya hay una ronda abierta. Ciérrala antes de crear otra.
             </p>
           ) : null}

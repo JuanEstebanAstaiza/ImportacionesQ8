@@ -45,7 +45,7 @@ import { FormCuentaBancaria } from "./FormCuentaBancaria";
 
 const REFRESCO_MS = 30_000;
 const CLASE_BOTON_ACENTO =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-base font-semibold text-[#0f0f0f] shadow-sm hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-primary/90 dark:bg-accent dark:text-[#0f0f0f] dark:hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60";
 
 function vencida(ronda: Ronda): boolean {
   return new Date(ronda.fecha_limite).getTime() <= Date.now();
@@ -121,7 +121,7 @@ function AvisameProxima() {
 
   if (enviado) {
     return (
-      <p role="status" className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+      <p role="status" className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-accent dark:bg-accent/20 dark:text-accent">
         <MailCheck className="mt-0.5 h-4 w-4 shrink-0" />
         Listo. Te escribimos a {enviado} apenas abramos la próxima ronda.
       </p>
@@ -130,7 +130,7 @@ function AvisameProxima() {
 
   if (!abierto) {
     return (
-      <button type="button" onClick={() => setAbierto(true)} className={`${CLASE_BOTON_SECUNDARIO} w-full px-5 py-3 text-base sm:w-auto`}>
+      <button type="button" onClick={() => setAbierto(true)} className={`${CLASE_BOTON_SECUNDARIO} mx-auto flex w-full px-5 py-3 text-base sm:w-auto`}>
         <Lock className="h-4 w-4" /> Ronda cerrada. Avisame de la próxima
       </button>
     );
@@ -279,8 +279,8 @@ function PagoEnCamino({ participacion, onCambio }: { participacion: Participacio
 
 function Aviso({ tono, icono: Icono, children }: { tono: "exito" | "espera"; icono: typeof Banknote; children: ReactNode }) {
   const clase = tono === "exito"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
-    : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200";
+    ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-accent dark:bg-accent/20 dark:text-accent"
+    : "border-amber-200 bg-amber-50 text-amber-800 dark:border-accent dark:bg-accent/20 dark:text-accent";
   return (
     <div role="status" className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${clase}`}>
       <Icono className="mt-0.5 h-5 w-5 shrink-0" />
@@ -561,7 +561,7 @@ export function RetoPagina({
             {PASOS.map(({ icono: Icono, titulo, texto }, i) => (
               <li key={titulo} className="rounded-xl bg-muted/40 p-3">
                 <p className="flex items-center gap-2 text-sm font-semibold">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-white">{i + 1}</span>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-white dark:bg-accent dark:text-black">{i + 1}</span>
                   <Icono className="h-4 w-4 text-primary dark:text-accent" /> {titulo}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">{texto}</p>
@@ -570,7 +570,7 @@ export function RetoPagina({
           </ol>
 
           {exclusiones ? (
-            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-accent dark:bg-accent/20 dark:text-accent">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {exclusiones}
             </p>
           ) : null}

@@ -989,13 +989,27 @@ function etiquetaSitioWeb(valor: string | null | undefined): string {
     .replace(/\/+$/, "");
 }
 
-function resolveImporterAdvisorProfile(perfil: Record<string, unknown> | null | undefined, companyName: string) {
+const ROL_ASESOR_PUBLICO: Record<string, string> = { asesor: "Asesor", importador: "Responsable de la cuenta" };
+
+/**
+ * Contacto principal de la empresa. Manda lo que la empresa escribió en su
+ * perfil; si no escribió nada, la primera persona real que atiende (antes
+ * aparecía el texto de relleno «Asesor asignado»), y si no hay nadie, la propia
+ * empresa.
+ */
+function resolveImporterAdvisorProfile(
+  perfil: Record<string, unknown> | null | undefined,
+  companyName: string,
+  asesores: BackendImporter["asesores"] = [],
+) {
+  const principal = asesores?.[0];
   const advisorName =
     readPerfilPublicoString(perfil, "advisor_name", "asesor_nombre", "contact_name", "nombre_contacto") ||
-    "Asesor asignado";
+    principal?.nombre ||
+    companyName;
   const advisorRole =
     readPerfilPublicoString(perfil, "advisor_role", "asesor_rol", "cargo_contacto", "contact_role") ||
-    "Asesor";
+    (principal ? ROL_ASESOR_PUBLICO[principal.rol] || "Asesor" : "Equipo comercial");
   const advisorEmail = readPerfilPublicoString(perfil, "advisor_email", "asesor_email", "email", "correo");
   const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono");
 
@@ -1014,7 +1028,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
   const name = imp.nombre_empresa;
   const perfil = imp.perfil_publico ?? null;
   const tierMinimoRequerido = readPerfilPublicoString(perfil, "tier_minimo_requerido") || imp.tier_minimo_requerido || "Bronze";
-  const advisorProfile = resolveImporterAdvisorProfile(perfil, name);
+  const advisorProfile = resolveImporterAdvisorProfile(perfil, name, imp.asesores);
   return {
     description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
     certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
@@ -1052,6 +1066,13 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
     tierMinimoRequerido: ["Bronze", "Silver", "Gold", "Élite"].includes(tierMinimoRequerido) ? tierMinimoRequerido as Importer["tierMinimoRequerido"] : "Bronze",
     shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
+    advisors: (imp.asesores ?? []).map((asesor) => ({
+      id: asesor.id,
+      name: asesor.nombre,
+      role: ROL_ASESOR_PUBLICO[asesor.rol] || "Asesor",
+      initials: initialsFromName(asesor.nombre),
+      color: "bg-slate-600",
+    })),
     advisor: {
       name: advisorProfile.advisorName,
       role: advisorProfile.advisorRole,
@@ -2307,10 +2328,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
 
-  const ADVISORS=[
-    imp.advisor,
-    {name:"Suplente "+imp.advisor.name.split(" ")[1], role:"Asesor Jr.", initials:imp.advisor.initials[0]+"S", color:"bg-slate-500", email:"suplente@"+imp.id+".co"},
-  ];
+  // Las personas reales que atienden en la empresa. Antes se añadía un
+  // «Suplente / Asesor Jr.» inventado con un correo que no existía. El correo
+  // es el de contacto de la empresa: el de cada asesor no se publica.
+  const correoEmpresa=imp.email||imp.advisor.email||"";
+  const ADVISORS=(imp.advisors&&imp.advisors.length>0?imp.advisors:[imp.advisor]).map(adv=>({...adv,email:correoEmpresa}));
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -2438,7 +2460,7 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
 
               {/* Advisors */}
               <Card padding="md">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesores disponibles</h3>
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>{ADVISORS.length===1?"Quién te atiende":"Asesores disponibles"}</h3>
                 <div className="space-y-3">
                   {ADVISORS.map((adv,i)=>(
                     <div key={i} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
@@ -2446,11 +2468,11 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{adv.name}</p>
                         <p className="text-xs text-muted-foreground">{adv.role}</p>
-                        <p className="text-xs text-primary mt-0.5">{adv.email}</p>
+                        {adv.email&&<p className="text-xs text-primary mt-0.5">{adv.email}</p>}
                       </div>
                       <div className="flex gap-1.5">
                         <ContactBtn type="chat" size="sm" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
-                        <ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
+                        {adv.email&&<ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>}
                       </div>
                     </div>
                   ))}
@@ -6462,21 +6484,58 @@ function DocumentosScreen({
 }
 
 /** Armazón de las pantallas públicas (Tendencias y el reto) para quien no tiene sesión. */
-function PantallaPublica({activa,onLanding,onLogin,onRegister,onTendencias,onReto,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;children:React.ReactNode}) {
-  const pestana=(clave:"tendencias"|"reto",texto:string,onClick:()=>void)=>(
-    <button type="button" onClick={onClick} className={clsx("px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",activa===clave?"bg-primary text-white dark:bg-accent dark:text-accent-foreground":"text-muted-foreground hover:bg-foreground/10")}>{texto}</button>
+function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;children:React.ReactNode}) {
+  const { dark, toggleTheme } = useBrandTheme();
+  const claseMenuPublico=(activo:boolean)=>clsx(
+    "px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap",
+    activo
+      ?"bg-primary text-white dark:bg-accent dark:text-accent-foreground"
+      :"text-muted-foreground hover:bg-foreground/15 dark:hover:bg-white/15 dark:hover:text-white",
   );
+  const irALanding=()=>onLanding();
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
-          <button type="button" onClick={onLanding} aria-label="Ir al inicio"><Logo/></button>
-          <nav className="flex items-center gap-1">{pestana("tendencias","Tendencias",onTendencias)}{pestana("reto","Reto",onReto)}</nav>
+        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+          <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
+          <nav className="hidden xl:flex items-center gap-1">
+            {LANDING_TABS.map(section=>{
+              const action=section.key==="planes"
+                ?onPlanes
+                :section.key==="tendencias"
+                  ?onTendencias
+                  :section.key==="reto"
+                    ?onReto
+                    :irALanding;
+              return <button key={section.key} type="button" onClick={action} className={claseMenuPublico(activa===section.key)}>{section.label}</button>;
+            })}
+          </nav>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
+            >
+              {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+            </button>
             <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
             <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
           </div>
         </div>
+        <nav className="xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2">
+          {LANDING_TABS.map(section=>{
+            const action=section.key==="planes"
+              ?onPlanes
+              :section.key==="tendencias"
+                ?onTendencias
+                :section.key==="reto"
+                  ?onReto
+                  :irALanding;
+            return <button key={section.key} type="button" onClick={action} className={claseMenuPublico(activa===section.key)}>{section.label}</button>;
+          })}
+        </nav>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
     </div>
@@ -8826,13 +8885,27 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
     return null;
   }
 
+  // Mismos campos, en el mismo orden, que el formulario que llena el
+  // comprador (y que su propio detalle). Antes este modal mostraba una «ficha
+  // técnica» con peso, volumen, dimensiones y destino —que el formulario no
+  // pide, así que siempre decían «No especificado»— y se saltaba línea,
+  // calidad, cantidad, precio objetivo y el link de referencia.
   const custom = quote.customFields;
   const peso = findCustomFieldValue(custom, ["peso", "weight"]);
   const volumen = findCustomFieldValue(custom, ["volumen", "volume", "cbm", "m3"]);
   const dimensiones = findCustomFieldValue(custom, ["dimension", "medida", "tamano", "size"]);
-  const origen = findCustomFieldValue(custom, ["origen", "origin", "puerto_origen"]);
   const destino = findCustomFieldValue(custom, ["destino", "destination", "puerto_destino"]);
-  const adjuntos = getQuoteAttachmentLinks(quote);
+  const extras = [["Peso", peso], ["Volumen", volumen], ["Dimensiones", dimensiones], ["Destino", destino]].filter(([, v]) => v);
+  const linkReferencia = safeHttpUrl(quote.referenceLink);
+  const adjuntos = getQuoteAttachmentLinks(quote).filter((link) => link !== quote.referenceLink);
+  const conMayuscula = (texto?: string | null) => (texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "");
+  const proposito = quote.importMode === "corporativo" ? "Corporativo" : quote.importMode === "ecommerce" ? "Ecommerce" : conMayuscula(quote.importMode);
+  const dato = (etiqueta: string, valor: React.ReactNode, clase = "") => (
+    <div key={etiqueta} className={clase}>
+      <p className="text-xs text-muted-foreground">{etiqueta}</p>
+      <div className="text-sm font-medium mt-0.5 whitespace-pre-line break-words">{valor || "—"}</div>
+    </div>
+  );
 
   return (
     <Modal open={open} onClose={onClose} title={`Detalle completo · ${quote.code}`} width="max-w-3xl">
@@ -8854,33 +8927,37 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
         </div>
 
         <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Ficha técnica</h3>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-            <div><p className="text-xs text-muted-foreground">Peso</p><p className="font-medium">{peso || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Volumen</p><p className="font-medium">{volumen || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Dimensiones</p><p className="font-medium">{dimensiones || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Origen</p><p className="font-medium">{origen || quote.country || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Destino</p><p className="font-medium">{destino || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Incoterm</p><p className="font-medium">{quote.incoterm || "No especificado"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Shipping mark</p><p className="font-medium font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</p></div>
+          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+            {dato("Nombre", quote.product)}
+            {dato("Línea", quote.productLine)}
+            {dato("País de importación", quote.country)}
+            {dato("Calidad", conMayuscula(quote.quality))}
+            {dato("Personalización", quote.personalizationLevel)}
+            {dato("Descripción", quote.description, "col-span-2 sm:col-span-3")}
+            {linkReferencia && dato(
+              "Link de referencia",
+              <a href={linkReferencia} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-primary dark:text-accent hover:underline break-all">
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0"/>{quote.referenceLink}
+              </a>,
+              "col-span-2 sm:col-span-3",
+            )}
           </div>
+          {(quote.productPhotoUrls??[]).length>0&&(
+            <div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>
+          )}
         </Card>
 
         <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Información registrada por el comprador</h3>
-          <div className="space-y-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Descripción</p>
-              <p className="mt-1 whitespace-pre-wrap">{quote.description || "Sin descripción"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Notas adicionales</p>
-              <p className="mt-1 whitespace-pre-wrap">{quote.notes || "Sin notas"}</p>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div><p className="text-xs text-muted-foreground">Nivel de personalización</p><p className="font-medium mt-1">{quote.personalizationLevel || "No especificado"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Modalidad de importación</p><p className="font-medium mt-1">{quote.importMode || "No especificado"}</p></div>
-            </div>
+          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+            {dato("Propósito", proposito)}
+            {dato("Cantidad", cantidadConUnidad(quote.minQuantity, quote.unit))}
+            {dato("Precio objetivo", quote.targetPrice && quote.targetPrice !== "N/A" ? quote.targetPrice : "Sin precio objetivo")}
+            {dato("Incoterm", quote.incoterm)}
+            {dato("Shipping mark", <span className="font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</span>)}
+            {extras.map(([k, v]) => dato(k, v))}
+            {dato("Notas", quote.notes, "col-span-2 sm:col-span-3")}
           </div>
         </Card>
 
@@ -8900,17 +8977,9 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
           </div>
         )}
 
-        {(quote.productPhotoUrls??[]).length>0&&(
+        {adjuntos.length>0&&(
           <Card padding="md">
-            <GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/>
-          </Card>
-        )}
-
-        <Card padding="md">
-          <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
-          {adjuntos.length===0 ? (
-            <p className="text-sm text-muted-foreground">No hay archivos o enlaces adjuntos en esta cotización.</p>
-          ) : (
+            <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
             <div className="space-y-2">
               {adjuntos.map((link)=> (
                 <a key={link} href={link} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all inline-flex items-center gap-1.5">
@@ -8918,8 +8987,8 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
                 </a>
               ))}
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </Modal>
   );
@@ -9682,14 +9751,16 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // ─────────────────────────────────────────────────────────────────────────────
 // Textos: zarpi-home-copy-v1.md (raíz del repositorio). Los precios, lo que
 // incluye cada plan y los cupos NO están aquí: salen de Admin › Planes.
-const LANDING_TABS:{key:LandingSection;label:string}[]=[
+type LandingTabKey=Exclude<LandingSection,"stats"|"dare">|"tendencias"|"reto";
+const LANDING_TABS:{key:LandingTabKey;label:string}[]=[
   {key:"home",label:"Inicio"},
   {key:"about",label:"Quiénes somos"},
   {key:"how-it-works",label:"Cómo funciona"},
-];
-const LANDING_TABS_FINAL:{key:LandingSection;label:string}[]=[
+  {key:"planes",label:"Planes"},
   {key:"news",label:"Novedades y aliados"},
   {key:"contact",label:"Contacto"},
+  {key:"tendencias",label:"Tendencias"},
+  {key:"reto",label:"Reto"},
 ];
 
 type PreguntaLanding={q:string;a:string};
@@ -9746,16 +9817,33 @@ function PreguntasLanding({items}:{items:PreguntaLanding[]}) {
 
 function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
-  const [activeTab,setActiveTab]=useState<LandingSection>("home");
+  const [activeTab,setActiveTab]=useState<LandingTabKey>("home");
   // Sección a la que hay que bajar después de cambiar de pestaña (`planes`, `preguntas`).
   const [ancla,setAncla]=useState<string|null>(null);
-  const irA=(pestana:LandingSection,destino?:string)=>{
+  const irA=(pestana:LandingTabKey,destino?:string)=>{
+    if (pestana === "tendencias") {
+      onTendencias();
+      return;
+    }
+    if (pestana === "reto") {
+      onReto();
+      return;
+    }
+    if (pestana === "planes") {
+      setActiveTab("home");
+      setAncla("planes");
+      return;
+    }
     setActiveTab(pestana);
     if(destino)setAncla(destino);
     else window.scrollTo({top:0});
   };
-  // «Solicitar acceso» lleva a la sección de planes del inicio (/#planes).
+  // El tab Planes lleva a la sección de precios del inicio (/#planes).
   const irAPlanes=()=>irA("home","planes");
+  // El CTA de acceso respeta el interruptor Admin › Módulos: registro público
+  // o formulario de solicitud para la lista privada.
+  const abrirAcceso=()=>onRegister();
+  const textoAcceso=registroAbierto()?"Crear cuenta":"Solicitar acceso";
   // «Aplicar como empresa importadora» abre Contacto con ese perfil ya marcado.
   const [perfilContacto,setPerfilContacto]=useState<PerfilContacto>("comprador");
   const contactar=(perfil:PerfilContacto)=>{setPerfilContacto(perfil);irA("contact");};
@@ -9809,12 +9897,6 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       {LANDING_TABS.map(section=>(
         <button key={section.key} onClick={()=>irA(section.key)} className={claseMenu(activeTab===section.key)}>{section.label}</button>
       ))}
-      <button onClick={irAPlanes} className={claseMenu(false)}>Planes</button>
-      <button onClick={onTendencias} className={claseMenu(false)}>Tendencias</button>
-      <button onClick={onReto} className={claseMenu(false)}>Reto</button>
-      {LANDING_TABS_FINAL.map(section=>(
-        <button key={section.key} onClick={()=>irA(section.key)} className={claseMenu(activeTab===section.key)}>{section.label}</button>
-      ))}
     </>
   );
   const enlacePie="hover:text-accent transition-colors text-left";
@@ -9838,8 +9920,8 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
             <Button variant="secondary" size="sm" className="hidden sm:inline-flex hover:bg-primary hover:text-white hover:border-primary dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:border-accent" onClick={onLogin}>
               Iniciar sesión
             </Button>
-            <Button variant="primary" size="sm" className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={irAPlanes}>
-              Solicitar acceso
+            <Button variant="primary" size="sm" className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={abrirAcceso}>
+              {textoAcceso}
             </Button>
           </div>
         </div>
@@ -9868,7 +9950,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
             Publica lo que quieres importar y recibe propuestas de empresas importadoras verificadas, con precio final puesto en Colombia. Compara, elige y sigue todo el proceso en un solo lugar.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={irAPlanes} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">Solicitar acceso</Button>
+            <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={abrirAcceso} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoAcceso}</Button>
             <Button variant="secondary" size="lg" icon={<MoveRight className="w-4 h-4"/>} onClick={()=>irA("how-it-works")} className="px-8 bg-transparent text-background border-background/40 hover:bg-background/10">Cómo funciona</Button>
           </div>
           <p className="mt-6 text-sm italic text-background/60 max-w-xl mx-auto">
@@ -9940,12 +10022,12 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       </>
       )}
 
-      {activeTab==="about" && <LandingAboutSection content={dynamicContent} onSolicitarAcceso={irAPlanes}/>}
+      {activeTab==="about" && <LandingAboutSection content={dynamicContent} onSolicitarAcceso={abrirAcceso}/>}
       {activeTab==="how-it-works" && <LandingHowItWorksSection onVerPlanes={irAPlanes} onAplicarImportadora={()=>contactar("nacionalizadora")}/>}
       {activeTab==="news" && (
         <LandingNewsAlliesSection content={dynamicContent} error={dynamicContentError} onLogin={onLogin} onRegister={onRegister}/>
       )}
-      {activeTab==="contact" && <LandingContactSection key={perfilContacto} perfilInicial={perfilContacto} onLogin={onLogin} onRegister={irAPlanes}/>}
+      {activeTab==="contact" && <LandingContactSection key={perfilContacto} perfilInicial={perfilContacto} onLogin={onLogin} onRegister={abrirAcceso}/>}
 
       {activeTab!=="contact" && (
       /* CIERRE */
@@ -9954,7 +10036,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
         <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
           <h2 className="text-2xl sm:text-3xl font-bold mb-3">Tu próxima importación empieza con una mejor decisión.</h2>
           <p className="text-primary-foreground/80 mb-7 leading-relaxed">Publica lo que necesitas y elige la empresa importadora que mejor se ajuste a tu operación.</p>
-          <Button variant="secondary" size="lg" onClick={irAPlanes} className="px-8 text-accent-foreground">Solicitar acceso</Button>
+          <Button variant="secondary" size="lg" onClick={abrirAcceso} className="px-8 text-accent-foreground">{textoAcceso}</Button>
           <p className="mt-5 text-sm text-primary-foreground/80">
             ¿Eres una empresa importadora?{" "}
             <button type="button" onClick={()=>contactar("nacionalizadora")} className="font-semibold underline underline-offset-2 hover:text-white">Conoce cómo vincularte</button>
@@ -10087,7 +10169,7 @@ function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamic
           <p className="text-sm text-muted-foreground leading-relaxed">Zarpi S.A.S. nació en Cali en 2026, fundada por Juan Pablo Orozco, comerciante que lleva años importando para su propia operación de comercio electrónico. Creamos Zarpi para convertir una experiencia llena de incertidumbre en un proceso claro y documentado.</p>
         </div>
         <div className="text-center">
-          <Button variant="primary" size="lg" className="px-8 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={onSolicitarAcceso}>Solicitar acceso</Button>
+          <Button variant="primary" size="lg" className="px-8 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={onSolicitarAcceso}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
         </div>
       </div>
     </section>
@@ -10492,25 +10574,70 @@ function FormularioListaPrivada() {
 }
 
 /** Con el registro público cerrado (Admin › Módulos), se pide acceso a la lista privada. */
-function RegistroCerrado({onLogin,onLanding,onVerPlanes}:{onLogin:()=>void;onLanding:()=>void;onVerPlanes:()=>void}) {
+function RegistroCerrado({onLogin,onLanding,onVerPlanes,onPolicy}:{onLogin:()=>void;onLanding:()=>void;onVerPlanes:()=>void;onPolicy:(page:LegalPage)=>void}) {
+  const { dark, toggleTheme } = useBrandTheme();
+
   return (
-    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4 py-10">
-      <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8 max-w-xl w-full relative z-10">
-        <div className="text-center mb-6">
-          <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
-          <h2 className="text-lg font-semibold mb-2">Zarpi funciona con planes de acceso</h2>
-          <p className="text-sm text-muted-foreground">
-            Elige tu plan, paga por transferencia y activamos tu cuenta en máximo 2 horas en horario hábil.
-          </p>
-          <Button variant="primary" className="mt-4 dark:bg-accent dark:text-accent-foreground" onClick={onVerPlanes}>Ver planes</Button>
+    <div className="min-h-screen flex flex-col bg-background">
+      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-3.5 relative z-10">
+        <button type="button" onClick={onLanding} aria-label="Ir al inicio">
+          <Logo/>
+        </button>
+        <div className="flex items-center gap-1.5 w-fit">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground transition-colors"
+          >
+            {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+          </button>
+          <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onLanding}>Volver</Button>
         </div>
-        <p className="mb-3 text-center text-xs text-muted-foreground">¿Prefieres que te contactemos antes? Déjanos tus datos.</p>
-        <FormularioListaPrivada/>
-        <div className="mt-6 flex flex-col items-center gap-3">
-          <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
-          <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+      </header>
+
+      <main className="relative flex flex-1 items-center justify-center px-4 py-10 overflow-hidden">
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <img
+            src={dark ? "/brand/fondo-1.png" : "/brand/fondo-4.png"}
+            alt="Fondo de solicitud de acceso"
+            className="auth-background w-full h-full object-cover object-center transition-all duration-300"
+          />
         </div>
-      </div>
+
+        <div className="relative z-10 w-full max-w-[480px]">
+          <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8">
+            <div className="text-center mb-6">
+              <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
+              <h1 className="text-xl font-semibold tracking-tight mb-2">Zarpi funciona con planes de acceso</h1>
+              <p className="text-sm text-muted-foreground">
+                Elige tu plan, paga por transferencia y activamos tu cuenta en máximo 2 horas en horario hábil.
+              </p>
+              <Button variant="primary" className="mt-4 dark:bg-accent dark:text-accent-foreground" onClick={onVerPlanes}>Ver planes</Button>
+            </div>
+            <p className="mb-3 text-center text-xs text-muted-foreground">¿Prefieres que te contactemos antes? Déjanos tus datos.</p>
+            <FormularioListaPrivada/>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
+              <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+        <span>© 2026 Zarpi</span>
+        <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
+          Tratamiento de Datos
+        </button>
+        <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
+          Términos
+        </button>
+        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
+          Pagos y Reembolsos
+        </button>
+      </footer>
     </div>
   );
 }
@@ -12740,7 +12867,7 @@ export default function App() {
     onPoliticaDatos={()=>goTo("policy-data")}
     prefill={isAuthenticated&&currentUserProfile?{email:currentUserProfile.email,nombre:currentUserProfile.nombre??undefined,telefono:currentUserProfile.telefono??undefined}:undefined}
   />;
-  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")} onVerPlanes={irAPlanesDelInicio}/>;
+  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")} onVerPlanes={irAPlanesDelInicio} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
@@ -12828,7 +12955,7 @@ export default function App() {
 
   if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
     return (
-      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")}>
+      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")}>
         {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}
