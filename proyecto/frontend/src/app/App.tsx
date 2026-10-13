@@ -6696,7 +6696,8 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
   );
   const irALanding=()=>onLanding();
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <LandingBackground />
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
         <div className="flex w-full min-h-16 items-center justify-between gap-3 px-4 sm:px-6">
           <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
@@ -6739,7 +6740,7 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
           })}
         </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6">{children}</main>
     </div>
   );
 }
@@ -10185,7 +10186,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
           <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {pasosCortos.map((paso,i)=>(
               <li key={paso.title} className="rounded-2xl border border-border bg-card/80 p-5">
-                <span className="w-9 h-9 rounded-xl bg-accent text-accent-foreground text-sm font-bold flex items-center justify-center mb-4">{i+1}</span>
+                <span className="w-9 h-9 rounded-xl bg-primary dark:bg-accent text-primary-foreground dark:text-accent-foreground text-sm font-bold flex items-center justify-center mb-4">{i+1}</span>
                 <h3 className="font-semibold mb-1.5">{paso.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{paso.desc}</p>
               </li>
@@ -10279,7 +10280,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING — Perfil de empresa (QuickView) y subpáginas públicas
 // ─────────────────────────────────────────────────────────────────────────────
-function LandingBackground() {
+export function LandingBackground() {
   const particles = Array.from({ length: 15 }, (_, i) => {
     const random = (min: number, max: number) =>
       Math.random() * (max - min) + min;
