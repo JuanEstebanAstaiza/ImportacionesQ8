@@ -15,6 +15,7 @@ from services import enlaces_video as ev
 
 TIKTOK = "https://www.tiktok.com/@tienda.viral/video/7300000000000000001"
 YOUTUBE = "https://youtu.be/dQw4w9WgXcQ"
+PIN = "https://www.pinterest.com/pin/99360735500167749/"
 # El fixture de abajo reemplaza el oEmbed para el flujo completo; las pruebas
 # unitarias usan el real con un transporte simulado.
 _OEMBED_REAL = ev.consultar_oembed
@@ -36,6 +37,10 @@ _OEMBED_REAL = ev.consultar_oembed
      "https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
     ("https://www.instagram.com/reel/C1a2B3c4D5e/?igsh=xyz", "instagram", "C1a2B3c4D5e",
      "https://www.instagram.com/p/C1a2B3c4D5e/"),
+    ("https://co.pinterest.com/pin/99360735500167749/?utm_source=x#c", "pinterest", "99360735500167749", PIN),
+    ("pinterest.es/pin/sala-moderna--99360735500167749/", "pinterest", "99360735500167749", PIN),
+    ("https://www.pinterest.com.mx/pin/99360735500167749/sent/?invite_code=abc", "pinterest", "99360735500167749",
+     PIN),
 ])
 def test_normaliza_y_extrae_el_id(url, plataforma, id_video, normalizada):
     enlace = ev.normalizar(url)
@@ -45,6 +50,8 @@ def test_normaliza_y_extrae_el_id(url, plataforma, id_video, normalizada):
 @pytest.mark.parametrize("url", [
     "https://vimeo.com/123456", "https://evil.com/tiktok.com/@a/video/7300000000000000001",
     "https://www.tiktok.com/@solo.perfil", "https://www.youtube.com/watch?v=corto", "", "javascript:alert(1)",
+    "https://pinterest.evil.com/pin/99360735500167749/", "https://www.pinterest.com/kentbrew/",
+    "https://pin.it.evil.com/abc",
 ])
 def test_rechaza_enlaces_no_validos(url):
     with pytest.raises(ev.EnlaceInvalido):
@@ -68,6 +75,62 @@ def test_resuelve_el_enlace_corto_de_tiktok():
     assert ev.normalizar("https://vm.tiktok.com/ZMabc123/", cliente).id_video == "7300000000000000001"
 
 
+def test_resuelve_el_enlace_corto_de_pinterest_sin_salir_de_pinterest():
+    def respuesta(request):
+        if request.url.host == "pin.it":
+            return httpx.Response(308, headers={"location": "https://api.pinterest.com/url_shortener/4Wn5mH2/redirect/"})
+        return httpx.Response(302, headers={"location": PIN + "sent/?invite_code=abc"})
+
+    cliente = httpx.Client(transport=httpx.MockTransport(respuesta))
+    assert ev.normalizar("https://pin.it/4Wn5mH2", cliente).normalizada == PIN
+
+    afuera = httpx.Client(transport=httpx.MockTransport(
+        lambda r: httpx.Response(302, headers={"location": "https://evil.example.com/pin/1/"})))
+    with pytest.raises(ev.EnlaceInvalido):
+        ev.normalizar("https://pin.it/4Wn5mH2", afuera)
+
+
+def _pinterest_simulado(pin):
+    """oEmbed que redirige al subdominio del país, como el real, y el widget de pines."""
+    vistos = []
+
+    def respuesta(request):
+        vistos.append(request.url.host)
+        if request.url.path == "/oembed.json" and request.url.host == "www.pinterest.com":
+            return httpx.Response(302, headers={"location": "https://co.pinterest.com/oembed.json?url=" + PIN})
+        if request.url.path == "/oembed.json":
+            return httpx.Response(200, json={"author_name": "Quien lo guardó", "title": "Organizador",
+                                             "thumbnail_url": "https://i.pinimg.com/236x/a.jpg"})
+        return httpx.Response(200, json={"data": [pin]})
+
+    return httpx.Client(transport=httpx.MockTransport(respuesta)), vistos
+
+
+def test_pinterest_trae_al_creador_original_como_dueno():
+    cliente, vistos = _pinterest_simulado({
+        "id": "99360735500167749", "is_video": True, "link": "https://tienda.example.com/organizador",
+        "pinner": {"full_name": "Quien lo guardó", "profile_url": "https://www.pinterest.com/guarda/"},
+        "native_creator": {"full_name": "Casa Orden", "profile_url": "https://www.pinterest.com/casaorden/"},
+        "images": {"564x": {"url": "https://i.pinimg.com/564x/a.jpg"}},
+    })
+    enlace = _OEMBED_REAL(ev.normalizar(PIN), cliente)
+    assert enlace.autor == "Casa Orden (@casaorden)"
+    assert enlace.datos["author_url"] == "https://www.pinterest.com/casaorden/"
+    assert enlace.datos["enlace_origen"] == "https://tienda.example.com/organizador"
+    assert enlace.miniatura_url == "https://i.pinimg.com/564x/a.jpg"
+    assert set(vistos) <= {"www.pinterest.com", "co.pinterest.com", "widgets.pinterest.com"}
+
+    # Sin creador original, el dueño es la cuenta que lo publicó.
+    cliente, _ = _pinterest_simulado({"id": "1", "pinner": {"full_name": "", "profile_url": "https://www.pinterest.com/guarda/"}})
+    assert _OEMBED_REAL(ev.normalizar(PIN), cliente).autor == "@guarda"
+
+
+def test_pinterest_marca_pines_borrados():
+    cliente, _ = _pinterest_simulado({"id": "99360735500167749", "error": "Not found"})
+    with pytest.raises(ev.VideoNoDisponible):
+        _OEMBED_REAL(ev.normalizar(PIN), cliente)
+
+
 def test_oembed_marca_videos_caidos():
     cliente = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404)))
     with pytest.raises(ev.VideoNoDisponible):
@@ -78,6 +141,11 @@ def test_embed_url_solo_desde_ids_validos():
     assert ev.embed_url("youtube", "dQw4w9WgXcQ") == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
     assert ev.embed_url("tiktok", "7300000000000000001") == "https://www.tiktok.com/embed/v2/7300000000000000001"
     assert ev.embed_url("youtube", '"><script>') is None
+    assert ev.embed_url("pinterest", "99360735500167749") == \
+        "https://assets.pinterest.com/ext/embed.html?id=99360735500167749"
+    assert ev.embed_url("pinterest", "1&src=evil") is None
+    assert ev.proporcion_pin('<iframe src="x" height="436" width="450"></iframe>') == round(336 / 450, 4)
+    assert ev.proporcion_pin(None) is None
 
 
 # ── Flujo completo ───────────────────────────────────────────────────────────
@@ -143,7 +211,7 @@ def test_enlace_no_valido_responde_422(client, db_session):
     _, comprador = crear_usuario_con_token(db_session)
     r = client.post("/tendencias/enviar", json={"url": "https://vimeo.com/1"}, headers=comprador)
     assert r.status_code == 422
-    assert "TikTok, Instagram o YouTube" in r.json()["detail"]
+    assert "TikTok, Instagram, YouTube o Pinterest" in r.json()["detail"]
 
 
 def test_no_se_publica_sin_portada_y_el_feed_no_trae_embeds(client, db_session):

@@ -614,3 +614,24 @@ class TestCatalogoEnriquecido:
         )
         assert response.status_code == 200
         assert response.json()["verificado"] is True
+
+def test_la_ficha_publica_muestra_a_quien_atiende_sin_inventar_ni_exponer_correos(client, db_session):
+    """Antes la ficha mostraba «Asesor asignado» y un «Suplente / Asesor Jr.»
+    inventado. Ahora salen los asesores activos reales; si no hay, la cuenta
+    responsable. Solo el nombre: la ficha es pública."""
+    empresa, _ = crear_empresa_importadora(db_session, nombre_dueño="Diana Responsable")
+    activo, _ = crear_usuario_con_token(db_session, rol="asesor", importador_id=empresa.id, nombre="Carlos")
+    activo.apellido = "Mendoza"
+    inactivo, _ = crear_usuario_con_token(db_session, rol="asesor", importador_id=empresa.id, nombre="Ya No Está")
+    inactivo.activo = False
+    db_session.commit()
+
+    asesores = client.get(f"/importadores/{empresa.id}").json()["asesores"]
+    assert asesores == [{"id": activo.id, "nombre": "Carlos Mendoza", "rol": "asesor"}]
+
+    sin_asesores, dueno = crear_empresa_importadora(db_session, nombre_empresa="Sin Asesores",
+                                                    nombre_dueño="Diana Responsable")
+    catalogo = {e["id"]: e for e in client.get("/importadores").json()}
+    assert catalogo[sin_asesores.id]["asesores"] == [
+        {"id": dueno.id, "nombre": "Diana Responsable", "rol": "importador"}]
+    assert "email" not in str(catalogo[empresa.id]["asesores"])

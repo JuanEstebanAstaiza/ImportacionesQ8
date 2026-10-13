@@ -33,7 +33,7 @@ MOTIVOS_RECHAZO = {
     MotivoRechazo.calidad.value: "El video no deja ver bien el producto",
 }
 
-ETIQUETA_PLATAFORMA = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
+ETIQUETA_PLATAFORMA = enlaces_video.NOMBRE_PLATAFORMA
 
 PATRON_ARCHIVO = re.compile(r"^/documentos/archivos/([0-9a-f-]{36})/descargar$")
 
@@ -97,7 +97,7 @@ def enviar(
     try:
         enlace = enlaces_video.consultar_oembed(enlace)
     except enlaces_video.VideoNoDisponible:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ese video no existe o ya no está disponible.")
+        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ese video o pin no existe o ya no está disponible.")
 
     rol = rol_remitente(usuario)
     portada = validar_archivo_propio(db, portada_url, usuario) if rol == RolRemitente.importadora.value else None
@@ -515,6 +515,7 @@ def ficha(db: Session, item: TendenciaItem) -> Dict:
     datos.update({
         "empresa": _empresa_dict(empresa, completa=True),
         "embed_url": enlaces_video.embed_url(item.plataforma, item.id_video_plataforma),
+        "proporcion_pin": enlaces_video.proporcion_pin(item.embed_html) if item.plataforma == "pinterest" else None,
         "url_video": item.url_origen,
         "plataforma_nombre": ETIQUETA_PLATAFORMA.get(item.plataforma, item.plataforma),
         "autor_plataforma": item.autor_plataforma,
@@ -522,8 +523,8 @@ def ficha(db: Session, item: TendenciaItem) -> Dict:
         "ojo_antes": item.ojo_antes,
         "descripcion": item.descripcion,
         "imagenes": imagenes_de(item),
-        "pie": f"El video pertenece a su autor y se reproduce desde "
-               f"{ETIQUETA_PLATAFORMA.get(item.plataforma, item.plataforma)}. {PIE_FICHA}",
+        "pie": f"{'El pin' if item.plataforma == 'pinterest' else 'El video'} pertenece a su autor y se "
+               f"reproduce desde {ETIQUETA_PLATAFORMA.get(item.plataforma, item.plataforma)}. {PIE_FICHA}",
     })
     return datos
 
@@ -635,7 +636,7 @@ def crear_del_equipo(db: Session, usuario: Usuario, datos: Dict) -> TendenciaIte
     try:
         enlace = enlaces_video.consultar_oembed(enlace)
     except enlaces_video.VideoNoDisponible:
-        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ese video no existe o ya no está disponible.")
+        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ese video o pin no existe o ya no está disponible.")
 
     portada = _imagen_propia(db, datos.get("portada_url"), usuario)
     imagenes = []
@@ -777,7 +778,7 @@ def verificar_publicados(db: Session, ahora: Optional[datetime] = None, cliente=
     items = (
         db.query(TendenciaItem)
         .filter(TendenciaItem.estado == EstadoTendencia.publicado.value,
-                TendenciaItem.plataforma.in_(("tiktok", "youtube")))
+                TendenciaItem.plataforma.in_(("tiktok", "youtube", "pinterest")))
         .all()
     )
     for item in items:

@@ -391,7 +391,7 @@ function PanelParticipante({
 
 const PASOS = [
   { icono: Users, titulo: "Inscribite", texto: "Los cupos son limitados y hay uno por persona." },
-  { icono: Search, titulo: "Subí enlaces", texto: "Videos de TikTok, Instagram o YouTube con productos que se estén haciendo virales." },
+  { icono: Search, titulo: "Subí enlaces", texto: "Videos o pines de TikTok, Instagram, YouTube o Pinterest con productos que se estén haciendo virales." },
   { icono: Trophy, titulo: "Reclamá", texto: "Cuando te aprobamos los necesarios, elegís efectivo o cotizaciones gratis." },
 ];
 

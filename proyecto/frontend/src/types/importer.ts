@@ -53,6 +53,11 @@ export interface Importer {
   foundedYear?: string;
   /** Sectores a los que la empresa dice atender ("Retail", "Industrial"...). */
   industries?: string[];
+  /**
+   * Personas reales que atienden en la empresa (`asesores` del backend). La
+   * ficha pública las lista; `advisor` queda como el contacto principal.
+   */
+  advisors?: Array<{ id: string; name: string; role: string; initials: string; color: string }>;
   advisor: {
     name: string;
     role: string;

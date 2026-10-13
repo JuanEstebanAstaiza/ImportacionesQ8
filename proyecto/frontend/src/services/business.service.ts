@@ -20,6 +20,11 @@ export interface BackendImporter {
   puntaje_publicidad?: number;
   /** Órdenes que la empresa llevó hasta "entregado" (trayectoria pública). */
   proyectos_completados?: number;
+  /**
+   * Quién atiende en la empresa: sus asesores activos o, si no tiene, la
+   * cuenta responsable ("importador"). Solo el nombre: la ficha es pública.
+   */
+  asesores?: Array<{ id: string; nombre: string; rol: "asesor" | "importador" | string }>;
   especialidad_producto: string[];
   paises_origen: string[];
   calificacion_promedio: number;
@@ -577,9 +582,11 @@ export interface BackendChatConversation {
   /**
    * "negociacion" es el hilo solicitante ↔ empresa; "interna" es el canal de
    * coordinación de la empresa con uno de sus asesores, que el cliente no ve.
-   * En las internas no hay cotización ni solicitante.
+   * En las internas no hay cotización ni solicitante. "soporte" es el ticket
+   * de un usuario con el equipo de la plataforma; "equipo", el canal propio
+   * de ese equipo (sala común o hilo entre dos de sus miembros).
    */
-  tipo: "negociacion" | "interna" | "soporte";
+  tipo: "negociacion" | "interna" | "soporte" | "equipo";
   cotizacion_id: string | null;
   orden_id: string | null;
   solicitante_id: string | null;

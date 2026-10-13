@@ -28,7 +28,7 @@ import {
 
 /**
  * Feed público de Tendencias. Regla del módulo: aquí no se carga ningún
- * reproductor ni script de TikTok, Instagram o YouTube; solo la portada.
+ * reproductor ni script de TikTok, Instagram, YouTube o Pinterest; solo la portada.
  */
 
 type Props = {
@@ -200,7 +200,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary dark:text-[#EDF953]">Tendencias</p>
             <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">Productos virales para importar</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground dark:text-white/70">
-              Lo que se está moviendo en TikTok, Instagram y YouTube, revisado por el equipo de Zarpi. Mira el video y pide
+              Lo que se está moviendo en TikTok, Instagram, YouTube y Pinterest, revisado por el equipo de Zarpi. Mira el video y pide
               propuestas a importadoras verificadas, sin compromiso.
             </p>
           </div>
@@ -319,7 +319,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:bg-white/[0.03]">
           <div>
             <p className="text-sm font-semibold">¿Encontraste un producto viral? Súbelo</p>
-            <p className="text-xs text-muted-foreground dark:text-white/60">Pega el enlace de TikTok, Instagram o YouTube. Lo revisamos en menos de 48 horas.</p>
+            <p className="text-xs text-muted-foreground dark:text-white/60">Pega el enlace de TikTok, Instagram, YouTube o Pinterest. Lo revisamos en menos de 48 horas.</p>
           </div>
           <button type="button" onClick={onEnviarEnlace} className={`${CLASE_CTA} shrink-0`}>
             <Link2 className="h-4 w-4" /> Enviar enlace
