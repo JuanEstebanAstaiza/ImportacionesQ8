@@ -513,6 +513,13 @@ export interface BackendChatMessage {
   tipo: string;
   fecha_envio: string;
   metadata: Record<string, unknown> | null;
+  /** Quién lo escribió (nombre resuelto por el backend). */
+  remitente_nombre?: string | null;
+  /**
+   * Si va del lado de quien mira: en una negociación, todo lo de la empresa
+   * (asesor y dueña) va del mismo lado aunque lo haya escrito otra persona.
+   */
+  de_mi_lado?: boolean | null;
 }
 
 export type MonedaEstimacion = "USD" | "COP" | "EUR" | "CNY";
@@ -618,6 +625,12 @@ export interface BackendChatConversation {
   nivel: number | null;
   agente_asignado_id: string | null;
   agente_nombre: string | null;
+  /**
+   * Solo cuando la cuenta dueña de la empresa mira el chat de uno de sus
+   * asesores: quién lo atiende.
+   */
+  asesor_id?: string | null;
+  asesor_nombre?: string | null;
   agente_nivel: number | null;
   calificacion: number | null;
   comentario_calificacion: string | null;

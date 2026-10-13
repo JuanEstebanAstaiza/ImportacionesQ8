@@ -97,6 +97,31 @@ def _nombre_de_usuario(db: Session, usuario_id: Optional[str]) -> Optional[str]:
     return usuario.nombre or usuario.email
 
 
+def _lado_de(conversacion: ConversacionChat, usuario_id: str) -> str:
+    """En qué lado del chat va un mensaje de `usuario_id`.
+
+    En una negociación hay dos lados, el cliente y la empresa, aunque por la
+    empresa escriban varias personas (el asesor y, supervisando, la dueña). En
+    un ticket, quien pidió ayuda y el equipo de soporte (puede pasar por varios
+    agentes). En el canal interno y en el del equipo cada persona es su propio
+    lado."""
+    if _es_interna(conversacion) or acceso_chat.es_equipo(conversacion):
+        return str(usuario_id)
+    return "solicitante" if str(usuario_id) == str(conversacion.solicitante_id) else "otro"
+
+
+def _supervisada_por(conversacion: ConversacionChat, current_user: dict) -> Optional[str]:
+    """Id del asesor cuando la cuenta dueña mira el chat de uno de sus asesores."""
+    if (
+        current_user.get("rol") != "importador"
+        or _tipo_de(conversacion) != TipoConversacion.negociacion.value
+        or not conversacion.importador_usuario_id
+        or str(conversacion.importador_usuario_id) == str(current_user.get("user_id"))
+    ):
+        return None
+    return str(conversacion.importador_usuario_id)
+
+
 def _contar_no_leidos(db: Session, conversacion_id: str, usuario_id: str) -> int:
     """Mensajes ajenos posteriores a la última lectura de este usuario.
 
@@ -215,6 +240,7 @@ def _respuesta_conversacion(
         rol_solicitante = autor.rol if autor else None
 
     contraparte = _contraparte(db, conversacion, current_user)
+    asesor_id = _supervisada_por(conversacion, current_user)
 
     return ConversacionChatResponse(
         id=str(conversacion.id),
@@ -235,6 +261,8 @@ def _respuesta_conversacion(
         ),
         calificacion=conversacion.calificacion,
         comentario_calificacion=conversacion.comentario_calificacion,
+        asesor_id=asesor_id,
+        asesor_nombre=_nombre_de_usuario(db, asesor_id),
         cotizacion_id=conversacion.cotizacion_id,
         orden_id=conversacion.orden_id,
         solicitante_id=conversacion.solicitante_id,
@@ -1202,7 +1230,19 @@ async def listar_mensajes(
         MensajeChat.conversacion_id == conversacion_id
     ).order_by(MensajeChat.fecha_envio.asc()).all()
 
-    return mensajes
+    remitentes = {str(m.remitente_id) for m in mensajes if m.remitente_id}
+    nombres = {
+        str(u.id): (" ".join(p for p in (u.nombre, u.apellido) if p) or u.email)
+        for u in db.query(Usuario).filter(Usuario.id.in_(remitentes)).all()
+    } if remitentes else {}
+    mi_lado = _lado_de(conversacion, current_user["user_id"])
+    respuesta = []
+    for mensaje in mensajes:
+        fila = MensajeChatResponse.model_validate(mensaje)
+        fila.remitente_nombre = nombres.get(str(mensaje.remitente_id))
+        fila.de_mi_lado = _lado_de(conversacion, mensaje.remitente_id) == mi_lado
+        respuesta.append(fila)
+    return respuesta
 
 
 def _notificar_mensaje_chat(

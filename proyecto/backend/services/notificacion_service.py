@@ -116,10 +116,10 @@ def _despachar_canales_externos(
     indicativo = usuario.indicativo_pais_telefono
     destino_email = usuario.email
     if buzon is None:
-        # Lo del equipo sale de admin@; lo de los usuarios, de notificaciones@.
-        from models.usuario import ROLES_EQUIPO
-
-        buzon = "admin" if usuario.rol in ROLES_EQUIPO else "notificaciones"
+        # Toda notificación sale de notificaciones@, también la del equipo.
+        # Antes lo del equipo salía de admin@, y como las respuestas de admin@
+        # vuelven a admin@, el buzón de administración se llenaba de avisos.
+        buzon = "notificaciones"
 
     def _enviar() -> None:
         if whatsapp and config.NOTIFICACIONES_WHATSAPP:
@@ -164,8 +164,7 @@ def notificar(
     buzon: Optional[str] = None,
 ) -> Optional[Notificacion]:
     """Notificación in-app + WhatsApp + correo, todo best-effort. `buzon` es el
-    remitente del correo (utils/email.BUZONES); sin él, admin@ si el destinatario
-    es del equipo y notificaciones@ si no.
+    remitente del correo (utils/email.BUZONES); sin él, notificaciones@.
 
     Punto único de entrada para los eventos de negocio: la fila in-app se crea
     dentro de la transacción del caller (que debe hacer commit), y los canales
