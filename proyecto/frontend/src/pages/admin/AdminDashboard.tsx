@@ -965,7 +965,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
             onClick={() => {
               void refreshAll();
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:!bg-primary hover:!text-white dark:hover:!bg-accent dark:hover:!text-black hover:!border-primary dark:hover:!border-accent"
           >
             <RefreshCw className="h-4 w-4" />
             Refrescar
@@ -1288,7 +1288,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm">
           <div>
             <p className="flex items-center gap-2 text-base font-semibold">
-              <MessageSquare className="h-4 w-4 text-primary" />
+              <MessageSquare className="h-4 w-4 text-primary dark:text-accent" />
               Soporte y gestión de incidentes
             </p>
             <p className="text-sm text-muted-foreground">
@@ -1307,7 +1307,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="flex items-center gap-2 text-sm font-semibold">
-              <Users className="h-4 w-4 text-primary" />
+              <Users className="h-4 w-4 text-primary dark:text-accent" />
               Mesa de soporte
             </p>
             <span className="text-xs text-muted-foreground">{supportTeam.length} agentes</span>
@@ -1383,7 +1383,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="flex items-center gap-2 text-sm font-semibold">
-              <Shield className="h-4 w-4 text-amber-600" />
+              <Shield className="h-4 w-4 text-amber-600 dark:text-accent" />
               Incidentes abiertos
             </p>
             <span className="text-xs text-muted-foreground">{disputes.length} sin resolver</span>
@@ -1459,7 +1459,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   <tr key={conversation.id} className="border-b border-border/60 align-top">
                     <td className="py-3 pr-3">
                       {conversation.tipo === "interna" ? (
-                        <span className="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                        <span className="inline-flex rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:!bg-accent/20">
                           Canal interno de empresa
                         </span>
                       ) : (
@@ -1546,7 +1546,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
       <section ref={certificationsSectionRef} className="space-y-4 scroll-mt-6">
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
           <p className="flex items-center gap-2 text-base font-semibold">
-            <Award className="h-4 w-4 text-primary" />
+            <Award className="h-4 w-4 text-primary dark:text-accent" />
             Certificaciones de la plataforma
           </p>
           <p className="text-sm text-muted-foreground">
@@ -1631,7 +1631,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                     type="button"
                     disabled={isUploadingLogo}
                     onClick={() => certificationLogoInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:!bg-primary hover:!text-white hover:!border-primary dark:hover:!bg-accent dark:hover:!text-black dark:hover:!border-accent disabled:opacity-60"
                   >
                     <Upload className="h-4 w-4" />
                     {isUploadingLogo ? "Subiendo..." : certificationForm.logo_url ? "Cambiar" : "Subir logo"}
@@ -1640,7 +1640,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                     <button
                       type="button"
                       onClick={() => setCertificationForm((prev) => ({ ...prev, logo_url: "" }))}
-                      className="text-xs text-muted-foreground hover:text-foreground"
+                      className="text-xs text-muted-foreground rounded-lg border hover:border-transparent px-2 py-1 hover:text-primary dark:hover:text-accent hover:bg-primary/20 dark:hover:bg-accent/20"
                     >
                       Quitar
                     </button>
@@ -1655,7 +1655,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   onClick={() => {
                     void handleSaveCertification();
                   }}
-                  className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="flex-1 rounded-lg bg-primary dark:bg-accent px-3 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80 disabled:opacity-60"
                 >
                   {editingCertificationId ? "Guardar cambios" : "Crear certificación"}
                 </button>
@@ -1666,7 +1666,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                       setEditingCertificationId(null);
                       setCertificationForm(EMPTY_CERTIFICATION_FORM);
                     }}
-                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:!bg-primary/20 hover:!text-primary hover:!border-primary dark:hover:!bg-accent/20 dark:hover:!text-accent dark:hover:!border-accent"
                   >
                     Cancelar
                   </button>
@@ -1691,7 +1691,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   </thead>
                   <tbody>
                     {certifications.map((certificacion) => (
-                      <tr key={certificacion.id} className="border-b border-border/60">
+                      <tr key={certificacion.id} className="border-b border-border/60 hover:!bg-primary/12 dark:hover:!bg-accent/12">
                         <td className="py-3 pr-3">
                           <div className="flex items-center gap-2.5">
                             {certificacion.logo_url ? (
@@ -1722,7 +1722,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                             <button
                               type="button"
                               onClick={() => startEditingCertification(certificacion)}
-                              className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                              className="rounded-lg border px-2.5 py-1.5 text-xs font-medium hover:!bg-primary hover:!text-white !border-primary/30 hover:!border-primary dark:hover:!bg-accent dark:hover:!text-black dark:!border-accent/30 dark:hover:!border-accent"
                             >
                               Editar
                             </button>
@@ -1732,7 +1732,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                                 onClick={() => {
                                   void handleRetireCertification(certificacion);
                                 }}
-                                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                                className="rounded-lg border bg-red-50 border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/60"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -1761,7 +1761,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   <select
                     value={grantCompanyId}
                     onChange={(event) => setGrantCompanyId(event.target.value)}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
                   >
                     <option value="">Selecciona una empresa</option>
                     {companies.map((company) => (
@@ -1771,12 +1771,13 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                     ))}
                   </select>
                 </div>
+
                 <div className="min-w-[200px] flex-1">
                   <label className="mb-1 block text-xs font-medium text-muted-foreground">Certificación</label>
                   <select
                     value={grantCertificationId}
                     onChange={(event) => setGrantCertificationId(event.target.value)}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
                   >
                     <option value="">Selecciona un sello</option>
                     {certifications.filter((item) => item.activa).map((item) => (
@@ -1792,7 +1793,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   onClick={() => {
                     void handleGrantCertification();
                   }}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="rounded-lg bg-primary dark:bg-accent px-4 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80 disabled:opacity-60"
                 >
                   Otorgar
                 </button>
@@ -1841,7 +1842,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
       <section className="space-y-4">
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
           <p className="flex items-center gap-2 text-base font-semibold">
-            <Download className="h-4 w-4 text-primary" />
+            <Download className="h-4 w-4 text-primary dark:text-accent" />
             Copia de seguridad
           </p>
           <p className="text-sm text-muted-foreground">
@@ -1871,7 +1872,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               onClick={() => {
                 void handleDownloadBackup();
               }}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary dark:bg-accent px-4 py-2 text-sm font-medium text-white dark:text-black disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
               {isDownloadingBackup ? "Generando ZIP..." : "Descargar copia de seguridad"}

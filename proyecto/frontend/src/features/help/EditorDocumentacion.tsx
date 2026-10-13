@@ -140,7 +140,7 @@ export function EditorDocumentacion() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <BookOpen className="h-4 w-4 text-primary dark:text-accent" />
             Documentación de ayuda
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">

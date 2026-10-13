@@ -1496,7 +1496,7 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
     {key:"gestion",label:"Gestión",icon:Building2,items:["admin-empresas","admin-presentaciones","admin-asignacion","admin-usuarios","admin-cotizantes"]},
     {key:"comunicacion",label:"Comunicación",icon:MessageSquare,items:["admin-correos","admin-soporte","chats","documentos"]},
     {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","tendencias-aprobacion","diseno","admin-reto"]},
-    {key:"finanzas",label:"Finanzas y formación",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
+    {key:"finanzas",label:"Suscripciones",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
     {key:"configuracion",label:"Configuración",icon:ToggleRight,items:["admin-certificaciones","admin-respaldos","admin-tipografia","admin-modulos"]},
   ] as const;
 

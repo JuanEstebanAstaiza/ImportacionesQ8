@@ -713,12 +713,31 @@ export function RevisionPagos() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Contador etiqueta="Tokens por revisar" valor={contadores.tokens} icono={Coins} clase="bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300" />
-        <Contador etiqueta="Suscripciones por revisar" valor={contadores.suscripcion} icono={CalendarClock} clase="bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" />
-        <Contador etiqueta="Cursos por revisar" valor={contadores.curso} icono={GraduationCap} clase="bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" />
-        <Contador etiqueta="Aprobados este mes" valor={contadores.mes} icono={CheckCircle2} clase="bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" />
+        <Contador
+          etiqueta="Tokens por revisar"
+          valor={contadores.tokens}
+          icono={Coins}
+          clase="bg-blue-50 text-blue-700 dark:!bg-accent/20 dark:text-accent"
+        />
+        <Contador
+          etiqueta="Suscripciones por revisar"
+          valor={contadores.suscripcion}
+          icono={CalendarClock}
+          clase="bg-violet-50 text-violet-700 dark:!bg-accent/20 dark:text-accent"
+        />
+        <Contador
+          etiqueta="Cursos por revisar"
+          valor={contadores.curso}
+          icono={GraduationCap}
+          clase="bg-amber-50 text-amber-800 dark:!bg-accent/20 dark:text-accent"
+        />
+        <Contador
+          etiqueta="Aprobados este mes"
+          valor={contadores.mes}
+          icono={CheckCircle2}
+          clase="bg-emerald-50 text-emerald-700 dark:!bg-accent/20 dark:text-accent"
+        />
       </div>
-
       <div role="tablist" aria-label="Secciones de pagos" className="flex flex-wrap gap-2 border-b border-border pb-2">
         {pestanas.map((p) => (
           <button

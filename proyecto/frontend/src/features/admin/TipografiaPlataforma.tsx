@@ -143,7 +143,7 @@ export function TipografiaPlataforma() {
       <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="flex items-center gap-2 text-base font-semibold"><Type className="h-4 w-4 text-primary" />Tipografía de la plataforma</h2>
+            <h2 className="flex items-center gap-2 text-base font-semibold"><Type className="h-4 w-4 text-primary dark:text-accent" />Tipografía de la plataforma</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Elige la fuente de todo el texto y, si quieres, una distinta para los títulos. Al aplicarla, el servidor la
               descarga una sola vez y desde entonces la sirve él mismo: los visitantes no se conectan a ningún servicio

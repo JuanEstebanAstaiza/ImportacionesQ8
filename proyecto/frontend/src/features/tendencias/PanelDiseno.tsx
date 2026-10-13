@@ -896,9 +896,24 @@ export function PanelDiseno() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Contador etiqueta="En cola" valor={contadores?.en_cola ?? null} icono={Clock} clase="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" />
-        <Contador etiqueta="Publicados hoy" valor={contadores?.publicados_hoy ?? null} icono={CheckCircle2} clase="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" />
-        <Contador etiqueta="Diseñados por ti" valor={contadores?.mios_total ?? null} icono={Palette} clase="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" />
+        <Contador
+          etiqueta="En cola"
+          valor={contadores?.en_cola ?? null}
+          icono={Clock}
+          clase="bg-amber-50 text-amber-700 dark:!bg-accent/20 dark:text-accent"
+        />
+        <Contador
+          etiqueta="Publicados hoy"
+          valor={contadores?.publicados_hoy ?? null}
+          icono={CheckCircle2}
+          clase="bg-emerald-50 text-emerald-700 dark:!bg-accent/20 dark:text-accent"
+        />
+        <Contador
+          etiqueta="Diseñados por ti"
+          valor={contadores?.mios_total ?? null}
+          icono={Palette}
+          clase="bg-violet-50 text-violet-700 dark:!bg-accent/20 dark:text-accent"
+        />
       </div>
 
       <div role="tablist" aria-label="Secciones del panel" className="flex flex-wrap gap-2 border-b border-border pb-2">
