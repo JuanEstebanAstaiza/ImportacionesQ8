@@ -3943,7 +3943,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const [notaSoporte,setNotaSoporte]=useState(0);
   const [comentarioNota,setComentarioNota]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
-  const [pendingImage,setPendingImage]=useState<{file:File;url:string}|null>(null);
+  const [pendingLocalAttachment,setPendingLocalAttachment]=useState<{file:File;url:string}|null>(null);
+  const [pendingResource,setPendingResource]=useState<BackendArchivoItem|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
   const [previewObjectUrl,setPreviewObjectUrl]=useState("");
@@ -4187,35 +4188,29 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     await handleDownloadResource(attachment.storage_url, attachment.nombre);
   }
 
-  async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>,isImage:boolean){
+  async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];
     if(!file||!selectedId)return;
 
-    if(isImage){
-      setPendingImage({file,url:URL.createObjectURL(file)});
-      event.target.value="";
-      return;
-    }
-
-    const contentLabel=isImage?"Imagen":"Archivo";
-    const localMsg:ChatMsg={
-      id:`pending-file-${Date.now()}`,
-      sender:"client",
-      text:`${contentLabel} adjunto: ${file.name}`,
-      file:{name:file.name,size:getReadableFileSize(file.size),type:mapFileType(file)},
-      time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),
-      read:true,
-    };
-
-    setMsgs(prev=>({...prev,[selectedId]:[...(prev[selectedId]||[]),localMsg]}));
-    try{
-      await onShareLocalAttachment(selectedId,file);
-    }catch{
-      // Mantener feedback visual local aunque falle el registro remoto.
-    }
-
+    setPendingLocalAttachment({file,url:URL.createObjectURL(file)});
     event.target.value="";
-    setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+  }
+
+  function cancelarAdjuntoLocal() {
+    if (pendingLocalAttachment) URL.revokeObjectURL(pendingLocalAttachment.url);
+    setPendingLocalAttachment(null);
+  }
+
+  async function enviarAdjuntoLocal() {
+    if (!pendingLocalAttachment || !selectedId) return;
+    const selected = pendingLocalAttachment;
+    cancelarAdjuntoLocal();
+    try {
+      await onShareLocalAttachment(selectedId, selected.file);
+      setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+    } catch {
+      toast.error("No se pudo enviar el archivo adjunto.");
+    }
   }
 
   function insertEmoji(emoji:string){
@@ -4505,14 +4500,23 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   }
 
   async function handleShareExistingResourceToChat(file: BackendArchivoItem) {
+    setPendingResource(file);
+    setIsResourcePickerOpen(false);
+  }
+
+  async function enviarRecursoPendiente() {
     const targetConversationId = resourceTargetConversationId.trim();
-    if (!targetConversationId) {
+    if (!pendingResource || !targetConversationId) {
       toast.error("Selecciona el chat destino");
       return;
     }
-    await onShareExistingResource([targetConversationId], file.id, `Recurso compartido: ${file.nombre}`);
-    toast.success("Recurso enviado al chat");
-    setIsResourcePickerOpen(false);
+    try {
+      await onShareExistingResource([targetConversationId], pendingResource.id, `Recurso compartido: ${pendingResource.nombre}`);
+      toast.success("Recurso enviado al chat");
+      setPendingResource(null);
+    } catch {
+      toast.error("No se pudo enviar el recurso al chat.");
+    }
   }
 
   async function handleUploadResourceToCurrentFolder(file: File) {
@@ -5028,15 +5032,36 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  onChange={(event)=>{void handleAttachFileChange(event,false);}}
+                  onChange={(event)=>{void handleAttachFileChange(event);}}
                 />
                 <input
                   ref={imageInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(event)=>{void handleAttachFileChange(event,true);}}
+                  onChange={(event)=>{void handleAttachFileChange(event);}}
                 />
+                {pendingLocalAttachment && (
+                  <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-2">
+                    {pendingLocalAttachment.file.type.startsWith("image/") ? (
+                      <img
+                        src={pendingLocalAttachment.url}
+                        alt={`Vista previa de ${pendingLocalAttachment.file.name}`}
+                        className="h-16 w-16 rounded-lg border border-border object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-border bg-white">
+                        <FileIcon className="h-7 w-7 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{pendingLocalAttachment.file.name}</p>
+                      <p className="text-xs text-muted-foreground">{getReadableFileSize(pendingLocalAttachment.file.size)}</p>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={cancelarAdjuntoLocal}>Cancelar</Button>
+                    <Button variant="primary" size="sm" onClick={()=>{void enviarAdjuntoLocal();}}>Enviar</Button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1 items-center">
                     <button
@@ -5109,8 +5134,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     />
                   </div>
                   <button
-                    onClick={()=>{void sendMsg();}}
-                    disabled={!input.trim()||sending}
+                    onClick={()=>{void (pendingLocalAttachment ? enviarAdjuntoLocal() : sendMsg());}}
+                    disabled={(!input.trim()&&!pendingLocalAttachment)||sending}
                     className={clsx("w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0",
                       input.trim()?"bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent shadow-sm":"bg-muted text-muted-foreground cursor-not-allowed")}>
                     <Send className="w-4 h-4"/>
@@ -5431,6 +5456,38 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
           )}
         </div>
 
+        <Modal
+          open={Boolean(pendingResource)}
+          onClose={()=>setPendingResource(null)}
+          title="Vista previa del recurso"
+        >
+          {pendingResource && (
+            <div className="space-y-4">
+              <div className="flex min-h-40 items-center justify-center rounded-lg border border-border bg-muted/30 p-4">
+                {resourcePreviewThumb(pendingResource) ? (
+                  <img
+                    src={resourcePreviewThumb(pendingResource) || ""}
+                    alt={pendingResource.nombre}
+                    className="max-h-56 w-full rounded-lg object-contain"
+                  />
+                ) : (
+                  <FormatFileIcon extension={pendingResource.extension} mimeType={pendingResource.mime_type} />
+                )}
+              </div>
+              <div>
+                <p className="truncate text-sm font-medium">{pendingResource.nombre}</p>
+                <p className="text-xs text-muted-foreground">
+                  {pendingResource.extension.toUpperCase()} · {pendingResource.size_bytes != null ? getReadableFileSize(pendingResource.size_bytes) : "Tamaño no disponible"}
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={()=>setPendingResource(null)}>Cancelar</Button>
+                <Button variant="primary" onClick={()=>{void enviarRecursoPendiente();}}>Enviar al chat</Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+
         {previewAttachment && (
           <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl border border-border w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -5450,23 +5507,6 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   <div className="h-[40vh] flex items-center justify-center text-sm text-muted-foreground">Cargando vista previa...</div>
                 )}
 
-                <Modal open={Boolean(pendingImage)} onClose={()=>{if(pendingImage)URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}} title="Vista previa de imagen">
-                  {pendingImage && (
-                    <div className="space-y-4">
-                      <img src={pendingImage.url} alt={`Vista previa de ${pendingImage.file.name}`} className="max-h-[60vh] w-full rounded-lg border border-border object-contain bg-muted/30" />
-                      <p className="truncate text-sm text-muted-foreground">{pendingImage.file.name} · {getReadableFileSize(pendingImage.file.size)}</p>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="secondary" onClick={()=>{URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}}>Cancelar</Button>
-                        <Button variant="primary" onClick={()=>{
-                          const selected = pendingImage;
-                          URL.revokeObjectURL(selected.url);
-                          setPendingImage(null);
-                          if(selectedId) void onShareLocalAttachment(selectedId, selected.file).catch(()=>undefined);
-                        }}>Enviar imagen</Button>
-                      </div>
-                    </div>
-                  )}
-                </Modal>
                 {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && previewLoadFailed && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
                     <p className="text-sm text-muted-foreground">No se pudo cargar el recurso desde el backend. Verifica permisos o disponibilidad del archivo.</p>
