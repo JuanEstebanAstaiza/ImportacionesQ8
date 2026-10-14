@@ -5055,7 +5055,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     {puedeEstimarPrecio&&(
                       <button
                         onClick={()=>setShowCalculadora(true)}
-                        className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 text-primary text-xs font-medium hover:bg-primary/5 transition-colors"
+                        className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 dark:border-accent/20 text-primary dark:text-accent text-xs font-medium hover:bg-primary/10 dark:hover:bg-accent/10 transition-colors"
                         title="Calculadora de precios: envía al cliente un precio estimado"
                       >
                         <Calculator className="w-4 h-4"/>
@@ -8486,28 +8486,136 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
               <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary"/>Información general</p>
+                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary dark:text-accent"/>Información general</p>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input label="Razón social" value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)}/>
-                  <Input label="Año de fundación" type="number" value={form.year} onChange={e=>f("year",e.target.value)}/>
-                  <Input label="Sitio web" value={form.website} onChange={e=>f("website",e.target.value)} prefix={<Globe className="w-4 h-4"/>}/>
-                  <div>
-                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>{fijarPreviaLocal("logo",null);f("logoUrl",e.target.value);}} prefix={<ImageIcon className="w-4 h-4"/>} hint="Súbelo desde aquí o pega la URL de tu logo."/>
+                  {/* Razón social */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Razón social</label>
+                    <input
+                      type="text"
+                      value={form.razonSocial}
+                      onChange={e => f("razonSocial", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                  </div>
+
+                  {/* Año de fundación */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Año de fundación</label>
+                    <input
+                      type="number"
+                      value={form.year}
+                      onChange={e => f("year", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                  </div>
+
+                  {/* Sitio web */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Sitio web</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><Globe className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.website}
+                        onChange={e => f("website", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* URL de logo/foto */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">URL de logo/foto</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><ImageIcon className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.logoUrl}
+                        onChange={e => { fijarPreviaLocal("logo", null); f("logoUrl", e.target.value); }}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Súbelo desde aquí o pega la URL de tu logo.</p>
                     <div className="mt-2 flex gap-2">
                       <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Reemplazar logo":"Subir logo"}</Button>
                       {form.logoUrl&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("logo",null);editar({logoUrl:""});}}>Quitar</Button>}
                     </div>
                     {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
                   </div>
-                  <Input label="Correo de contacto" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<MailIcon className="w-4 h-4"/>}/>
-                  <Input label="Teléfono" value={form.phone} onChange={e=>f("phone",e.target.value)} prefix={<Phone className="w-4 h-4"/>}/>
-                  <Input label="Dirección" value={form.address} onChange={e=>f("address",e.target.value)} prefix={<MapPin className="w-4 h-4"/>}/>
-                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Lo máximo que manejas por pedido. Opcional"/>
+
+                  {/* Correo de contacto */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Correo de contacto</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><MailIcon className="w-4 h-4"/></span>
+                      <input
+                        type="email"
+                        value={form.email}
+                        onChange={e => f("email", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Teléfono */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Teléfono</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><Phone className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.phone}
+                        onChange={e => f("phone", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dirección */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Dirección</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><MapPin className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.address}
+                        onChange={e => f("address", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Capacidad de volumen */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Capacidad de volumen</label>
+                    <input
+                      type="number"
+                      value={form.capacityVolume}
+                      onChange={e => f("capacityVolume", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                    <p className="text-xs text-muted-foreground">Lo máximo que manejas por pedido. Opcional</p>
+                  </div>
+
+                  {/* Pedido mínimo */}
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="pedido-minimo" className="text-sm font-medium text-foreground">Pedido mínimo</label>
                     <div className="flex gap-2">
-                      <input id="pedido-minimo" inputMode="decimal" placeholder="Sin mínimo" value={form.pedidoMinimo} onChange={e=>f("pedidoMinimo",e.target.value)} className="w-full h-10 bg-white border rounded-lg text-sm px-3 border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"/>
-                      <select aria-label="Unidad del pedido mínimo" value={form.pedidoMinimoUnidad} onChange={e=>editar({pedidoMinimoUnidad:e.target.value==="m3"?"m3":"unidades"})} className="h-10 rounded-lg border border-border bg-white px-2 text-sm">
+                      <input 
+                        id="pedido-minimo" 
+                        inputMode="decimal" 
+                        placeholder="Sin mínimo" 
+                        value={form.pedidoMinimo} 
+                        onChange={e => f("pedidoMinimo", e.target.value)} 
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                      <select 
+                        aria-label="Unidad del pedido mínimo" 
+                        value={form.pedidoMinimoUnidad} 
+                        onChange={e => editar({pedidoMinimoUnidad: e.target.value === "m3" ? "m3" : "unidades"})} 
+                        className="h-10 rounded-lg border border-border bg-white px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
+                      >
                         <option value="unidades">Unidades</option>
                         <option value="m3">m³</option>
                       </select>
@@ -8515,8 +8623,14 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     <p className="text-xs text-muted-foreground">Zarpi lo usa para asignarte solicitudes que encajen contigo</p>
                   </div>
                 </div>
-                <div className="mt-4">
-                  <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
+                <div className="mt-4 flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Descripción</label>
+                  <textarea
+                    rows={3}
+                    value={form.description}
+                    onChange={e => f("description", e.target.value)}
+                    className="w-full border rounded-lg text-sm p-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/25 resize-y"
+                  />
                 </div>
                 <div className="mt-4 flex items-center gap-2">
                   <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>editar({soloCotizacionesDirectas:e.target.checked})} className="h-4 w-4 rounded border-border"/>
@@ -8524,17 +8638,36 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 </div>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información comercial</p>
+                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</p>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Select label="Tiempo promedio de respuesta" value={form.avgResponse} onChange={e=>f("avgResponse",e.target.value)}>
-                    {["~12h","~24h","~36h","~48h","~72h"].map(v=><option key={v}>{v}</option>)}
-                  </Select>
-                  <Select label="Tier mínimo requerido para cotizar" value={form.tierMinimoRequerido} onChange={e=>f("tierMinimoRequerido",e.target.value)}>
-                    {["Bronze", "Silver", "Gold", "Élite"].map((tier)=><option key={tier}>{tier}</option>)}
-                  </Select>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Tiempo promedio de respuesta</label>
+                    <select
+                      value={form.avgResponse}
+                      onChange={e => f("avgResponse", e.target.value)}
+                      className="w-full h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
+                    >
+                      {["~12h","~24h","~36h","~48h","~72h"].map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Tier mínimo requerido para cotizar</label>
+                    <select
+                      value={form.tierMinimoRequerido}
+                      onChange={e => f("tierMinimoRequerido", e.target.value)}
+                      className="w-full h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
+                    >
+                      {["Bronze", "Silver", "Gold", "Élite"].map((tier) => (
+                        <option key={tier} value={tier}>{tier}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
-                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40 hover:bg-primary/20")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Países atendidos</p>
@@ -8551,7 +8684,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     dentro de "Información comercial" pasaba desapercibido. */}
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary"/>Límite de cotizaciones por día</p>
+                    <p className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary dark:text-accent"/>Límite de cotizaciones por día</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Cuántas cotizaciones (dirigidas y abiertas) quiere recibir tu equipo cada día. Al llegar al tope,
                       los clientes no pueden enviarte más dirigidas y las abiertas se reparten a otras empresas hasta la medianoche.
@@ -8563,37 +8696,43 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     aria-checked={form.limiteCotizacionesDiarias.trim()!==""}
                     aria-label="Limitar cotizaciones por día"
                     onClick={()=>editar({limiteCotizacionesDiarias:form.limiteCotizacionesDiarias.trim()?"":String(cupo?.limite_cotizaciones_diarias||20)})}
-                    className={clsx("relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors",form.limiteCotizacionesDiarias.trim()?"bg-primary":"bg-muted-foreground/30")}
+                    className={clsx("relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors",form.limiteCotizacionesDiarias.trim()?"bg-primary dark:bg-accent":"bg-muted-foreground/30")}
                   >
                     <span className={clsx("inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",form.limiteCotizacionesDiarias.trim()?"translate-x-5":"translate-x-0.5")}/>
                   </button>
                 </div>
                 {form.limiteCotizacionesDiarias.trim()!==""?(
                   <div className="mt-4 grid sm:grid-cols-2 gap-4 items-start">
-                    <Input
-                      label="Máximo por día"
-                      type="number"
-                      min={1}
-                      max={10000}
-                      value={form.limiteCotizacionesDiarias}
-                      onChange={e=>f("limiteCotizacionesDiarias",e.target.value)}
-                      error={leerLimiteDiario(form.limiteCotizacionesDiarias)===undefined?"Escribe un número entero entre 1 y 10000.":undefined}
-                    />
-                    {cupo&&cupo.limite_cotizaciones_diarias!=null?(
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">Máximo por día</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10000}
+                        value={form.limiteCotizacionesDiarias}
+                        onChange={e => f("limiteCotizacionesDiarias", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                      {leerLimiteDiario(form.limiteCotizacionesDiarias) === undefined && (
+                        <p className="text-xs text-destructive">Escribe un número entero entre 1 y 10000.</p>
+                      )}
+                    </div>
+
+                    {cupo && cupo.limite_cotizaciones_diarias != null ? (
                       <div>
-                        <p className="text-sm font-medium mb-1.5">Uso de hoy</p>
+                        <p className="text-sm font-medium mb-1.5 text-foreground">Uso de hoy</p>
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div
-                            className={clsx("h-full transition-all",cupo.cupo_agotado?"bg-destructive":"bg-primary")}
-                            style={{width:`${Math.min(100,Math.round((cupo.recibidas_hoy/Math.max(1,cupo.limite_cotizaciones_diarias))*100))}%`}}
+                            className={clsx("h-full transition-all", cupo.cupo_agotado ? "bg-destructive" : "bg-primary dark:bg-accent")}
+                            style={{ width: `${Math.min(100, Math.round((cupo.recibidas_hoy / Math.max(1, cupo.limite_cotizaciones_diarias)) * 100))}%` }}
                           />
                         </div>
-                        <p className={clsx("text-xs mt-1.5",cupo.cupo_agotado?"text-destructive font-medium":"text-muted-foreground")}>
+                        <p className={clsx("text-xs mt-1.5", cupo.cupo_agotado ? "text-destructive font-medium" : "text-muted-foreground")}>
                           {cupo.recibidas_hoy} de {cupo.limite_cotizaciones_diarias} recibidas hoy.
-                          {cupo.cupo_agotado?" Cupo agotado: no recibirás más hasta mañana.":` Te quedan ${cupo.disponibles_hoy}.`}
+                          {cupo.cupo_agotado ? " Cupo agotado: no recibirás más hasta mañana." : ` Te quedan ${cupo.disponibles_hoy}.`}
                         </p>
                       </div>
-                    ):(
+                    ) : (
                       <p className="text-xs text-muted-foreground sm:mt-7">El uso de hoy aparece en cuanto se guarde el límite.</p>
                     )}
                   </div>
@@ -8604,20 +8743,24 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 )}
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</p>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary dark:text-accent"/>Shipping mark</p>
                 <p className="text-xs text-muted-foreground mb-4">
                   Prefijo con el que se rotula la carga de tu empresa. Cada cliente añade su propio sufijo
                   al pedir la cotización, y así se distinguen sus cajas dentro del contenedor.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4 items-start">
-                  <Input
-                    label="Prefijo de la empresa"
-                    placeholder="ctl"
-                    maxLength={LONGITUD_MAX_PREFIJO_SHIPPING_MARK}
-                    value={form.shippingMarkPrefijo}
-                    onChange={e=>f("shippingMarkPrefijo",e.target.value)}
-                    hint="Solo letras y números; se guarda en minúsculas."
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Prefijo de la empresa</label>
+                    <input
+                      type="text"
+                      placeholder="ctl"
+                      maxLength={LONGITUD_MAX_PREFIJO_SHIPPING_MARK}
+                      value={form.shippingMarkPrefijo}
+                      onChange={e => f("shippingMarkPrefijo", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                    <p className="text-xs text-muted-foreground">Solo letras y números; se guarda en minúsculas.</p>
+                  </div>
                   <div className="pt-1">
                     <p className="text-sm font-medium mb-1.5">Así quedará</p>
                     <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
@@ -8628,7 +8771,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 </div>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Film className="w-4 h-4 text-primary"/>Presentación de la empresa</p>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Film className="w-4 h-4 text-primary dark:text-accent"/>Presentación de la empresa</p>
                 <p className="text-xs text-muted-foreground mb-4">
                   Un video corto de tu taller y algunas fotos de producto. Es lo primero que mira un cliente
                   al abrir tu ficha; nuestro equipo lo revisa antes de publicarlo.
@@ -8636,7 +8779,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 <EditorPresentacion/>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary"/>Banner de portada</p>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary dark:text-accent"/>Banner de portada</p>
                 <p className="text-xs text-muted-foreground mb-4">Imagen ancha que encabeza tu perfil público. Se recomienda 1600×400 px.</p>
 
                 <input
@@ -9018,7 +9161,12 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
           )}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex gap-1 flex-wrap">
-              {tabs.map(t=><button key={t} onClick={()=>setFilter(t)} className={clsx("px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors",filter===t?"bg-primary text-white":"bg-white border border-border text-muted-foreground hover:text-foreground")}>{t}</button>)}
+              {tabs.map(t=>
+                <button key={t}
+                  onClick={()=>setFilter(t)}
+                  className={clsx("px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors",filter===t?"bg-primary dark:bg-accent text-white dark:text-black":"border hover:bg-primary/20 dark:hover:bg-accent/20 hover:text-primary dark:hover:text-accent hover:!border-primary/40 dark:hover:!border-accent/40")}>{t}
+                </button>
+              )}
             </div>
             <div className="w-64"><Input placeholder="Buscar…" value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
           </div>
@@ -9765,12 +9913,12 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                     step === i + 1
                       ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground shadow-sm"
                       : step > i + 1
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:!bg-accent/20 dark:text-emerald-400 dark:border-emerald-800/60"
                       : "bg-muted/60 text-muted-foreground border border-transparent"
                   )}
                 >
                   {step > i + 1 ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-accent" />
                   ) : (
                     <span className="w-4 h-4 rounded-full flex items-center justify-center bg-foreground/10 text-[10px] font-semibold">
                       {i + 1}

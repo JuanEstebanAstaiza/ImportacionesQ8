@@ -185,24 +185,24 @@ export function EditorPresentacion() {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="text-sm font-medium block mb-1.5" htmlFor="titulo-presentacion">Título</label>
+          <label className="text-sm font-medium block mb-1.5 text-foreground" htmlFor="titulo-presentacion">Título</label>
           <input
             id="titulo-presentacion"
             value={titulo}
             onChange={(evento) => setTitulo(evento.target.value)}
             placeholder="Ej. Recorrido por nuestro taller"
-            className="w-full h-9 rounded-lg border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-9 rounded-lg border border-border px-3 text-sm bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/30"
           />
         </div>
         <div>
-          <label className="text-sm font-medium block mb-1.5" htmlFor="descripcion-presentacion">Descripción breve</label>
+          <label className="text-sm font-medium block mb-1.5 text-foreground" htmlFor="descripcion-presentacion">Descripción breve</label>
           <input
             id="descripcion-presentacion"
             value={descripcion}
             onChange={(evento) => setDescripcion(evento.target.value)}
             maxLength={600}
             placeholder="Una o dos frases sobre lo que se ve"
-            className="w-full h-9 rounded-lg border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-9 rounded-lg border border-border px-3 text-sm bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/30"
           />
         </div>
       </div>

@@ -117,7 +117,7 @@ function Interruptor({
       title={etiqueta}
       disabled={cargando}
       onClick={(e) => { e.stopPropagation(); onCambio(); }}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${activo ? "bg-primary" : "bg-slate-300 dark:bg-slate-600"}`}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${activo ? "bg-primary dark:bg-accent" : "bg-slate-300 dark:bg-slate-600"}`}
     >
       <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${activo ? "translate-x-5" : "translate-x-0.5"}`} />
       {cargando ? <Loader2 className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 animate-spin text-primary" /> : null}
@@ -1069,7 +1069,7 @@ export function CatalogosEmpresa({ esDueno }: { esDueno: boolean }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <BookOpen className="h-5 w-5 text-primary" /> Catálogos selectos
+            <BookOpen className="h-5 w-5 text-primary dark:text-accent" /> Catálogos selectos
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Muestra a tus clientes lo que puedes importarles. Para ellos son gratis y tú decides quién ve cada catálogo.
@@ -1088,7 +1088,7 @@ export function CatalogosEmpresa({ esDueno }: { esDueno: boolean }) {
       {catalogos.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-white p-10 text-center">
           <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-[#0f0f0f]">
-            <BookOpen className="h-5 w-5" />
+            <BookOpen className="h-5 w-5 text-primary dark:text-accent" />
           </span>
           <p className="text-sm font-semibold">Aún no tienes catálogos</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
@@ -1128,7 +1128,7 @@ export function CatalogosEmpresa({ esDueno }: { esDueno: boolean }) {
                   ) : null}
                 </div>
 
-                <p className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary dark:bg-primary/25 dark:text-violet-200">
+                <p className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary dark:bg-accent/25 dark:text-accent">
                   <Icono className="h-3.5 w-3.5" /> {c.criterio_texto}
                 </p>
 
@@ -1147,10 +1147,10 @@ export function CatalogosEmpresa({ esDueno }: { esDueno: boolean }) {
                 <div className="mt-2"><AvisoAlcance catalogo={c} /></div>
 
                 <div className="mt-auto flex gap-2 pt-4">
-                  <button type="button" onClick={() => { setSeleccion(c.id); setPestana("productos"); }} className={`${CLASE_BOTON_SECUNDARIO} flex-1`}>
+                  <button type="button" onClick={() => { setSeleccion(c.id); setPestana("productos"); }} className={`hover:bg-primary/10 dark:hover:!bg-accent/10 hover:border-primary/60 dark:hover:border-accent/60 hover:text-primary dark:hover:text-accent ${CLASE_BOTON_SECUNDARIO} flex-1`}>
                     <Package className="h-4 w-4" /> {esDueno ? "Productos" : "Ver productos"}
                   </button>
-                  <button type="button" onClick={() => { setSeleccion(c.id); setPestana("acceso"); }} className={`${CLASE_BOTON_SECUNDARIO} flex-1`}>
+                  <button type="button" onClick={() => { setSeleccion(c.id); setPestana("acceso"); }} className={`hover:bg-primary/10 dark:hover:!bg-accent/10 hover:border-primary/60 dark:hover:border-accent/60 hover:text-primary dark:hover:text-accent ${CLASE_BOTON_SECUNDARIO} flex-1`}>
                     <Users className="h-4 w-4" /> Quién lo ve
                   </button>
                 </div>

@@ -1068,14 +1068,15 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
               <p className="text-base font-semibold">Empresas / Importadores</p>
               <p className="text-sm text-muted-foreground">Crea empresas importadoras y revisa su información administrativa principal.</p>
             </div>
+            {/*
             <button
               type="button"
               onClick={() => setShowCompanyModal(true)}
               className="rounded-lg px-3 py-2 text-sm font-medium bg-primary dark:bg-accent !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80 disabled:opacity-60"
-
             >
               + Crear Empresa
             </button>
+            */}
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
