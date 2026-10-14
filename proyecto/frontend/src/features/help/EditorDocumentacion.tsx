@@ -140,7 +140,7 @@ export function EditorDocumentacion() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <BookOpen className="h-4 w-4 text-primary dark:text-accent" />
             Documentación de ayuda
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -151,7 +151,7 @@ export function EditorDocumentacion() {
         <button
           type="button"
           onClick={abrirNuevo}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary dark:bg-accent px-3 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80"
         >
           <Plus className="h-4 w-4" />
           Nuevo artículo

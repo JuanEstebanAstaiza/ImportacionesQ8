@@ -592,7 +592,7 @@ export function RetoAdmin() {
         ) : null}
       </div>
 
-      <p className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-800 dark:border-accent dark:bg-accent/20 dark:text-accent">
+      <p className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-800 dark:border-accent dark:!bg-accent/20 dark:text-accent">
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <span>La plataforma no mueve dinero: transferí desde Bancolombia y registrá aquí la referencia.</span>
       </p>

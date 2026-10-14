@@ -180,8 +180,8 @@ export function AdminEmailCampaign() {
         </div>
       </div>
 
-      {error ? <div className="rounded-lg border border-red-300/60 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300">{error}</div> : null}
-      {message ? <div className="flex items-center gap-2 rounded-lg border border-emerald-300/60 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />{message}</div> : null}
+      {error ? <div className="rounded-lg border border-red-300/60 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300 dark:!bg-red-900/15">{error}</div> : null}
+      {message ? <div className="flex items-center gap-2 rounded-lg border border-emerald-300/60 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-accent/70 dark:!bg-accent/15 dark:text-accent"><CheckCircle2 className="h-4 w-4" />{message}</div> : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm dark:bg-card/80">
@@ -209,7 +209,7 @@ export function AdminEmailCampaign() {
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
               <p className="text-xs text-muted-foreground">{form.buzon === "notificaciones" ? "Las respuestas llegan al buzón de contacto." : "Las respuestas llegan a ese mismo buzón."}</p>
-              <button type="button" disabled={sending} onClick={() => { void sendCampaign(); }} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-accent dark:text-accent-foreground">
+              <button type="button" disabled={sending} onClick={() => { void sendCampaign(); }} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary dark:bg-accent px-4 py-2 text-sm font-medium !text-white dark:!text-black hover:!bg-primary dark:hover:!bg-accent hover:opacity-80">
                 <Send className="h-4 w-4" />{sending ? "Enviando..." : "Enviar campaña"}
               </button>
             </div>

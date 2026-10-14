@@ -86,7 +86,7 @@ function Criterio({ etiqueta, criterio }: { etiqueta: string; criterio: Criterio
         ? "border-rose-200 bg-rose-50 text-rose-700"
         : "border-border bg-muted/40 text-muted-foreground";
   return (
-    <span title={detalle} className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium ${clase}`}>
+    <span title={detalle} className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium dark:!bg-accent/6 ${clase}`}>
       {cumple === true ? <Check className="h-3 w-3" /> : cumple === false ? <X className="h-3 w-3" /> : null}
       {etiqueta}
     </span>
@@ -171,7 +171,7 @@ function AjustesOperacion({
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
-        <p className="flex items-center gap-2 text-base font-semibold"><Settings2 className="h-4 w-4 text-primary" />Reparto de solicitudes abiertas</p>
+        <p className="flex items-center gap-2 text-base font-semibold"><Settings2 className="h-4 w-4 text-primary dark:text-accent" />Reparto de solicitudes abiertas</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Cada solicitud llega a pocas empresas elegidas por encaje, no a toda la red. Ninguna ve las propuestas de las otras.
         </p>
@@ -183,8 +183,16 @@ function AjustesOperacion({
               role="radio"
               aria-checked={asignacion.modo === modo}
               disabled={guardando !== null}
-              onClick={() => { if (asignacion.modo !== modo) void cambiarModo(modo); }}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${asignacion.modo === modo ? "border-primary bg-primary text-white" : "border-border bg-white text-foreground"}`}
+              onClick={() => {
+                if (asignacion.modo !== modo) void cambiarModo(modo);
+              }}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors 
+                hover:!bg-primary dark:hover:!bg-accent hover:!border-primary/80 dark:hover:!border-accent/80 hover:opacity-80 disabled:opacity-60 
+                ${
+                  asignacion.modo === modo
+                    ? "bg-primary border-primary dark:bg-accent dark:border-accent !text-white dark:!text-black"
+                    : "border-border bg-white dark:bg-card dark:text-foreground hover:!text-white dark:hover:!text-black"
+                }`}
             >
               {modo === "manual" ? "Manual (asigno yo)" : "Automático por encaje"}
             </button>
@@ -205,7 +213,7 @@ function AjustesOperacion({
             type="button"
             disabled={guardando !== null || cupo === String(asignacion.cupo_por_solicitud)}
             onClick={guardarCupo}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50 hover:!bg-primary dark:hover:!bg-accent hover:!text-white dark:hover:!text-black hover:!border-primary dark:hover:!border-accent"
           >
             {guardando === "cupo" ? "Guardando..." : "Guardar"}
           </button>
@@ -229,7 +237,7 @@ function AjustesOperacion({
             onChange={(e) => setRespaldo(e.target.value)}
             className="w-32 rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
           />
-          <button type="button" disabled={guardando !== null} onClick={() => guardarRespaldo()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+          <button type="button" disabled={guardando !== null} onClick={() => guardarRespaldo()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50 hover:!bg-primary hover:!text-white hover:!border-primary dark:hover:!bg-accent dark:hover:!text-black dark:hover:!border-accent">
             {guardando === "trm" ? "Guardando..." : "Guardar"}
           </button>
           {trm.respaldo_admin ? (
@@ -237,14 +245,14 @@ function AjustesOperacion({
               Quitar
             </button>
           ) : null}
-          <button type="button" disabled={guardando !== null || !trm.consulta_automatica} onClick={consultarTrm} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50" title={trm.consulta_automatica ? "Volver a consultar el dólar en Google Finance" : "La consulta automática está desactivada en el servidor"}>
+          <button type="button" disabled={guardando !== null || !trm.consulta_automatica} onClick={consultarTrm} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50 hover:!bg-primary hover:!text-white hover:!border-primary dark:hover:!bg-accent dark:hover:!text-black dark:hover:!border-accent" title={trm.consulta_automatica ? "Volver a consultar el dólar en Google Finance" : "La consulta automática está desactivada en el servidor"}>
             <RefreshCw className={`h-3.5 w-3.5 ${guardando === "consultar" ? "animate-spin" : ""}`} />Consultar ahora
           </button>
         </div>
       </div>
 
       {aviso || error ? (
-        <p role={error ? "alert" : "status"} className={`lg:col-span-2 rounded-lg border px-3 py-2 text-sm ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+        <p role={error ? "alert" : "status"} className={`lg:col-span-2 rounded-lg border px-3 py-2 text-sm dark:!bg-accent/10 ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
           {error || aviso}
         </p>
       ) : null}
@@ -357,7 +365,7 @@ function ModalAsignar({
                 return (
                   <label
                     key={c.importador_id}
-                    className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center ${elegida ? "border-primary bg-primary/5" : "border-border"} ${bloqueo ? "cursor-default opacity-70" : ""}`}
+                    className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center ${elegida ? "border-primary dark:border-accent bg-primary/5 dark:bg-accent/5" : "border-border"} ${bloqueo ? "cursor-default opacity-70" : ""}`}
                   >
                     <input
                       type="checkbox"
@@ -369,7 +377,7 @@ function ModalAsignar({
                     <div className="min-w-0 flex-1">
                       <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                         {c.nombre_empresa}
-                        {c.verificado ? <BadgeCheck className="h-4 w-4 text-primary" aria-label="Verificada" /> : null}
+                        {c.verificado ? <BadgeCheck className="h-4 w-4 text-primary dark:!text-accent" aria-label="Verificada" /> : null}
                         {bloqueo ? <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{bloqueo}</span> : null}
                         {c.estado_propuesta ? <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">{ESTADO_PROPUESTA[c.estado_propuesta] ?? c.estado_propuesta}</span> : null}
                       </p>
@@ -381,7 +389,7 @@ function ModalAsignar({
                       </div>
                     </div>
                     <dl className="grid flex-shrink-0 grid-cols-4 gap-3 text-center text-xs sm:w-[360px]">
-                      <div><dt className="text-muted-foreground">Calificación</dt><dd className="flex items-center justify-center gap-0.5 font-semibold"><Star className="h-3 w-3 text-amber-500" />{c.calificacion_promedio.toFixed(1)}</dd></div>
+                      <div><dt className="text-muted-foreground">Calificación</dt><dd className="flex items-center justify-center gap-0.5 font-semibold"><Star className="h-3 w-3 text-amber-500 dark:text-accent" />{c.calificacion_promedio.toFixed(1)}</dd></div>
                       <div><dt className="text-muted-foreground">Responde</dt><dd className="font-semibold">{porcentaje(c.desempeno.tasa_respuesta_pct)}</dd></div>
                       <div><dt className="text-muted-foreground">Cierra</dt><dd className="font-semibold">{porcentaje(c.desempeno.tasa_cierre_pct)}</dd></div>
                       <div><dt className="text-muted-foreground">Hoy</dt><dd className={`font-semibold ${c.cupo_diario_agotado ? "text-rose-700" : ""}`}>{c.recibidas_hoy}{c.limite_cotizaciones_diarias ? `/${c.limite_cotizaciones_diarias}` : ""}</dd></div>
@@ -395,12 +403,12 @@ function ModalAsignar({
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3">
           {error ? <p role="alert" className="mr-auto text-sm text-rose-700">{error}</p> : null}
-          <button type="button" onClick={onCerrar} className="rounded-lg border border-border px-4 py-2 text-sm font-medium">Cancelar</button>
+          <button type="button" onClick={onCerrar} className="rounded-lg border border-border hover:!border-primary/60 dark:hover:!border-accent/60 hover:!bg-primary/10 dark:hover:!bg-accent/10 hover:!text-primary dark:hover:!text-accent px-4 py-2 text-sm font-medium">Cancelar</button>
           <button
             type="button"
             disabled={!seleccion.length || guardando}
             onClick={() => { void asignar(); }}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg !bg-primary dark:!bg-accent px-4 py-2 text-sm font-medium !text-white dark:!text-black hover:!opacity-70"
           >
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
             Asignar{seleccion.length ? ` (${seleccion.length})` : ""}
@@ -485,22 +493,22 @@ export function AsignacionSolicitudes() {
                   role="tab"
                   aria-selected={filtro === f.clave}
                   onClick={() => setFiltro(f.clave)}
-                  className={`rounded-md px-3 py-1 text-sm ${filtro === f.clave ? "bg-primary text-white" : "text-muted-foreground"}`}
+                  className={`rounded-md px-3 py-1 text-sm ${filtro === f.clave ? "bg-primary hover:!bg-primary dark:bg-accent dark:hover:!bg-accent text-white hover:!text-white dark:hover:!text-black! dark:!text-black" : "text-muted-foreground hover:!bg-primary/10 dark:hover:!bg-accent/10 hover:!text-primary dark:hover:!text-accent"}`}
                 >
                   {f.etiqueta}
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => { void cargar(); }} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border" title="Actualizar">
+            <button type="button" onClick={() => { void cargar(); }} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:!bg-primary dark:hover:!bg-accent hover:!text-white dark:hover:!text-black hover:!border-primary dark:hover:!border-accent" title="Actualizar">
               <RefreshCw className={`h-4 w-4 ${cargando ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
 
-        {error ? <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+        {error ? <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:!bg-accent">{error}</p> : null}
 
         {filtro === "por_asignar" && porAsignar > 0 ? (
-          <p className="mt-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="mt-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:!bg-accent/10">
             <AlertTriangle className="h-4 w-4" />{porAsignar} {porAsignar === 1 ? "solicitud no ha llegado" : "solicitudes no han llegado"} a ninguna empresa todavía.
           </p>
         ) : null}
@@ -522,7 +530,7 @@ export function AsignacionSolicitudes() {
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                       {s.nombre_producto}
-                      <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${tiempo.clase}`}><Clock className="h-3 w-3" />{tiempo.texto}</span>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium dark:!bg-accent/10 ${tiempo.clase}`}><Clock className="h-3 w-3" />{tiempo.texto}</span>
                       {!vigente ? <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{s.estado}</span> : null}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -561,7 +569,7 @@ export function AsignacionSolicitudes() {
                       type="button"
                       disabled={lleno || !vigente}
                       onClick={() => setAbierta(s.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg !bg-primary dark:!bg-accent px-3 py-1.5 text-sm font-medium !text-white dark:!text-black hover:!opacity-70 disabled:opacity-50"
                       title={lleno ? "El cupo de empresas de esta solicitud está completo" : undefined}
                     >
                       <UserPlus className="h-4 w-4" />Asignar a

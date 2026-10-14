@@ -151,7 +151,7 @@ export function PanelEmpresa({
               role="tab"
               aria-selected={dias === p.dias}
               onClick={() => setDias(p.dias)}
-              className={`rounded-md px-3 py-1 text-xs font-medium ${dias === p.dias ? "bg-primary text-white" : "text-muted-foreground"}`}
+              className={`rounded-md px-3 py-1 text-xs font-medium ${dias === p.dias ? "bg-primary dark:bg-accent text-white dark:text-black" : "text-muted-foreground hover:bg-primary/20 dark:hover:bg-accent/20 hover:text-primary dark:hover:text-accent hover:border-primary/10 dark:hover:border-accent"}`}
             >
               {p.etiqueta}
             </button>
@@ -170,14 +170,32 @@ export function PanelEmpresa({
           valor={panel.conversion_pct !== null ? `${panel.conversion_pct.toLocaleString("es-CO", { maximumFractionDigits: 1 })} %` : "—"} detalle={cierre} />
         <Metrica icono={<Target className="h-5 w-5" />} color="bg-cyan-50 text-cyan-600" etiqueta="Tasa de respuesta"
           valor={panel.tasa_respuesta_pct !== null ? `${Math.round(panel.tasa_respuesta_pct)} %` : "—"} detalle="Propuestas enviadas ÷ solicitudes recibidas" />
-        <Metrica icono={<Banknote className="h-5 w-5" />} color="bg-amber-50 text-amber-600" etiqueta="Valor promedio de los negocios cerrados"
-          valor={pesos(panel.valor_promedio_cerrado_cop)} detalle={panel.valor_cerrado_cop ? `Total cerrado ${pesos(panel.valor_cerrado_cop)}` : undefined} />
         <Metrica icono={<Hourglass className="h-5 w-5" />} color="bg-orange-50 text-orange-600" etiqueta="Propuestas esperando respuesta del comprador"
           valor={pesos(panel.valor_esperando_cop)} detalle={`${panel.propuestas_esperando} ${panel.propuestas_esperando === 1 ? "propuesta" : "propuestas"}`} />
         <Metrica icono={<Clock className="h-5 w-5" />} color="bg-sky-50 text-sky-600" etiqueta="Tiempo promedio de respuesta"
           valor={panel.tiempo_promedio_respuesta_horas === null ? "—" : panel.tiempo_promedio_respuesta_horas < 1 ? "< 1 h" : `${panel.tiempo_promedio_respuesta_horas.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h`} detalle={`${chatsActivos} chats activos`} />
         <Metrica icono={<Users className="h-5 w-5" />} color="bg-lime-50 text-lime-600" etiqueta="Asesores conectados" valor={String(asesoresConectados)} />
       </div>
+
+      {panel.resumen_financiero_confirmado ? (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm" aria-labelledby="resumen-financiero-confirmado">
+          <div className="mb-4">
+            <h2 id="resumen-financiero-confirmado" className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+              <Banknote className="h-4 w-4 text-emerald-700" />
+              Resumen financiero de la operación
+            </h2>
+            <p className="mt-1 text-xs text-emerald-900/70">Disponible después de confirmar la solicitud y el primer abono.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Metrica icono={<Banknote className="h-5 w-5" />} color="bg-white text-emerald-700" etiqueta="Monto total de la operación"
+              valor={pesos(panel.resumen_financiero_confirmado.monto_total_operacion_cop)} />
+            <Metrica icono={<Banknote className="h-5 w-5" />} color="bg-white text-emerald-700" etiqueta="Monto pagado / Primer abono"
+              valor={pesos(panel.resumen_financiero_confirmado.monto_pagado_cop)} />
+            <Metrica icono={<Banknote className="h-5 w-5" />} color="bg-white text-emerald-700" etiqueta="Monto pendiente confirmado"
+              valor={pesos(panel.resumen_financiero_confirmado.monto_pendiente_confirmado_cop)} />
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid items-start gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-border bg-white shadow-sm lg:col-span-2">
@@ -208,7 +226,7 @@ export function PanelEmpresa({
                       {p.con_borrador ? " · borrador en curso" : ""}
                     </p>
                   </div>
-                  <span className={`flex-shrink-0 rounded border px-2 py-0.5 text-xs font-medium ${nivel.chip}`}>{espera(p.horas_esperando)}</span>
+                  <span className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium dark:!bg-accent/10 ${nivel.chip}`}>{espera(p.horas_esperando)}</span>
                 </button>
               );
             })}
@@ -219,8 +237,8 @@ export function PanelEmpresa({
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-semibold"><ShoppingCart className="h-4 w-4 text-primary" />Pedidos en proceso</h2>
-              <button type="button" onClick={onAbrirPedidos} className="text-xs font-medium text-primary">{enProceso} en curso</button>
+              <h2 className="flex items-center gap-2 text-sm font-semibold"><ShoppingCart className="h-4 w-4 text-primary dark:text-accent" />Pedidos en proceso</h2>
+              <button type="button" onClick={onAbrirPedidos} className="text-xs font-medium text-primary dark:text-accent">{enProceso} en curso</button>
             </div>
             <div className="space-y-2">
               {ETAPAS.map((e) => {
@@ -229,7 +247,7 @@ export function PanelEmpresa({
                   <div key={e.clave} className="flex items-center gap-3 text-sm">
                     <span className="w-28 flex-shrink-0 text-xs text-muted-foreground">{e.etiqueta}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${(n / maxEtapa) * 100}%` }} />
+                      <div className="h-full rounded-full bg-primary dark:bg-accent" style={{ width: `${(n / maxEtapa) * 100}%` }} />
                     </div>
                     <span className="w-6 text-right text-xs font-semibold">{n}</span>
                   </div>

@@ -90,10 +90,30 @@ export function PanelAprobacion({ esAdmin }: { esAdmin: boolean }) {
 
       {enCola && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Contador etiqueta="Pendientes" valor={contadores?.pendientes ?? null} icono={Clock} clase="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" />
-          <Contador etiqueta="En diseño" valor={contadores?.en_diseno ?? null} icono={ImageOff} clase="bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" />
-          <Contador etiqueta="Aprobados hoy" valor={contadores?.aprobados_hoy ?? null} icono={CheckCircle2} clase="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" />
-          <Contador etiqueta="Rechazados hoy" valor={contadores?.rechazados_hoy ?? null} icono={XCircle} clase="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" />
+          <Contador
+            etiqueta="Pendientes"
+            valor={contadores?.pendientes ?? null}
+            icono={Clock}
+            clase="bg-amber-50 text-amber-700 dark:!bg-accent/20 dark:text-accent"
+          />
+          <Contador
+            etiqueta="En diseño"
+            valor={contadores?.en_diseno ?? null}
+            icono={ImageOff}
+            clase="bg-sky-50 text-sky-700 dark:!bg-accent/20 dark:text-accent"
+          />
+          <Contador
+            etiqueta="Aprobados hoy"
+            valor={contadores?.aprobados_hoy ?? null}
+            icono={CheckCircle2}
+            clase="bg-emerald-50 text-emerald-700 dark:!bg-accent/20 dark:text-accent"
+          />
+          <Contador
+            etiqueta="Rechazados hoy"
+            valor={contadores?.rechazados_hoy ?? null}
+            icono={XCircle}
+            clase="bg-rose-50 text-rose-700 dark:!bg-accent/20 dark:text-accent"
+          />
         </div>
       )}
 

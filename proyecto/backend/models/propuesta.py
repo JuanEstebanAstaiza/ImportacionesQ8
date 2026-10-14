@@ -33,6 +33,8 @@ class Propuesta(Base):
     # Cantidad que cubre el precio (en la unidad de la cotización). NULL = la
     # cantidad pedida por el cliente.
     cantidad = Column(Float, nullable=True)
+    # Unidad declarada para el MOQ de la propuesta: unidades o USD.
+    moq_unit = Column(String(10), nullable=True)
 
     # --- Descarte: el cliente eligió otra propuesta ---
     motivo_descarte = Column(String(20), nullable=True)  # precio, tiempo, condiciones, otro

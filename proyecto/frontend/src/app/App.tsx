@@ -1487,9 +1487,24 @@ type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
+  const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
   const timer=useRef<ReturnType<typeof setTimeout>>(null);
   const floating=!pinned&&hovered;
   const isExpanded=pinned||hovered;
+  const isAdminNavigation=navItems.some(item=>item.key==="admin-dashboard");
+  const adminGroups=[
+    {key:"gestion",label:"Gestión",icon:Building2,items:["admin-empresas","admin-presentaciones","admin-asignacion","admin-usuarios","admin-cotizantes"]},
+    {key:"comunicacion",label:"Comunicación",icon:MessageSquare,items:["admin-correos","admin-soporte","chats","documentos"]},
+    {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","tendencias-aprobacion","diseno","admin-reto"]},
+    {key:"finanzas",label:"Suscripciones",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
+    {key:"configuracion",label:"Configuración",icon:ToggleRight,items:["admin-certificaciones","admin-respaldos","admin-tipografia","admin-modulos"]},
+  ] as const;
+
+  useEffect(()=>{
+    if(!isAdminNavigation)return;
+    const activeGroup=adminGroups.find(group=>group.items.includes(active));
+    if(activeGroup)setOpenAdminGroup(activeGroup.key);
+  },[active,isAdminNavigation]);
 
   function onEnter(){timer.current=setTimeout(()=>setHovered(true),60);}
   function onLeave(){if(timer.current)clearTimeout(timer.current);setHovered(false);}
@@ -1511,8 +1526,91 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
           <img src={dark ? (isExpanded ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-isotipo-acid.svg") : (isExpanded ? "/brand/zarpi-wordmark.svg" : "/brand/zarpi-isotipo.svg")} alt="Zarpi" className={clsx("object-contain object-left transition-all duration-200",isExpanded?"h-8 w-28":"h-8 w-8")} />
         </div>
 
-        <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1">
-          {navItems.map(({ icon: Icon, label, key }) => {
+        <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1 overflow-y-auto">
+          {isAdminNavigation ? (
+            <>
+              {navItems.filter(item=>item.key==="admin-dashboard").map(({icon:Icon,label,key})=>{
+                const isActive=active===key;
+                return (
+                  <button
+                    key={key}
+                    onClick={()=>onNav(key)}
+                    className={clsx(
+                      "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
+                      isActive
+                        ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                      isExpanded ? "gap-2.5" : "justify-center gap-0"
+                    )}
+                    title={!isExpanded ? label : undefined}
+                  >
+                    <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary dark:text-accent")}/>
+                    <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                      <span className="whitespace-nowrap">{label}</span>
+                    </div>
+                    {isExpanded&&isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0"/>}
+                  </button>
+                );
+              })}
+              {adminGroups.map(group=>{
+                const GroupIcon=group.icon;
+                const groupItems=navItems.filter(item=>group.items.includes(item.key));
+                if(groupItems.length===0)return null;
+                const isOpen=openAdminGroup===group.key;
+                const hasActiveItem=groupItems.some(item=>item.key===active);
+                return (
+                  <div key={group.key} className="mt-1">
+                    <button
+                      type="button"
+                      onClick={()=>isExpanded&&setOpenAdminGroup(current=>current===group.key?null:group.key)}
+                      className={clsx(
+                        "flex items-center rounded-lg px-2.5 py-2 text-sm font-semibold transition-all duration-150 w-full",
+                        hasActiveItem
+                          ? "text-primary dark:text-accent"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                        isExpanded?"gap-2.5":"justify-center gap-0"
+                      )}
+                      title={!isExpanded?group.label:undefined}
+                      aria-expanded={isExpanded?isOpen:undefined}
+                    >
+                      <GroupIcon className="w-4 h-4 flex-shrink-0"/>
+                      <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
+                        <span className="whitespace-nowrap">{group.label}</span>
+                      </div>
+                      {isExpanded&&<ChevronDown className={clsx("ml-auto w-4 h-4 transition-transform duration-200",isOpen&&"rotate-180")}/>}
+                    </button>
+                    {isExpanded&&(
+                      <div className={clsx("grid transition-[grid-template-rows] duration-200",isOpen?"grid-rows-[1fr]":"grid-rows-[0fr]")}>
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="ml-2 border-l border-border pl-2 pt-0.5">
+                            {groupItems.map(({icon:Icon,label,key})=>{
+                              const isActive=active===key;
+                              return (
+                                <button
+                                  key={key}
+                                  onClick={()=>onNav(key)}
+                                  className={clsx(
+                                    "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full gap-2.5",
+                                    isActive
+                                      ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  )}
+                                >
+                                  <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary dark:text-accent")}/>
+                                  <span className="whitespace-nowrap">{label}</span>
+                                  {isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0"/>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          ) : navItems.map(({ icon: Icon, label, key }) => {
             const isActive = active === key;
             return (
               <button
@@ -3002,6 +3100,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   };
   const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
   const activeProposal=visibleProposals[0]??null;
+  const hayPropuestaAceptada = visibleProposals.some((proposal) => proposal.estado === "aceptada" || proposal.preaceptada_por_solicitante);
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
   const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
@@ -3216,7 +3315,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               {p.estado==="rechazada"&&p.motivo_descarte&&<p className="text-[11px] text-muted-foreground mt-2">Elegiste otra propuesta por: {MOTIVOS_ELECCION.find(m=>m.clave===p.motivo_descarte)?.etiqueta??p.motivo_descarte}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                              {p.estado==="pendiente"?(
+                              {p.estado==="pendiente"&&!hayPropuestaAceptada?(
                                 <>
                                   <Button variant="primary" size="sm" onClick={()=>aceptarPropuesta(p)}>Aceptar</Button>
                                   <Button variant="secondary" size="sm" onClick={()=>void handleDecision(p.id,false)}>Rechazar</Button>
@@ -3643,17 +3742,17 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
           </Card>
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Resumen comercial</h3>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Resumen comercial</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Producto",order.product],["Cantidad",order.quantity],["Precio final",order.unitPrice],["Incoterm",order.incoterm],["Shipping mark",order.shippingMark||"Sin marca"],["Puerto de origen",order.originPort],["Puerto de destino",order.destPort],["Valor total",order.totalValue]].map(([k,v])=>(
-                  <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary font-semibold")}>{v}</p></div>
+                  <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary dark:text-accent font-semibold")}>{v}</p></div>
                 ))}</div>
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
               <div ref={seguimientoRef}>
                 <Card padding="md">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-                    <h3 className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">{orderStateLabel(order.status)}</span>
+                    <h3 className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary dark:text-accent"/>Estado logístico</h3>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent">{orderStateLabel(order.status)}</span>
                   </div>
                   <Timeline stages={timelineStages}/>
                   {/* La empresa y el asesor asignado mueven el embarque desde
@@ -3682,7 +3781,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                 </Card>
               </div>
               <Card padding="none">
-                <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
+                <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary dark:text-accent"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
                 <div className="divide-y divide-border/60">{documents.map(doc=>(
                   <div key={doc.name} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date||orderDocumentTypeLabel(doc.type)}</p></div></div>
@@ -3694,7 +3793,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                 ))}</div>
                 {documents.length===0&&<div className="py-10 text-center text-sm text-muted-foreground">No hay documentos adjuntos para esta operación.</div>}
               </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary"/>Historial de eventos</h3>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary dark:text-accent"/>Historial de eventos</h3>
                 <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
                   <div className="space-y-1">{historyEvents.map((ev,i)=>{
                     // Los eventos guardan el estado real de la orden
@@ -3844,6 +3943,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const [notaSoporte,setNotaSoporte]=useState(0);
   const [comentarioNota,setComentarioNota]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
+  const [pendingImage,setPendingImage]=useState<{file:File;url:string}|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
   const [previewObjectUrl,setPreviewObjectUrl]=useState("");
@@ -4090,6 +4190,12 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>,isImage:boolean){
     const file=event.target.files?.[0];
     if(!file||!selectedId)return;
+
+    if(isImage){
+      setPendingImage({file,url:URL.createObjectURL(file)});
+      event.target.value="";
+      return;
+    }
 
     const contentLabel=isImage?"Imagen":"Archivo";
     const localMsg:ChatMsg={
@@ -4957,7 +5063,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     {puedeEstimarPrecio&&(
                       <button
                         onClick={()=>setShowCalculadora(true)}
-                        className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 text-primary text-xs font-medium hover:bg-primary/5 transition-colors"
+                        className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 dark:border-accent/20 text-primary dark:text-accent text-xs font-medium hover:bg-primary/10 dark:hover:bg-accent/10 transition-colors"
                         title="Calculadora de precios: envía al cliente un precio estimado"
                       >
                         <Calculator className="w-4 h-4"/>
@@ -5040,7 +5146,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
               </div>
               <div className="p-3 space-y-3 flex-1">
                 {conv.type==="soporte"?(
-                  <div className={clsx("rounded-lg border px-2.5 py-2 space-y-1.5",conv.closed?"bg-emerald-50 border-emerald-200":"bg-rose-50 border-rose-200")}>
+                  <div className={clsx("rounded-lg border px-2.5 py-2 space-y-1.5 dark:!bg-accent/20",conv.closed?"bg-emerald-50 border-emerald-200":"bg-rose-50 border-rose-200")}>
                     <p
                       className={clsx(
                         "text-[10px] font-semibold uppercase tracking-wide",
@@ -5095,7 +5201,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
 
                     {/* Cerrar es de quien atiende; reabrir, también de quien lo pidió. */}
                     {!conv.closed&&esEquipoPlataforma&&(
-                      <div className="pt-1.5 border-t border-rose-200 space-y-1.5">
+                      <div className="pt-1.5 border-t border-rose-200 dark:border-border space-y-1.5">
                         {/* Escalar: el nivel inicial se dedujo de la urgencia, que
                             dice cuánta prisa corre y no lo difícil que es. */}
                         {(conv.level||1)<3&&(
@@ -5109,11 +5215,17 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                           onChange={(e)=>setResolucionTicket(e.target.value)}
                           rows={3}
                           placeholder="Qué se hizo para resolverlo…"
-                          className="w-full resize-none rounded-md border border-rose-200 px-2 py-1.5 text-[11px] bg-white"
+                          className="w-full resize-none rounded-md border border-rose-200 dark:border-border px-2 py-1.5 text-[11px] bg-white dark:bg-background text-foreground"
                         />
-                        <Button variant="primary" size="sm" fullWidth loading={cerrandoTicket}
+                        <Button 
+                          variant="primary" 
+                          size="sm" 
+                          fullWidth 
+                          loading={cerrandoTicket}
                           disabled={resolucionTicket.trim().length<5}
-                          onClick={()=>{void cerrarTicket();}}>
+                          onClick={()=>{void cerrarTicket();}}
+                          className="bg-primary text-white dark:bg-accent dark:text-black dark:hover:bg-accent/80"
+                        >
                           Cerrar ticket
                         </Button>
                       </div>
@@ -5337,6 +5449,24 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && !previewObjectUrl && !previewLoadFailed && (
                   <div className="h-[40vh] flex items-center justify-center text-sm text-muted-foreground">Cargando vista previa...</div>
                 )}
+
+                <Modal open={Boolean(pendingImage)} onClose={()=>{if(pendingImage)URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}} title="Vista previa de imagen">
+                  {pendingImage && (
+                    <div className="space-y-4">
+                      <img src={pendingImage.url} alt={`Vista previa de ${pendingImage.file.name}`} className="max-h-[60vh] w-full rounded-lg border border-border object-contain bg-muted/30" />
+                      <p className="truncate text-sm text-muted-foreground">{pendingImage.file.name} · {getReadableFileSize(pendingImage.file.size)}</p>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="secondary" onClick={()=>{URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}}>Cancelar</Button>
+                        <Button variant="primary" onClick={()=>{
+                          const selected = pendingImage;
+                          URL.revokeObjectURL(selected.url);
+                          setPendingImage(null);
+                          if(selectedId) void onShareLocalAttachment(selectedId, selected.file).catch(()=>undefined);
+                        }}>Enviar imagen</Button>
+                      </div>
+                    </div>
+                  )}
+                </Modal>
                 {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && previewLoadFailed && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
                     <p className="text-sm text-muted-foreground">No se pudo cargar el recurso desde el backend. Verifica permisos o disponibilidad del archivo.</p>
@@ -5406,6 +5536,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   variant={resourceViewMode === "list" ? "secondary" : "ghost"}
                   size="sm"
                   onClick={() => setResourceViewMode("list")}
+                  className={resourceViewMode === "list" ? "!bg-primary !text-white dark:!bg-accent dark:!text-black" : "hover:!bg-primary/20 hover:!text-primary dark:hover:!bg-accent/20 dark:hover:!text-accent"}
                 >
                   Lista
                 </Button>
@@ -5414,6 +5545,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   size="sm"
                   icon={<LayoutGrid className="w-3.5 h-3.5" />}
                   onClick={() => setResourceViewMode("grid")}
+                  className={resourceViewMode === "grid" ? "!bg-primary !text-white dark:!bg-accent dark:!text-black" : "hover:!bg-primary/20 hover:!text-primary dark:hover:!bg-accent/20 dark:hover:!text-accent"}
                 >
                   Cuadrícula
                 </Button>
@@ -5433,7 +5565,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 <button
                   key={`${node.id || "root"}-${index}`}
                   onClick={()=>{void jumpResourceTrail(index);}}
-                  className={clsx("text-xs px-2 py-1 rounded-md border",index===resourceFolderTrail.length-1?"bg-primary/10 text-primary border-primary/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
+                  className={clsx("text-xs px-2 py-1 rounded-md border",index===resourceFolderTrail.length-1?"bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent border-primary/20 dark:border-accent/20":"bg-white text-muted-foreground border-border hover:text-foreground")}
                 >
                   {node.name}
                 </button>
@@ -5480,8 +5612,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   className={clsx(
                     "rounded-xl border text-left transition-colors w-full",
                     folder.is_protected || folder.is_system
-                      ? "doc-system-folder"
-                      : "border-border bg-sky-50/40 hover:bg-sky-50",
+                      ? "doc-system-folder dark:!bg-accent/10 dark:hover:!bg-accent/20"
+                      : "border-border dark:!border-sky-200/40 bg-sky-600/20 hover:bg-sky-600/40",
                     resourceViewMode === "grid" ? "p-4" : "px-3 py-2.5 flex items-center justify-between gap-3"
                   )}
                 >
@@ -5513,7 +5645,12 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     <p className="text-xs text-muted-foreground mt-1">{file.extension.toUpperCase()} · {new Date(file.created_at).toLocaleDateString("es-CO")}</p>
                   </div>
                   <div className={clsx("flex items-center gap-1.5", resourceViewMode === "grid" ? "mt-3" : "flex-shrink-0")}>
-                    <Button size="sm" variant="secondary" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadResource(file.storage_url, file.nombre);}}>Descargar</Button>
+                    <Button size="sm"
+                      variant="secondary"
+                      icon={<Download className="w-3.5 h-3.5"/>}
+                      onClick={()=>{void handleDownloadResource(file.storage_url, file.nombre);}}>
+                        Descargar
+                      </Button>
                     <Button size="sm" variant="secondary" onClick={()=>{void handleOpenResource(file.storage_url, file.nombre);}}>Abrir</Button>
                     <Button size="sm" onClick={()=>{void handleShareExistingResourceToChat(file);}}>Compartir</Button>
                   </div>
@@ -6262,7 +6399,7 @@ function DocumentosScreen({
                         isHoveredForUpload
                           ? "border-primary bg-primary/20 scale-[1.01]"
                           : isProtectedFolder(folder.id)
-                          ? "doc-system-folder"
+                          ? "doc-system-folder dark:!bg-accent/20"
                           : "doc-folder",
                         viewMode === "grid"
                           ? "min-h-[220px] p-4 flex flex-col items-center justify-center text-center"
@@ -6592,7 +6729,8 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
   );
   const irALanding=()=>onLanding();
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <LandingBackground />
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
         <div className="flex w-full min-h-16 items-center justify-between gap-3 px-4 sm:px-6">
           <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
@@ -6635,7 +6773,7 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
           })}
         </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6">{children}</main>
     </div>
   );
 }
@@ -8043,7 +8181,7 @@ type FormularioEmpresa = {
   razonSocial:string;description:string;year:string;website:string;email:string;logoUrl:string;
   phone:string;address:string;
   categories:string[];countries:string[];industries:string[];
-  avgResponse:string;capacityVolume:string;soloCotizacionesDirectas:boolean;
+  avgResponse:string;soloCotizacionesDirectas:boolean;
   shippingMarkPrefijo:string;certs:string[];banner:string;
   tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
   /** Vacío = sin límite. Texto para poder dejar el campo en blanco al editar. */
@@ -8081,7 +8219,7 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
   phone:"",address:"",
   categories:[],countries:[],industries:[],
-  avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
+  avgResponse:"~24h",soloCotizacionesDirectas:false,
   shippingMarkPrefijo:"",certs:[],banner:"",
   tierMinimoRequerido:"Bronze",
   limiteCotizacionesDiarias:"",
@@ -8089,7 +8227,7 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   pedidoMinimoUnidad:"unidades",
 };
 
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
   const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
   const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
@@ -8176,7 +8314,6 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       countries:company.paises_origen ?? [],
       industries:getStringArray("industries"),
       avgResponse:company.tiempo_respuesta_promedio || "~24h",
-      capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
       certs:getStringArray("certs"),
       banner:getString("banner"),
       soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
@@ -8230,7 +8367,6 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         paises_origen:actual.countries,
         shipping_mark_prefijo:actual.shippingMarkPrefijo.trim(),
         tiempo_respuesta_promedio:actual.avgResponse,
-        capacidad_volumen:actual.capacityVolume.trim() ? Number.parseInt(actual.capacityVolume, 10) : undefined,
         perfil_publico: {
           description: actual.description.trim(),
           year: actual.year.trim(),
@@ -8374,28 +8510,124 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
               <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary"/>Información general</p>
+                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary dark:text-accent"/>Información general</p>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input label="Razón social" value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)}/>
-                  <Input label="Año de fundación" type="number" value={form.year} onChange={e=>f("year",e.target.value)}/>
-                  <Input label="Sitio web" value={form.website} onChange={e=>f("website",e.target.value)} prefix={<Globe className="w-4 h-4"/>}/>
-                  <div>
-                    <Input label="URL de logo/foto" value={form.logoUrl} onChange={e=>{fijarPreviaLocal("logo",null);f("logoUrl",e.target.value);}} prefix={<ImageIcon className="w-4 h-4"/>} hint="Súbelo desde aquí o pega la URL de tu logo."/>
+                  {/* Razón social */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Razón social</label>
+                    <input
+                      type="text"
+                      value={form.razonSocial}
+                      onChange={e => f("razonSocial", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                  </div>
+
+                  {/* Año de fundación */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Año de fundación</label>
+                    <input
+                      type="number"
+                      value={form.year}
+                      onChange={e => f("year", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                  </div>
+
+                  {/* Sitio web */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Sitio web</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><Globe className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.website}
+                        onChange={e => f("website", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* URL de logo/foto */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">URL de logo/foto</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><ImageIcon className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.logoUrl}
+                        onChange={e => { fijarPreviaLocal("logo", null); f("logoUrl", e.target.value); }}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Súbelo desde aquí o pega la URL de tu logo.</p>
                     <div className="mt-2 flex gap-2">
                       <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Reemplazar logo":"Subir logo"}</Button>
                       {form.logoUrl&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("logo",null);editar({logoUrl:""});}}>Quitar</Button>}
                     </div>
                     {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
                   </div>
-                  <Input label="Correo de contacto" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<MailIcon className="w-4 h-4"/>}/>
-                  <Input label="Teléfono" value={form.phone} onChange={e=>f("phone",e.target.value)} prefix={<Phone className="w-4 h-4"/>}/>
-                  <Input label="Dirección" value={form.address} onChange={e=>f("address",e.target.value)} prefix={<MapPin className="w-4 h-4"/>}/>
-                  <Input label="Capacidad de volumen" type="number" value={form.capacityVolume} onChange={e=>f("capacityVolume",e.target.value)} hint="Lo máximo que manejas por pedido. Opcional"/>
+
+                  {/* Correo de contacto */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Correo de contacto</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><MailIcon className="w-4 h-4"/></span>
+                      <input
+                        type="email"
+                        value={form.email}
+                        onChange={e => f("email", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Teléfono */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Teléfono</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><Phone className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.phone}
+                        onChange={e => f("phone", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dirección */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Dirección</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-muted-foreground"><MapPin className="w-4 h-4"/></span>
+                      <input
+                        type="text"
+                        value={form.address}
+                        onChange={e => f("address", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Pedido mínimo */}
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="pedido-minimo" className="text-sm font-medium text-foreground">Pedido mínimo</label>
                     <div className="flex gap-2">
-                      <input id="pedido-minimo" inputMode="decimal" placeholder="Sin mínimo" value={form.pedidoMinimo} onChange={e=>f("pedidoMinimo",e.target.value)} className="w-full h-10 bg-white border rounded-lg text-sm px-3 border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"/>
-                      <select aria-label="Unidad del pedido mínimo" value={form.pedidoMinimoUnidad} onChange={e=>editar({pedidoMinimoUnidad:e.target.value==="m3"?"m3":"unidades"})} className="h-10 rounded-lg border border-border bg-white px-2 text-sm">
+                      <input 
+                        id="pedido-minimo" 
+                        inputMode="decimal" 
+                        placeholder="Sin mínimo" 
+                        value={form.pedidoMinimo} 
+                        onChange={e => f("pedidoMinimo", e.target.value)} 
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                      <select 
+                        aria-label="Unidad del pedido mínimo" 
+                        value={form.pedidoMinimoUnidad} 
+                        onChange={e => editar({pedidoMinimoUnidad: e.target.value === "m3" ? "m3" : "unidades"})} 
+                        className="h-10 rounded-lg border border-border bg-white px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
+                      >
                         <option value="unidades">Unidades</option>
                         <option value="m3">m³</option>
                       </select>
@@ -8403,8 +8635,14 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     <p className="text-xs text-muted-foreground">Zarpi lo usa para asignarte solicitudes que encajen contigo</p>
                   </div>
                 </div>
-                <div className="mt-4">
-                  <Textarea label="Descripción" rows={3} value={form.description} onChange={e=>f("description",e.target.value)}/>
+                <div className="mt-4 flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Descripción</label>
+                  <textarea
+                    rows={3}
+                    value={form.description}
+                    onChange={e => f("description", e.target.value)}
+                    className="w-full border rounded-lg text-sm p-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/25 resize-y"
+                  />
                 </div>
                 <div className="mt-4 flex items-center gap-2">
                   <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>editar({soloCotizacionesDirectas:e.target.checked})} className="h-4 w-4 rounded border-border"/>
@@ -8412,17 +8650,36 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 </div>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary"/>Información comercial</p>
+                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</p>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Select label="Tiempo promedio de respuesta" value={form.avgResponse} onChange={e=>f("avgResponse",e.target.value)}>
-                    {["~12h","~24h","~36h","~48h","~72h"].map(v=><option key={v}>{v}</option>)}
-                  </Select>
-                  <Select label="Tier mínimo requerido para cotizar" value={form.tierMinimoRequerido} onChange={e=>f("tierMinimoRequerido",e.target.value)}>
-                    {["Bronze", "Silver", "Gold", "Élite"].map((tier)=><option key={tier}>{tier}</option>)}
-                  </Select>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Tiempo promedio de respuesta</label>
+                    <select
+                      value={form.avgResponse}
+                      onChange={e => f("avgResponse", e.target.value)}
+                      className="w-full h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
+                    >
+                      {["~12h","~24h","~36h","~48h","~72h"].map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Tier mínimo requerido para cotizar</label>
+                    <select
+                      value={form.tierMinimoRequerido}
+                      onChange={e => f("tierMinimoRequerido", e.target.value)}
+                      className="w-full h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
+                    >
+                      {["Bronze", "Silver", "Gold", "Élite"].map((tier) => (
+                        <option key={tier} value={tier}>{tier}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
-                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40 hover:bg-primary/20")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Países atendidos</p>
@@ -8439,7 +8696,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     dentro de "Información comercial" pasaba desapercibido. */}
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary"/>Límite de cotizaciones por día</p>
+                    <p className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary dark:text-accent"/>Límite de cotizaciones por día</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Cuántas cotizaciones (dirigidas y abiertas) quiere recibir tu equipo cada día. Al llegar al tope,
                       los clientes no pueden enviarte más dirigidas y las abiertas se reparten a otras empresas hasta la medianoche.
@@ -8451,37 +8708,43 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                     aria-checked={form.limiteCotizacionesDiarias.trim()!==""}
                     aria-label="Limitar cotizaciones por día"
                     onClick={()=>editar({limiteCotizacionesDiarias:form.limiteCotizacionesDiarias.trim()?"":String(cupo?.limite_cotizaciones_diarias||20)})}
-                    className={clsx("relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors",form.limiteCotizacionesDiarias.trim()?"bg-primary":"bg-muted-foreground/30")}
+                    className={clsx("relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors",form.limiteCotizacionesDiarias.trim()?"bg-primary dark:bg-accent":"bg-muted-foreground/30")}
                   >
                     <span className={clsx("inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",form.limiteCotizacionesDiarias.trim()?"translate-x-5":"translate-x-0.5")}/>
                   </button>
                 </div>
                 {form.limiteCotizacionesDiarias.trim()!==""?(
                   <div className="mt-4 grid sm:grid-cols-2 gap-4 items-start">
-                    <Input
-                      label="Máximo por día"
-                      type="number"
-                      min={1}
-                      max={10000}
-                      value={form.limiteCotizacionesDiarias}
-                      onChange={e=>f("limiteCotizacionesDiarias",e.target.value)}
-                      error={leerLimiteDiario(form.limiteCotizacionesDiarias)===undefined?"Escribe un número entero entre 1 y 10000.":undefined}
-                    />
-                    {cupo&&cupo.limite_cotizaciones_diarias!=null?(
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">Máximo por día</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10000}
+                        value={form.limiteCotizacionesDiarias}
+                        onChange={e => f("limiteCotizacionesDiarias", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                      {leerLimiteDiario(form.limiteCotizacionesDiarias) === undefined && (
+                        <p className="text-xs text-destructive">Escribe un número entero entre 1 y 10000.</p>
+                      )}
+                    </div>
+
+                    {cupo && cupo.limite_cotizaciones_diarias != null ? (
                       <div>
-                        <p className="text-sm font-medium mb-1.5">Uso de hoy</p>
+                        <p className="text-sm font-medium mb-1.5 text-foreground">Uso de hoy</p>
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div
-                            className={clsx("h-full transition-all",cupo.cupo_agotado?"bg-destructive":"bg-primary")}
-                            style={{width:`${Math.min(100,Math.round((cupo.recibidas_hoy/Math.max(1,cupo.limite_cotizaciones_diarias))*100))}%`}}
+                            className={clsx("h-full transition-all", cupo.cupo_agotado ? "bg-destructive" : "bg-primary dark:bg-accent")}
+                            style={{ width: `${Math.min(100, Math.round((cupo.recibidas_hoy / Math.max(1, cupo.limite_cotizaciones_diarias)) * 100))}%` }}
                           />
                         </div>
-                        <p className={clsx("text-xs mt-1.5",cupo.cupo_agotado?"text-destructive font-medium":"text-muted-foreground")}>
+                        <p className={clsx("text-xs mt-1.5", cupo.cupo_agotado ? "text-destructive font-medium" : "text-muted-foreground")}>
                           {cupo.recibidas_hoy} de {cupo.limite_cotizaciones_diarias} recibidas hoy.
-                          {cupo.cupo_agotado?" Cupo agotado: no recibirás más hasta mañana.":` Te quedan ${cupo.disponibles_hoy}.`}
+                          {cupo.cupo_agotado ? " Cupo agotado: no recibirás más hasta mañana." : ` Te quedan ${cupo.disponibles_hoy}.`}
                         </p>
                       </div>
-                    ):(
+                    ) : (
                       <p className="text-xs text-muted-foreground sm:mt-7">El uso de hoy aparece en cuanto se guarde el límite.</p>
                     )}
                   </div>
@@ -8492,20 +8755,24 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 )}
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary"/>Shipping mark</p>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary dark:text-accent"/>Shipping mark</p>
                 <p className="text-xs text-muted-foreground mb-4">
                   Prefijo con el que se rotula la carga de tu empresa. Cada cliente añade su propio sufijo
                   al pedir la cotización, y así se distinguen sus cajas dentro del contenedor.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4 items-start">
-                  <Input
-                    label="Prefijo de la empresa"
-                    placeholder="ctl"
-                    maxLength={LONGITUD_MAX_PREFIJO_SHIPPING_MARK}
-                    value={form.shippingMarkPrefijo}
-                    onChange={e=>f("shippingMarkPrefijo",e.target.value)}
-                    hint="Solo letras y números; se guarda en minúsculas."
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Prefijo de la empresa</label>
+                    <input
+                      type="text"
+                      placeholder="ctl"
+                      maxLength={LONGITUD_MAX_PREFIJO_SHIPPING_MARK}
+                      value={form.shippingMarkPrefijo}
+                      onChange={e => f("shippingMarkPrefijo", e.target.value)}
+                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                    />
+                    <p className="text-xs text-muted-foreground">Solo letras y números; se guarda en minúsculas.</p>
+                  </div>
                   <div className="pt-1">
                     <p className="text-sm font-medium mb-1.5">Así quedará</p>
                     <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
@@ -8516,7 +8783,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 </div>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Film className="w-4 h-4 text-primary"/>Presentación de la empresa</p>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Film className="w-4 h-4 text-primary dark:text-accent"/>Presentación de la empresa</p>
                 <p className="text-xs text-muted-foreground mb-4">
                   Un video corto de tu taller y algunas fotos de producto. Es lo primero que mira un cliente
                   al abrir tu ficha; nuestro equipo lo revisa antes de publicarlo.
@@ -8524,7 +8791,7 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                 <EditorPresentacion/>
               </Card>
               <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary"/>Banner de portada</p>
+                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary dark:text-accent"/>Banner de portada</p>
                 <p className="text-xs text-muted-foreground mb-4">Imagen ancha que encabeza tu perfil público. Se recomienda 1600×400 px.</p>
 
                 <input
@@ -8906,7 +9173,12 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
           )}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex gap-1 flex-wrap">
-              {tabs.map(t=><button key={t} onClick={()=>setFilter(t)} className={clsx("px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors",filter===t?"bg-primary text-white":"bg-white border border-border text-muted-foreground hover:text-foreground")}>{t}</button>)}
+              {tabs.map(t=>
+                <button key={t}
+                  onClick={()=>setFilter(t)}
+                  className={clsx("px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors",filter===t?"bg-primary dark:bg-accent text-white dark:text-black":"border hover:bg-primary/20 dark:hover:bg-accent/20 hover:text-primary dark:hover:text-accent hover:!border-primary/40 dark:hover:!border-accent/40")}>{t}
+                </button>
+              )}
             </div>
             <div className="w-64"><Input placeholder="Buscar…" value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
           </div>
@@ -9350,6 +9622,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   type ProposalAttachmentRef = {id:string;nombre:string};
   type ProposalDraftDetails = {
     moq: string;
+    moqUnit: "unidades" | "USD";
     port: string;
     productionTime: string;
     shippingTime: string;
@@ -9389,6 +9662,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 
       return {
         moq: pickString(draft.moq),
+        moqUnit: draft.moqUnit === "USD" ? "USD" : "unidades",
         port: pickString(draft.port),
         productionTime: pickString(draft.productionTime),
         shippingTime: pickString(draft.shippingTime),
@@ -9412,11 +9686,12 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
   const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
+  const [directChatId,setDirectChatId]=useState<string|undefined>(chatConversationId);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [attachedFiles,setAttachedFiles]=useState<ProposalAttachmentRef[]>([]);
   const [form,setForm]=useState({
-    unitPrice:"",moq:"",totalPrice:"",
+    unitPrice:"",moq:"",moqUnit:"unidades",totalPrice:"",
     incoterm:"FOB",port:"",productionTime:"",shippingTime:"",totalTime:"",
     description:"",advantages:"",recommendations:"",
     files:[] as {name:string;type:string}[],
@@ -9459,6 +9734,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
         incoterm: existingProposal.incoterm || "FOB",
         totalTime: existingProposal.tiempo_estimado_entrega || "",
         moq: draftDetails?.moq || "",
+        moqUnit: draftDetails?.moqUnit || "unidades",
         port: draftDetails?.port || "",
         productionTime: draftDetails?.productionTime || "",
         shippingTime: draftDetails?.shippingTime || "",
@@ -9504,6 +9780,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     const observaciones = JSON.stringify({
       schema:"create-response-v1",
       moq:form.moq.trim(),
+      moqUnit:form.moqUnit,
       port:form.port.trim(),
       productionTime:form.productionTime.trim(),
       shippingTime:form.shippingTime.trim(),
@@ -9516,12 +9793,14 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     try{
       setSaving(true);
       setError("");
+      let directConversationId = directChatId;
       const payload:CreatePropuestaPayload = {
         cotizacion_id: quote.id,
         precio_ofrecido_usd: parsedAmount,
         tiempo_estimado_entrega: tiempoEstimado,
         incoterm: form.incoterm,
         condiciones_adicionales: observaciones || undefined,
+        moqUnit: form.moqUnit === "USD" ? "USD" : "unidades",
       };
 
       // El borrador lo redacta el asesor y lo envía la cuenta dueña. Ese envío
@@ -9540,13 +9819,25 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
         await businessService.createProposalDraft(payload);
         setSubmittedTitle("Borrador guardado");
       }else{
-        await businessService.createProposal(payload);
+        const created = await businessService.createProposal(payload);
+        if(userRole==="importadora"){
+          const conversation = await businessService.startNegotiationChat(quote.id, created.id);
+          directConversationId = conversation.id;
+          setDirectChatId(conversation.id);
+        }
         setSubmittedTitle("Respuesta enviada");
       }
 
-      if(chatConversationId && attachedFiles.length>0){
+      if(userRole==="importadora" && !directConversationId && existingProposal?.id){
+        const conversation = await businessService.startNegotiationChat(quote.id, existingProposal.id);
+        directConversationId = conversation.id;
+        setDirectChatId(conversation.id);
+      }
+
+      const conversationId = directConversationId || chatConversationId;
+      if(conversationId && attachedFiles.length>0){
         await businessService.shareDocumentsToChat({
-          conversacion_ids:[chatConversationId],
+          conversacion_ids:[conversationId],
           archivo_ids:attachedFiles.map((file)=>file.id),
           mensaje:"Adjuntos de propuesta comercial",
         });
@@ -9591,7 +9882,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           <div><h2 className="text-lg font-semibold">{submittedTitle}</h2><p className="text-sm text-muted-foreground mt-1">Tu propuesta fue registrada correctamente para {quote.product}.</p></div>
           <div className="flex gap-2 flex-wrap justify-center">
             <Button variant="primary" onClick={onBack}>Volver a cotizaciones</Button>
-            {chatConversationId && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(chatConversationId)}>Ir al Chat</Button>}
+            {(directChatId || chatConversationId) && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(directChatId || chatConversationId!)}>Ir al Chat</Button>}
           </div>
         </div></div>
       </div>
@@ -9653,12 +9944,12 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                     step === i + 1
                       ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground shadow-sm"
                       : step > i + 1
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:!bg-accent/20 dark:text-emerald-400 dark:border-emerald-800/60"
                       : "bg-muted/60 text-muted-foreground border border-transparent"
                   )}
                 >
                   {step > i + 1 ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-accent" />
                   ) : (
                     <span className="w-4 h-4 rounded-full flex items-center justify-center bg-foreground/10 text-[10px] font-semibold">
                       {i + 1}
@@ -9674,7 +9965,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           </div>
 
           <div className="flex gap-6">
-            <div className="flex-1 min-w-0 max-w-2xl space-y-6">
+            <div className="flex-1 min-w-0 max-w-3xl space-y-6">
               {step === 1 && (
                 <Card padding="lg" className="border-border bg-card">
                   <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
@@ -9682,9 +9973,69 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                     Información económica
                   </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Input label="Precio unitario" placeholder="9.20 USD/kg" value={form.unitPrice} onChange={e => f("unitPrice", e.target.value)} />
-                    <Input label="MOQ (cantidad mínima)" placeholder="300 kg" value={form.moq} onChange={e => f("moq", e.target.value)} />
-                    <Input label="Precio total estimado" placeholder="2,760 USD" value={form.totalPrice} onChange={e => f("totalPrice", e.target.value)} className="sm:col-span-2" />
+                    {/* Precio unitario */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">Precio unitario</label>
+                      <input
+                        type="text"
+                        placeholder="9.20 USD"
+                        value={form.unitPrice}
+                        onChange={e => f("unitPrice", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+
+                    {/* MOQ (cantidad mínima) con switch/toggle al lado del input */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">MOQ (cantidad mínima)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder={form.moqUnit === "USD" ? "1,000 USD" : "300 kg"}
+                          value={form.moq}
+                          onChange={e => f("moq", e.target.value)}
+                          className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                        />
+                        <div className="flex items-center gap-0.5 bg-muted p-1 rounded-lg shrink-0 h-10 border border-border dark:bg-card">
+                          <button
+                            type="button"
+                            onClick={() => f("moqUnit", "unidades")}
+                            className={clsx(
+                              "px-2.5 py-1 text-xs rounded-md transition-colors h-full flex items-center justify-center",
+                              (form.moqUnit === "unidades" || !form.moqUnit)
+                                ? "bg-primary dark:bg-accent text-white dark:text-black font-medium shadow-sm"
+                                : "text-muted-foreground hover:text-primary hover:bg-primary/20 dark:hover:text-accent dark:hover:bg-accent/20"
+                            )}
+                          >
+                            Unidades
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => f("moqUnit", "USD")}
+                            className={clsx(
+                              "px-2.5 py-1 text-xs rounded-md transition-colors h-full flex items-center justify-center",
+                              form.moqUnit === "USD"
+                                ? "bg-primary dark:bg-accent text-white dark:text-black font-medium shadow-sm"
+                                : "text-muted-foreground hover:text-primary hover:bg-primary/20 dark:hover:text-accent dark:hover:bg-accent/20"
+                            )}
+                          >
+                            USD
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Precio total estimado */}
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <label className="text-sm font-medium text-foreground">Precio total estimado</label>
+                      <input
+                        type="text"
+                        placeholder="2,760 USD"
+                        value={form.totalPrice}
+                        onChange={e => f("totalPrice", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
                   </div>
                 </Card>
               )}
@@ -10038,20 +10389,20 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
         <div className="zarpi-blob zarpi-blob-violet absolute -top-24 -left-24 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-acid absolute top-20 -right-20 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-neutral absolute -bottom-36 left-1/3 z-0 pointer-events-none"/>
-        <div className="landing-hero-content relative z-10 max-w-5xl mx-auto text-center">
+        <div className="landing-hero-content relative z-10 max-w-7xl mx-auto text-center">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent text-accent-foreground rounded-full text-xs font-semibold mb-6"><Ship className="w-3.5 h-3.5"/>Importaciones desde China</span>
           <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mb-5">
             Tú dices qué importar.<br/>
             <span className="text-accent">Zarpi encuentra quién lo trae.</span>
           </h1>
-          <p className="text-lg text-background/75 max-w-2xl mx-auto leading-relaxed mb-8">
+          <p className="text-lg text-background/75 max-w-4xl mx-auto leading-relaxed mb-8">
             Publica lo que quieres importar y recibe propuestas de empresas importadoras verificadas, con precio final puesto en Colombia. Compara, elige y sigue todo el proceso en un solo lugar.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="secondary" size="lg" icon={<UserRound className="w-4 h-4"/>} onClick={abrirAcceso} className="px-8 bg-accent text-accent-foreground border-accent hover:bg-accent/85">{textoAcceso}</Button>
             <Button variant="secondary" size="lg" icon={<MoveRight className="w-4 h-4"/>} onClick={()=>irA("how-it-works")} className="px-8 text-black bg-accent border-background/40 hover:bg-accent/85 ">Cómo funciona</Button>
           </div>
-          <p className="mt-6 text-sm italic text-background/60 max-w-xl mx-auto">
+          <p className="mt-6 text-sm italic text-background/60 max-w-2xl mx-auto">
             Para comerciantes, emprendedores y empresas que quieren importar con más información y menos incertidumbre.
           </p>
         </div>
@@ -10061,7 +10412,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       <section className="py-16 px-6 bg-muted relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-acid absolute -right-16 top-10 pointer-events-none opacity-30 scale-90" />
         <div className="zarpi-blob zarpi-blob-violet absolute -left-20 bottom-10 pointer-events-none opacity-25 scale-75" />
-        <div className="max-w-6xl mx-auto relative z-10 grid gap-5 md:grid-cols-3">
+        <div className="max-w-7xl mx-auto relative z-10 grid gap-5 md:grid-cols-3">
           {benefits.map((b, i) => (
             <div key={b.title} className="landing-reveal bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 hover:shadow-md transition-shadow" style={{animationDelay:`${i*90}ms`}}>
               <div className="landing-icon w-12 h-12 rounded-xl flex items-center justify-center mb-4 border bg-primary/10 border-primary/20 text-primary dark:bg-[#EDF953]/15 dark:border-[#EDF953]/30 dark:text-[#EDF953]">
@@ -10076,12 +10427,12 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 
       {/* CÓMO FUNCIONA (versión corta) */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-7xl mx-auto relative z-10">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-12">De lo que quieres importar a una propuesta en firme.</h2>
           <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {pasosCortos.map((paso,i)=>(
               <li key={paso.title} className="rounded-2xl border border-border bg-card/80 p-5">
-                <span className="w-9 h-9 rounded-xl bg-accent text-accent-foreground text-sm font-bold flex items-center justify-center mb-4">{i+1}</span>
+                <span className="w-9 h-9 rounded-xl bg-primary dark:bg-accent text-primary-foreground dark:text-accent-foreground text-sm font-bold flex items-center justify-center mb-4">{i+1}</span>
                 <h3 className="font-semibold mb-1.5">{paso.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{paso.desc}</p>
               </li>
@@ -10098,7 +10449,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 
       {/* PARA EMPRESAS IMPORTADORAS */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
-        <div className="max-w-3xl mx-auto relative z-10 rounded-2xl border border-border bg-card/80 p-6 sm:p-10">
+        <div className="max-w-5xl mx-auto relative z-10 rounded-2xl border border-border bg-card/80 p-6 sm:p-10">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Para empresas importadoras</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-6">Tu experiencia merece llegar a más compradores.</h2>
           <ListaChequeo items={PARA_IMPORTADORAS}/>
@@ -10109,7 +10460,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 
       {/* PREGUNTAS FRECUENTES (versión corta) */}
       <section className="py-20 px-6 bg-muted relative overflow-hidden">
-        <div className="max-w-3xl mx-auto relative z-10">
+        <div className="max-w-5xl mx-auto relative z-10">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-10">Preguntas frecuentes</h2>
           <PreguntasLanding items={FAQ_HOME}/>
           <div className="text-center mt-6">
@@ -10131,7 +10482,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       /* CIERRE */
       <section className="py-16 px-6 bg-primary/60 relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-violet absolute right-20 top-1/3 pointer-events-none opacity-25 scale-80" />
-        <div className="max-w-3xl mx-auto text-center text-primary-foreground relative z-10">
+        <div className="max-w-5xl mx-auto text-center text-primary-foreground relative z-10">
           <h2 className="text-2xl sm:text-3xl font-bold mb-3">Tu próxima importación empieza con una mejor decisión.</h2>
           <p className="text-primary-foreground/80 mb-7 leading-relaxed">Publica lo que necesitas y elige la empresa importadora que mejor se ajuste a tu operación.</p>
           <Button variant="secondary" size="lg" onClick={abrirAcceso} className="px-8 text-accent-foreground">{textoAcceso}</Button>
@@ -10146,7 +10497,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       {/* PIE */}
       <footer className="bg-[#0F0F0F] text-white py-10 px-6 relative overflow-hidden">
         <div className="zarpi-blob zarpi-blob-neutral absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-15 scale-125" />
-        <div className="mx-auto max-w-6xl relative z-10 space-y-6">
+        <div className="mx-auto max-w-7xl relative z-10 space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <img src="/brand/zarpi-wordmark-acid.svg" alt="Zarpi" className="h-8 w-28 object-contain object-left" />
             <p className="text-xs text-white/70"><span className="font-semibold text-white">{EMPRESA.razonSocial}</span> · NIT {EMPRESA.nit} · {EMPRESA.ciudad}, Colombia</p>
@@ -10161,7 +10512,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
             <button onClick={()=>onPolicy("terms")} className={enlacePie}>Términos y condiciones</button>
             <button onClick={()=>onPolicy("data")} className={enlacePie}>Política de tratamiento de datos</button>
           </nav>
-          <p className="max-w-4xl text-xs leading-relaxed text-white/55">
+          <p className="max-w-5xl text-xs leading-relaxed text-white/55">
             <span className="font-semibold text-white/70">Aviso legal: </span>
             Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
           </p>
@@ -10175,7 +10526,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
 // ─────────────────────────────────────────────────────────────────────────────
 // LANDING — Perfil de empresa (QuickView) y subpáginas públicas
 // ─────────────────────────────────────────────────────────────────────────────
-function LandingBackground() {
+export function LandingBackground() {
   const particles = Array.from({ length: 15 }, (_, i) => {
     const random = (min: number, max: number) =>
       Math.random() * (max - min) + min;
@@ -10234,7 +10585,7 @@ function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamic
     <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
 
-      <div className="max-w-4xl mx-auto relative z-10 space-y-12">
+      <div className="max-w-7xl mx-auto relative z-10 space-y-12">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Quiénes somos</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Importar no debería depender de tener los contactos correctos.</h1>
@@ -10242,7 +10593,7 @@ function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamic
         {carrusel.activo&&carrusel.videos.length>0&&(
           <CarruselVideos videos={carrusel.videos} intervaloSegundos={carrusel.intervalo_segundos}/>
         )}
-        <div className="max-w-3xl mx-auto space-y-4 text-base leading-relaxed text-muted-foreground">
+        <div className="max-w-5xl mx-auto space-y-4 text-base leading-relaxed text-muted-foreground">
           <p>Cuando empezamos a importar no sabíamos por dónde arrancar: si irnos a Buenaventura a buscar quién traía contenedores o irnos a China. Y estando en China, frente al producto, quedaban dos preguntas: cómo iba a llegar a la bodega y cuánto iba a costar realmente tenerlo en Colombia.</p>
           <p>Con los años encontramos la respuesta: empresas importadoras que traen el producto a su nombre, lo nacionalizan y te lo entregan facturado en Colombia. Así importan desde quien hace su primer pedido hasta empresas que traen millones de dólares al mes. Algunas llevan más de treinta años yendo a China.</p>
           <p>También entendimos que encontrar una buena empresa no debería depender de una recomendación, un contacto o una conversación por WhatsApp. <span className="font-semibold text-foreground">Zarpi existe para que esa respuesta esté a un clic de cualquier comerciante en Colombia.</span></p>
@@ -10295,7 +10646,7 @@ function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlane
   return (
     <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
-      <div className="max-w-5xl mx-auto relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Cómo funciona</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Así se importa con Zarpi</h1>
@@ -10319,10 +10670,10 @@ function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlane
           <Card padding="lg" className="flex flex-col">
             <h2 className="text-base font-bold mb-3">Para empresas importadoras</h2>
             <div className="flex-1"><ListaChequeo items={PARA_IMPORTADORAS}/></div>
-            <Button variant="secondary" className="mt-5 self-start" icon={<Building2 className="w-4 h-4"/>} onClick={onAplicarImportadora}>Aplicar como empresa importadora</Button>
+            <Button variant="primary" className="mt-7 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" icon={<Building2 className="w-4 h-4"/>} onClick={()=>contactar("nacionalizadora")}>Aplicar como empresa importadora</Button>
           </Card>
         </div>
-        <div id="preguntas" className="scroll-mt-28 max-w-3xl mx-auto">
+        <div id="preguntas" className="scroll-mt-28 max-w-5xl mx-auto">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8">Preguntas frecuentes</h2>
           <PreguntasLanding items={FAQ_COMPLETA}/>
         </div>
@@ -10361,7 +10712,7 @@ function LandingNewsAlliesSection({content,error,onLogin,onRegister}:{content:La
   return (
     <section className="pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
-      <div className="max-w-5xl mx-auto space-y-14 relative z-10">
+      <div className="max-w-7xl mx-auto space-y-14 relative z-10">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Novedades y aliados</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Lo último de Zarpi</h1>
@@ -10489,7 +10840,7 @@ function LandingContactSection({perfilInicial="comprador",onLogin,onRegister}:{p
   return (
     <section className="pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
-      <div className="max-w-3xl mx-auto space-y-12 relative z-10">
+      <div className="max-w-4xl mx-auto space-y-12 relative z-10">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Contacto</p>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Hablemos</h1>
@@ -12653,7 +13004,7 @@ export default function App() {
     return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }

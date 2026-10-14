@@ -47,6 +47,7 @@ CATEGORIAS_CANONICAS = (
     "Consumo masivo",
     "Seguridad",
     "Televenta",
+    "Decoración de interiores",
 )
 
 # Variantes léxicas que no se resuelven quitando tildes ni el plural. La clave y

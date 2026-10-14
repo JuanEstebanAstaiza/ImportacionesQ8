@@ -310,7 +310,7 @@ function Campo({ etiqueta, children, ayuda }: { etiqueta: string; children: Reac
 }
 
 const CLASE_INPUT =
-  "h-9 w-full rounded-lg border border-border bg-white px-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+  "h-9 w-full rounded-lg border border-border bg-white px-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20 [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white";
 
 export interface ValoresInicialesCalculadora {
   cantidad?: number;
@@ -422,10 +422,10 @@ export function CalculadoraPreciosChat({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Calculadora de precios">
-      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-semibold"><Calculator className="h-4 w-4 text-primary" />Calculadora de precios</p>
+            <p className="flex items-center gap-2 text-sm font-semibold"><Calculator className="h-4 w-4 text-primary dark:text-accent" />Calculadora de precios</p>
             <p className="truncate text-xs text-muted-foreground">{referencia}</p>
           </div>
           <button onClick={onCerrar} className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" title="Cerrar">

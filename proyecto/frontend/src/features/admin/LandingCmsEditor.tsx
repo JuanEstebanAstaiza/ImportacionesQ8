@@ -231,22 +231,38 @@ function FontFamilyPicker({ value, onChange, tipografia }: { value: LandingFontF
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1.5">
-        {opciones.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => onChange(option.key)}
-            className={clsx(
-              "rounded-lg border px-2.5 py-1.5 text-left leading-none transition-colors",
-              actual === option.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
-            )}
-          >
-            <span className={clsx(claseFuente(option.key), "block text-base")}>{option.sample}</span>
-            <span className="text-[10px] text-muted-foreground">{option.label}</span>
-          </button>
-        ))}
+        {opciones.map((option) => {
+          const isSelected = actual === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onChange(option.key)}
+              className={clsx(
+                "rounded-lg border px-2.5 py-1.5 text-left leading-none transition-colors",
+                isSelected
+                  ? "border-primary bg-primary text-white dark:border-accent dark:bg-accent dark:text-black"
+                  : "border-border text-foreground hover:!bg-primary/20 hover:!border-primary hover:!text-primary dark:hover:!bg-accent/20 dark:hover:!border-accent dark:hover:!text-accent",
+              )}
+            >
+              <span className={clsx(claseFuente(option.key), "block")}>
+                {option.sample}
+              </span>
+              <span
+                className={clsx(
+                  "text-[10px]",
+                  isSelected ? "text-white/80 dark:text-black/80" : "",
+                )}
+              >
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      <p className="text-[11px] text-muted-foreground">Títulos y Texto siguen a la tipografía de la plataforma; las de marca no cambian.</p>
+      <p className="text-[11px] text-muted-foreground">
+        Títulos y Texto siguen a la tipografía de la plataforma; las de marca no cambian.
+      </p>
     </div>
   );
 }
@@ -266,11 +282,13 @@ function FontSizeSelector({ tipo, fuente, value, onChange }: { tipo: "heading" |
           onClick={() => onChange(size)}
           className={clsx(
             "rounded-lg border px-2.5 py-1.5 leading-none transition-colors",
-            value === size ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+            value === size
+              ? "border-primary bg-primary text-white dark:border-accent dark:bg-accent dark:text-black"
+              : "border-border text-foreground hover:!bg-primary/20 hover:!border-primary hover:!text-primary dark:hover:!bg-accent/20 dark:hover:!border-accent dark:hover:!text-accent",
           )}
         >
           <span className={fontClass} style={{ fontSize: previewSize[size] }}>{sampleText}</span>
-          <span className="ml-1.5 text-[10px] text-muted-foreground">{size.toUpperCase()}</span>
+          <span className="ml-1.5 text-[10px]">{size.toUpperCase()}</span>
         </button>
       ))}
     </div>
@@ -291,7 +309,9 @@ function TokenColorPicker({ value, onChange }: { value: LandingBrandToken; onCha
             onClick={() => onChange(token)}
             className={clsx(
               "flex items-center gap-1 rounded-full border px-1.5 py-1 transition-colors",
-              selected ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40",
+              selected 
+              ? "border-primary dark:border-accent ring-2 ring-primary/30 dark:ring-accent/30" 
+              : "hover:!bg-primary/20 dark:hover:!bg-accent/20 hover:!border-primary/40 dark:hover:!border-accent/40"
             )}
           >
             <span className="h-4 w-4 rounded-full border border-border" style={{ background: swatch.light }} />
@@ -793,7 +813,7 @@ export function LandingCmsEditor() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="flex items-center gap-2 text-base font-semibold">
-              <Layers className="h-4 w-4 text-primary" />
+              <Layers className="h-4 w-4 text-primary dark:text-accent" />
               Gestion de Landing — Novedades y aliados
             </p>
             <p className="text-sm text-muted-foreground">
@@ -821,7 +841,7 @@ export function LandingCmsEditor() {
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="flex items-center gap-2 text-base font-semibold">
-              <Clapperboard className="h-4 w-4 text-primary" />
+              <Clapperboard className="h-4 w-4 text-primary dark:text-accent" />
               Quiénes somos — videos
             </p>
             <p className="max-w-2xl text-sm text-muted-foreground">
@@ -1018,7 +1038,7 @@ export function LandingCmsEditor() {
 
               {(block.tipo === "heading" || block.tipo === "paragraph") ? (
                 <div className="mt-3">
-                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">Tamano</p>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">Tamaño</p>
                   <FontSizeSelector tipo={block.tipo} fuente={block.fuente} value={block.tamano_fuente} onChange={(size) => updateBlock(block.id, { tamano_fuente: size })} />
                 </div>
               ) : null}
@@ -1091,7 +1111,7 @@ export function LandingCmsEditor() {
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <Users className="h-4 w-4 text-primary" /> Muro de aliados
+            <Users className="h-4 w-4 text-primary dark:text-accent" /> Muro de aliados
           </p>
           <button
             type="button"
@@ -1142,7 +1162,7 @@ export function LandingCmsEditor() {
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <Newspaper className="h-4 w-4 text-primary" /> Miniblog de novedades
+            <Newspaper className="h-4 w-4 text-primary dark:text-accent" /> Miniblog de novedades
           </p>
           <button
             type="button"

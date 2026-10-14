@@ -92,7 +92,7 @@ export function BloqueLanding({
   }
   if (block.tipo === "video") {
     if (!block.contenido) return null;
-    return <div className={alineacion}>{video(block.contenido, clsx("inline-block max-h-80 w-full max-w-2xl rounded-xl border", BORDE_MEDIO[modo]))}</div>;
+    return <div className={alineacion}>{video(block.contenido, clsx("inline-block max-h-80 w-full max-w-5xl rounded-xl border", BORDE_MEDIO[modo]))}</div>;
   }
   if (block.tipo === "button") {
     const clase = clsx("inline-flex items-center rounded-lg px-6 py-3 text-sm font-semibold", (TOKEN_BOTON[block.token_color] ?? TOKEN_BOTON.primary)[modo]);

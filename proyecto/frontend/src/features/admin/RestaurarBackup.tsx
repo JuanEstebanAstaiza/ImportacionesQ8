@@ -162,7 +162,7 @@ export function RestaurarBackup({
   return (
     <div className="mt-5 border-t border-border pt-4">
       <p className="flex items-center gap-2 text-sm font-semibold">
-        <Upload className="h-4 w-4 text-primary" />
+        <Upload className="h-4 w-4 text-primary dark:text-accent" />
         Restaurar una copia
       </p>
       <p className="text-sm text-muted-foreground">
