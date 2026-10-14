@@ -53,7 +53,6 @@ type CompanyFormState = {
   especialidad_producto: string;
   paises_origen: string;
   tiempo_respuesta_promedio: string;
-  capacidad_volumen: string;
   solo_cotizaciones_directas: boolean;
   nit: string;
   telefono: string;
@@ -138,7 +137,6 @@ const EMPTY_IMPORTER_FORM: CompanyFormState = {
   especialidad_producto: "",
   paises_origen: "",
   tiempo_respuesta_promedio: "~48h",
-  capacidad_volumen: "",
   solo_cotizaciones_directas: false,
   nit: "",
   telefono: "",
@@ -730,7 +728,6 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         especialidad_producto: especialidades,
         paises_origen: paises,
         tiempo_respuesta_promedio: companyForm.tiempo_respuesta_promedio || "~48h",
-        capacidad_volumen: companyForm.capacidad_volumen ? Number(companyForm.capacidad_volumen) : undefined,
         solo_cotizaciones_directas: companyForm.solo_cotizaciones_directas,
         logo_url: companyForm.logo_url.trim() || undefined,
         // Mismas claves que usa el autoservicio del perfil de empresa, para que
@@ -2317,12 +2314,6 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
                   setCompanyForm((prev) => ({ ...prev, tiempo_respuesta_promedio: event.target.value }))
                 }
                 placeholder="Tiempo respuesta"
-                className="h-9 rounded-lg border border-border px-3 text-sm"
-              />
-              <input
-                value={companyForm.capacidad_volumen}
-                onChange={(event) => setCompanyForm((prev) => ({ ...prev, capacidad_volumen: event.target.value }))}
-                placeholder="Capacidad volumen"
                 className="h-9 rounded-lg border border-border px-3 text-sm"
               />
               <input

@@ -232,6 +232,11 @@ class PropuestaCreate(BaseModel):
     cantidad: Optional[float] = Field(
         None, gt=0, description="Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida)"
     )
+    moq_unit: Optional[Literal["unidades", "USD"]] = Field(
+        None,
+        validation_alias=AliasChoices("moqUnit", "moq_unit"),
+        description="Unidad del MOQ: 'unidades' o 'USD'",
+    )
 
 class EmpresaPropuestaResumen(BaseModel):
     """Lo que el comprador necesita para comparar a quién le compra: no solo
@@ -259,6 +264,7 @@ class PropuestaResponse(BaseModel):
     preaceptada_por_solicitante: bool = False
     preaceptada_por_empresa: bool = False
     cantidad: Optional[float] = None
+    moq_unit: Optional[Literal["unidades", "USD"]] = None
     fecha_envio: Optional[datetime] = None
     # Veces que la empresa la reescribió tras enviarla, y cuándo fue la última.
     # El comprador necesita verlo: una propuesta ajustada después de llegar ya

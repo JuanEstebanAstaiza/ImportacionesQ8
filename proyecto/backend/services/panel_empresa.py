@@ -196,6 +196,9 @@ def panel_empresa(db: Session, importador_id: str, dias: int = 90, ahora: Option
         "valor_cerrado_cop": round(sum(valores_cerrados), 2),
         "valor_promedio_cerrado_cop": round(sum(valores_cerrados) / len(valores_cerrados), 2) if valores_cerrados else None,
         "valor_esperando_cop": round(valor_esperando, 2),
+        # Se habilitará cuando exista una operación con pago confirmado y
+        # primer abono registrado. Nunca se infiere desde una propuesta aceptada.
+        "resumen_financiero_confirmado": None,
         "pedidos_por_etapa": {etapa: etapas.get(etapa, 0) for etapa in ETAPAS_PEDIDO},
         "pedidos_entregados": entregados,
         "motivos_perdida": {m: motivos.get(m, 0) for m in (*MOTIVOS_DESCARTE, "sin_motivo")},

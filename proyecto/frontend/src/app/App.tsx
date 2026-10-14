@@ -3100,6 +3100,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   };
   const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
   const activeProposal=visibleProposals[0]??null;
+  const hayPropuestaAceptada = visibleProposals.some((proposal) => proposal.estado === "aceptada" || proposal.preaceptada_por_solicitante);
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
   const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
   const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
@@ -3314,7 +3315,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               {p.estado==="rechazada"&&p.motivo_descarte&&<p className="text-[11px] text-muted-foreground mt-2">Elegiste otra propuesta por: {MOTIVOS_ELECCION.find(m=>m.clave===p.motivo_descarte)?.etiqueta??p.motivo_descarte}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                              {p.estado==="pendiente"?(
+                              {p.estado==="pendiente"&&!hayPropuestaAceptada?(
                                 <>
                                   <Button variant="primary" size="sm" onClick={()=>aceptarPropuesta(p)}>Aceptar</Button>
                                   <Button variant="secondary" size="sm" onClick={()=>void handleDecision(p.id,false)}>Rechazar</Button>
@@ -3741,17 +3742,17 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
           </Card>
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-5">
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary"/>Resumen comercial</h3>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Resumen comercial</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Producto",order.product],["Cantidad",order.quantity],["Precio final",order.unitPrice],["Incoterm",order.incoterm],["Shipping mark",order.shippingMark||"Sin marca"],["Puerto de origen",order.originPort],["Puerto de destino",order.destPort],["Valor total",order.totalValue]].map(([k,v])=>(
-                  <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary font-semibold")}>{v}</p></div>
+                  <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary dark:text-accent font-semibold")}>{v}</p></div>
                 ))}</div>
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
               <div ref={seguimientoRef}>
                 <Card padding="md">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-                    <h3 className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary"/>Estado logístico</h3>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">{orderStateLabel(order.status)}</span>
+                    <h3 className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary dark:text-accent"/>Estado logístico</h3>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent">{orderStateLabel(order.status)}</span>
                   </div>
                   <Timeline stages={timelineStages}/>
                   {/* La empresa y el asesor asignado mueven el embarque desde
@@ -3780,7 +3781,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                 </Card>
               </div>
               <Card padding="none">
-                <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
+                <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary dark:text-accent"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
                 <div className="divide-y divide-border/60">{documents.map(doc=>(
                   <div key={doc.name} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date||orderDocumentTypeLabel(doc.type)}</p></div></div>
@@ -3792,7 +3793,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                 ))}</div>
                 {documents.length===0&&<div className="py-10 text-center text-sm text-muted-foreground">No hay documentos adjuntos para esta operación.</div>}
               </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary"/>Historial de eventos</h3>
+              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary dark:text-accent"/>Historial de eventos</h3>
                 <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
                   <div className="space-y-1">{historyEvents.map((ev,i)=>{
                     // Los eventos guardan el estado real de la orden
@@ -3942,6 +3943,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const [notaSoporte,setNotaSoporte]=useState(0);
   const [comentarioNota,setComentarioNota]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
+  const [pendingImage,setPendingImage]=useState<{file:File;url:string}|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
   const [previewObjectUrl,setPreviewObjectUrl]=useState("");
@@ -4188,6 +4190,12 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>,isImage:boolean){
     const file=event.target.files?.[0];
     if(!file||!selectedId)return;
+
+    if(isImage){
+      setPendingImage({file,url:URL.createObjectURL(file)});
+      event.target.value="";
+      return;
+    }
 
     const contentLabel=isImage?"Imagen":"Archivo";
     const localMsg:ChatMsg={
@@ -5441,6 +5449,24 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && !previewObjectUrl && !previewLoadFailed && (
                   <div className="h-[40vh] flex items-center justify-center text-sm text-muted-foreground">Cargando vista previa...</div>
                 )}
+
+                <Modal open={Boolean(pendingImage)} onClose={()=>{if(pendingImage)URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}} title="Vista previa de imagen">
+                  {pendingImage && (
+                    <div className="space-y-4">
+                      <img src={pendingImage.url} alt={`Vista previa de ${pendingImage.file.name}`} className="max-h-[60vh] w-full rounded-lg border border-border object-contain bg-muted/30" />
+                      <p className="truncate text-sm text-muted-foreground">{pendingImage.file.name} · {getReadableFileSize(pendingImage.file.size)}</p>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="secondary" onClick={()=>{URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}}>Cancelar</Button>
+                        <Button variant="primary" onClick={()=>{
+                          const selected = pendingImage;
+                          URL.revokeObjectURL(selected.url);
+                          setPendingImage(null);
+                          if(selectedId) void onShareLocalAttachment(selectedId, selected.file).catch(()=>undefined);
+                        }}>Enviar imagen</Button>
+                      </div>
+                    </div>
+                  )}
+                </Modal>
                 {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && previewLoadFailed && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
                     <p className="text-sm text-muted-foreground">No se pudo cargar el recurso desde el backend. Verifica permisos o disponibilidad del archivo.</p>
@@ -8155,7 +8181,7 @@ type FormularioEmpresa = {
   razonSocial:string;description:string;year:string;website:string;email:string;logoUrl:string;
   phone:string;address:string;
   categories:string[];countries:string[];industries:string[];
-  avgResponse:string;capacityVolume:string;soloCotizacionesDirectas:boolean;
+  avgResponse:string;soloCotizacionesDirectas:boolean;
   shippingMarkPrefijo:string;certs:string[];banner:string;
   tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
   /** Vacío = sin límite. Texto para poder dejar el campo en blanco al editar. */
@@ -8193,7 +8219,7 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
   phone:"",address:"",
   categories:[],countries:[],industries:[],
-  avgResponse:"~24h",capacityVolume:"",soloCotizacionesDirectas:false,
+  avgResponse:"~24h",soloCotizacionesDirectas:false,
   shippingMarkPrefijo:"",certs:[],banner:"",
   tierMinimoRequerido:"Bronze",
   limiteCotizacionesDiarias:"",
@@ -8201,7 +8227,7 @@ const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
   pedidoMinimoUnidad:"unidades",
 };
 
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
+function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
   const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
   const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
   const [saveError,setSaveError]=useState("");
@@ -8288,7 +8314,6 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
       countries:company.paises_origen ?? [],
       industries:getStringArray("industries"),
       avgResponse:company.tiempo_respuesta_promedio || "~24h",
-      capacityVolume:typeof company.capacidad_volumen === "number" ? String(company.capacidad_volumen) : "",
       certs:getStringArray("certs"),
       banner:getString("banner"),
       soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
@@ -8342,7 +8367,6 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
         paises_origen:actual.countries,
         shipping_mark_prefijo:actual.shippingMarkPrefijo.trim(),
         tiempo_respuesta_promedio:actual.avgResponse,
-        capacidad_volumen:actual.capacityVolume.trim() ? Number.parseInt(actual.capacityVolume, 10) : undefined,
         perfil_publico: {
           description: actual.description.trim(),
           year: actual.year.trim(),
@@ -8584,18 +8608,6 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
                         className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
                       />
                     </div>
-                  </div>
-
-                  {/* Capacidad de volumen */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Capacidad de volumen</label>
-                    <input
-                      type="number"
-                      value={form.capacityVolume}
-                      onChange={e => f("capacityVolume", e.target.value)}
-                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                    />
-                    <p className="text-xs text-muted-foreground">Lo máximo que manejas por pedido. Opcional</p>
                   </div>
 
                   {/* Pedido mínimo */}
@@ -9610,6 +9622,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   type ProposalAttachmentRef = {id:string;nombre:string};
   type ProposalDraftDetails = {
     moq: string;
+    moqUnit: "unidades" | "USD";
     port: string;
     productionTime: string;
     shippingTime: string;
@@ -9649,6 +9662,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 
       return {
         moq: pickString(draft.moq),
+        moqUnit: draft.moqUnit === "USD" ? "USD" : "unidades",
         port: pickString(draft.port),
         productionTime: pickString(draft.productionTime),
         shippingTime: pickString(draft.shippingTime),
@@ -9672,11 +9686,12 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
   const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
+  const [directChatId,setDirectChatId]=useState<string|undefined>(chatConversationId);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [attachedFiles,setAttachedFiles]=useState<ProposalAttachmentRef[]>([]);
   const [form,setForm]=useState({
-    unitPrice:"",moq:"",totalPrice:"",
+    unitPrice:"",moq:"",moqUnit:"unidades",totalPrice:"",
     incoterm:"FOB",port:"",productionTime:"",shippingTime:"",totalTime:"",
     description:"",advantages:"",recommendations:"",
     files:[] as {name:string;type:string}[],
@@ -9719,6 +9734,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
         incoterm: existingProposal.incoterm || "FOB",
         totalTime: existingProposal.tiempo_estimado_entrega || "",
         moq: draftDetails?.moq || "",
+        moqUnit: draftDetails?.moqUnit || "unidades",
         port: draftDetails?.port || "",
         productionTime: draftDetails?.productionTime || "",
         shippingTime: draftDetails?.shippingTime || "",
@@ -9764,6 +9780,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     const observaciones = JSON.stringify({
       schema:"create-response-v1",
       moq:form.moq.trim(),
+      moqUnit:form.moqUnit,
       port:form.port.trim(),
       productionTime:form.productionTime.trim(),
       shippingTime:form.shippingTime.trim(),
@@ -9776,12 +9793,14 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     try{
       setSaving(true);
       setError("");
+      let directConversationId = directChatId;
       const payload:CreatePropuestaPayload = {
         cotizacion_id: quote.id,
         precio_ofrecido_usd: parsedAmount,
         tiempo_estimado_entrega: tiempoEstimado,
         incoterm: form.incoterm,
         condiciones_adicionales: observaciones || undefined,
+        moqUnit: form.moqUnit === "USD" ? "USD" : "unidades",
       };
 
       // El borrador lo redacta el asesor y lo envía la cuenta dueña. Ese envío
@@ -9800,13 +9819,25 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
         await businessService.createProposalDraft(payload);
         setSubmittedTitle("Borrador guardado");
       }else{
-        await businessService.createProposal(payload);
+        const created = await businessService.createProposal(payload);
+        if(userRole==="importadora"){
+          const conversation = await businessService.startNegotiationChat(quote.id, created.id);
+          directConversationId = conversation.id;
+          setDirectChatId(conversation.id);
+        }
         setSubmittedTitle("Respuesta enviada");
       }
 
-      if(chatConversationId && attachedFiles.length>0){
+      if(userRole==="importadora" && !directConversationId && existingProposal?.id){
+        const conversation = await businessService.startNegotiationChat(quote.id, existingProposal.id);
+        directConversationId = conversation.id;
+        setDirectChatId(conversation.id);
+      }
+
+      const conversationId = directConversationId || chatConversationId;
+      if(conversationId && attachedFiles.length>0){
         await businessService.shareDocumentsToChat({
-          conversacion_ids:[chatConversationId],
+          conversacion_ids:[conversationId],
           archivo_ids:attachedFiles.map((file)=>file.id),
           mensaje:"Adjuntos de propuesta comercial",
         });
@@ -9851,7 +9882,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           <div><h2 className="text-lg font-semibold">{submittedTitle}</h2><p className="text-sm text-muted-foreground mt-1">Tu propuesta fue registrada correctamente para {quote.product}.</p></div>
           <div className="flex gap-2 flex-wrap justify-center">
             <Button variant="primary" onClick={onBack}>Volver a cotizaciones</Button>
-            {chatConversationId && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(chatConversationId)}>Ir al Chat</Button>}
+            {(directChatId || chatConversationId) && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(directChatId || chatConversationId!)}>Ir al Chat</Button>}
           </div>
         </div></div>
       </div>
@@ -9934,7 +9965,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
           </div>
 
           <div className="flex gap-6">
-            <div className="flex-1 min-w-0 max-w-2xl space-y-6">
+            <div className="flex-1 min-w-0 max-w-3xl space-y-6">
               {step === 1 && (
                 <Card padding="lg" className="border-border bg-card">
                   <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
@@ -9942,9 +9973,69 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                     Información económica
                   </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Input label="Precio unitario" placeholder="9.20 USD/kg" value={form.unitPrice} onChange={e => f("unitPrice", e.target.value)} />
-                    <Input label="MOQ (cantidad mínima)" placeholder="300 kg" value={form.moq} onChange={e => f("moq", e.target.value)} />
-                    <Input label="Precio total estimado" placeholder="2,760 USD" value={form.totalPrice} onChange={e => f("totalPrice", e.target.value)} className="sm:col-span-2" />
+                    {/* Precio unitario */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">Precio unitario</label>
+                      <input
+                        type="text"
+                        placeholder="9.20 USD"
+                        value={form.unitPrice}
+                        onChange={e => f("unitPrice", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
+
+                    {/* MOQ (cantidad mínima) con switch/toggle al lado del input */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">MOQ (cantidad mínima)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder={form.moqUnit === "USD" ? "1,000 USD" : "300 kg"}
+                          value={form.moq}
+                          onChange={e => f("moq", e.target.value)}
+                          className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                        />
+                        <div className="flex items-center gap-0.5 bg-muted p-1 rounded-lg shrink-0 h-10 border border-border dark:bg-card">
+                          <button
+                            type="button"
+                            onClick={() => f("moqUnit", "unidades")}
+                            className={clsx(
+                              "px-2.5 py-1 text-xs rounded-md transition-colors h-full flex items-center justify-center",
+                              (form.moqUnit === "unidades" || !form.moqUnit)
+                                ? "bg-primary dark:bg-accent text-white dark:text-black font-medium shadow-sm"
+                                : "text-muted-foreground hover:text-primary hover:bg-primary/20 dark:hover:text-accent dark:hover:bg-accent/20"
+                            )}
+                          >
+                            Unidades
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => f("moqUnit", "USD")}
+                            className={clsx(
+                              "px-2.5 py-1 text-xs rounded-md transition-colors h-full flex items-center justify-center",
+                              form.moqUnit === "USD"
+                                ? "bg-primary dark:bg-accent text-white dark:text-black font-medium shadow-sm"
+                                : "text-muted-foreground hover:text-primary hover:bg-primary/20 dark:hover:text-accent dark:hover:bg-accent/20"
+                            )}
+                          >
+                            USD
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Precio total estimado */}
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <label className="text-sm font-medium text-foreground">Precio total estimado</label>
+                      <input
+                        type="text"
+                        placeholder="2,760 USD"
+                        value={form.totalPrice}
+                        onChange={e => f("totalPrice", e.target.value)}
+                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
+                      />
+                    </div>
                   </div>
                 </Card>
               )}
@@ -12913,7 +13004,7 @@ export default function App() {
     return activo ? "Asesor activado." : "Asesor desactivado.";
   }
 
-  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;capacidad_volumen?:number;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;}) {
+  async function handleSaveCompanyProfile(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;}) {
     if (!currentUserProfile?.importador_id) {
       throw new Error("Tu usuario no tiene importador asociado.");
     }

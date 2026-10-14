@@ -193,6 +193,7 @@ export interface BackendPropuesta {
   preaceptada_por_empresa: boolean;
   /** Cantidad que cubre el precio (null = la pedida en la cotización). */
   cantidad?: number | null;
+  moq_unit?: "unidades" | "USD" | null;
   fecha_envio?: string | null;
   /**
    * Veces que la empresa reescribió la propuesta DESPUÉS de enviarla, y cuándo
@@ -240,6 +241,13 @@ export interface BackendPendienteResponder {
 export type EtapaPedido = "compra" | "embarque" | "transito" | "nacionalizacion" | "entrega";
 export type MotivoPerdida = MotivoEleccion | "sin_motivo";
 
+/** Desglose visible después de confirmar la operación y su primer abono. */
+export interface BackendResumenFinancieroConfirmado {
+  monto_total_operacion_cop: number;
+  monto_pagado_cop: number;
+  monto_pendiente_confirmado_cop: number;
+}
+
 /** Panel comercial de la empresa (`GET /importadores/panel`), montos en COP. */
 export interface BackendPanelEmpresa {
   importador_id: string;
@@ -257,8 +265,10 @@ export interface BackendPanelEmpresa {
   tasa_respuesta_pct: number | null;
   tiempo_promedio_respuesta_horas: number | null;
   valor_cerrado_cop: number;
+  /** Dato histórico del API; no se muestra en el dashboard hasta confirmar pago. */
   valor_promedio_cerrado_cop: number | null;
   valor_esperando_cop: number;
+  resumen_financiero_confirmado: BackendResumenFinancieroConfirmado | null;
   pedidos_por_etapa: Record<EtapaPedido, number>;
   pedidos_entregados: number;
   motivos_perdida: Record<MotivoPerdida, number>;
@@ -281,6 +291,7 @@ export interface CreatePropuestaPayload {
   incoterm: string;
   condiciones_adicionales?: string;
   cantidad?: number;
+  moqUnit?: "unidades" | "USD";
 }
 
 export interface PreAceptarPropuestaPayload {
@@ -885,6 +896,13 @@ export const businessService = {
     return apiRequest<BackendChatConversation>("/chat/interno", {
       method: "POST",
       body: { asesor_id: asesorId ?? null, mensaje_inicial: mensajeInicial ?? null },
+    });
+  },
+
+  startNegotiationChat(cotizacionId: string, propuestaId?: string): Promise<BackendChatConversation> {
+    return apiRequest<BackendChatConversation>("/chat/iniciar", {
+      method: "POST",
+      body: { cotizacion_id: cotizacionId, propuesta_id: propuestaId ?? null },
     });
   },
 

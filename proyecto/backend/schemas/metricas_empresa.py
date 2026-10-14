@@ -47,6 +47,13 @@ class PendienteResponder(BaseModel):
     con_borrador: bool = False
 
 
+class ResumenFinancieroConfirmado(BaseModel):
+    """Desglose disponible tras confirmar la operación y el primer abono."""
+    monto_total_operacion_cop: float
+    monto_pagado_cop: float
+    monto_pendiente_confirmado_cop: float
+
+
 class PanelEmpresaResponse(BaseModel):
     """Panel comercial de la empresa importadora, en pesos colombianos.
 
@@ -77,6 +84,7 @@ class PanelEmpresaResponse(BaseModel):
     valor_cerrado_cop: float = 0
     valor_promedio_cerrado_cop: Optional[float] = None
     valor_esperando_cop: float = 0
+    resumen_financiero_confirmado: Optional[ResumenFinancieroConfirmado] = None
 
     # compra, embarque, transito, nacionalizacion, entrega
     pedidos_por_etapa: Dict[str, int]

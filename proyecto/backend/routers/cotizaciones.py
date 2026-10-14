@@ -973,6 +973,7 @@ async def enviar_propuesta(
         incoterm=propuesta.incoterm,
         condiciones_adicionales=propuesta.condiciones_adicionales,
         cantidad=propuesta.cantidad,
+        moq_unit=propuesta.moq_unit,
         estado=EstadoPropuesta.pendiente,
         creado_por_usuario_id=user_id_str
     )
@@ -1032,6 +1033,7 @@ async def enviar_propuesta(
         estado=nueva_propuesta.estado.value if isinstance(nueva_propuesta.estado, EstadoPropuesta) else nueva_propuesta.estado,
         creado_por_usuario_id=nueva_propuesta.creado_por_usuario_id,
         cantidad=nueva_propuesta.cantidad,
+        moq_unit=nueva_propuesta.moq_unit,
         fecha_envio=nueva_propuesta.fecha_envio,
         contacto_asesor=nueva_propuesta.contacto_asesor
     )
@@ -1109,6 +1111,7 @@ async def crear_borrador_propuesta(
         incoterm=propuesta.incoterm,
         condiciones_adicionales=propuesta.condiciones_adicionales,
         cantidad=propuesta.cantidad,
+        moq_unit=propuesta.moq_unit,
         estado=EstadoPropuesta.borrador,
         creado_por_usuario_id=user_id_str
     )
@@ -1158,6 +1161,7 @@ async def editar_propuesta(
     propuesta_db.condiciones_adicionales = propuesta.condiciones_adicionales
     if propuesta.cantidad is not None:
         propuesta_db.cantidad = propuesta.cantidad
+    propuesta_db.moq_unit = propuesta.moq_unit
     propuesta_db.creado_por_usuario_id = str(PyUUID(current_user["user_id"]))
     # Una edición reinicia la pre-aceptación mutua: cualquier cambio debe volver a confirmarse
     propuesta_db.preaceptada_por_solicitante = False
