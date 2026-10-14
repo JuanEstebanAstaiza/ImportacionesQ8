@@ -179,15 +179,15 @@ export function EnviarEnlace({ rol }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <section className="rounded-xl border border-border bg-white p-4 shadow-sm sm:p-6">
-        <h1 className="text-xl font-bold sm:text-2xl">¿Encontraste un producto viral? Súbelo</h1>
+      <section className="rounded-xl border border-border bg-white dark:bg-card p-4 shadow-sm sm:p-6">
+        <h1 className="text-xl font-bold sm:text-2xl text-foreground">¿Encontraste un producto viral? Súbelo</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Pega el enlace del video o pin de TikTok, Instagram, YouTube o Pinterest. Lo revisamos y, si lo aprobamos, aparece en Tendencias.
         </p>
 
         <form onSubmit={enviar} className="mt-5 space-y-4">
           <div>
-            <label htmlFor="enlace-tendencia" className="text-sm font-medium">Enlace del video</label>
+            <label htmlFor="enlace-tendencia" className="text-sm font-medium text-foreground">Enlace del video</label>
             <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
                 <Link2 className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
@@ -201,7 +201,7 @@ export function EnviarEnlace({ rol }: Props) {
                   value={url}
                   onChange={(e) => { setUrl(e.target.value); if (resultado?.tipo !== "recibido") setResultado(null); }}
                   placeholder="https://www.tiktok.com/@autor/video/…"
-                  className={`${CLASE_INPUT} h-12 pl-10 pr-10 text-base`}
+                  className={`${CLASE_INPUT} h-12 pl-10 pr-10 text-base border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20`}
                 />
                 {url ? (
                   <button type="button" onClick={() => { setUrl(""); campoUrl.current?.focus(); }} aria-label="Borrar enlace" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground">
@@ -210,7 +210,7 @@ export function EnviarEnlace({ rol }: Props) {
                 ) : null}
               </div>
               {typeof navigator !== "undefined" && navigator.clipboard?.readText && !url ? (
-                <button type="button" onClick={() => { void pegar(); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-border px-4 text-sm font-medium hover:bg-muted">
+                <button type="button" onClick={() => { void pegar(); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-4 text-sm font-medium text-foreground hover:bg-muted dark:bg-card dark:hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20">
                   <Copy className="h-4 w-4" /> Pegar
                 </button>
               ) : null}
@@ -218,30 +218,47 @@ export function EnviarEnlace({ rol }: Props) {
           </div>
 
           <div className="rounded-lg border border-border">
-            <button type="button" onClick={() => setAbierto((v) => !v)} aria-expanded={abierto} className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium">
+            <button type="button" onClick={() => setAbierto((v) => !v)} aria-expanded={abierto} className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium text-foreground">
               <span>Agregar detalles <span className="font-normal text-muted-foreground">(opcional)</span></span>
               <ChevronDown className={`h-4 w-4 transition-transform ${abierto ? "rotate-180" : ""}`} />
             </button>
             {abierto ? (
               <div className="grid gap-3 border-t border-border p-3 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="font-medium">Nombre del producto</span>
-                  <input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={120} placeholder="Ej.: Lámpara de luna 3D" className={`${CLASE_INPUT} mt-1`} />
+                  <span className="font-medium text-foreground">Nombre del producto</span>
+                  <input
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    maxLength={120}
+                    placeholder="Ej.: Lámpara de luna 3D"
+                    className={`${CLASE_INPUT} mt-1 border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20`}
+                  />
                 </label>
                 <label className="block text-sm">
-                  <span className="font-medium">Categoría</span>
-                  <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className={`${CLASE_INPUT} mt-1`}>
+                  <span className="font-medium text-foreground">Categoría</span>
+                  <select
+                    value={categoria}
+                    onChange={(e) => setCategoria(e.target.value)}
+                    className={`${CLASE_INPUT} mt-1 border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20 [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white`}
+                  >
                     <option value="">Sin elegir</option>
                     {CATEGORIAS_PRODUCTO.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="block text-sm sm:col-span-2">
-                  <span className="font-medium">Nota para el equipo</span>
-                  <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} maxLength={500} placeholder="Por qué crees que se puede vender en Colombia" className={`${CLASE_INPUT} mt-1 resize-y`} />
+                  <span className="font-medium text-foreground">Nota para el equipo</span>
+                  <textarea
+                    value={nota}
+                    onChange={(e) => setNota(e.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Por qué crees que se puede vender en Colombia"
+                    className={`${CLASE_INPUT} mt-1 resize-y border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20`}
+                  />
                 </label>
                 {conFoto ? (
                   <div className="sm:col-span-2">
-                    <p className="text-sm font-medium">Foto del producto (portada propuesta)</p>
+                    <p className="text-sm font-medium text-foreground">Foto del producto (portada propuesta)</p>
                     <p className="text-xs text-muted-foreground">Foto propia, sin marcas de terceros. Si la aprobamos, puede quedar como portada.</p>
                     <div className="mt-2 flex items-center gap-3">
                       {portada ? (
@@ -268,7 +285,7 @@ export function EnviarEnlace({ rol }: Props) {
           <button
             type="submit"
             disabled={!url.trim() || enviando}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:hover:bg-primary/80"
           >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Enviar enlace
@@ -276,7 +293,7 @@ export function EnviarEnlace({ rol }: Props) {
         </form>
 
         {resultado?.tipo === "recibido" ? (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100" role="status">
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-400/30 dark:!bg-accent/15 dark:text-accent" role="status">
             <p className="flex items-center gap-1.5 font-semibold"><CheckCircle2 className="h-4 w-4" /> Recibido</p>
             <p className="mt-0.5">
               Lo revisamos en menos de 48 horas.

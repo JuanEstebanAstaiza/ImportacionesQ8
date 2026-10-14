@@ -115,6 +115,23 @@ class TestAmbosLadosFinalizan:
         cotizacion, propuesta = _crear_cotizacion_con_propuesta(db_session, solicitante, importador.id)
 
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(solicitante))
+
+        conversacion_previa = db_session.query(ConversacionChat).filter(
+            ConversacionChat.cotizacion_id == cotizacion.id
+        ).first()
+        assert conversacion_previa is not None
+        mensajes_sistema = db_session.query(MensajeChat).filter(
+            MensajeChat.conversacion_id == conversacion_previa.id,
+            MensajeChat.tipo == TipoMensajeChat.sistema.value,
+        ).all()
+        mensaje_aceptacion = next(
+            mensaje for mensaje in mensajes_sistema
+            if (mensaje.metadata_json or {}).get("tipo_evento") == "comprador_acepto_propuesta"
+        )
+        assert mensaje_aceptacion is not None
+        assert "El comprador aceptó la propuesta" in mensaje_aceptacion.contenido
+        assert mensaje_aceptacion.metadata_json["tipo_evento"] == "comprador_acepto_propuesta"
+
         response = client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         assert response.status_code == 200
@@ -135,11 +152,17 @@ class TestAmbosLadosFinalizan:
         assert conversacion.importador_usuario_id == str(dueño.id)
         assert conversacion.orden_id == orden.id
 
-        mensaje_sistema = db_session.query(MensajeChat).filter(
+        mensaje_sistema = next(mensaje for mensaje in db_session.query(MensajeChat).filter(
             MensajeChat.conversacion_id == conversacion.id,
             MensajeChat.tipo == TipoMensajeChat.sistema.value
-        ).first()
+        ).all() if (mensaje.metadata_json or {}).get("tipo_evento") == "solicitud_pago_orden")
         assert mensaje_sistema is not None
+        assert "La empresa confirmó la propuesta" in mensaje_sistema.contenido
+        assert "Solicitud de pago" in mensaje_sistema.contenido
+        assert "US$3.20" in mensaje_sistema.contenido
+        assert mensaje_sistema.metadata_json["tipo_evento"] == "solicitud_pago_orden"
+        assert mensaje_sistema.metadata_json["orden_id"] == str(orden.id)
+        assert "enviar el comprobante por el chat" in mensaje_sistema.contenido
 
     def test_asesor_asignado_no_puede_finalizar_por_la_empresa(self, client, db_session, solicitante, empresa, asesor):
         """El asesor negocia; comprometer a la empresa es de la cuenta dueña.

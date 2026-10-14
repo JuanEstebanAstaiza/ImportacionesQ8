@@ -1752,6 +1752,45 @@ async def pre_aceptar_propuesta(
             data={"cotizacion_id": str(cotizacion.id), "propuesta_id": str(propuesta.id)},
             enlace_relativo="/cotizaciones",
         )
+        if solicitud.aceptar:
+            conversacion = db.query(ConversacionChat).filter(
+                ConversacionChat.cotizacion_id == cotizacion.id
+            ).first()
+            if not conversacion:
+                dueño = db.query(UsuarioModel).filter(
+                    UsuarioModel.importador_id == propuesta.importador_id,
+                    UsuarioModel.rol == "importador",
+                ).first()
+                responsable_id = cotizacion.asesor_asignado_id or (str(dueño.id) if dueño else None)
+                if responsable_id:
+                    conversacion = ConversacionChat(
+                        id=str(gen_uuid()),
+                        cotizacion_id=cotizacion.id,
+                        solicitante_id=cotizacion.solicitante_id,
+                        importador_usuario_id=responsable_id,
+                    )
+                    db.add(conversacion)
+                    db.flush()
+            if conversacion and not any(
+                (mensaje.metadata_json or {}).get("tipo_evento") == "comprador_acepto_propuesta"
+                for mensaje in conversacion.mensajes
+            ):
+                db.add(MensajeChat(
+                    id=str(gen_uuid()),
+                    conversacion_id=conversacion.id,
+                    remitente_id=user_id_str,
+                    contenido=(
+                        "El comprador aceptó la propuesta. "
+                        "La operación queda pendiente de la confirmación de la empresa; "
+                        "pueden continuar la coordinación por este chat."
+                    ),
+                    tipo=TipoMensajeChat.sistema,
+                    metadata_json={
+                        "tipo_evento": "comprador_acepto_propuesta",
+                        "cotizacion_id": str(cotizacion.id),
+                        "propuesta_id": str(propuesta.id),
+                    },
+                ))
     else:
         propuesta.preaceptada_por_empresa = solicitud.aceptar
         from services.notificacion_service import notificar as _notificar_usuario
@@ -1895,6 +1934,7 @@ async def pre_aceptar_propuesta(
 
         if conversacion:
             conversacion.orden_id = nueva_orden.id
+            precio_pago = f"US${propuesta.precio_ofrecido_usd:,.2f}"
             db.add(MensajeChat(
                 id=str(gen_uuid()),
                 conversacion_id=conversacion.id,
@@ -1902,9 +1942,17 @@ async def pre_aceptar_propuesta(
                 contenido=(
                     "La empresa confirmó la propuesta y se creó la operación. "
                     "Esta conversación pasa a ser el seguimiento del embarque: "
-                    "aquí se irán informando los cambios de estado."
+                    "aquí se irán informando los cambios de estado.\n\n"
+                    f"Solicitud de pago: realiza el pago acordado de {precio_pago} "
+                    "para continuar con la operación. Cuando lo hayas realizado, "
+                    "envía el comprobante por este chat."
                 ),
-                tipo=TipoMensajeChat.sistema
+                tipo=TipoMensajeChat.sistema,
+                metadata_json={
+                    "tipo_evento": "solicitud_pago_orden",
+                    "orden_id": str(nueva_orden.id),
+                    "monto_usd": propuesta.precio_ofrecido_usd,
+                },
             ))
 
         if config.redis_client:
@@ -1928,6 +1976,7 @@ async def pre_aceptar_propuesta(
             mensaje=(
                 f"{_nombre_empresa(db, propuesta.importador_id)} confirmó la propuesta para "
                 f"{cotizacion.nombre_producto} y se creó la operación.{precio} "
+                "Debes realizar el pago acordado para continuar y enviar el comprobante por el chat. "
                 "Te avisaremos de cada cambio de estado del embarque."
             ),
             data={"cotizacion_id": str(cotizacion.id), "orden_id": str(nueva_orden.id)},
