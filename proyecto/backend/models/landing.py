@@ -22,6 +22,15 @@ TIPOS_BLOQUE_LANDING = ("heading", "paragraph", "image", "video", "button", "all
 TIPO_VIDEO_ROTATIVO = "video_rotativo"
 SECCION_QUIENES_SOMOS = "about"
 
+# Videos de las tarjetas de la sección «Planes»: un único bloque cuyo
+# `contenido` es JSON con el video de cada plan (ver services/videos_planes.py).
+# No es parte de la Landing que edita el CMS: `dynamic-content` no lo devuelve y
+# «Guardar estructura» no lo toca.
+TIPO_VIDEOS_PLANES = "videos_planes"
+SECCION_PLANES = "planes"
+# Bloques con endpoint propio, que «Guardar estructura» no borra ni reescribe.
+TIPOS_CON_ENDPOINT_PROPIO = (TIPO_VIDEO_ROTATIVO, TIPO_VIDEOS_PLANES)
+
 ALINEACIONES_BLOQUE = ("left", "center", "right")
 
 ACCIONES_BOTON = ("open_login", "open_register", "external_link")

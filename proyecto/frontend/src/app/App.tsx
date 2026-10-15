@@ -17,7 +17,7 @@ import {
   FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
   Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
   MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
-  LockKeyhole, LifeBuoy, WalletCards, Calculator, DatabaseBackup, Gauge,
+  LockKeyhole, LifeBuoy, WalletCards, DatabaseBackup, Gauge, FileSignature,
   Sparkles, LibraryBig, Type, Trophy, Palette, ToggleRight, Flame, GraduationCap,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -94,10 +94,11 @@ import {
   type CreateAsesorPayload,
   type CreateCotizacionPayload,
   type CreatePropuestaPayload,
-  type EstimacionEnMensaje,
-  type EstimacionPrecioEntrada,
 } from "@/services/business.service";
-import { CalculadoraPreciosChat, TarjetaEstimacion, propuestaDesdeEstimacion, type PropuestaDesdeEstimacion } from "@/features/chat/CalculadoraPrecios";
+import { FormularioPropuesta } from "@/features/propuestas/FormularioPropuesta";
+import { TarjetaPropuestaChat, leerPropuestaDeMensaje, type PropuestaEnMensaje } from "@/features/propuestas/TarjetaPropuestaChat";
+import { CondicionesEmpresa } from "@/features/propuestas/CondicionesEmpresa";
+import { leerPropuesta, pesos as pesosCop, type FormularioPropuesta as FormularioPropuestaDatos } from "@/features/propuestas/calculo";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { landingService, leerVideosQuienesSomos, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
 import { CarruselVideos } from "@/app/components/media/CarruselVideos";
@@ -681,8 +682,8 @@ interface MsgFile {name:string;type:MsgFileType;size:string;}
 interface ChatMsg {
   id:string;sender:"client"|"provider";text?:string;file?:MsgFile;
   time:string;read:boolean;dateGroup?:string;
-  // Precio estimado enviado con la calculadora (`tipo: "estimacion"`).
-  estimate?:EstimacionEnMensaje;
+  // Propuesta enviada (`tipo: "propuesta"`): se muestra como tarjeta.
+  proposal?:PropuestaEnMensaje;
   // Nombre de quien lo escribió, cuando no es quien mira.
   authorName?:string;
 }
@@ -697,10 +698,7 @@ function mapBackendChatMessage(
   message:{id:string;remitente_id:string;contenido:string;tipo:string;fecha_envio:string;metadata:Record<string,unknown>|null;remitente_nombre?:string|null;de_mi_lado?:boolean|null},
   currentUserId:string|undefined,
 ):ChatMsg{
-  const estimacion=message.tipo==="estimacion"?message.metadata?.estimacion:undefined;
-  const estimate=estimacion&&typeof estimacion==="object"&&"desglose" in estimacion&&"entrada" in estimacion
-    ?estimacion as EstimacionEnMensaje
-    :undefined;
+  const proposal=message.tipo==="propuesta"?leerPropuestaDeMensaje(message.metadata)??undefined:undefined;
   return {
     id:message.id,
     sender:(message.de_mi_lado??message.remitente_id===currentUserId)?"client":"provider",
@@ -708,7 +706,7 @@ function mapBackendChatMessage(
     text:message.contenido,
     time:formatChatTime(message.fecha_envio),
     read:true,
-    estimate,
+    proposal,
   };
 }
 
@@ -1167,6 +1165,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     importMode: cot.modalidad_importacion ?? "",
     shippingMark: cot.shipping_mark ?? null,
     shippingMarkSufijo: cot.shipping_mark_sufijo ?? null,
+    deliveryCity: cot.ciudad_entrega ?? null,
     customFields: cot.campos_personalizados_valores ?? null,
     requesterId: cot.solicitante_id,
     tierMinimoRequerido: cot.tier_minimo_requerido ?? "Bronze",
@@ -1367,7 +1366,7 @@ function mapBackendProposalToUiResponse(p: BackendPropuesta): QuoteResponse {
     id: p.id,
     importerId: p.importador_id,
     quoteId: p.cotizacion_id,
-    price: `${p.precio_ofrecido_usd} USD`,
+    price: leerPropuesta(p.condiciones_adicionales) ? `${pesosCop(leerPropuesta(p.condiciones_adicionales)!.totales.total_cop)} COP con IVA` : `${p.precio_ofrecido_usd} USD`,
     deliveryTime: p.tiempo_estimado_entrega,
     incoterm: p.incoterm,
     date: formatShortDate(new Date().toISOString()),
@@ -2981,6 +2980,18 @@ const INCOTERM_INCLUYE: Record<string,string> = {
 function leerCondicionesPropuesta(texto: string | null | undefined): { descripcion: string; ventajas: string; detalles: string[] } {
   const vacio = { descripcion: "", ventajas: "", detalles: [] as string[] };
   if (!texto) return vacio;
+  // Propuesta rápida (precio cerrado en pesos): su detalle completo está en la
+  // tarjeta del chat; aquí basta la nota y lo esencial.
+  const nueva = leerPropuesta(texto);
+  if (nueva) {
+    const f = nueva.formulario;
+    const detalles = [
+      f.entrega_modo === "cliente" ? `Puesto en ${f.bodega_ciudad}; flete a ${f.ciudad_destino} a cargo del cliente` : `Entregado en ${f.ciudad_destino}`,
+      f.requiere_permisos && f.permiso_cual ? `${f.permiso_cual} (${f.permiso_gestiona === "importadora" ? "incluido" : "lo gestiona el cliente"})` : "",
+      `Válida hasta ${new Date(`${nueva.vigencia_hasta}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`,
+    ].filter(Boolean);
+    return { descripcion: f.nota || "", ventajas: "", detalles };
+  }
   try {
     const datos = JSON.parse(texto) as Record<string, unknown>;
     if (datos && typeof datos === "object" && datos.schema === "create-response-v1") {
@@ -2997,6 +3008,29 @@ function leerCondicionesPropuesta(texto: string | null | undefined): { descripci
     // Texto libre.
   }
   return { ...vacio, descripcion: texto };
+}
+
+/**
+ * Precio de una propuesta para comparar. Las del formato nuevo son un precio
+ * cerrado en pesos con IVA; las anteriores, USD con el equivalente a la TRM.
+ */
+function PrecioPropuesta({ propuesta, trm, tamano = "sm" }: { propuesta: BackendPropuesta; trm?: number | null; tamano?: "sm" | "base" }) {
+  const nueva = leerPropuesta(propuesta.condiciones_adicionales);
+  const clase = clsx("font-semibold", tamano === "base" ? "text-base" : "text-sm");
+  if (nueva) {
+    return (
+      <>
+        <p className={clase}>{pesosCop(nueva.totales.total_cop)}</p>
+        <p className="text-[11px] text-muted-foreground">con IVA · {pesosCop(nueva.totales.unitario_cop)} por unidad</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className={clase}>US${propuesta.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
+      {trm ? <p className="text-[11px] text-muted-foreground">≈ {formatoPesos(propuesta.precio_ofrecido_usd * trm)}</p> : null}
+    </>
+  );
 }
 
 const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string }[] = [
@@ -3308,8 +3342,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                                     <p className="text-[11px] text-muted-foreground">{proposal.estado==="pendiente"?(proposal.preaceptada_por_solicitante?"Aceptaste; falta que la empresa confirme":"Esperando tu respuesta"):proposal.estado==="aceptada"?"Elegida":proposal.estado==="rechazada"?"No elegida":proposal.estado}</p>
                                   </td>
                                   <td className="py-2.5 pr-3">
-                                    <p className="font-medium">US${proposal.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
-                                    {trm&&<p className="text-[11px] text-muted-foreground">≈ {formatoPesos(proposal.precio_ofrecido_usd*trm)}</p>}
+                                    <PrecioPropuesta propuesta={proposal} trm={trm}/>
                                     {proposal.cantidad?<p className="text-[11px] text-muted-foreground">por {cantidadConUnidad(proposal.cantidad,quote.unit)}</p>:null}
                                   </td>
                                   <td className="py-2.5 pr-3 font-medium">{proposal.tiempo_estimado_entrega}</td>
@@ -3360,7 +3393,7 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{contactName}</p>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><p className="text-sm font-semibold">US${p.precio_ofrecido_usd.toLocaleString("es-CO")}</p>{trm&&<p className="text-[11px] text-muted-foreground">≈ {formatoPesos(p.precio_ofrecido_usd*trm)}</p>}</div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><PrecioPropuesta propuesta={p} trm={trm}/></div>
                                 <div><p className="text-[10px] text-muted-foreground uppercase">Tiempo</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
                                 <div><p className="text-[10px] text-muted-foreground uppercase">Incluye</p><p className="text-sm font-semibold">{p.incoterm}</p><p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(p.incoterm||"").toUpperCase()]??"Según lo acordado"}</p></div>
                                 <div><p className="text-[10px] text-muted-foreground uppercase">Cumplimiento</p>{p.empresa?<><p className="text-sm font-semibold flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{p.empresa.calificacion_promedio.toFixed(1)}</p><p className="text-[11px] text-muted-foreground">{p.empresa.pedidos_entregados} entregados</p></>:<p className="text-sm font-semibold">—</p>}</div>
@@ -3977,7 +4010,7 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
   return Boolean(tier) && esCotizante && esRolAutorizado;
 }
 
-function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onSendPriceEstimate,onConvertEstimateToProposal,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onSendPriceEstimate:(conversationId:string,entrada:EstimacionPrecioEntrada)=>Promise<void>;onConvertEstimateToProposal:(quoteId:string,estimate:EstimacionEnMensaje)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
+function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onOpenProposalForm,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onOpenProposalForm?:(quoteId:string)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[]}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
@@ -3990,9 +4023,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const [sending,setSending]=useState(false);
   const [showCtx,setShowCtx]=useState(true);
   const [showEmojiMenu,setShowEmojiMenu]=useState(false);
-  const [showCalculadora,setShowCalculadora]=useState(false);
-  // Cambiar de conversación cierra la calculadora: lo escrito era para otro cliente.
-  useEffect(()=>{setShowCalculadora(false);},[selectedId]);
+  const inputRef=useRef<HTMLTextAreaElement>(null);
   const [transferTo,setTransferTo]=useState("");
   const [isTransferring,setIsTransferring]=useState(false);
   const [transferMessage,setTransferMessage]=useState("");
@@ -4318,21 +4349,22 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   // empresa le indica por el canal interno cuándo hacerlo. El backend comprueba
   // que sea el asignado a esa orden.
   const canManageOrder = currentUserRole === "importadora" || currentUserRole === "asesor";
-  // La calculadora es de la empresa y solo tiene sentido en el hilo con el
-  // cliente (cotización u orden), no en el interno ni en soporte.
-  const puedeEstimarPrecio = canManageOrder && (conv?.type==="cotizacion" || conv?.type==="orden");
-  const cotizacionDelHilo = conv?.quoteId ? quotes.find((quote)=>quote.id===conv.quoteId) || null : null;
-  // Pasar una estimación a propuesta formal: solo mientras se negocia la
-  // cotización (en una orden ya hay propuesta aceptada) y si la propuesta de la
-  // empresa sigue editable. El backend vuelve a validarlo al guardar.
+  // «Nueva propuesta» reemplaza a la calculadora: la empresa responde desde el
+  // chat con el cliente mientras se negocia la cotización y su propuesta sigue
+  // editable (en una orden ya hay una aceptada). El backend lo vuelve a validar.
   const estadoPropuestaEmpresa = conv?.quoteId ? proposalStateByQuoteId[conv.quoteId] : undefined;
-  const accionEstimacion = puedeEstimarPrecio && conv?.type==="cotizacion" && conv.quoteId
-    && (!estadoPropuestaEmpresa || estadoPropuestaEmpresa==="borrador" || estadoPropuestaEmpresa==="pendiente")
-    ? (estimate:EstimacionEnMensaje)=>({
-        etiqueta: estadoPropuestaEmpresa ? "Actualizar propuesta con esta estimación" : "Convertir en propuesta",
-        onClick: ()=>onConvertEstimateToProposal(conv.quoteId,estimate),
-      })
-    : null;
+  const puedeProponer = canManageOrder && conv?.type==="cotizacion" && Boolean(conv.quoteId) && Boolean(onOpenProposalForm)
+    && (!estadoPropuestaEmpresa || estadoPropuestaEmpresa==="borrador" || estadoPropuestaEmpresa==="pendiente");
+  const textoBotonPropuesta = estadoPropuestaEmpresa==="pendiente" ? "Editar propuesta"
+    : estadoPropuestaEmpresa==="borrador" ? "Revisar borrador" : "Nueva propuesta";
+  // Última versión de cada propuesta en el hilo: las anteriores salen como reemplazadas.
+  const versionVigente = new Map<string,number>();
+  for(const m of (selectedId?msgs[selectedId]||[]:[])){
+    if(m.proposal){
+      versionVigente.set(m.proposal.propuesta_id, Math.max(versionVigente.get(m.proposal.propuesta_id)||0, m.proposal.version));
+    }
+  }
+  const esComprador = currentUserRole === "solicitante";
   // Administración y atención al cliente comparten la bandeja de tickets.
   const esEquipoPlataforma = currentUserRole === "admin" || currentUserRole === "soporte";
   // El backend solo admite avanzar un paso en la cadena, así que ofrecer la
@@ -5077,8 +5109,16 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                               })}
                             </div>
                           )}
-                          {msg.estimate&&<TarjetaEstimacion estimacion={msg.estimate} propia={isClient} accion={accionEstimacion?accionEstimacion(msg.estimate):undefined}/>}
-                          {!msg.estimate&&shouldRenderMessageText(msg, messageAttachments.length) && (
+                          {msg.proposal&&(
+                            <TarjetaPropuestaChat
+                              datos={msg.proposal}
+                              esCliente={esComprador}
+                              reemplazada={(versionVigente.get(msg.proposal.propuesta_id)||0)>msg.proposal.version}
+                              onElegir={()=>onViewQuote(msg.proposal!.cotizacion_id)}
+                              onPreguntar={()=>{setInput("Sobre tu propuesta: ");inputRef.current?.focus();}}
+                            />
+                          )}
+                          {!msg.proposal&&shouldRenderMessageText(msg, messageAttachments.length) && (
                             <div className={clsx("px-3 py-2 rounded-2xl text-sm leading-relaxed",
                               isClient
                                 ?"bg-primary text-white rounded-br-sm"
@@ -5169,14 +5209,14 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     >
                       <FolderOpen className="w-4 h-4"/>
                     </button>
-                    {puedeEstimarPrecio&&(
+                    {puedeProponer&&conv&&(
                       <button
-                        onClick={()=>setShowCalculadora(true)}
+                        onClick={()=>onOpenProposalForm?.(conv.quoteId)}
                         className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 dark:border-accent/20 text-primary dark:text-accent text-xs font-medium hover:bg-primary/10 dark:hover:bg-accent/10 transition-colors"
-                        title="Calculadora de precios: envía al cliente un precio estimado"
+                        title="Propuesta con precio cerrado en pesos: le llega al cliente en este chat"
                       >
-                        <Calculator className="w-4 h-4"/>
-                        <span className="hidden md:inline">Calcular precio</span>
+                        <FileSignature className="w-4 h-4"/>
+                        <span className="hidden md:inline">{textoBotonPropuesta}</span>
                       </button>
                     )}
                     <div className="relative">
@@ -5208,6 +5248,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   </div>
                   <div className="flex-1">
                     <textarea
+                      ref={inputRef}
                       value={input}
                       onChange={e=>setInput(e.target.value)}
                       onKeyDown={handleKey}
@@ -5227,24 +5268,6 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 </div>
               </div>
             </div>
-          )}
-
-          {conv&&puedeEstimarPrecio&&(
-            <CalculadoraPreciosChat
-              abierta={showCalculadora}
-              referencia={[conv.refCode,cotizacionDelHilo?.product,conv.counterpartName].filter(Boolean).join(" · ")}
-              valoresIniciales={{
-                cantidad:extractFirstNumber(cotizacionDelHilo?.minQuantity)||undefined,
-                moneda:cotizacionDelHilo?.targetPriceCurrency,
-                incoterm:cotizacionDelHilo?.incoterm,
-                precioObjetivo:cotizacionDelHilo?.targetPrice&&cotizacionDelHilo.targetPrice!=="N/D"?cotizacionDelHilo.targetPrice:undefined,
-              }}
-              onCerrar={()=>setShowCalculadora(false)}
-              onEnviar={async(entrada)=>{
-                await onSendPriceEstimate(conv.id,entrada);
-                setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
-              }}
-            />
           )}
 
           {/* ── Right: context panel ────────────────────────────────────── */}
@@ -6948,10 +6971,10 @@ function Stepper({current}:{current:number}) {
   );
 }
 
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrls:string[];country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;}
+interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrls:string[];country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;deliveryCity:string;}
 /** Igual que `MAX_FOTOS_PRODUCTO` en backend/schemas/cotizacion.py. */
 const MAX_FOTOS_PRODUCTO=10;
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrls:[],country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:""};
+const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrls:[],country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:"",deliveryCity:""};
 const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
 const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
 const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
@@ -7217,6 +7240,7 @@ function RightPanel({
               : "",
           ],
           ["Incoterm", form.incoterm],
+          ["Ciudad de entrega", form.deliveryCity],
         ].map(([k, v]) => (
           <div key={k} className="flex justify-between items-start gap-2">
             <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -7754,6 +7778,17 @@ function Step2({
               realizar la facturación electrónica correspondiente.
             </p>
           </div>
+          {/* La empresa arma la entrega de su propuesta con esto: hasta dónde
+              llega su precio y cuánto cuesta llevarlo. */}
+          <Input
+            label="Ciudad de entrega"
+            placeholder="Medellín"
+            maxLength={100}
+            value={form.deliveryCity}
+            onChange={(e) => upd("deliveryCity", e.target.value)}
+            hint="Dónde quieres recibir el producto. Las empresas la usan para calcular la entrega."
+            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
+          />
           <Textarea
             label="Notas"
             placeholder="Información adicional..."
@@ -7891,6 +7926,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       if(!form.country){setStepError("Selecciona el pais de importacion.");return;}
       if(!form.productLine){setStepError("Selecciona la linea de producto.");return;}
       if(!form.incoterm){setStepError("Selecciona el incoterm.");return;}
+      if(form.deliveryCity.trim().length<2){setStepError("Escribe la ciudad de entrega.");return;}
     }
     setStepError("");
     navigate(step+1,"fwd");
@@ -7952,6 +7988,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
       incoterm:form.incoterm || "DDP",
       notas_adicionales:form.notes||undefined,
       shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
+      ciudad_entrega:form.deliveryCity.trim()||undefined,
       tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
       ...(origen?.origen==="tendencias"?{
         origen:"tendencias" as const,
@@ -9001,6 +9038,12 @@ function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;compan
               </Card>
             </div>
           </div>
+          {/* Lo que cada propuesta trae listo: bodega, entrega, tiempos, pago,
+              cancelación (features/propuestas). No se autoguarda como el perfil:
+              tiene su propio botón. */}
+          <section id="condiciones-propuesta" className="scroll-mt-6 border-t border-border pt-6">
+            <CondicionesEmpresa puedeEditar/>
+          </section>
         </main>
       </div>
     </div>
@@ -9285,7 +9328,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{q.product}</p>
                         <p className="text-xs text-muted-foreground">
-                          {q.code} · US${propuesta.precio_ofrecido_usd} · {propuesta.tiempo_estimado_entrega} · {propuesta.incoterm}
+                          {q.code} · {leerPropuesta(propuesta.condiciones_adicionales) ? `${pesosCop(leerPropuesta(propuesta.condiciones_adicionales)!.totales.total_cop)} con IVA` : `US$${propuesta.precio_ofrecido_usd}`} · {propuesta.tiempo_estimado_entrega} · {propuesta.incoterm}
                         </p>
                       </div>
                       <Button variant="secondary" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>}
@@ -9467,6 +9510,7 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting,proposal
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
             {dato("Propósito", proposito)}
             {dato("Cantidad", cantidadConUnidad(quote.minQuantity, quote.unit))}
+            {dato("Ciudad de entrega", quote.deliveryCity)}
             {dato("Precio objetivo", quote.targetPrice && quote.targetPrice !== "N/A" ? quote.targetPrice : "Sin precio objetivo")}
             {dato("Incoterm", quote.incoterm)}
             {dato("Shipping mark", <span className="font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</span>)}
@@ -9806,64 +9850,7 @@ function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalB
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATE RESPONSE SCREEN — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
-function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,chatConversationId,onOpenChat,prefill}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};chatConversationId?:string;onOpenChat?:(conversationId:string)=>void;prefill?:PropuestaDesdeEstimacion|null}) {
-  type ProposalAttachmentRef = {id:string;nombre:string};
-  type ProposalDraftDetails = {
-    moq: string;
-    moqUnit: "unidades" | "USD";
-    port: string;
-    productionTime: string;
-    shippingTime: string;
-    description: string;
-    advantages: string;
-    recommendations: string;
-    attachedFiles: ProposalAttachmentRef[];
-  };
-
-  function parseDraftDetails(raw:string|null|undefined):ProposalDraftDetails|null{
-    if(!raw){
-      return null;
-    }
-    try{
-      const parsed=JSON.parse(raw) as unknown;
-      if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)){
-        return null;
-      }
-      const draft=parsed as Record<string, unknown>;
-      const pickString=(value:unknown)=>typeof value==="string"?value:"";
-      const attachedFiles=Array.isArray(draft.attachedFiles)
-        ?draft.attachedFiles.map((row)=>{
-          if(!row||typeof row!=="object"||Array.isArray(row)){
-            return null;
-          }
-          const item=row as Record<string, unknown>;
-          const id=typeof item.id==="string"?item.id.trim():"";
-          if(!id){
-            return null;
-          }
-          return {
-            id,
-            nombre:typeof item.nombre==="string"&&item.nombre.trim()?item.nombre.trim():"Archivo adjunto",
-          };
-        }).filter((row):row is ProposalAttachmentRef=>Boolean(row))
-        :[];
-
-      return {
-        moq: pickString(draft.moq),
-        moqUnit: draft.moqUnit === "USD" ? "USD" : "unidades",
-        port: pickString(draft.port),
-        productionTime: pickString(draft.productionTime),
-        shippingTime: pickString(draft.shippingTime),
-        description: pickString(draft.description),
-        advantages: pickString(draft.advantages),
-        recommendations: pickString(draft.recommendations),
-        attachedFiles,
-      };
-    }catch{
-      return null;
-    }
-  }
-
+function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,companyName,clientName,chatConversationId,onOpenChat,onEditConditions}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};companyName:string;clientName?:string;chatConversationId?:string;onOpenChat?:(conversationId:string)=>void;onEditConditions?:()=>void}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;
 
   // Abrir la solicitud es el "vista" de la bitácora; el backend solo cuenta la primera.
@@ -9871,20 +9858,11 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     if(!quoteId)return;
     void businessService.markQuoteViewed(quoteId).catch(()=>undefined);
   },[quoteId]);
-  const [step,setStep]=useState(1);
   const [submitted,setSubmitted]=useState(false);
-  const [submittedTitle,setSubmittedTitle]=useState("Respuesta enviada");
+  const [submittedTitle,setSubmittedTitle]=useState("Propuesta enviada");
   const [directChatId,setDirectChatId]=useState<string|undefined>(chatConversationId);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
-  const [attachedFiles,setAttachedFiles]=useState<ProposalAttachmentRef[]>([]);
-  const [form,setForm]=useState({
-    unitPrice:"",moq:"",moqUnit:"unidades",totalPrice:"",
-    incoterm:"FOB",port:"",productionTime:"",shippingTime:"",totalTime:"",
-    description:"",advantages:"",recommendations:"",
-    files:[] as {name:string;type:string}[],
-  });
-  function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
 
   // Solo la cuenta dueña envía; el asesor guarda y deja el borrador listo.
   const esBorradorPendienteDeEnvio = userRole==="importadora" && existingProposal?.estado==="borrador";
@@ -9894,141 +9872,51 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   // en los dos casos, y parecía que se podía responder varias veces.
   const esPropuestaYaVista = existingProposal?.estado==="pendiente";
   const revisionesPrevias = existingProposal?.revisiones ?? 0;
-  const tituloPantalla = esPropuestaYaVista ? "Editar mi propuesta" : "Responder cotización";
+  const tituloPantalla = esPropuestaYaVista ? "Editar mi propuesta" : "Nueva propuesta";
+  // La propuesta guardada en el formato nuevo se edita tal cual; una del formato
+  // anterior (precio en USD y texto libre) se rehace con el formulario.
+  const inicial = leerPropuesta(existingProposal?.condiciones_adicionales);
+  const esFormatoAnterior = Boolean(existingProposal) && !inicial;
+  const textoEnviar = userRole==="asesor" ? "Guardar borrador" : esPropuestaYaVista ? "Enviar versión nueva" : "Enviar propuesta";
 
-  // El formulario se hidrata una sola vez por propuesta: el refresco automático
-  // trae un objeto nuevo cada pocos segundos y volver a copiarlo pisaba lo que
-  // el usuario estuviera escribiendo. La estimación del chat (`prefill`) se
-  // aplica una vez y siempre encima de la propuesta guardada, aunque esta
-  // llegue después.
-  const propuestaHidratadaRef=useRef<string|null>(null);
-  const prefillAplicadoRef=useRef<PropuestaDesdeEstimacion|null>(null);
-  useEffect(()=>{
-    const hidratarPropuesta=Boolean(existingProposal)&&propuestaHidratadaRef.current!==existingProposal?.id;
-    const aplicarPrefill=Boolean(prefill)&&prefillAplicadoRef.current!==prefill;
-    if(!hidratarPropuesta&&!aplicarPrefill){
-      return;
-    }
-
-    if(existingProposal&&hidratarPropuesta){
-      propuestaHidratadaRef.current=existingProposal.id;
-      const draftDetails=parseDraftDetails(existingProposal.condiciones_adicionales);
-      const plainTextConditions=draftDetails?"":(existingProposal.condiciones_adicionales || "");
-
-      setForm((prev)=>({
-        ...prev,
-        totalPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
-        unitPrice: String(existingProposal.precio_ofrecido_usd ?? ""),
-        incoterm: existingProposal.incoterm || "FOB",
-        totalTime: existingProposal.tiempo_estimado_entrega || "",
-        moq: draftDetails?.moq || "",
-        moqUnit: draftDetails?.moqUnit || "unidades",
-        port: draftDetails?.port || "",
-        productionTime: draftDetails?.productionTime || "",
-        shippingTime: draftDetails?.shippingTime || "",
-        description: draftDetails?.description || plainTextConditions,
-        advantages: draftDetails?.advantages || "",
-        recommendations: draftDetails?.recommendations || "",
-      }));
-
-      setAttachedFiles(draftDetails?.attachedFiles || []);
-    }
-
-    if(prefill){
-      prefillAplicadoRef.current=prefill;
-      setForm((prev)=>({
-        ...prev,
-        totalPrice: prefill.precioTotalUsd,
-        unitPrice: prefill.precioUnitarioUsd,
-        moq: prefill.cantidad,
-        incoterm: prefill.incoterm || prev.incoterm,
-        totalTime: prefill.tiempoEntrega || prev.totalTime,
-        description: prefill.descripcion,
-      }));
-      if(aplicarPrefill){
-        setStep(1);
-      }
-    }
-  },[existingProposal,prefill]);
-
-  async function submit(){
+  async function submit(formulario:FormularioPropuestaDatos){
     if(!quote){
       setError("No se encontró la cotización seleccionada.");
       return;
     }
-
-    const sourceAmount = form.totalPrice.trim() || form.unitPrice.trim();
-    const parsedAmount = Number.parseFloat(sourceAmount.replace(/[^0-9.,]/g, "").replace(",", "."));
-    if(!Number.isFinite(parsedAmount) || parsedAmount <= 0){
-      setError("Ingresa un valor numérico válido para el costo de la propuesta.");
-      return;
-    }
-
-    const tiempoEstimado = form.totalTime.trim() || [form.productionTime.trim(), form.shippingTime.trim()].filter(Boolean).join(" + ") || "Por definir";
-    const observaciones = JSON.stringify({
-      schema:"create-response-v1",
-      moq:form.moq.trim(),
-      moqUnit:form.moqUnit,
-      port:form.port.trim(),
-      productionTime:form.productionTime.trim(),
-      shippingTime:form.shippingTime.trim(),
-      description:form.description.trim(),
-      advantages:form.advantages.trim(),
-      recommendations:form.recommendations.trim(),
-      attachedFiles:attachedFiles.map((file)=>({id:file.id,nombre:file.nombre})),
-    });
-
     try{
       setSaving(true);
       setError("");
       let directConversationId = directChatId;
-      const payload:CreatePropuestaPayload = {
-        cotizacion_id: quote.id,
-        precio_ofrecido_usd: parsedAmount,
-        tiempo_estimado_entrega: tiempoEstimado,
-        incoterm: form.incoterm,
-        condiciones_adicionales: observaciones || undefined,
-        moqUnit: form.moqUnit === "USD" ? "USD" : "unidades",
-      };
+      let propuestaId = existingProposal?.id;
+      const payload:CreatePropuestaPayload = {cotizacion_id: quote.id, formulario};
 
-      // El borrador lo redacta el asesor y lo envía la cuenta dueña. Ese envío
-      // (POST /propuestas/{id}/enviar) no lo llamaba ninguna pantalla, así que
-      // el borrador se quedaba atrapado y el solicitante nunca veía la
-      // propuesta. Aquí se cierra el circuito.
+      // El borrador lo redacta el asesor y lo envía la cuenta dueña
+      // (POST /propuestas/{id}/enviar).
       if(existingProposal?.id){
         await businessService.updateProposal(existingProposal.id, payload);
         if(esBorradorPendienteDeEnvio){
           await businessService.sendProposal(existingProposal.id);
           setSubmittedTitle("Propuesta enviada al comprador");
         }else{
-          setSubmittedTitle(userRole==="asesor"?"Borrador actualizado":"Propuesta actualizada");
+          setSubmittedTitle(userRole==="asesor"?"Borrador actualizado":"Versión nueva enviada");
         }
       }else if(userRole==="asesor"){
         await businessService.createProposalDraft(payload);
         setSubmittedTitle("Borrador guardado");
       }else{
-        const created = await businessService.createProposal(payload);
-        if(userRole==="importadora"){
-          const conversation = await businessService.startNegotiationChat(quote.id, created.id);
+        propuestaId = (await businessService.createProposal(payload)).id;
+        setSubmittedTitle("Propuesta enviada");
+      }
+
+      // El backend deja la propuesta como tarjeta en el chat (y lo abre si no
+      // existía); aquí solo se averigua cuál es para ofrecer "Ir al chat".
+      if(userRole==="importadora" && !directConversationId && propuestaId){
+        const conversation = await businessService.startNegotiationChat(quote.id, propuestaId).catch(()=>null);
+        if(conversation){
           directConversationId = conversation.id;
           setDirectChatId(conversation.id);
         }
-        setSubmittedTitle("Respuesta enviada");
-      }
-
-      if(userRole==="importadora" && !directConversationId && existingProposal?.id){
-        const conversation = await businessService.startNegotiationChat(quote.id, existingProposal.id);
-        directConversationId = conversation.id;
-        setDirectChatId(conversation.id);
-      }
-
-      const conversationId = directConversationId || chatConversationId;
-      if(conversationId && attachedFiles.length>0){
-        await businessService.shareDocumentsToChat({
-          conversacion_ids:[conversationId],
-          archivo_ids:attachedFiles.map((file)=>file.id),
-          mensaje:"Adjuntos de propuesta comercial",
-        });
       }
 
       if(onSubmitted){
@@ -10042,7 +9930,6 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
     }
   }
   const activeNav=userRole==="importadora"?"imp-quotes":"adv-my-quotes";
-  const steps=[{label:"Económica"},{label:"Logística"},{label:"Observaciones"}];
   if(!quote){
     return (
       <div className="flex h-screen bg-background overflow-hidden">
@@ -10067,315 +9954,86 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
       <div className="flex-1 flex flex-col"><AppHeader user={headerUser}/>
         <div className="flex-1 flex items-center justify-center"><div className="flex flex-col items-center gap-4 text-center max-w-sm">
           <div className="w-14 h-14 rounded-full bg-emerald-50 dark:!bg-accent/10 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500 dark:text-accent"/></div>
-          <div><h2 className="text-lg font-semibold">{submittedTitle}</h2><p className="text-sm text-muted-foreground mt-1">Tu propuesta fue registrada correctamente para {quote.product}.</p></div>
+          <div>
+            <h2 className="text-lg font-semibold">{submittedTitle}</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {userRole==="asesor"
+                ? `Tu borrador para ${quote.product} quedó guardado. La cuenta de la empresa lo revisa y lo envía.`
+                : `El comprador la recibe en el chat de ${quote.product}, con el total en pesos y las condiciones.`}
+            </p>
+          </div>
           <div className="flex gap-2 flex-wrap justify-center">
-            <Button variant="primary" onClick={onBack}>Volver a cotizaciones</Button>
+            <Button variant="primary" onClick={onBack}>Volver</Button>
             {(directChatId || chatConversationId) && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(directChatId || chatConversationId!)}>Ir al Chat</Button>}
           </div>
         </div></div>
       </div>
     </div>
   );
+  const cantidad = Number(String(quote.minQuantity ?? "").replace(",", ".")) || extractFirstNumber(quote.minQuantity) || 0;
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active={activeNav}/>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader user={headerUser}/>
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:items-start">
-          <section className="min-w-0">
+          <div className="mx-auto max-w-7xl">
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
           </div>
           <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:tituloPantalla}]}/>
-          <h1 className="text-xl font-semibold mt-3">{tituloPantalla}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 mb-6">{quote.product} · {quote.code}</p>
+          <h1 className="text-xl font-semibold mt-3 mb-4">{tituloPantalla}</h1>
           {esPropuestaYaVista&&(
-            <div className="mb-6 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sm text-sky-900 flex items-start gap-2">
+            <div className="mb-4 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sm text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
               <span>
-                No estás respondiendo de nuevo: estás <strong>modificando la propuesta que ya enviaste</strong>.
-                El comprador la tiene delante y verá que la cambiaste, con la fecha.
+                No estás respondiendo de nuevo: estás <strong>enviando una versión nueva de tu propuesta</strong>.
+                Al cliente le llega como otra tarjeta en el chat y la anterior queda marcada como reemplazada.
                 {revisionesPrevias>0&&<> Ya la has cambiado {revisionesPrevias===1?"una vez":`${revisionesPrevias} veces`}.</>}
                 {" "}Guardar también anula la aceptación que hubiera de cualquiera de las dos partes.
               </span>
             </div>
           )}
+          {esFormatoAnterior&&(
+            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200 flex items-start gap-2">
+              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
+              <span>Esta propuesta se hizo con el formulario anterior (precio en USD). Llénala de nuevo: al guardarla queda con precio cerrado en pesos.</span>
+            </div>
+          )}
           {esBorradorPendienteDeEnvio&&(
-            <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 dark:text-accent dark:!bg-accent/15 flex items-start gap-2">
+            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 dark:text-accent dark:!bg-accent/15 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
               <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el comprador no la ve.</span>
             </div>
           )}
-          {prefill&&(
-            <div className="mb-6 p-3 rounded-lg border border-primary/30 bg-primary/5 text-sm text-foreground flex items-start gap-2">
-              <Calculator className="w-4 h-4 mt-0.5 flex-shrink-0 text-primary"/>
-              <span>
-                Datos tomados de la estimación que enviaste por el chat; el desglose quedó en la descripción de la oferta. Revísalos antes de guardar.
-                {prefill.monedaOrigen!=="USD"&&<> <strong>La estimación estaba en {prefill.monedaOrigen} y la propuesta se expresa en USD: escribe el precio convertido.</strong></>}
-              </span>
-            </div>
-          )}
           {userRole==="asesor"&&(
-            <div className="mb-6 p-3 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground flex items-start gap-2">
+            <div className="mb-4 p-3 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
               <span>Tu respuesta se guarda como borrador. La cuenta de la empresa es quien la revisa y la envía al comprador.</span>
             </div>
           )}
-          {/* Stepper */}
-          <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-1">
-            {steps.map((s, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <div
-                  className={clsx(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 whitespace-nowrap",
-                    step === i + 1
-                      ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground shadow-sm"
-                      : step > i + 1
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:!bg-accent/20 dark:text-emerald-400 dark:border-emerald-800/60"
-                      : "bg-muted/60 text-muted-foreground border border-transparent"
-                  )}
-                >
-                  {step > i + 1 ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-accent" />
-                  ) : (
-                    <span className="w-4 h-4 rounded-full flex items-center justify-center bg-foreground/10 text-[10px] font-semibold">
-                      {i + 1}
-                    </span>
-                  )}
-                  {s.label}
-                </div>
-                {i < steps.length - 1 && (
-                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
-                )}
-              </div>
-            ))}
+          <FormularioPropuesta
+            cotizacion={{
+              codigo: quote.code,
+              producto: quote.product,
+              cantidad,
+              cantidadTexto: cantidadConUnidad(quote.minQuantity, quote.unit),
+              cliente: clientName,
+              ciudad: quote.deliveryCity,
+            }}
+            empresa={companyName}
+            inicial={inicial}
+            textoEnviar={textoEnviar}
+            esBorrador={userRole==="asesor"}
+            guardando={saving}
+            error={error}
+            onEnviar={(f)=>{void submit(f);}}
+            onCancelar={onBack}
+            onEditarCondiciones={userRole==="importadora"?onEditConditions:undefined}
+          />
+          <div className="mt-6 max-w-xl">
+            <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
           </div>
-
-          <div className="flex gap-6">
-            <div className="flex-1 min-w-0 max-w-3xl space-y-6">
-              {step === 1 && (
-                <Card padding="lg" className="border-border bg-card">
-                  <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
-                    <Receipt className="w-4 h-4 text-primary dark:text-accent" />
-                    Información económica
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {/* Precio unitario */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-foreground">Precio unitario</label>
-                      <input
-                        type="text"
-                        placeholder="9.20 USD"
-                        value={form.unitPrice}
-                        onChange={e => f("unitPrice", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-
-                    {/* MOQ (cantidad mínima) con switch/toggle al lado del input */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-foreground">MOQ (cantidad mínima)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder={form.moqUnit === "USD" ? "1,000 USD" : "300 kg"}
-                          value={form.moq}
-                          onChange={e => f("moq", e.target.value)}
-                          className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                        />
-                        <div className="flex items-center gap-0.5 bg-muted p-1 rounded-lg shrink-0 h-10 border border-border dark:bg-card">
-                          <button
-                            type="button"
-                            onClick={() => f("moqUnit", "unidades")}
-                            className={clsx(
-                              "px-2.5 py-1 text-xs rounded-md transition-colors h-full flex items-center justify-center",
-                              (form.moqUnit === "unidades" || !form.moqUnit)
-                                ? "bg-primary dark:bg-accent text-white dark:text-black font-medium shadow-sm"
-                                : "text-muted-foreground hover:text-primary hover:bg-primary/20 dark:hover:text-accent dark:hover:bg-accent/20"
-                            )}
-                          >
-                            Unidades
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => f("moqUnit", "USD")}
-                            className={clsx(
-                              "px-2.5 py-1 text-xs rounded-md transition-colors h-full flex items-center justify-center",
-                              form.moqUnit === "USD"
-                                ? "bg-primary dark:bg-accent text-white dark:text-black font-medium shadow-sm"
-                                : "text-muted-foreground hover:text-primary hover:bg-primary/20 dark:hover:text-accent dark:hover:bg-accent/20"
-                            )}
-                          >
-                            USD
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Precio total estimado */}
-                    <div className="flex flex-col gap-1.5 sm:col-span-2">
-                      <label className="text-sm font-medium text-foreground">Precio total estimado</label>
-                      <input
-                        type="text"
-                        placeholder="2,760 USD"
-                        value={form.totalPrice}
-                        onChange={e => f("totalPrice", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-              {step === 2 && (
-                <Card padding="lg" className="border-border bg-card">
-                  <p className="font-semibold mb-5 flex items-center gap-2 text-foreground">
-                    <Truck className="w-4 h-4 text-primary dark:text-accent" />
-                    Información logística
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <Select label="Incoterm" value={form.incoterm} onChange={e => f("incoterm", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20">
-                      {INCOTERMS.map(v => <option key={v}>{v}</option>)}
-                    </Select>
-                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e => f("port", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
-                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e => f("productionTime", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
-                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e => f("shippingTime", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
-                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e => f("totalTime", e.target.value)} className="sm:col-span-2 dark:focus:border-accent dark:focus:ring-accent/20" />
-                  </div>
-                </Card>
-              )}
-
-              {step === 3 && (
-                <div className="space-y-4">
-                  <Card padding="lg" className="border-border bg-card">
-                    <p className="font-semibold mb-4 flex items-center gap-2 text-foreground">
-                      <FileText className="w-4 h-4 text-primary dark:text-accent" />
-                      Observaciones
-                    </p>
-                    <div className="space-y-4">
-                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e => f("description", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
-                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e => f("advantages", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
-                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e => f("recommendations", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
-                    </div>
-                  </Card>
-
-                  <Card padding="lg" className="border-border bg-card">
-                    <p className="font-semibold mb-4 flex items-center gap-2 text-foreground">
-                      <Paperclip className="w-4 h-4 text-primary dark:text-accent" />
-                      Archivos adjuntos
-                    </p>
-                    <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 text-center bg-muted/20 hover:bg-muted/40 transition-colors">
-                      <Upload className="w-7 h-7 text-muted-foreground/60" />
-                      <p className="text-sm text-muted-foreground">PDF, imágenes, fichas técnicas, cotización oficial</p>
-                      <DocumentUploadButton
-                        label="Seleccionar archivos"
-                        multiple
-                        origen="propuesta"
-                        onUploaded={(fileItem) => setAttachedFiles((prev) => {
-                          if (prev.some((row) => row.id === fileItem.id)) return prev;
-                          return [...prev, { id: fileItem.id, nombre: fileItem.nombre }];
-                        })}
-                        onError={(message) => setError(message)}
-                      />
-                      {attachedFiles.length > 0 && (
-                        <div className="w-full mt-3 space-y-1.5 text-left">
-                          {attachedFiles.map((file) => (
-                            <div key={file.id} className="rounded-md border border-border bg-muted/40 px-3 py-2 flex items-center justify-between gap-2 transition-colors hover:bg-muted/60">
-                              <p className="text-xs font-medium text-foreground truncate">{file.nombre}</p>
-                              <button 
-                                className="text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors" 
-                                onClick={() => setAttachedFiles((prev) => prev.filter((row) => row.id !== file.id))}
-                              >
-                                Quitar
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                </div>
-              )}
-
-             {/* Acciones del Stepper */}
-              <div className="flex items-center justify-between mt-6 pt-5 border-t border-border">
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={onBack}>
-                    Cancelar
-                  </Button>
-                  {step > 1 && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<ChevronLeft className="w-3.5 h-3.5" />}
-                      onClick={() => setStep(s => s - 1)}
-                      className="hover:!border-primary hover:text-primary hover:bg-primary/10 dark:hover:!border-accent dark:hover:text-accent dark:hover:bg-accent/15 transition-colors"
-                    >
-                      Anterior
-                    </Button>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  {step < 3 ? (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      iconRight={<ChevronRight className="w-4 h-4" />}
-                      onClick={() => setStep(s => s + 1)}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
-                    >
-                      Continuar
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      icon={userRole === "asesor" ? <Save className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                      loading={saving}
-                      onClick={submit}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90 transition-colors"
-                    >
-                      {userRole === "asesor"
-                        ? "Guardar borrador"
-                        : esPropuestaYaVista
-                          ? "Guardar cambios"
-                          : "Enviar propuesta"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Banner de error adaptable */}
-              {error && (
-                <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive dark:bg-destructive/20 dark:border-destructive/30">
-                  {error}
-                </div>
-              )}
-            </div>
-          </div>
-          </section>
-          <aside className="min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
-            <div className="space-y-4">
-              <Card padding="md" className="border-border bg-card">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-primary dark:text-accent">Cotizante</p>
-                    <h2 className="mt-1 truncate text-base font-semibold">Perfil de referencia</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">Información disponible mientras preparas la propuesta.</p>
-                  </div>
-                  <TierBadge tier={quote.solicitanteTier} />
-                </div>
-                <div className="mt-4 space-y-2 border-t border-border pt-4 text-xs">
-                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Producto</span><span className="text-right font-medium">{quote.product || "—"}</span></div>
-                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Código</span><span className="font-mono font-medium">{quote.code || "—"}</span></div>
-                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">País de origen</span><span className="text-right font-medium">{quote.country || "—"}</span></div>
-                  <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">Tier actual</span><TierBadge tier={quote.solicitanteTier} /></div>
-                </div>
-              </Card>
-              <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
-            </div>
-          </aside>
           </div>
         </main>
       </div>
@@ -12050,8 +11708,6 @@ export default function App() {
   const [companyAdvisors,setCompanyAdvisors]=useState<CompanyAdvisor[]>([]);
   const [advisorAssignedQuotes,setAdvisorAssignedQuotes]=useState<Quote[]>([]);
   const [advisorProposalsByQuoteId,setAdvisorProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
-  // Estimación del chat que se está pasando a propuesta formal.
-  const [proposalPrefill,setProposalPrefill]=useState<{quoteId:string;datos:PropuestaDesdeEstimacion}|null>(null);
   // Propuestas de la empresa vistas desde la cuenta dueña: de aquí sale la
   // bandeja de "esperan tu confirmación".
   const [companyProposalsByQuoteId,setCompanyProposalsByQuoteId]=useState<Record<string, BackendPropuesta>>({});
@@ -12801,14 +12457,8 @@ export default function App() {
   /** «Solicitar acceso» fuera de la landing: lleva a la sección Planes del inicio (/#planes). */
   function irAPlanesDelInicio(){goTo("landing");window.setTimeout(()=>{window.location.hash="planes";},0);}
 
-  // La estimación solo prellena la propuesta a la que se llegó desde el chat;
-  // abrir después "Responder" por otro camino debe partir de cero.
-  useEffect(()=>{
-    if(screen!=="create-response")setProposalPrefill(null);
-  },[screen]);
-
-  function handleConvertEstimateToProposal(quoteId:string,estimate:EstimacionEnMensaje){
-    setProposalPrefill({quoteId,datos:propuestaDesdeEstimacion(estimate)});
+  /** «Nueva propuesta» desde el chat: abre el formulario de esa cotización. */
+  function openProposalForm(quoteId:string){
     setSelectedQuoteId(quoteId);
     goTo("create-response");
   }
@@ -13087,6 +12737,7 @@ export default function App() {
       incoterm:quote.incoterm||"DDP",
       notes:quote.notes||"",
       shippingMarkSufijo:quote.shippingMarkSufijo||"",
+      deliveryCity:quote.deliveryCity||"",
     });
     setPreselectedImporterId(quote.importadorId||undefined);
     goTo("new-quote");
@@ -13217,12 +12868,6 @@ export default function App() {
       [conversationId]: messages.map((message) => mapBackendChatMessage(message, currentUserProfile?.id)),
     }));
     await reloadChatData();
-  }
-
-  async function handleSendPriceEstimate(conversationId: string, entrada: EstimacionPrecioEntrada) {
-    await businessService.sendPriceEstimate(conversationId, entrada);
-    // El refresco es cortesía: la estimación ya está enviada aunque falle.
-    await reloadChatData().catch(() => undefined);
   }
 
   async function handleShareLocalAttachment(conversationId: string, file: File) {
@@ -13543,7 +13188,7 @@ export default function App() {
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
     // ── Shared ────────────────────────────────────────────────────────────────
-    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={refreshQuoteLists} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} prefill={proposalPrefill?.quoteId===selectedQuoteId?proposalPrefill.datos:null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat}/>;
+    if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={async()=>{await refreshQuoteLists();await reloadChatData().catch(()=>undefined);}} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} companyName={companyProfile?.nombre_empresa || "Tu empresa"} clientName={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.counterpartName} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat} onEditConditions={()=>{goTo("imp-profile");window.setTimeout(()=>document.getElementById("condiciones-propuesta")?.scrollIntoView({behavior:"smooth"}),300);}}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onOpen={openNotification} onBack={()=>goTo(prevScreen)} sb={sb}/>;
     if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole} onPedirSoporte={()=>setSoporteAbierto(true)}/>;
     if(screen==="courses")return (
@@ -13586,8 +13231,8 @@ export default function App() {
     if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={userRole==="solicitante"?requesterQuotes:userRole==="importadora"?importerQuotes:advisorAssignedQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo(userRole==="solicitante"?"quotes":getHomeScreenForRole(userRole))} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote} userRole={userRole} onConfirmProposal={userRole==="importadora"?handleConfirmProposalAsCompany:undefined}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
-    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
-    if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
+    if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
     if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;

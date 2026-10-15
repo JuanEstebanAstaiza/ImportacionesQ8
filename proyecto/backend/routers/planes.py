@@ -12,7 +12,9 @@ from pydantic import BaseModel, EmailStr, Field, ValidationError, model_validato
 from sqlalchemy.orm import Session
 
 from models.usuario import Usuario
+from schemas.landing import VideoRotativo
 from services import planes as svc
+from services import videos_planes
 from utils.dependencies import get_db, get_optional_current_user, require_rol
 from utils.limiter import RATE_LIMIT_PLANES, limiter
 
@@ -189,6 +191,24 @@ def admin_actualizar_plan(plan_id: str, datos: PlanActualizar, db: Session = Dep
     plan = svc.actualizar(db, plan_id, datos.model_dump(exclude_unset=True))
     db.commit()
     return svc.a_dict(db, plan, admin=True)
+
+
+@router.put("/admin/planes/{plan_id}/video")
+def admin_guardar_video_plan(plan_id: str, datos: VideoRotativo, db: Session = Depends(get_db),
+                             current_user: dict = Depends(require_rol("admin"))):
+    """Video de la tarjeta del plan, en horizontal, vertical o los dos (como los
+    de «Quiénes somos»). Solo archivos subidos a Documentos."""
+    video = videos_planes.guardar(db, plan_id, datos.model_dump(exclude={"id"}))
+    db.commit()
+    return {"video": video}
+
+
+@router.delete("/admin/planes/{plan_id}/video")
+def admin_quitar_video_plan(plan_id: str, db: Session = Depends(get_db),
+                            current_user: dict = Depends(require_rol("admin"))):
+    videos_planes.guardar(db, plan_id, None)
+    db.commit()
+    return {"video": None}
 
 
 @router.get("/admin/inscripciones")

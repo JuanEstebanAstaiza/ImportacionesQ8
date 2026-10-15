@@ -77,7 +77,8 @@ Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03
 | `POST` | `/ayuda/articulos/{articulo_id}/visto` | Ayuda y soporte | JWT | Marcar Visto |
 | `POST` | `/ayuda/articulos/{articulo_id}/voto` | Ayuda y soporte | JWT | Votar Articulo |
 | `GET` | `/ayuda/categorias` | Ayuda y soporte | JWT | Listar Categorias |
-| `POST` | `/chat/calculadora/calcular` | Chat | JWT | Calcular Estimacion Precio |
+| `GET` | `/condiciones-propuesta` | Propuestas | JWT | Ver Condiciones |
+| `PUT` | `/condiciones-propuesta` | Propuestas | JWT | Guardar Condiciones |
 | `GET` | `/chat/conversaciones` | Chat | JWT | Listar Mis Conversaciones |
 | `POST` | `/chat/conversaciones/{conversacion_id}/estimaciones` | Chat | JWT | Enviar Estimacion Precio |
 | `POST` | `/chat/conversaciones/{conversacion_id}/leida` | Chat | JWT | Marcar Conversacion Leida |
@@ -260,6 +261,6 @@ Total: **212** operaciones REST exportadas desde OpenAPI (generado el 2026-10-03
 - [[16-Notificaciones|APIs — Notificaciones in-app]]
 - [[17-Documentos-y-Multimedia|APIs — Gestión documental y multimedia]]
 - [[19-Limite-Diario-Cotizaciones|APIs — Límite diario de cotizaciones]]
-- [[20-Calculadora-Precios-Chat|APIs — Calculadora de precios en el chat]]
+- [[20-Propuesta-Rapida|APIs — Propuesta rápida]]
 - [[23-Asignacion-de-Solicitudes|APIs — Asignación de solicitudes abiertas]]
 - [[24-Eventos-y-Panel-Empresa|APIs — Bitácora de eventos y panel de la empresa]]

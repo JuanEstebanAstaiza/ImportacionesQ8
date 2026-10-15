@@ -38,6 +38,7 @@ from routers.tendencias_virales import router as tendencias_virales_router
 from routers.reto import router as reto_router
 from routers.comprobantes import router as comprobantes_router
 from routers.planes import router as planes_router
+from routers.condiciones_propuesta import router as condiciones_propuesta_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -316,6 +317,7 @@ app.include_router(tendencias_virales_router)
 app.include_router(reto_router)
 app.include_router(comprobantes_router)
 app.include_router(planes_router)
+app.include_router(condiciones_propuesta_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
