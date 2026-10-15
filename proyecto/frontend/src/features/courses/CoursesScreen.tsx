@@ -1604,7 +1604,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                 </TableHeader>
                 <TableBody>
                   {creatorCourses.map((course) => (
-                    <TableRow key={course.id}>
+                    <TableRow key={course.id} className="dark:hover:!bg-accent/10">
                       <TableCell className="whitespace-normal">
                         <div>
                           <p className="font-medium">{course.titulo}</p>
@@ -1617,14 +1617,29 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                       <TableCell>{formatCurrency(course.estudiantes_count * course.precio)}</TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => { void handleOpenCourseDetail(course.id); }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="dark:border-accent dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"
+                            onClick={() => { void handleOpenCourseDetail(course.id); }}
+                          >
                             Ver
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleEditCourse(course.id)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="dark:border-accent dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"
+                            onClick={() => handleEditCourse(course.id)}
+                          >
                             <Pencil className="size-3.5" />
                             Editar
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => { void handleDeleteCourse(course.id); }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="dark:border-accent dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"
+                            onClick={() => { void handleDeleteCourse(course.id); }}
+                          >
                             <Trash2 className="size-3.5" />
                             Eliminar
                           </Button>

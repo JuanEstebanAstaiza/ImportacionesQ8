@@ -26,6 +26,18 @@ export interface Plan {
   cupos_restantes: number | null;
   destacado: boolean;
   orden: number;
+  /** Video de la tarjeta (Admin › Planes › Videos). null: sin video. */
+  video: VideoPlan | null;
+}
+
+/**
+ * Como los videos de «Quiénes somos»: horizontal (computador), vertical
+ * (celular) o los dos. Rutas de Documentos (`/documentos/archivos/…`).
+ */
+export interface VideoPlan {
+  horizontal: string | null;
+  vertical: string | null;
+  titulo: string | null;
 }
 
 export interface PlanAdmin extends Plan {
@@ -73,7 +85,7 @@ export interface InscripcionAdmin {
   fecha: string | null;
 }
 
-export type CamposPlan = Omit<Plan, "id" | "iva_cop" | "total_cop" | "total_solicitud_adicional_cop" | "cupos_restantes"> & {
+export type CamposPlan = Omit<Plan, "id" | "iva_cop" | "total_cop" | "total_solicitud_adicional_cop" | "cupos_restantes" | "video"> & {
   activo: boolean;
 };
 
@@ -109,6 +121,14 @@ export const planesService = {
 
   actualizarPlan(id: string, datos: Partial<CamposPlan>): Promise<PlanAdmin> {
     return apiRequest(`/planes/admin/planes/${id}`, { method: "PUT", body: datos });
+  },
+
+  guardarVideo(id: string, video: VideoPlan): Promise<{ video: VideoPlan | null }> {
+    return apiRequest(`/planes/admin/planes/${id}/video`, { method: "PUT", body: video });
+  },
+
+  quitarVideo(id: string): Promise<{ video: null }> {
+    return apiRequest(`/planes/admin/planes/${id}/video`, { method: "DELETE" });
   },
 
   inscripciones(estado?: EstadoInscripcion): Promise<InscripcionAdmin[]> {

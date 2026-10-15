@@ -241,6 +241,14 @@ function Badge({variant,label,className}:{variant:BadgeVariant;label?:string;cla
   );
 }
 
+function formatChatTime(value: string): string {
+  const d = parseBackendDate(value);
+  if (Number.isNaN(d.getTime())) {
+    return value;
+  }
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
 type BtnVariant="primary"|"secondary"|"danger"|"ghost";
 interface BtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?:BtnVariant; size?:"sm"|"md"|"lg";
@@ -603,7 +611,7 @@ function inferLifecycleStageIndex(rawState:string|undefined|null):number{
   if(normalized.includes("bodega"))return 6;
   if(normalized.includes("aduan"))return 5;
   if(normalized.includes("transit")||normalized.includes("enviad"))return 4;
-  if(normalized.includes("produ")||normalized.includes("orden")||normalized.includes("proceso"))return 3;
+  if(normalized.includes("produ")||normalized.includes("orden")||normalized.includes("proceso")||normalized.includes("cotizacion_aceptada")||normalized.includes("cotización aceptada"))return 3;
   if(normalized.includes("negoci"))return 2;
   if(normalized.includes("respond")||normalized.includes("propuesta")||normalized.includes("respuesta"))return 1;
   return 0;
@@ -697,7 +705,7 @@ function mapBackendChatMessage(
     sender:(message.de_mi_lado??message.remitente_id===currentUserId)?"client":"provider",
     authorName:message.remitente_id!==currentUserId?(message.remitente_nombre||undefined):undefined,
     text:message.contenido,
-    time:new Date(message.fecha_envio).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),
+    time:formatChatTime(message.fecha_envio),
     read:true,
     estimate,
   };
@@ -918,8 +926,19 @@ function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   return "dashboard";
 }
 
+function parseBackendDate(value: string): Date {
+  const normalized = String(value ?? "").trim();
+  // El backend persiste fechas UTC sin sufijo de zona (datetime naive). Sin
+  // esta marca, el navegador las interpreta como hora local y los chats se
+  // desplazan según la zona del servidor.
+  const utcValue = normalized.includes("T") && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized)
+    ? `${normalized}Z`
+    : normalized;
+  return new Date(utcValue);
+}
+
 function formatShortDate(value: string): string {
-  const d = new Date(value);
+  const d = parseBackendDate(value);
   if (Number.isNaN(d.getTime())) {
     return value;
   }
@@ -3002,7 +3021,7 @@ function formatoPesos(valor: number): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // QUOTE DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders,onDuplicate}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[];onDuplicate:(quote:Quote)=>void}) {
+function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders,onDuplicate,userRole,onConfirmProposal}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[];onDuplicate:(quote:Quote)=>void;userRole:UserRole|"admin";onConfirmProposal?:(propuestaId:string)=>Promise<void>}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;
   const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
   const [loadingProposals,setLoadingProposals]=useState(true);
@@ -3013,6 +3032,8 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   const [motivoEleccion,setMotivoEleccion]=useState<MotivoEleccion|null>(null);
   const [motivoDetalle,setMotivoDetalle]=useState("");
   const [decisionError,setDecisionError]=useState("");
+  const [confirmingCompanyProposal,setConfirmingCompanyProposal]=useState(false);
+  const [companyConfirmationError,setCompanyConfirmationError]=useState("");
 
   useEffect(()=>{
     let vigente=true;
@@ -3100,9 +3121,17 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
   };
   const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
   const activeProposal=visibleProposals[0]??null;
+  const companyConfirmationProposal = visibleProposals.find((proposal) => (
+    proposal.estado==="pendiente"
+    && proposal.preaceptada_por_solicitante
+    && !proposal.preaceptada_por_empresa
+  )) ?? null;
   const hayPropuestaAceptada = visibleProposals.some((proposal) => proposal.estado === "aceptada" || proposal.preaceptada_por_solicitante);
   const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
-  const relChat=chats.find(c=>c.refId===quoteId&&c.type==="cotizacion");
+  const relChat=chats.find(c=>(c.type==="cotizacion"||c.type==="orden")&&(c.quoteId===quoteId||c.refId===quoteId));
+  const waitingCompanyConfirmation = userRole==="importadora"
+    && Boolean(onConfirmProposal)
+    && Boolean(companyConfirmationProposal);
   const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
   const quoteLifecycleIndex = relatedOrder
     ? inferLifecycleStageIndex(relatedOrder.status || relatedOrder.history[relatedOrder.history.length - 1]?.estado)
@@ -3172,6 +3201,42 @@ function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,
             <Card padding="md" className="mb-5 border-rose-300/60 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30">
               <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">{quote.importer} rechazó esta cotización</p>
               <p className="mt-1 text-sm text-rose-800/90 dark:text-rose-200 whitespace-pre-line">Motivo: {quote.motivoRechazo}</p>
+            </Card>
+          )}
+          {waitingCompanyConfirmation&&companyConfirmationProposal&&(
+            <Card padding="md" className="mb-5 border-amber-300 bg-amber-50 dark:border-accent/40 dark:!bg-accent/10">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-amber-700 dark:text-accent flex-shrink-0 mt-0.5"/>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-amber-900 dark:!text-accent">El comprador ya aceptó la propuesta</p>
+                  <p className="text-xs text-amber-800 dark:!text-accent mt-0.5">Revisa la negociación y confirma para crear la operación.</p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {relChat&&(
+                      <Button variant="secondary" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)} className="dark:!border-accent/40">
+                        Ver negociación
+                      </Button>
+                    )}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<CheckCircle2 className="w-3.5 h-3.5"/>}
+                      loading={confirmingCompanyProposal}
+                      onClick={()=>{
+                        if(!onConfirmProposal)return;
+                        setCompanyConfirmationError("");
+                        setConfirmingCompanyProposal(true);
+                        void onConfirmProposal(companyConfirmationProposal.id)
+                          .catch((error)=>setCompanyConfirmationError(error instanceof Error?error.message:"No se pudo confirmar la propuesta."))
+                          .finally(()=>setConfirmingCompanyProposal(false));
+                      }}
+                      className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                    >
+                      Confirmar y crear operación
+                    </Button>
+                  </div>
+                  {companyConfirmationError&&<p role="alert" className="text-xs text-destructive mt-2">{companyConfirmationError}</p>}
+                </div>
+              </div>
             </Card>
           )}
           <div className="flex gap-5 items-start">
@@ -3943,7 +4008,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const [notaSoporte,setNotaSoporte]=useState(0);
   const [comentarioNota,setComentarioNota]=useState("");
   const [previewAttachment,setPreviewAttachment]=useState<BackendChatAttachmentItem|null>(null);
-  const [pendingImage,setPendingImage]=useState<{file:File;url:string}|null>(null);
+  const [pendingLocalAttachment,setPendingLocalAttachment]=useState<{file:File;url:string}|null>(null);
+  const [pendingResource,setPendingResource]=useState<BackendArchivoItem|null>(null);
   // La descarga del backend exige Authorization, así que un <img>/<iframe>/<video>
   // apuntando directo a la URL devolvería 401: se resuelve a un blob autenticado.
   const [previewObjectUrl,setPreviewObjectUrl]=useState("");
@@ -4114,7 +4180,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   async function sendMsg(){
     if(!input.trim()||!selectedId)return;
     const content = input.trim();
-    const newMsg:ChatMsg={id:`pending-${Date.now()}`,sender:"client",text:content,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),read:true};
+    const newMsg:ChatMsg={id:`pending-${Date.now()}`,sender:"client",text:content,time:formatChatTime(new Date().toISOString()),read:true};
     setMsgs(prev=>({...prev,[selectedId]:[...(prev[selectedId]||[]),newMsg]}));
     setInput("");
     setSending(true);
@@ -4180,42 +4246,36 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   }
 
   async function handleAttachmentCardClick(attachment: BackendChatAttachmentItem) {
-    if (previewType(attachment) === "image" || previewType(attachment) === "pdf") {
+    if (previewType(attachment) === "image" || previewType(attachment) === "pdf" || previewType(attachment) === "video") {
       setPreviewAttachment(attachment);
       return;
     }
     await handleDownloadResource(attachment.storage_url, attachment.nombre);
   }
 
-  async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>,isImage:boolean){
+  async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];
     if(!file||!selectedId)return;
 
-    if(isImage){
-      setPendingImage({file,url:URL.createObjectURL(file)});
-      event.target.value="";
-      return;
-    }
-
-    const contentLabel=isImage?"Imagen":"Archivo";
-    const localMsg:ChatMsg={
-      id:`pending-file-${Date.now()}`,
-      sender:"client",
-      text:`${contentLabel} adjunto: ${file.name}`,
-      file:{name:file.name,size:getReadableFileSize(file.size),type:mapFileType(file)},
-      time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),
-      read:true,
-    };
-
-    setMsgs(prev=>({...prev,[selectedId]:[...(prev[selectedId]||[]),localMsg]}));
-    try{
-      await onShareLocalAttachment(selectedId,file);
-    }catch{
-      // Mantener feedback visual local aunque falle el registro remoto.
-    }
-
+    setPendingLocalAttachment({file,url:URL.createObjectURL(file)});
     event.target.value="";
-    setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+  }
+
+  function cancelarAdjuntoLocal() {
+    if (pendingLocalAttachment) URL.revokeObjectURL(pendingLocalAttachment.url);
+    setPendingLocalAttachment(null);
+  }
+
+  async function enviarAdjuntoLocal() {
+    if (!pendingLocalAttachment || !selectedId) return;
+    const selected = pendingLocalAttachment;
+    cancelarAdjuntoLocal();
+    try {
+      await onShareLocalAttachment(selectedId, selected.file);
+      setTimeout(()=>messagesEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+    } catch {
+      toast.error("No se pudo enviar el archivo adjunto.");
+    }
   }
 
   function insertEmoji(emoji:string){
@@ -4248,7 +4308,9 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     ),
   );
 
-  const refQuote=conv?.type==="cotizacion"?quotes.find((quote)=>quote.id===conv.refId)||null:null;
+  const refQuote=conv?.type==="cotizacion"
+    ? quotes.find((quote)=>quote.id===conv.quoteId)||quotes.find((quote)=>quote.id===conv.refId)||null
+    : null;
   const refOrderId=conv?.type==="orden"?conv.refId:null;
   const refOrder=conv?.type==="orden"?orders.find((order)=>order.id===conv.refId)||null:null;
   // El asesor asignado también mueve el estado del embarque: es a quien la
@@ -4505,14 +4567,23 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   }
 
   async function handleShareExistingResourceToChat(file: BackendArchivoItem) {
+    setPendingResource(file);
+    setIsResourcePickerOpen(false);
+  }
+
+  async function enviarRecursoPendiente() {
     const targetConversationId = resourceTargetConversationId.trim();
-    if (!targetConversationId) {
+    if (!pendingResource || !targetConversationId) {
       toast.error("Selecciona el chat destino");
       return;
     }
-    await onShareExistingResource([targetConversationId], file.id, `Recurso compartido: ${file.nombre}`);
-    toast.success("Recurso enviado al chat");
-    setIsResourcePickerOpen(false);
+    try {
+      await onShareExistingResource([targetConversationId], pendingResource.id, `Recurso compartido: ${pendingResource.nombre}`);
+      toast.success("Recurso enviado al chat");
+      setPendingResource(null);
+    } catch {
+      toast.error("No se pudo enviar el recurso al chat.");
+    }
   }
 
   async function handleUploadResourceToCurrentFolder(file: File) {
@@ -4542,12 +4613,18 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     toast.success("Carpeta recargada");
   }
 
-  function resourcePreviewThumb(file: BackendArchivoItem): string | null {
+  function resourcePreviewMediaUrl(file: BackendArchivoItem): string | null {
     const mime = String(file.mime_type || "").toLowerCase();
-    if (mime.startsWith("image/") && file.storage_url && resourcePreviewUrls[file.id]) {
+    if ((mime.startsWith("image/") || mime.startsWith("video/")) && file.storage_url && resourcePreviewUrls[file.id]) {
       return resourcePreviewUrls[file.id];
     }
     return null;
+  }
+
+  function resourcePreviewThumb(file: BackendArchivoItem): string | null {
+    return String(file.mime_type || "").toLowerCase().startsWith("image/")
+      ? resourcePreviewMediaUrl(file)
+      : null;
   }
 
   // Para el equipo de la plataforma esto es una bandeja de soporte: filtrar por
@@ -4678,7 +4755,10 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
       return;
     }
 
-    const fileIds = new Set(pickerVisibleFiles.map((file) => file.id));
+    const previewFiles = pendingResource
+      ? [...pickerVisibleFiles, pendingResource]
+      : pickerVisibleFiles;
+    const fileIds = new Set(previewFiles.map((file) => file.id));
     Object.entries(resourcePreviewRegistryRef.current).forEach(([fileId, objectUrl]) => {
       if (!fileIds.has(fileId)) {
         window.URL.revokeObjectURL(objectUrl);
@@ -4689,7 +4769,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
 
     setResourcePreviewUrls((current) => {
       const next: Record<string,string> = {};
-      pickerVisibleFiles.forEach((file) => {
+      previewFiles.forEach((file) => {
         if (current[file.id]) {
           next[file.id] = current[file.id];
         }
@@ -4699,9 +4779,9 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
       return iguales ? current : next;
     });
 
-    pickerVisibleFiles.forEach((file) => {
+    previewFiles.forEach((file) => {
       const mime = String(file.mime_type || "").toLowerCase();
-      if (!mime.startsWith("image/") || !file.storage_url) {
+      if (!(mime.startsWith("image/") || mime.startsWith("video/")) || !file.storage_url) {
         return;
       }
       if (resourcePreviewRegistryRef.current[file.id] || resourcePreviewLoadingRef.current[file.id]) {
@@ -4723,7 +4803,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
           delete resourcePreviewLoadingRef.current[file.id];
         });
     });
-  }, [isResourcePickerOpen, pickerVisibleFiles]);
+  }, [isResourcePickerOpen, pickerVisibleFiles, pendingResource]);
 
   useEffect(() => {
     return () => {
@@ -5028,15 +5108,43 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  onChange={(event)=>{void handleAttachFileChange(event,false);}}
+                  onChange={(event)=>{void handleAttachFileChange(event);}}
                 />
                 <input
                   ref={imageInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(event)=>{void handleAttachFileChange(event,true);}}
+                  onChange={(event)=>{void handleAttachFileChange(event);}}
                 />
+                {pendingLocalAttachment && (
+                  <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-2">
+                    {pendingLocalAttachment.file.type.startsWith("image/") ? (
+                      <img
+                        src={pendingLocalAttachment.url}
+                        alt={`Vista previa de ${pendingLocalAttachment.file.name}`}
+                        className="h-16 w-16 rounded-lg border border-border object-cover"
+                      />
+                    ) : pendingLocalAttachment.file.type.startsWith("video/") ? (
+                      <video
+                        src={pendingLocalAttachment.url}
+                        controls
+                        preload="metadata"
+                        className="h-16 w-28 rounded-lg border border-border bg-black object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-border bg-white">
+                        <FileIcon className="h-7 w-7 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{pendingLocalAttachment.file.name}</p>
+                      <p className="text-xs text-muted-foreground">{getReadableFileSize(pendingLocalAttachment.file.size)}</p>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={cancelarAdjuntoLocal}>Cancelar</Button>
+                    <Button variant="primary" size="sm" onClick={()=>{void enviarAdjuntoLocal();}}>Enviar</Button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1 items-center">
                     <button
@@ -5109,8 +5217,8 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     />
                   </div>
                   <button
-                    onClick={()=>{void sendMsg();}}
-                    disabled={!input.trim()||sending}
+                    onClick={()=>{void (pendingLocalAttachment ? enviarAdjuntoLocal() : sendMsg());}}
+                    disabled={(!input.trim()&&!pendingLocalAttachment)||sending}
                     className={clsx("w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0",
                       input.trim()?"bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent shadow-sm":"bg-muted text-muted-foreground cursor-not-allowed")}>
                     <Send className="w-4 h-4"/>
@@ -5285,9 +5393,9 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     {errorTicket&&<p className="text-[10px] text-destructive">{errorTicket}</p>}
                   </div>
                 ):conv.type==="interno"?(
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2">
-                    <p className="text-[10px] font-semibold text-amber-800 uppercase tracking-wide mb-1">Canal interno</p>
-                    <p className="text-[11px] text-amber-900 leading-snug">
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 dark:!bg-accent/15 px-2.5 py-2">
+                    <p className="text-[10px] font-semibold text-amber-800 dark:text-accent uppercase tracking-wide mb-1">Canal interno</p>
+                    <p className="text-[11px] text-amber-900 dark:text-accent leading-snug">
                       Coordinación entre la empresa y {conv.counterpartName||"el asesor"}. Úsalo para indicar
                       cuándo actualizar el estado de una operación. El comprador no ve estos mensajes.
                     </p>
@@ -5431,6 +5539,45 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
           )}
         </div>
 
+        <Modal
+          open={Boolean(pendingResource)}
+          onClose={()=>setPendingResource(null)}
+          title="Vista previa del recurso"
+        >
+          {pendingResource && (
+            <div className="space-y-4">
+              <div className="flex min-h-40 items-center justify-center rounded-lg border border-border bg-muted/30 p-4">
+                {resourcePreviewThumb(pendingResource) ? (
+                  <img
+                    src={resourcePreviewThumb(pendingResource) || ""}
+                    alt={pendingResource.nombre}
+                    className="max-h-56 w-full rounded-lg object-contain"
+                  />
+                ) : String(pendingResource.mime_type || "").toLowerCase().startsWith("video/") && resourcePreviewMediaUrl(pendingResource) ? (
+                  <video
+                    src={resourcePreviewMediaUrl(pendingResource) || ""}
+                    controls
+                    preload="metadata"
+                    className="max-h-56 w-full rounded-lg border border-border bg-black"
+                  />
+                ) : (
+                  <FormatFileIcon extension={pendingResource.extension} mimeType={pendingResource.mime_type} />
+                )}
+              </div>
+              <div>
+                <p className="truncate text-sm font-medium">{pendingResource.nombre}</p>
+                <p className="text-xs text-muted-foreground">
+                  {pendingResource.extension.toUpperCase()} · {pendingResource.size_bytes != null ? getReadableFileSize(pendingResource.size_bytes) : "Tamaño no disponible"}
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={()=>setPendingResource(null)}>Cancelar</Button>
+                <Button variant="primary" onClick={()=>{void enviarRecursoPendiente();}}>Enviar al chat</Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+
         {previewAttachment && (
           <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl border border-border w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -5450,23 +5597,6 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   <div className="h-[40vh] flex items-center justify-center text-sm text-muted-foreground">Cargando vista previa...</div>
                 )}
 
-                <Modal open={Boolean(pendingImage)} onClose={()=>{if(pendingImage)URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}} title="Vista previa de imagen">
-                  {pendingImage && (
-                    <div className="space-y-4">
-                      <img src={pendingImage.url} alt={`Vista previa de ${pendingImage.file.name}`} className="max-h-[60vh] w-full rounded-lg border border-border object-contain bg-muted/30" />
-                      <p className="truncate text-sm text-muted-foreground">{pendingImage.file.name} · {getReadableFileSize(pendingImage.file.size)}</p>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="secondary" onClick={()=>{URL.revokeObjectURL(pendingImage.url);setPendingImage(null);}}>Cancelar</Button>
-                        <Button variant="primary" onClick={()=>{
-                          const selected = pendingImage;
-                          URL.revokeObjectURL(selected.url);
-                          setPendingImage(null);
-                          if(selectedId) void onShareLocalAttachment(selectedId, selected.file).catch(()=>undefined);
-                        }}>Enviar imagen</Button>
-                      </div>
-                    </div>
-                  )}
-                </Modal>
                 {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && previewLoadFailed && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
                     <p className="text-sm text-muted-foreground">No se pudo cargar el recurso desde el backend. Verifica permisos o disponibilidad del archivo.</p>
@@ -9094,7 +9224,7 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
     setMensaje("");
     try{
       await onConfirmProposal(propuesta.id);
-      setMensaje(`Confirmaste la propuesta de ${quote.product}. La operación ya está creada y el seguimiento queda en el chat.`);
+      setMensaje(`Confirmaste la propuesta de ${quote.product}. La operación ya está creada; el comprador fue avisado de realizar el pago y enviar el comprobante por el chat.`);
     }catch(err){
       setMensaje(err instanceof Error?err.message:"No se pudo confirmar la propuesta.");
     }finally{
@@ -9136,9 +9266,9 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
 
           {esperandoConfirmacion.length>0&&(
             <Card padding="none" className="border-amber-300">
-              <div className="px-5 py-3 border-b border-amber-200 bg-amber-50">
-                <p className="font-semibold text-sm text-amber-900">Esperan tu confirmación</p>
-                <p className="text-xs text-amber-800 mt-0.5">
+              <div className="px-5 py-3 border-b border-amber-200 bg-amber-50 dark:!bg-accent/10">
+                <p className="font-semibold text-sm text-amber-900 dark:!text-accent">Esperan tu confirmación</p>
+                <p className="text-xs text-amber-800 dark:!text-accent mt-0.5">
                   El cliente aceptó lo que negoció tu asesor. Revisa el chat y confirma para crear la operación.
                 </p>
               </div>
@@ -9195,20 +9325,20 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
               </thead>
               <tbody className="divide-y divide-border">
                 {filtered.map(q=>(
-                  <tr key={q.id} className="hover:bg-muted/30 transition-colors">
+                  <tr key={q.id} className="hover:bg-muted/30 dark:hover:!bg-accent/10 transition-colors">
                     <td className="px-5 py-3">
                       <p className="font-medium truncate max-w-[200px]">{q.product}</p>
                       <p className="text-xs text-muted-foreground">{q.code}</p>
                     </td>
-                    <td className="px-3 py-3 hidden md:table-cell"><span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium",q.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{q.mode}</span></td>
+                    <td className="px-3 py-3 hidden md:table-cell"><span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium dark:!bg-accent/10 dark:!text-accent",q.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{q.mode}</span></td>
                     <td className="px-3 py-3 text-xs text-muted-foreground hidden sm:table-cell">{q.date}</td>
                     <td className="px-3 py-3"><Badge variant={q.status}/></td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
-                        <Button variant="ghost" size="sm" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
-                        <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
-                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
+                        <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
+                        <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
+                        <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
+                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                         <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>
@@ -9222,7 +9352,15 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
           {mensaje&&<div className="p-3 rounded-lg border border-border bg-muted/40 text-sm">{mensaje}</div>}
         </main>
       </div>
-      <AdvisorQuoteDetailModal quote={detalle} open={Boolean(detalle)} onClose={()=>setDetalle(null)}/>
+      <AdvisorQuoteDetailModal
+        quote={detalle}
+        open={Boolean(detalle)}
+        onClose={()=>setDetalle(null)}
+        proposal={detalle ? proposalsByQuoteId[detalle.id] : undefined}
+        negotiationChat={detalle ? chatDe(detalle.id) : undefined}
+        onConfirmProposal={onConfirmProposal}
+        onOpenChat={onOpenChat}
+      />
       <Modal open={Boolean(asignando)} onClose={()=>setAsignando(null)} title="Asignar asesor">
         <p className="text-sm text-muted-foreground mb-4">
           Elige quien de tu equipo se hace cargo de esta cotizacion. Devolverla al pool permite que
@@ -9250,7 +9388,9 @@ function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onA
   );
 }
 
-function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean}) {
+function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting,proposal,negotiationChat,onConfirmProposal,onOpenChat}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean;proposal?:BackendPropuesta;negotiationChat?:ChatConv;onConfirmProposal?:(propuestaId:string)=>Promise<void>;onOpenChat?:(conversationId:string)=>void}) {
+  const [confirmingProposal, setConfirmingProposal] = useState(false);
+  const [confirmationError, setConfirmationError] = useState("");
   if (!quote) {
     return null;
   }
@@ -9332,6 +9472,50 @@ function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting}:{quote:
         </Card>
 
         <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
+
+        {proposal?.estado==="pendiente" && proposal.preaceptada_por_solicitante && !proposal.preaceptada_por_empresa && onConfirmProposal && (
+          <Card padding="md" className="border-amber-300 bg-amber-50 dark:border-accent/40 dark:!bg-accent/10">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-amber-700 dark:text-accent flex-shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-amber-900 dark:!text-accent">El comprador ya aceptó la propuesta</p>
+                <p className="text-xs text-amber-800 dark:!text-accent mt-0.5">Revisa la negociación y confirma para crear la operación.</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {negotiationChat && onOpenChat && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<MessageCircle className="w-3.5 h-3.5" />}
+                      onClick={() => onOpenChat(negotiationChat.id)}
+                      className=" dark:!border-accent/40"
+                    >
+                      Ver negociación
+                    </Button>
+                  )}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                    loading={confirmingProposal}
+                    onClick={() => {
+                      setConfirmationError("");
+                      setConfirmingProposal(true);
+                      void onConfirmProposal(proposal.id)
+                        .catch((error) => {
+                          setConfirmationError(error instanceof Error ? error.message : "No se pudo confirmar la propuesta.");
+                        })
+                        .finally(() => setConfirmingProposal(false));
+                    }}
+                    className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
+                  >
+                    Confirmar y crear operación
+                  </Button>
+                </div>
+                {confirmationError && <p role="alert" className="text-xs text-destructive mt-2">{confirmationError}</p>}
+              </div>
+            </div>
+          </Card>
+        )}
 
         {onAccept && (
           <div className="flex justify-end border-t border-border pt-4">
@@ -9878,7 +10062,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
       <Sidebar {...sb} active={activeNav}/>
       <div className="flex-1 flex flex-col"><AppHeader user={headerUser}/>
         <div className="flex-1 flex items-center justify-center"><div className="flex flex-col items-center gap-4 text-center max-w-sm">
-          <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500"/></div>
+          <div className="w-14 h-14 rounded-full bg-emerald-50 dark:!bg-accent/10 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500 dark:text-accent"/></div>
           <div><h2 className="text-lg font-semibold">{submittedTitle}</h2><p className="text-sm text-muted-foreground mt-1">Tu propuesta fue registrada correctamente para {quote.product}.</p></div>
           <div className="flex gap-2 flex-wrap justify-center">
             <Button variant="primary" onClick={onBack}>Volver a cotizaciones</Button>
@@ -9914,7 +10098,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
             </div>
           )}
           {esBorradorPendienteDeEnvio&&(
-            <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
+            <div className="mb-6 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 dark:text-accent dark:!bg-accent/15 flex items-start gap-2">
               <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
               <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el comprador no la ve.</span>
             </div>
@@ -10047,13 +10231,13 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                     Información logística
                   </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Select label="Incoterm" value={form.incoterm} onChange={e => f("incoterm", e.target.value)}>
+                    <Select label="Incoterm" value={form.incoterm} onChange={e => f("incoterm", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20">
                       {INCOTERMS.map(v => <option key={v}>{v}</option>)}
                     </Select>
-                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e => f("port", e.target.value)} />
-                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e => f("productionTime", e.target.value)} />
-                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e => f("shippingTime", e.target.value)} />
-                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e => f("totalTime", e.target.value)} className="sm:col-span-2" />
+                    <Input label="Puerto de origen" placeholder="Puerto de Buenaventura" value={form.port} onChange={e => f("port", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
+                    <Input label="Tiempo de producción" placeholder="15 días" value={form.productionTime} onChange={e => f("productionTime", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
+                    <Input label="Tiempo de envío" placeholder="12 días" value={form.shippingTime} onChange={e => f("shippingTime", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
+                    <Input label="Tiempo total estimado" placeholder="27 días" value={form.totalTime} onChange={e => f("totalTime", e.target.value)} className="sm:col-span-2 dark:focus:border-accent dark:focus:ring-accent/20" />
                   </div>
                 </Card>
               )}
@@ -10066,9 +10250,9 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
                       Observaciones
                     </p>
                     <div className="space-y-4">
-                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e => f("description", e.target.value)} />
-                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e => f("advantages", e.target.value)} />
-                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e => f("recommendations", e.target.value)} />
+                      <Textarea label="Descripción de la oferta" placeholder="Descripción detallada de tu propuesta…" rows={3} value={form.description} onChange={e => f("description", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
+                      <Textarea label="Ventajas competitivas" placeholder="¿Por qué elegir tu empresa?" rows={2} value={form.advantages} onChange={e => f("advantages", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
+                      <Textarea label="Recomendaciones" placeholder="Condiciones especiales, notas…" rows={2} value={form.recommendations} onChange={e => f("recommendations", e.target.value)} className="dark:focus:border-accent dark:focus:ring-accent/20" />
                     </div>
                   </Card>
 
@@ -13130,7 +13314,11 @@ export default function App() {
    */
   async function handleConfirmProposalAsCompany(propuestaId: string) {
     await businessService.preAcceptProposal(propuestaId, true);
-    await refreshQuoteLists();
+    await Promise.all([
+      reloadImporterQuotes(),
+      reloadImporterOrders(),
+      reloadChatData(),
+    ]);
   }
 
   async function handleUpdateOrderStatus(orderId: string, statusValue: string) {
@@ -13383,7 +13571,7 @@ export default function App() {
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
       return <PantallaPortal sb={sb} active="tendencias-aprobacion" titulo="Tendencias · Aprobación"><PanelAprobacion esAdmin={userRole==="admin"}/></PantallaPortal>;
     }
-    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote}/>;
+    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={userRole==="solicitante"?requesterQuotes:userRole==="importadora"?importerQuotes:advisorAssignedQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo(userRole==="solicitante"?"quotes":getHomeScreenForRole(userRole))} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote} userRole={userRole} onConfirmProposal={userRole==="importadora"?handleConfirmProposalAsCompany:undefined}/>;
     if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
     if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onSendPriceEstimate={handleSendPriceEstimate} onConvertEstimateToProposal={handleConvertEstimateToProposal} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;

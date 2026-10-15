@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Check, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, X } from "lucide-react";
+import { Check, Clapperboard, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, Video, X } from "lucide-react";
 
+import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { toApiPath } from "@/services/api-client";
+import { businessService } from "@/services/business.service";
 import {
   planesService,
   pesos,
@@ -10,6 +13,7 @@ import {
   type EstadoInscripcion,
   type InscripcionAdmin,
   type PlanAdmin,
+  type VideoPlan,
 } from "@/services/planes.service";
 
 import {
@@ -270,6 +274,157 @@ function EditorPlan({ plan, onGuardado, onCancelar }: { plan: PlanAdmin | null; 
   );
 }
 
+// Mismo aviso que en la Landing: los planes los abre gente desde el celular.
+const VIDEO_PESADO_BYTES = 30 * 1024 * 1024;
+const FORMATOS_VIDEO = "video/mp4,video/webm,video/quicktime,video/x-m4v,.mp4,.webm,.mov,.m4v";
+
+/** Vista previa que solo descarga el video al pedirla (como en la Landing). */
+function VistaPrevia({ ruta }: { ruta: string }) {
+  const [ver, setVer] = useState(false);
+  useEffect(() => { setVer(false); }, [ruta]);
+  if (!ver) {
+    return (
+      <button type="button" onClick={() => setVer(true)}
+        className="flex h-28 w-full flex-col items-center justify-center gap-1 rounded-lg bg-slate-900 text-xs text-white/80 hover:text-white">
+        <Video className="h-5 w-5" /> Video listo · Previsualizar
+      </button>
+    );
+  }
+  return <div className="h-28 overflow-hidden rounded-lg bg-black"><ProtectedVideoPlayer url={ruta} className="h-full w-full object-contain" /></div>;
+}
+
+/**
+ * Video de la tarjeta de un plan, en sus dos encuadres. Se guarda con su propio
+ * botón, aparte de los datos del plan, igual que los videos de «Quiénes somos».
+ */
+function VideoDePlan({ plan, onGuardado }: { plan: PlanAdmin; onGuardado: () => void }) {
+  const inicial: VideoPlan = plan.video ?? { horizontal: null, vertical: null, titulo: null };
+  const [video, setVideo] = useState<VideoPlan>(inicial);
+  const [subiendo, setSubiendo] = useState<"horizontal" | "vertical" | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const entrada = useRef<HTMLInputElement>(null);
+  const destino = useRef<"horizontal" | "vertical">("horizontal");
+  useEffect(() => { setVideo(plan.video ?? { horizontal: null, vertical: null, titulo: null }); }, [plan.video]);
+
+  const cambiado = JSON.stringify(video) !== JSON.stringify(inicial);
+
+  const elegirArchivo = (encuadre: "horizontal" | "vertical") => {
+    destino.current = encuadre;
+    entrada.current?.click();
+  };
+
+  const subir = async (e: ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    if (!archivo.type.startsWith("video/")) { toast.error("Elige un archivo de video (MP4, WebM o MOV)."); return; }
+    const encuadre = destino.current;
+    setSubiendo(encuadre);
+    try {
+      const creado = await businessService.uploadDocumentFile(archivo, null, "landing");
+      const ruta = toApiPath(creado.storage_url);
+      if (!ruta) throw new Error("El video se subió pero no tiene ruta.");
+      setVideo((v) => ({ ...v, [encuadre]: ruta }));
+      if (archivo.size > VIDEO_PESADO_BYTES) {
+        toast.warning(`El video pesa ${Math.round(archivo.size / 1024 / 1024)} MB: conviene comprimirlo a menos de 30 MB (por ejemplo, 1080p en MP4).`);
+      } else {
+        toast.success("Video subido. Pulsa «Guardar video» para publicarlo en la tarjeta.");
+      }
+    } catch (err) {
+      toast.error(mensajeError(err, "No se pudo subir el video."));
+    } finally {
+      setSubiendo(null);
+    }
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      if (!video.horizontal && !video.vertical) await planesService.quitarVideo(plan.id);
+      else await planesService.guardarVideo(plan.id, { ...video, titulo: video.titulo?.trim() || null });
+      toast.success(video.horizontal || video.vertical ? "Video publicado en la tarjeta del plan." : "Video quitado de la tarjeta.");
+      onGuardado();
+    } catch (err) {
+      toast.error(mensajeError(err, "No se pudo guardar el video."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const ranura = (encuadre: "horizontal" | "vertical", etiqueta: string) => {
+    const ruta = video[encuadre];
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">{etiqueta}</p>
+        {ruta ? <VistaPrevia ruta={ruta} /> : (
+          <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">Sin video</div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => elegirArchivo(encuadre)} disabled={subiendo !== null} className={CLASE_BOTON_SECUNDARIO}>
+            {subiendo === encuadre ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {subiendo === encuadre ? "Subiendo…" : ruta ? "Cambiar" : "Subir video"}
+          </button>
+          {ruta && (
+            <>
+              <button type="button" onClick={() => { void abrirArchivoEnPestana(ruta); }} className={CLASE_BOTON_SECUNDARIO}>Ver</button>
+              <button type="button" onClick={() => setVideo((v) => ({ ...v, [encuadre]: null }))} className={`${CLASE_BOTON_SECUNDARIO} text-destructive`}>
+                <Trash2 className="h-4 w-4" /> Quitar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <li className={`rounded-lg border border-border p-4 ${plan.activo ? "" : "opacity-60"}`}>
+      <input ref={entrada} type="file" accept={FORMATOS_VIDEO} className="hidden" onChange={(e) => void subir(e)} />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">
+          {plan.nombre}
+          {plan.video ? <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">Con video</span>
+            : <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Sin video</span>}
+        </p>
+        <button type="button" onClick={() => void guardar()} disabled={!cambiado || guardando || subiendo !== null} className={CLASE_BOTON_PRIMARIO}>
+          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar video
+        </button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {ranura("horizontal", "Horizontal · computador (16:9)")}
+        {ranura("vertical", "Vertical · celular (9:16)")}
+      </div>
+      <label className="mt-3 block text-xs font-medium text-muted-foreground">
+        Texto bajo el video (opcional)
+        <input value={video.titulo ?? ""} onChange={(e) => setVideo((v) => ({ ...v, titulo: e.target.value }))} maxLength={120}
+          placeholder="Así funciona el plan" className={`${CLASE_INPUT} mt-1`} />
+      </label>
+    </li>
+  );
+}
+
+function VideosPlanes({ planes, onCambio }: { planes: PlanAdmin[]; onCambio: () => void }) {
+  return (
+    <section className="rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card">
+      <p className="flex items-center gap-2 text-base font-semibold">
+        <Clapperboard className="h-4 w-4 text-primary dark:text-accent" /> Videos de los planes
+      </p>
+      <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
+        El video se reproduce arriba en la tarjeta del plan, en la sección Planes del inicio. Sube la versión horizontal
+        (computador, 16:9), la vertical (celular, 9:16) o las dos: cada visitante ve la de su pantalla y, si solo hay
+        una, esa se ve en todas. Se guarda con su propio botón.
+      </p>
+      {planes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Crea un plan primero.</p>
+      ) : (
+        <ul className="space-y-3">
+          {planes.map((p) => <VideoDePlan key={p.id} plan={p} onGuardado={onCambio} />)}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function PlanesAdmin() {
   const [planes, setPlanes] = useState<PlanAdmin[]>([]);
   const [editando, setEditando] = useState<string | "nuevo" | null>(null);
@@ -335,6 +490,8 @@ export function PlanesAdmin() {
           ))}
         </ul>
       </section>
+
+      <VideosPlanes planes={planes} onCambio={() => void cargar()} />
     </div>
   );
 }
