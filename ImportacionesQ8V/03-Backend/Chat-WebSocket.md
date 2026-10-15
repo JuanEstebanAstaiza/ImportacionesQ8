@@ -3,7 +3,7 @@
 
 > **Actualización 2026-10-01** (detalle en [[#Tipos de conversación y de mensaje (estado 2026-10-01)|Tipos de conversación y de mensaje]]):
 > - además del chat de negociación hay **chat interno** empresa–asesor y **tickets de soporte**;
-> - existe un tipo de mensaje `estimacion` (calculadora de precios).
+> - existe un tipo de mensaje `propuesta` (tarjeta de la propuesta rápida); `estimacion` quedó solo para leer mensajes de la calculadora retirada.
 
 ## Descripción general
 
@@ -227,7 +227,8 @@ Una sola tabla, `conversaciones_chat`, con columna `tipo`. Así mensajes, adjunt
 |-------------------|---------------|-------|
 | `texto`, `archivo` | Cualquier participante (REST o WebSocket) | Únicos tipos aceptados por los canales genéricos |
 | `sistema` | Solo el backend | Avisos automáticos (traspaso, reclamo…) |
-| `estimacion` | Solo `POST /chat/conversaciones/{id}/estimaciones` (empresa) | Precio estimado con desglose recalculado en el servidor. Ver [[20-Calculadora-Precios-Chat]] |
+| `propuesta` | Solo el backend, al enviar o editar una propuesta | Tarjeta con el precio cerrado en pesos y las condiciones. Ver [[20-Propuesta-Rapida]] |
+| `estimacion` | Ya no se crea | Mensajes de la calculadora retirada; se muestran como texto |
 
 No leídos: `lecturas_conversacion` guarda hasta dónde leyó cada participante. Las marcas de tiempo tienen microsegundos (migración `0014`).
 

@@ -34,7 +34,7 @@ Zarpi conecta a quienes quieren importar (solicitantes) con empresas importadora
 | Propuestas: borrador del asesor, envío del dueño, doble aceptación, orden automática | ✅ | ✅ | jul 2026 | [[05-Cotizaciones-y-Propuestas]] |
 | Órdenes y seguimiento del embarque | ✅ | ✅ | jul 2026 | [[06-Ordenes]] |
 | Chat en tiempo real: negociación, interno empresa–asesor y soporte | ✅ | ✅ | jul–ago 2026 | [[08-Chat-y-WebSocket]] · [[Chat-WebSocket]] |
-| **Calculadora de precios en el chat y conversión a propuesta** | ✅ | ✅ | 2026-09-30 | [[20-Calculadora-Precios-Chat]] |
+| **Propuesta rápida** (reemplaza la calculadora del chat): precio cerrado en pesos, tarjeta en el chat y condiciones de la empresa | ✅ | ✅ | 2026-10-15 | [[20-Propuesta-Rapida]] |
 | Asesores y reparto de cotizaciones | ✅ | ✅ | jul 2026 | [[03-Usuarios-Asesores-y-Perfil]] |
 | Tiers del cotizante y desbloqueo con puntos | ✅ | ✅ | sep 2026 | [[18-Tiers-y-Perfil-Cotizante]] |
 | Reseñas y certificaciones de empresas | ✅ | ✅ | ago 2026 | [[04-Importadores]] |

@@ -21,7 +21,7 @@ Documentación de las pantallas P0 y P1 para el importador (empresa importadora 
 | Asesores | `/empresa/asesores` | Crear, activar y desactivar asesores; chat interno con cada uno |
 | **Mi empresa** | `/empresa/perfil` | Ver tabla de abajo. Se guarda solo (autoguardado) |
 | Órdenes | `/ordenes` | Seguimiento y avance del estado de cada embarque |
-| Chats | `/chats` | Negociación con clientes (con **calculadora de precios**), chat interno con asesores |
+| Chats | `/chats` | Negociación con clientes (con **Nueva propuesta**: precio cerrado en pesos que le llega al cliente como tarjeta), chat interno con asesores |
 | Responder | `/asesor/responder/:id` | Propuesta formal en 3 pasos; se prellena al **convertir una estimación** del chat |
 
 Secciones de **Mi empresa**:
@@ -53,10 +53,10 @@ Secciones de **Mi empresa**:
 Todos los montos van en pesos con la moneda escrita ("$4.250.000 COP"), convertidos con la TRM de cada momento. Definiciones en [[24-Eventos-y-Panel-Empresa]].
 
 **En el chat con un cliente** (cotización u orden):
-- El botón **"Calcular precio"** abre la calculadora, con resultado en vivo prellenado con la cotización.
+- El botón **"Nueva propuesta"** (o «Editar propuesta» / «Revisar borrador») abre el formulario de propuesta de esa cotización. Las condiciones que trae se llenan en **Mi empresa › Condiciones de tus propuestas**.
 - **"Enviar al cliente"** publica una tarjeta con el total, el rango y el desglose.
 - Desde la tarjeta, **"Convertir en propuesta"** lleva a la propuesta formal prellenada. Si ya hay una propuesta en borrador o pendiente, el botón dice "Actualizar propuesta con esta estimación".
-- Ver [[20-Calculadora-Precios-Chat]].
+- Ver [[20-Propuesta-Rapida]].
 
 **Asesor**
 
@@ -65,7 +65,7 @@ Todos los montos van en pesos con la moneda escrita ("$4.250.000 COP"), converti
 | Dashboard | `/asesor` | Sus cotizaciones, respuestas enviadas y chats activos |
 | Disponibles | `/asesor/disponibles` | Pool de la empresa: reclamar cotizaciones (abre el chat con el cliente). El detalle muestra el perfil público y el tier del cotizante |
 | Mis cotizaciones | `/asesor/cotizaciones` | Redactar borradores de propuesta (los envía la cuenta dueña) |
-| Chats | `/chats` | Negociación (también con calculadora) y chat interno con su empresa |
+| Chats | `/chats` | Negociación (también con «Nueva propuesta», que queda como borrador) y chat interno con su empresa |
 
 ---
 

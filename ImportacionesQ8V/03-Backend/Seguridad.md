@@ -212,7 +212,8 @@ Estas mejoras fueron discutidas con el usuario y se documentan explícitamente c
 | 2026-09-29 | Ticket de un solo uso para el stream SSE de notificaciones (sin JWT en la URL) | `routers/notificaciones.py` |
 | 2026-09-29 | Correos con HTML escapado en la plantilla común | `utils/email.py` |
 | 2026-09-30 | El WebSocket solo acepta mensajes `texto` y `archivo`: nadie puede forjar un mensaje `sistema` ni una estimación de precio | `routers/chat.py` |
-| 2026-09-30 | Las estimaciones de precio se recalculan siempre en el servidor | `services/calculadora_precios.py` |
+| 2026-09-30 | Las estimaciones de precio se recalculan siempre en el servidor (calculadora retirada el 2026-10-15) | `services/calculadora_precios.py` |
+| 2026-10-15 | Los totales de la propuesta rápida se recalculan en el servidor; la tarjeta `propuesta` del chat solo la crea el backend | `services/formulario_propuesta.py` |
 | 2026-09-30 | Cupo diario con bloqueo de fila al crear cotizaciones dirigidas | `services/cupo_cotizaciones.py` |
 | 2026-10-01 | Restauración desde el panel: solo admin, confirmación escrita, verificación SHA-256/CRC/conteos, rechazo de rutas fuera de `uploads/` y `generated_docs/` (zip slip), copia previa automática | `routers/admin.py`, `services/backup_service.py` |
 | 2026-10-01 | Modo mantenimiento (503 en todos los workers) mientras se restaura | `services/mantenimiento.py` |

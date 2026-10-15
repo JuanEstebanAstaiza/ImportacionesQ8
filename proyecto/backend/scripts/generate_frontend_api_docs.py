@@ -427,7 +427,7 @@ def main() -> None:
         ("16-Notificaciones", "APIs — Notificaciones in-app"),
         ("17-Documentos-y-Multimedia", "APIs — Gestión documental y multimedia"),
         ("19-Limite-Diario-Cotizaciones", "APIs — Límite diario de cotizaciones"),
-        ("20-Calculadora-Precios-Chat", "APIs — Calculadora de precios en el chat"),
+        ("20-Propuesta-Rapida", "APIs — Propuesta rápida"),
         ("23-Asignacion-de-Solicitudes", "APIs — Asignación de solicitudes abiertas"),
         ("24-Eventos-y-Panel-Empresa", "APIs — Bitácora de eventos y panel de la empresa"),
     ):
