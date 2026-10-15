@@ -1943,9 +1943,8 @@ async def pre_aceptar_propuesta(
                     "La empresa confirmó la propuesta y se creó la operación. "
                     "Esta conversación pasa a ser el seguimiento del embarque: "
                     "aquí se irán informando los cambios de estado.\n\n"
-                    f"Solicitud de pago: realiza el pago acordado de {precio_pago} "
-                    "para continuar con la operación. Cuando lo hayas realizado, "
-                    "envía el comprobante por este chat."
+                    f"Solicitud de pago: debes realizar el pago acordado de {precio_pago} "
+                    "para continuar con la operación y enviar el comprobante por el chat."
                 ),
                 tipo=TipoMensajeChat.sistema,
                 metadata_json={
