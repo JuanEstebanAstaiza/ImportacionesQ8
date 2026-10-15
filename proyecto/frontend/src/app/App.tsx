@@ -6873,7 +6873,50 @@ function DocumentosScreen({
 }
 
 /** Armazón de las pantallas públicas (Tendencias y el reto) para quien no tiene sesión. */
-function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;children:React.ReactNode}) {
+type FooterPublicoProps = {
+  onLanding: () => void;
+  onPlanes: () => void;
+  onPolicy: (page: LegalPage) => void;
+  onTendencias: () => void;
+};
+
+const enlacePie = "hover:text-accent transition-colors text-left";
+
+function FooterPublico({ onLanding, onPlanes, onPolicy, onTendencias }: FooterPublicoProps) {
+  return (
+    <footer className="bg-[#0F0F0F] text-white py-10 px-6 relative overflow-hidden">
+      <div className="zarpi-blob zarpi-blob-neutral absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-15 scale-125" />
+      <div className="mx-auto max-w-7xl relative z-10 space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <button type="button" onClick={onLanding} aria-label="Ir al inicio">
+            <img src="/brand/zarpi-wordmark-acid.svg" alt="Zarpi" className="h-8 w-28 object-contain object-left" />
+          </button>
+          <p className="text-xs text-white/70"><span className="font-semibold text-white">{EMPRESA.razonSocial}</span> · NIT {EMPRESA.nit} · {EMPRESA.ciudad}, Colombia</p>
+        </div>
+        <nav aria-label="Enlaces del pie" className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/70">
+          <button onClick={onLanding} className={enlacePie}>Quiénes somos</button>
+          <button onClick={onLanding} className={enlacePie}>Cómo funciona</button>
+          <button onClick={onPlanes} className={enlacePie}>Planes</button>
+          <button onClick={onTendencias} className={enlacePie}>Tendencias</button>
+          <button onClick={onLanding} className={enlacePie}>Contacto</button>
+          <button onClick={() => onPolicy("planes")} className={enlacePie}>Condiciones de los planes</button>
+          <button onClick={() => onPolicy("terms")} className={enlacePie}>Términos y condiciones</button>
+          <button onClick={() => onPolicy("data")} className={enlacePie}>Política de tratamiento de datos</button>
+        </nav>
+        <p className="max-w-5xl text-xs leading-relaxed text-white/55">
+          <span className="font-semibold text-white/70">Aviso legal: </span>
+          Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
+        </p>
+        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
+        <div className="flex justify-center border-t border-white/10 pt-5">
+          <PublicSicLogo />
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,onPolicy,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;onPolicy:(page:LegalPage)=>void;children:React.ReactNode}) {
   const { dark, toggleTheme } = useBrandTheme();
   const claseMenuPublico=(activo:boolean)=>clsx(
     "px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap",
@@ -6928,9 +6971,9 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
         </nav>
       </header>
       <main className="relative z-10 mx-auto max-w-6xl px-4 py-6">{children}</main>
-      <footer className="relative z-10 flex justify-center border-t border-border bg-background/90 py-6">
-        <PublicSicLogo />
-      </footer>
+      <div className="relative z-10">
+        <FooterPublico onLanding={onLanding} onPlanes={onPlanes} onPolicy={onPolicy} onTendencias={onTendencias} />
+      </div>
     </div>
   );
 }
@@ -10194,8 +10237,6 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       ))}
     </>
   );
-  const enlacePie="hover:text-accent transition-colors text-left";
-
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* NAV */}
@@ -13252,7 +13293,7 @@ export default function App() {
 
   if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
     return (
-      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")}>
+      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}>
         {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}
