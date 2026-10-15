@@ -1,4 +1,5 @@
 import { apiRequest } from "@/services/api-client";
+import type { CondicionesPropuesta, FormularioPropuesta } from "@/features/propuestas/calculo";
 
 /** Sello otorgado por la plataforma, tal como llega en el catálogo. */
 export interface BackendCertificacionOtorgada {
@@ -93,6 +94,8 @@ export interface BackendCotizacion {
   /** Marca ya compuesta ("ctl-prendascontrol"); null mientras no se sepa la empresa. */
   shipping_mark?: string | null;
   campos_personalizados_valores?: Record<string, unknown> | null;
+  /** Ciudad a la que el comprador quiere el producto. */
+  ciudad_entrega?: string | null;
   asesor_asignado_id?: string | null;
   conversacion_id?: string | null;
   estado: string;
@@ -127,6 +130,7 @@ export interface CreateCotizacionPayload {
   notas_adicionales?: string;
   shipping_mark_sufijo?: string;
   campos_personalizados_valores?: Record<string, unknown>;
+  ciudad_entrega?: string;
   tier_minimo_requerido?: string;
 }
 
@@ -286,9 +290,14 @@ export interface BackendTrm {
 
 export interface CreatePropuestaPayload {
   cotizacion_id: string;
-  precio_ofrecido_usd: number;
-  tiempo_estimado_entrega: string;
-  incoterm: string;
+  /**
+   * Propuesta rápida (features/propuestas). Con ella el backend calcula precio,
+   * tiempo, incoterm y condiciones, y los cuatro campos de abajo sobran.
+   */
+  formulario?: FormularioPropuesta;
+  precio_ofrecido_usd?: number;
+  tiempo_estimado_entrega?: string;
+  incoterm?: string;
   condiciones_adicionales?: string;
   cantidad?: number;
   moqUnit?: "unidades" | "USD";
@@ -531,58 +540,6 @@ export interface BackendChatMessage {
    * (asesor y dueña) va del mismo lado aunque lo haya escrito otra persona.
    */
   de_mi_lado?: boolean | null;
-}
-
-export type MonedaEstimacion = "USD" | "COP" | "EUR" | "CNY";
-
-/** Lo que la empresa escribe en la calculadora de precios del chat. */
-export interface EstimacionPrecioEntrada {
-  moneda: MonedaEstimacion;
-  cantidad: number;
-  precio_unitario: number;
-  flete_internacional: number;
-  seguro_pct: number;
-  arancel_pct: number;
-  iva_pct: number;
-  gastos_destino: number;
-  margen_pct: number;
-  rango_pct: number;
-  tasa_cambio_cop?: number | null;
-  incoterm?: string | null;
-  tiempo_entrega?: string | null;
-  validez_dias?: number | null;
-  notas?: string | null;
-}
-
-/** Desglose calculado por el backend (`services/calculadora_precios.py`). */
-export interface DesgloseEstimacion {
-  valor_mercancia: number;
-  flete_internacional: number;
-  seguro: number;
-  valor_cif: number;
-  arancel: number;
-  iva: number;
-  gastos_destino: number;
-  margen: number;
-  total: number;
-  costo_unitario: number;
-  total_minimo: number;
-  total_maximo: number;
-  total_cop: number | null;
-}
-
-export interface EstimacionPrecioResponse {
-  entrada: EstimacionPrecioEntrada;
-  desglose: DesgloseEstimacion;
-  resumen: string;
-}
-
-/** `metadata.estimacion` de un mensaje de chat con `tipo: "estimacion"`. */
-export interface EstimacionEnMensaje {
-  entrada: EstimacionPrecioEntrada;
-  desglose: DesgloseEstimacion;
-  cotizacion_id?: string | null;
-  orden_id?: string | null;
 }
 
 /** Alguien del equipo de la plataforma, para el canal interno. */
@@ -974,20 +931,6 @@ export const businessService = {
     return apiRequest<void>(`/chat/conversaciones/${conversationId}/leida`, { method: "POST" });
   },
 
-  previewPriceEstimate(payload: EstimacionPrecioEntrada): Promise<EstimacionPrecioResponse> {
-    return apiRequest<EstimacionPrecioResponse>("/chat/calculadora/calcular", {
-      method: "POST",
-      body: payload,
-    });
-  },
-
-  sendPriceEstimate(conversationId: string, payload: EstimacionPrecioEntrada): Promise<BackendChatMessage> {
-    return apiRequest<BackendChatMessage>(`/chat/conversaciones/${conversationId}/estimaciones`, {
-      method: "POST",
-      body: payload,
-    });
-  },
-
   listChatMessages(conversationId: string): Promise<BackendChatMessage[]> {
     return apiRequest<BackendChatMessage[]>(`/chat/conversaciones/${conversationId}/mensajes`, {
       method: "GET",
@@ -1152,6 +1095,15 @@ export const businessService = {
 
   getCompanyPanel(dias = 90): Promise<BackendPanelEmpresa> {
     return apiRequest<BackendPanelEmpresa>(`/importadores/panel?dias=${dias}`, { method: "GET" });
+  },
+
+  /** «Mi empresa › Condiciones de tus propuestas»: las de la empresa en sesión. */
+  getProposalConditions(): Promise<CondicionesPropuesta & { configuradas: boolean }> {
+    return apiRequest("/condiciones-propuesta", { method: "GET" });
+  },
+
+  saveProposalConditions(condiciones: CondicionesPropuesta): Promise<CondicionesPropuesta & { configuradas: boolean }> {
+    return apiRequest("/condiciones-propuesta", { method: "PUT", body: condiciones });
   },
 
   getTrm(): Promise<BackendTrm> {

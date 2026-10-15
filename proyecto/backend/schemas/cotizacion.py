@@ -2,6 +2,7 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator, model_vali
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
+from services.formulario_propuesta import FormularioPropuesta
 from utils.shipping_mark import LONGITUD_MAX_SUFIJO, normalizar_segmento
 
 MAX_FOTOS_PRODUCTO = 10
@@ -89,6 +90,9 @@ class CotizacionCreate(BaseModel):
     campos_personalizados_valores: Optional[Dict[str, Any]] = Field(
         None, description="Valores de los campos personalizados del importador dirigido, si aplica: {campo_id: valor}"
     )
+    # A dónde quiere el producto: la empresa arma la entrega de su propuesta
+    # con esto.
+    ciudad_entrega: Optional[str] = Field(None, max_length=100)
     origen: Literal["directa", "tendencias", "catalogo"] = Field(
         default="directa", description="De dónde sale la solicitud: formulario, Tendencias o catálogo de una empresa"
     )
@@ -159,6 +163,15 @@ class CotizacionCreate(BaseModel):
         return v.strip()
 
 class CotizacionResponse(BaseModel):
+    @field_validator("campos_personalizados_valores", mode="before")
+    @classmethod
+    def sin_claves_reservadas(cls, v):
+        # Las que empiezan por "_" son de la plataforma (la ciudad de entrega),
+        # no respuestas del formulario de la empresa.
+        if isinstance(v, dict):
+            return {k: val for k, val in v.items() if not str(k).startswith("_")}
+        return v
+
     id: str
     solicitante_id: str
     importador_id: Optional[str]
@@ -204,6 +217,7 @@ class CotizacionResponse(BaseModel):
     # se sepa qué empresa importará: en modalidad abierta, hasta que una gane.
     shipping_mark: Optional[str] = None
     campos_personalizados_valores: Optional[Dict[str, Any]] = None
+    ciudad_entrega: Optional[str] = None
     asesor_asignado_id: Optional[str] = None
     estado: str  # "creada", "dirigida", "abierta", etc.
     costo_creditos: Optional[float] = None
@@ -225,9 +239,13 @@ class CotizacionResponse(BaseModel):
 
 class PropuestaCreate(BaseModel):
     cotizacion_id: str  # ID de la cotización a la que responde
-    precio_ofrecido_usd: float = Field(..., gt=0, description="Precio ofrecido por el importador")
-    tiempo_estimado_entrega: str = Field(..., min_length=1, max_length=100, description="Tiempo estimado (ej: '45 días')")
-    incoterm: str = Field(..., min_length=1, max_length=50, description="Incoterm propuesto (FOB, CIF, EXW, DDP, etc.)")
+    # Con `formulario` (la propuesta rápida), el servidor calcula precio, tiempo,
+    # incoterm y condiciones y estos cuatro campos se ignoran. Sin él, son
+    # obligatorios (formato anterior).
+    formulario: Optional[FormularioPropuesta] = None
+    precio_ofrecido_usd: Optional[float] = Field(None, gt=0, description="Precio ofrecido por el importador")
+    tiempo_estimado_entrega: Optional[str] = Field(None, min_length=1, max_length=100, description="Tiempo estimado (ej: '45 días')")
+    incoterm: Optional[str] = Field(None, min_length=1, max_length=50, description="Incoterm propuesto (FOB, CIF, EXW, DDP, etc.)")
     condiciones_adicionales: Optional[str] = None  # Condiciones adicionales
     cantidad: Optional[float] = Field(
         None, gt=0, description="Cantidad que cubre el precio, en la unidad de la cotización (por defecto, la pedida)"
@@ -237,6 +255,14 @@ class PropuestaCreate(BaseModel):
         validation_alias=AliasChoices("moqUnit", "moq_unit"),
         description="Unidad del MOQ: 'unidades' o 'USD'",
     )
+
+    @model_validator(mode="after")
+    def formulario_o_campos(self):
+        if self.formulario is None and not (
+            self.precio_ofrecido_usd and self.tiempo_estimado_entrega and self.incoterm
+        ):
+            raise ValueError("Falta el formulario de la propuesta")
+        return self
 
 class EmpresaPropuestaResumen(BaseModel):
     """Lo que el comprador necesita para comparar a quién le compra: no solo

@@ -173,6 +173,12 @@ def generate_order_documents(
         f"Tiempo estimado entrega: {propuesta.tiempo_estimado_entrega if propuesta else orden.tiempo_estimado_entrega}",
         f"Incoterm: {propuesta.incoterm if propuesta else cotizacion.incoterm}",
     ]
+    # Propuesta rápida: el precio cerrado es en pesos (formulario_propuesta.py).
+    from services.formulario_propuesta import monto_a_pagar
+
+    monto_cop = monto_a_pagar(propuesta.condiciones_adicionales if propuesta else orden.condiciones_adicionales)
+    if monto_cop:
+        prop_lines.append(f"Precio cerrado: {monto_cop}")
     ord_lines = [
         "Operacion de compra",
         f"Fecha: {now}",

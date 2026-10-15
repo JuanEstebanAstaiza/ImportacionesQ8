@@ -22,7 +22,7 @@ Documentación de las pantallas P0 y P1 para el solicitante (cliente final que s
 | Respuestas | `/respuestas`, `/respuestas/:id` | Propuestas recibidas, comparación y preaceptación |
 | Órdenes | `/ordenes`, `/ordenes/:id` | Seguimiento del embarque; **reseñas pendientes** de órdenes entregadas |
 | Ficha de empresa | `/empresas/:id` | Presentación, certificaciones, reseñas y "N proyectos" |
-| Chats | `/chats` | Negociación con la empresa; recibe **tarjetas de estimación de precio** con total, rango y desglose ([[20-Calculadora-Precios-Chat]]) |
+| Chats | `/chats` | Negociación con la empresa; recibe la **propuesta como tarjeta**: total con IVA en pesos, entrega, tiempo, pago, permisos y condiciones, con «Elegir esta propuesta» ([[20-Propuesta-Rapida]]) |
 | Documentos | `/documentos` | Módulo documental tipo Drive |
 | Pagos | `/pagos` | Pagos (Wompi en modo simulado; cotizar no cuesta) |
 | Cursos | `/cursos` | Catálogo, reproductor, progreso y certificado |

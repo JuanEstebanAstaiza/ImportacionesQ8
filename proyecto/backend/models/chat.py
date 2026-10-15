@@ -18,10 +18,13 @@ class TipoMensajeChat(str, enum.Enum):
     texto = "texto"
     archivo = "archivo"
     sistema = "sistema"  # Mensajes automáticos (ej: traspaso de chat al supervisor)
-    # Precio estimado con la calculadora de la empresa. Solo lo crea
-    # `POST /chat/conversaciones/{id}/estimaciones`, que recalcula el desglose
-    # en el servidor: el cliente no puede forjarlo por los canales genéricos.
+    # Precio estimado con la calculadora que hubo en el chat, ya retirada. Se
+    # conserva para leer los mensajes viejos (se muestran como texto).
     estimacion = "estimacion"
+    # Tarjeta de una propuesta enviada (services/formulario_propuesta.py). Solo
+    # la crea el backend al enviar o editar la propuesta: el cliente no puede
+    # forjarla por los canales genéricos.
+    propuesta = "propuesta"
 
 
 class TipoConversacion(str, enum.Enum):

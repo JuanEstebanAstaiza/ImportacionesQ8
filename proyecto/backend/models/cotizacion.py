@@ -136,6 +136,18 @@ class Cotizacion(Base):
     def precio_objetivo_moneda(self, value):
         self.moneda_precio_objetivo = value or "USD"
 
+    # Ciudad a la que el comprador quiere el producto. Sin columna propia: va en
+    # el JSON de campos con una clave reservada (ver formulario_propuesta.py).
+    CLAVE_CIUDAD_ENTREGA = "_ciudad_entrega"
+
+    @property
+    def ciudad_entrega(self):
+        valores = self.campos_personalizados_valores
+        if isinstance(valores, dict):
+            ciudad = valores.get(self.CLAVE_CIUDAD_ENTREGA)
+            return str(ciudad).strip() or None if ciudad else None
+        return None
+
     @property
     def solicitante_tier(self):
         session = object_session(self)

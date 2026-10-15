@@ -35,7 +35,7 @@ Documentación **orientada al desarrollador frontend/fullstack** para conectar e
 | [[17-Documentos-y-Multimedia]] | Drive documental, adjuntos chat, reglas LMS y PDFs automáticos |
 | [[18-Tiers-y-Perfil-Cotizante]] | Tier mínimo de empresa, desbloqueo con puntos, recálculo de tiers y perfil público |
 | [[19-Limite-Diario-Cotizaciones]] | Límite diario de cotizaciones que recibe cada empresa importadora |
-| [[20-Calculadora-Precios-Chat]] | Calculadora de precios estimados que la empresa envía al cliente por el chat |
+| [[20-Propuesta-Rapida]] | Propuesta rápida: precio cerrado en pesos, entrega, tiempo y permisos; tarjeta en el chat y condiciones de la empresa (reemplaza la calculadora) |
 | [[21-Ayuda-y-Soporte]] | Centro de ayuda: artículos, categorías, votos (generado desde OpenAPI) |
 | [[22-Landing-CMS]] | Landing pública por bloques, aliados, noticias y contacto (generado desde OpenAPI) |
 | [[23-Asignacion-de-Solicitudes]] | Asignación de abiertas a máx. 3 empresas por encaje, propuestas selladas y comparador |

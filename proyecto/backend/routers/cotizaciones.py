@@ -605,7 +605,9 @@ async def crear_cotizacion(
         id=str(uuid4()),  # Convertir a string para SQLite
         solicitante_id=user_id_str,
         importador_id=cotizacion_data.importador_id if cotizacion_data.importador_id else None,
-        campos_personalizados_valores=cotizacion_data.campos_personalizados_valores,
+        campos_personalizados_valores=_con_ciudad_entrega(
+            cotizacion_data.campos_personalizados_valores, cotizacion_data.ciudad_entrega,
+        ),
         modalidad=cotizacion_data.modalidad,
         tier_minimo_requerido=tier_requerido,
         tier_solicitante_creacion=solicitante.tier,
@@ -785,6 +787,51 @@ def _nombre_empresa(db: Session, importador_id: Optional[str]) -> str:
         return "Una empresa importadora"
     empresa = db.query(Importador).filter(Importador.id == importador_id).first()
     return empresa.nombre_empresa if empresa else "Una empresa importadora"
+
+
+def _con_ciudad_entrega(valores: Optional[dict], ciudad: Optional[str]) -> Optional[dict]:
+    """La ciudad de entrega va en el JSON de campos con una clave reservada
+    (sin columna propia: ver `Cotizacion.ciudad_entrega`)."""
+    limpios = {k: v for k, v in (valores or {}).items() if not str(k).startswith("_")}
+    ciudad = (ciudad or "").strip()[:100]
+    if ciudad:
+        limpios[Cotizacion.CLAVE_CIUDAD_ENTREGA] = ciudad
+    return limpios or None
+
+
+def _campos_propuesta(db: Session, propuesta: PropuestaCreate, importador_id: str) -> dict:
+    """Precio, tiempo, incoterm y condiciones de la propuesta. Con el formulario
+    nuevo los calcula el servidor (services/formulario_propuesta.py)."""
+    if propuesta.formulario is not None:
+        from services.formulario_propuesta import armar
+
+        return armar(db, propuesta.formulario, importador_id)
+    return {
+        "precio_ofrecido_usd": propuesta.precio_ofrecido_usd,
+        "tiempo_estimado_entrega": propuesta.tiempo_estimado_entrega,
+        "incoterm": propuesta.incoterm,
+        "condiciones_adicionales": propuesta.condiciones_adicionales,
+        "cantidad": propuesta.cantidad,
+        "moq_unit": propuesta.moq_unit,
+    }
+
+
+def _publicar_propuesta_en_chat(db: Session, propuesta_db: Propuesta, cotizacion: Cotizacion, remitente_id: str) -> None:
+    """La tarjeta de la propuesta en el chat del comprador. Best-effort: si
+    falla, la propuesta ya quedó guardada y el comprador la ve en su cotización."""
+    from routers.chat import _publicar_mensaje
+    from services.formulario_propuesta import publicar_en_chat
+
+    try:
+        mensaje = publicar_en_chat(db, propuesta_db, cotizacion, remitente_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("No se pudo publicar en el chat la propuesta %s", propuesta_db.id, exc_info=True)
+        return
+    if mensaje is not None:
+        db.refresh(mensaje)
+        _publicar_mensaje(mensaje)
 
 
 def _notificar_propuesta_enviada(db: Session, *, cotizacion: Cotizacion, importador_id: Optional[str]) -> None:
@@ -968,12 +1015,7 @@ async def enviar_propuesta(
         id=str(uuid4()),  # Convertir a string para SQLite
         cotizacion_id=cotizacion_id_str,
         importador_id=importador_id_str,
-        precio_ofrecido_usd=propuesta.precio_ofrecido_usd,
-        tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
-        incoterm=propuesta.incoterm,
-        condiciones_adicionales=propuesta.condiciones_adicionales,
-        cantidad=propuesta.cantidad,
-        moq_unit=propuesta.moq_unit,
+        **_campos_propuesta(db, propuesta, importador_id_str),
         estado=EstadoPropuesta.pendiente,
         creado_por_usuario_id=user_id_str
     )
@@ -1012,6 +1054,8 @@ async def enviar_propuesta(
     except Exception:
         db.rollback()
         logger.warning("No se pudo notificar la propuesta enviada de %s", importador_id_str)
+
+    _publicar_propuesta_en_chat(db, nueva_propuesta, cotizacion, user_id_str)
     
     # 7. Actualizar estado en Redis (best-effort, después de confirmar en la base de datos).
     # Si Redis falla aquí ya no se debe revertir la propuesta, que ya quedó persistida en MySQL/SQLite.
@@ -1106,12 +1150,7 @@ async def crear_borrador_propuesta(
         id=str(uuid4()),
         cotizacion_id=cotizacion_id_str,
         importador_id=importador_id_str,
-        precio_ofrecido_usd=propuesta.precio_ofrecido_usd,
-        tiempo_estimado_entrega=propuesta.tiempo_estimado_entrega,
-        incoterm=propuesta.incoterm,
-        condiciones_adicionales=propuesta.condiciones_adicionales,
-        cantidad=propuesta.cantidad,
-        moq_unit=propuesta.moq_unit,
+        **_campos_propuesta(db, propuesta, importador_id_str),
         estado=EstadoPropuesta.borrador,
         creado_por_usuario_id=user_id_str
     )
@@ -1155,13 +1194,14 @@ async def editar_propuesta(
     if propuesta_db.estado not in (EstadoPropuesta.borrador.value, EstadoPropuesta.pendiente.value):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se puede editar una propuesta en borrador o pendiente")
 
-    propuesta_db.precio_ofrecido_usd = propuesta.precio_ofrecido_usd
-    propuesta_db.tiempo_estimado_entrega = propuesta.tiempo_estimado_entrega
-    propuesta_db.incoterm = propuesta.incoterm
-    propuesta_db.condiciones_adicionales = propuesta.condiciones_adicionales
-    if propuesta.cantidad is not None:
-        propuesta_db.cantidad = propuesta.cantidad
-    propuesta_db.moq_unit = propuesta.moq_unit
+    campos = _campos_propuesta(db, propuesta, propuesta_db.importador_id)
+    propuesta_db.precio_ofrecido_usd = campos["precio_ofrecido_usd"]
+    propuesta_db.tiempo_estimado_entrega = campos["tiempo_estimado_entrega"]
+    propuesta_db.incoterm = campos["incoterm"]
+    propuesta_db.condiciones_adicionales = campos["condiciones_adicionales"]
+    if campos["cantidad"] is not None:
+        propuesta_db.cantidad = campos["cantidad"]
+    propuesta_db.moq_unit = campos["moq_unit"]
     propuesta_db.creado_por_usuario_id = str(PyUUID(current_user["user_id"]))
     # Una edición reinicia la pre-aceptación mutua: cualquier cambio debe volver a confirmarse
     propuesta_db.preaceptada_por_solicitante = False
@@ -1186,6 +1226,13 @@ async def editar_propuesta(
 
     db.commit()
     db.refresh(propuesta_db)
+
+    # El comprador ya la tenía: la versión nueva le llega como otra tarjeta.
+    if propuesta_db.estado == EstadoPropuesta.pendiente.value:
+        cotizacion = db.query(Cotizacion).filter(Cotizacion.id == propuesta_db.cotizacion_id).first()
+        if cotizacion is not None:
+            _publicar_propuesta_en_chat(db, propuesta_db, cotizacion, str(PyUUID(current_user["user_id"])))
+            db.refresh(propuesta_db)
 
     return propuesta_db
 
@@ -1242,6 +1289,8 @@ async def enviar_borrador_propuesta(
     _notificar_propuesta_enviada(db, cotizacion=cotizacion, importador_id=propuesta_db.importador_id)
 
     db.commit()
+    db.refresh(propuesta_db)
+    _publicar_propuesta_en_chat(db, propuesta_db, cotizacion, str(PyUUID(current_user["user_id"])))
     db.refresh(propuesta_db)
 
     if config.redis_client and cotizacion.modalidad == "abierta":
@@ -1934,7 +1983,10 @@ async def pre_aceptar_propuesta(
 
         if conversacion:
             conversacion.orden_id = nueva_orden.id
-            precio_pago = f"US${propuesta.precio_ofrecido_usd:,.2f}"
+            from services.formulario_propuesta import monto_a_pagar
+
+            # Las propuestas del formato nuevo son un precio cerrado en pesos.
+            precio_pago = monto_a_pagar(propuesta.condiciones_adicionales) or f"US${propuesta.precio_ofrecido_usd:,.2f}"
             db.add(MensajeChat(
                 id=str(gen_uuid()),
                 conversacion_id=conversacion.id,
@@ -1966,7 +2018,14 @@ async def pre_aceptar_propuesta(
         # El cotizante se entera por correo (notificaciones@) de que ya hay orden de compra.
         from services.notificacion_service import notificar as _notificar_orden
 
-        precio = f" Precio acordado: US${propuesta.precio_ofrecido_usd:,.2f}." if propuesta.precio_ofrecido_usd else ""
+        from services.formulario_propuesta import monto_a_pagar
+
+        monto_cop = monto_a_pagar(propuesta.condiciones_adicionales)
+        precio = (
+            f" Precio acordado: {monto_cop}." if monto_cop
+            else f" Precio acordado: US${propuesta.precio_ofrecido_usd:,.2f}." if propuesta.precio_ofrecido_usd
+            else ""
+        )
         _notificar_orden(
             db,
             usuario_id=cotizacion.solicitante_id,
