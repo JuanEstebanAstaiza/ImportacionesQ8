@@ -30,6 +30,7 @@ import { SidebarCtrl } from "../types/portal";
 import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
 import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
+import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
 import type { LegalPage } from "@/features/legal/types";
@@ -6904,6 +6905,9 @@ function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendenc
         </nav>
       </header>
       <main className="relative z-10 mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <footer className="relative z-10 flex justify-center border-t border-border bg-background/90 py-6">
+        <PublicSicLogo />
+      </footer>
     </div>
   );
 }
@@ -10701,6 +10705,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
             Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
           </p>
           <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
+          <div className="flex justify-center border-t border-white/10 pt-5">
+            <PublicSicLogo />
+          </div>
         </div>
       </footer>
     </div>
@@ -11259,7 +11266,7 @@ function RegistroCerrado({onLogin,onLanding,onVerPlanes,onPolicy}:{onLogin:()=>v
         </div>
       </main>
 
-      <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+      <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
         <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
@@ -11270,6 +11277,7 @@ function RegistroCerrado({onLogin,onLanding,onVerPlanes,onPolicy}:{onLogin:()=>v
         <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
           Pagos y Reembolsos
         </button>
+        <PublicSicLogo />
       </footer>
     </div>
   );
@@ -11682,7 +11690,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
         </div>
       </main>
 
-      <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+      <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
         <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
@@ -11693,6 +11701,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
         <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
           Pagos y Reembolsos
         </button>
+        <PublicSicLogo />
       </footer>
     </div>
   );
@@ -11726,6 +11735,9 @@ function ResetPasswordScreen({ token, onBackToLogin }: { token: string; onBackTo
           <ResetPasswordForm token={token} onBackToLogin={onBackToLogin} />
         </div>
       </main>
+      <footer className="flex justify-center border-t border-border bg-background py-4">
+        <PublicSicLogo />
+      </footer>
     </div>
   );
 }

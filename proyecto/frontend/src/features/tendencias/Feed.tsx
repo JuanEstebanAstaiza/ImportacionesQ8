@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarDays, Link2, Loader2, Lock, Play, RefreshCw, Send, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Link2, Loader2, Lock, Play, RefreshCw, Send, Users } from "lucide-react";
 
 import {
   ETIQUETA_PLATAFORMA,
@@ -45,6 +45,7 @@ type Props = {
 
 const CLASE_CTA =
   "inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-[#EDF953] dark:text-[#16151B] dark:hover:bg-[#f3fb8a] dark:focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60";
+const PRODUCTOS_POR_PAGINA = 20;
 
 function Tarjeta({
   item,
@@ -141,6 +142,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
   const [pidiendo, setPidiendo] = useState<string | null>(null);
+  const [pagina, setPagina] = useState(1);
 
   useEffect(() => {
     let vigente = true;
@@ -161,11 +163,21 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
     return () => { vigente = false; };
   }, [semana, categoria, intento]);
 
+  useEffect(() => {
+    setPagina(1);
+  }, [semana, categoria]);
+
   const semanaMostrada = semana ?? datos?.semana ?? semanaActual;
   const opcionesSemana = Array.from(new Set([semanaActual, ...(datos?.semanas ?? [])].filter(Boolean) as string[]))
     .sort((a, b) => (a < b ? 1 : -1));
   const categorias = datos?.categorias ?? [];
   const items = datos?.items ?? [];
+  const totalPaginas = Math.max(1, Math.ceil(items.length / PRODUCTOS_POR_PAGINA));
+  const itemsPagina = items.slice((pagina - 1) * PRODUCTOS_POR_PAGINA, pagina * PRODUCTOS_POR_PAGINA);
+
+  useEffect(() => {
+    setPagina((actual) => Math.min(actual, totalPaginas));
+  }, [totalPaginas]);
   const mostrarBoton = puedeCotizar(rol);
   // Semana más reciente con productos, para sugerirla si la elegida está vacía.
   const otraSemana = (datos?.semanas ?? []).find((s) => s !== semanaMostrada) ?? null;
@@ -285,7 +297,7 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
           </div>
         ) : (
           <div className={`grid grid-cols-[repeat(auto-fill,minmax(155px,1fr))] gap-3 sm:gap-4 md:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] ${cargando ? "opacity-60" : ""}`}>
-            {items.map((item) => (
+            {itemsPagina.map((item) => (
               <Tarjeta
                 key={item.id}
                 item={item}
@@ -304,6 +316,32 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
             ))}
           </div>
         )}
+
+        {totalPaginas > 1 ? (
+          <nav aria-label="Paginación de productos" className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
+              disabled={pagina === 1}
+              aria-label="Ver productos anteriores"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:hover:border-white/40"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-sm text-muted-foreground dark:text-white/70">
+              Página {pagina} de {totalPaginas}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPagina((actual) => Math.min(totalPaginas, actual + 1))}
+              disabled={pagina === totalPaginas}
+              aria-label="Ver más productos"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:hover:border-white/40"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </nav>
+        ) : null}
 
         {vistaPrevia && !error && items.length > 0 ? (
           <MuroPago
