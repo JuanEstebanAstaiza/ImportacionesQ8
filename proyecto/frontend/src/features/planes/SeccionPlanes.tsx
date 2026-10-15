@@ -1,13 +1,64 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Monitor, Smartphone } from "lucide-react";
 
-import { planesService, pesos, type Plan } from "@/services/planes.service";
+import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
+import { encuadreParaPantalla, useEncuadrePreferido, type Encuadre } from "@/app/components/media/VideoAdaptable";
+import { planesService, pesos, type Plan, type VideoPlan } from "@/services/planes.service";
 
 /**
  * Sección «Planes» del inicio (id `planes`, a la que lleva «Solicitar acceso»).
  * Precio, IVA, lo que incluye y cupos salen de Admin › Planes: aquí no hay
  * ningún valor escrito a mano.
  */
+
+/**
+ * Video del plan dentro de su tarjeta (se sube en Admin › Planes). Igual que el
+ * de «Quiénes somos»: la versión de la pantalla y, si hay dos, se puede
+ * cambiar. La vertical se limita de alto para que la tarjeta no se estire.
+ */
+function VideoTarjeta({ video, nombre }: { video: VideoPlan; nombre: string }) {
+  const preferido = useEncuadrePreferido();
+  const [elegido, setElegido] = useState<Encuadre | null>(null);
+  const encuadre = encuadreParaPantalla(elegido ?? preferido, video.horizontal, video.vertical);
+  if (!encuadre) return null;
+  const url = encuadre === "vertical" ? video.vertical! : video.horizontal!;
+  return (
+    <div className="mb-5">
+      <div
+        className={`mx-auto overflow-hidden rounded-xl bg-black ${
+          encuadre === "vertical" ? "aspect-[9/16] h-[min(60vh,420px)] max-w-full" : "aspect-video w-full"
+        }`}
+      >
+        <ProtectedVideoPlayer key={url} url={url} className="h-full w-full object-contain" />
+      </div>
+      {(video.titulo || (video.horizontal && video.vertical)) && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          {video.titulo ? <p className="text-xs text-muted-foreground">{video.titulo}</p> : <span />}
+          {video.horizontal && video.vertical && (
+            <div className="flex gap-1" role="group" aria-label={`Versión del video de ${nombre}`}>
+              {([["horizontal", Monitor, "Computador"], ["vertical", Smartphone, "Celular"]] as const).map(([valor, Icono, etiqueta]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  onClick={() => setElegido(valor)}
+                  aria-pressed={encuadre === valor}
+                  title={etiqueta}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    encuadre === valor
+                      ? "bg-primary text-white dark:bg-accent dark:text-accent-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Icono className="h-3 w-3" /> {etiqueta}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Plan) => void }) {
   const sinCupos = plan.cupos_restantes !== null && plan.cupos_restantes < 1;
@@ -19,6 +70,7 @@ function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Pl
           : "border-border bg-card/80 backdrop-blur-sm"
       }`}
     >
+      {plan.video && <VideoTarjeta video={plan.video} nombre={plan.nombre} />}
       <h3 className="text-lg font-bold">{plan.nombre}</h3>
       {plan.para_quien && <p className="mt-1 text-sm text-muted-foreground">{plan.para_quien}</p>}
       <p className="mt-5 text-3xl font-bold tracking-tight">

@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 import config
 from models.landing import (
-    SECCION_QUIENES_SOMOS, TIPO_VIDEO_ROTATIVO, LandingAlly, LandingBlock, LandingNews,
+    SECCION_QUIENES_SOMOS, TIPO_VIDEO_ROTATIVO, TIPO_VIDEOS_PLANES, TIPOS_CON_ENDPOINT_PROPIO,
+    LandingAlly, LandingBlock, LandingNews,
 )
 from schemas.landing import (
     ContactoRequest,
@@ -48,7 +49,7 @@ async def obtener_contenido_dinamico(db: Session = Depends(get_db)):
     """Bloques, aliados y noticias activos, listos para `LandingScreen`."""
     bloques = (
         db.query(LandingBlock)
-        .filter(LandingBlock.activo.is_(True))
+        .filter(LandingBlock.activo.is_(True), LandingBlock.tipo != TIPO_VIDEOS_PLANES)
         .order_by(LandingBlock.seccion.asc(), LandingBlock.orden.asc())
         .all()
     )
@@ -194,7 +195,13 @@ async def obtener_contenido_dinamico_admin(
     current_user: dict = Depends(require_admin),
 ):
     """Igual que la vista pública, pero incluye lo inactivo/borrador para editar."""
-    bloques = db.query(LandingBlock).order_by(LandingBlock.seccion.asc(), LandingBlock.orden.asc()).all()
+    # Los videos de los planes se editan en Admin › Planes, no aquí.
+    bloques = (
+        db.query(LandingBlock)
+        .filter(LandingBlock.tipo != TIPO_VIDEOS_PLANES)
+        .order_by(LandingBlock.seccion.asc(), LandingBlock.orden.asc())
+        .all()
+    )
     aliados = db.query(LandingAlly).order_by(LandingAlly.orden.asc(), LandingAlly.nombre.asc()).all()
     noticias = db.query(LandingNews).order_by(LandingNews.orden.asc(), LandingNews.fecha_publicacion.desc()).all()
 
@@ -217,12 +224,14 @@ async def guardar_bloques(
     eliminar son todo ediciones locales hasta que se guarda), así que aquí se
     sincroniza la tabla contra esa lista en vez de aplicar diffs.
     """
-    # El carrusel de "Quiénes somos" tiene su propio endpoint: aquí no se
-    # borra ni se reescribe, aunque el editor mande una copia vieja.
-    bloques = [b for b in datos.blocks if b.tipo.strip() != TIPO_VIDEO_ROTATIVO]
+    # El carrusel de "Quiénes somos" y los videos de los planes tienen su propio
+    # endpoint: aquí no se borran ni se reescriben, aunque el editor mande una
+    # copia vieja.
+    bloques = [b for b in datos.blocks if b.tipo.strip() not in TIPOS_CON_ENDPOINT_PROPIO]
     ids_enviados = {b.id for b in bloques if b.id}
     existentes = {
-        b.id: b for b in db.query(LandingBlock).filter(LandingBlock.tipo != TIPO_VIDEO_ROTATIVO).all()
+        b.id: b
+        for b in db.query(LandingBlock).filter(LandingBlock.tipo.notin_(TIPOS_CON_ENDPOINT_PROPIO)).all()
     }
 
     for id_existente in existentes:

@@ -91,7 +91,13 @@ def cupos_restantes(db: Session, plan: Plan) -> Optional[int]:
     return max(0, int(plan.cupos_totales) - ocupados(db, plan.id))
 
 
-def a_dict(db: Session, plan: Plan, admin: bool = False) -> Dict:
+def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[str, dict]] = None) -> Dict:
+    """`videos`: los de `videos_planes.videos_por_plan`, para no leerlos una vez
+    por plan al listar."""
+    if videos is None:
+        from services.videos_planes import videos_por_plan
+
+        videos = videos_por_plan(db)
     datos = {
         "id": plan.id,
         "clave": plan.clave,
@@ -111,6 +117,8 @@ def a_dict(db: Session, plan: Plan, admin: bool = False) -> Dict:
         "cupos_restantes": cupos_restantes(db, plan),
         "destacado": bool(plan.destacado),
         "orden": plan.orden,
+        # Se reproduce en la tarjeta del plan (ver services/videos_planes.py).
+        "video": videos.get(str(plan.id)),
     }
     if admin:
         conteo = {e.value: 0 for e in EstadoInscripcionPlan}
@@ -124,7 +132,10 @@ def listar(db: Session, *, admin: bool = False) -> List[Dict]:
     consulta = db.query(Plan)
     if not admin:
         consulta = consulta.filter(Plan.activo.is_(True))
-    return [a_dict(db, p, admin) for p in consulta.order_by(Plan.orden.asc(), Plan.precio_cop.asc()).all()]
+    from services.videos_planes import videos_por_plan
+
+    videos = videos_por_plan(db)
+    return [a_dict(db, p, admin, videos) for p in consulta.order_by(Plan.orden.asc(), Plan.precio_cop.asc()).all()]
 
 
 def por_clave(db: Session, clave: str) -> Plan:
