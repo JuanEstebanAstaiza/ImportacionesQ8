@@ -11679,6 +11679,11 @@ export default function App() {
   // Plan elegido en el inicio («Inscribirme»): viaja en la URL como ?plan=.
   const [planElegido,setPlanElegido]=useState(()=>new URLSearchParams(window.location.search).get("plan")??"");
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
+  // Qué orden está en pantalla: si se vuelve a pedir la misma, se refresca sin
+  // pasar por «Cargando…» (eso desmontaba el detalle y se perdía lo que el
+  // usuario estaba haciendo, p. ej. el comprobante de pago recién elegido).
+  const orderDetailIdRef=useRef<string|null>(null);
+  orderDetailIdRef.current=selectedOrderDetail?.id??null;
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
@@ -11900,24 +11905,32 @@ export default function App() {
     setImporterOrders(orders.map((order) => mapBackendOrderToUiOrder(order, quoteMap.get(order.cotizacion_id))));
   }, [marketplaceImporters]);
 
+  // Las empresas se leen de una ref: si `loadOrderDetail` dependiera de la
+  // lista, cada auto-refresco (que la vuelve a pedir, p. ej. al cerrar el
+  // selector de archivos y recuperar el foco) recreaba la función y el efecto
+  // de abajo recargaba el detalle con la pantalla de carga.
+  const marketplaceImportersRef=useRef(marketplaceImporters);
+  marketplaceImportersRef.current=marketplaceImporters;
+
   const loadOrderDetail = useCallback(async (orderId: string) => {
     if (!orderId) {
       setSelectedOrderDetail(null);
       return;
     }
 
-    setIsOrderDetailLoading(true);
+    const silencioso = orderDetailIdRef.current === orderId;
+    if (!silencioso) setIsOrderDetailLoading(true);
     try {
       const [orderRow, quotes] = await Promise.all([
         businessService.getOrderById(orderId),
         businessService.listQuotes().catch(() => [] as BackendCotizacion[]),
       ]);
-      const quoteMap = new Map(quotes.map((quote) => [quote.id, mapBackendQuoteToUi(quote, marketplaceImporters)]));
+      const quoteMap = new Map(quotes.map((quote) => [quote.id, mapBackendQuoteToUi(quote, marketplaceImportersRef.current)]));
       setSelectedOrderDetail(mapBackendOrderToUiOrder(orderRow, quoteMap.get(orderRow.cotizacion_id)));
     } finally {
-      setIsOrderDetailLoading(false);
+      if (!silencioso) setIsOrderDetailLoading(false);
     }
-  }, [marketplaceImporters]);
+  }, []);
 
   const reloadChatData = useCallback(async () => {
     const [rows, quotes] = await Promise.all([
@@ -12372,6 +12385,11 @@ export default function App() {
       tareas.push(reloadChatData());
     }
 
+    // El detalle abierto se refresca en silencio (sin desmontar la pantalla).
+    if (screen === "order-detail" && selectedOrderId) {
+      tareas.push(loadOrderDetail(selectedOrderId));
+    }
+
     if (userRole === "solicitante") {
       tareas.push(reloadRequesterQuotes(), reloadRequesterResponses(), reloadRequesterOrders());
     } else if (userRole === "importadora") {
@@ -12384,6 +12402,9 @@ export default function App() {
     await Promise.allSettled(tareas);
   }, [
     userRole,
+    screen,
+    selectedOrderId,
+    loadOrderDetail,
     reloadImporters,
     reloadCurrentUserProfile,
     reloadChatData,
