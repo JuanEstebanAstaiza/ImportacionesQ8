@@ -12257,6 +12257,13 @@ export default function App() {
     void reloadDocumentExplorer();
   }, [isAuthenticated, token, isInitializing, reloadCurrentUserProfile, reloadChatData, reloadDocumentExplorer]);
 
+  // El plan o el saldo pueden cambiar sin que el comprador haga nada (el admin le
+  // da un plan, aprueba un comprobante): se releen al abrir una solicitud nueva o Pagos.
+  useEffect(() => {
+    if (!isAuthenticated || isInitializing || (screen !== "new-quote" && screen !== "pagos")) return;
+    void reloadCurrentUserProfile().catch(() => undefined);
+  }, [screen, isAuthenticated, isInitializing, reloadCurrentUserProfile]);
+
   useEffect(() => {
     if (!isAuthenticated || !token || isInitializing) {
       return;

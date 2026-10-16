@@ -254,7 +254,12 @@ function Inscripciones({ planes, onCambio }: { planes: PlanAdmin[]; onCambio: ()
           </button>
         </div>
       </div>
-      <DarPlanACuenta planes={planes} onOtorgado={onCambio} />
+      <DarPlanACuenta planes={planes} onOtorgado={() => {
+        onCambio();
+        // La inscripción que se crea queda activa: se muestra en esa pestaña.
+        if (estado === "activa") void cargar();
+        else setEstado("activa");
+      }} />
       <div role="tablist" className="flex flex-wrap gap-2 px-4 pt-3">
         {PESTANAS.map((p) => (
           <button key={p.estado} type="button" role="tab" aria-selected={estado === p.estado} onClick={() => setEstado(p.estado)}

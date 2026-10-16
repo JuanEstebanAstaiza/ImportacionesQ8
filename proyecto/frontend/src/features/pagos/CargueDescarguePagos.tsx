@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
+  BadgeCheck,
   Check,
   Coins,
   Copy,
@@ -281,8 +282,23 @@ function TarjetaSaldo({ etiqueta, valor, icono: Icono, clase }: { etiqueta: stri
 function Saldos({ resumen }: { resumen: ResumenPagos }) {
   const vigente = suscripcionVigente(resumen.suscripcion.vigente_hasta);
   const conGratis = resumen.cotizaciones_gratis > 0;
+  const plan = resumen.plan;
+  const tarjetas = 2 + (conGratis ? 1 : 0) + (plan ? 1 : 0);
+  const columnas = tarjetas === 4 ? "sm:grid-cols-2 lg:grid-cols-4" : tarjetas === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2";
   return (
-    <div className={`grid gap-3 ${conGratis ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+    <div className={`grid gap-3 ${columnas}`}>
+      {plan && (
+        <TarjetaSaldo
+          etiqueta={plan.vigente
+            ? `${plan.nombre ?? "Plan"} · vence el ${fechaCorta(plan.vence_en)}`
+            : `${plan.nombre ?? "Plan"} · vencido`}
+          valor={plan.vigente ? `${plan.solicitudes} ${plan.solicitudes === 1 ? "solicitud" : "solicitudes"}` : "Sin solicitudes"}
+          icono={BadgeCheck}
+          clase={plan.vigente
+            ? "bg-lime-100 text-lime-800 dark:bg-accent/15 dark:text-accent"
+            : "bg-muted text-muted-foreground"}
+        />
+      )}
       <TarjetaSaldo
         etiqueta="Tokens de cotización"
         valor={String(resumen.tokens)}
