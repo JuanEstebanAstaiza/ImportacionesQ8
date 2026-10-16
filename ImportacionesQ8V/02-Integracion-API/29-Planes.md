@@ -15,7 +15,7 @@ Textos de la sección: `zarpi-home-copy-v1.md` (raíz del repositorio). Código:
   O lo **rechaza** con motivo, y el cupo se libera.
 - Sin cupos, la misma pantalla deja a la persona en la **lista de espera**, sin comprobante.
 - **Acceso por lista cerrada:** hasta que los VIP prueben la plataforma no se abre al público.
-  - Arriba de la sección Planes va el aviso «Acceso por lista cerrada…» y el botón **«Avísame cuando abra»**, que lleva a `/lista-espera`, una pantalla pública.
+  - Debajo de las tarjetas de la sección Planes va el aviso «Acceso por lista cerrada…» y el botón **«Avísame cuando abra»**, que lleva a `/lista-espera`, una pantalla pública.
   - Para ocultar un plan (por ejemplo, el Paquete) se despublica en Admin › Planes.
   - **Registro público apagado** (módulo `registro`): nadie crea cuenta por su lado. Quien llega a `/registro` ve la misma línea y el botón a la lista de espera.
   - **Solo publican con plan** (módulo `solo_con_plan`): solo los compradores con plan vigente crean solicitudes. Las importadoras siguen igual.

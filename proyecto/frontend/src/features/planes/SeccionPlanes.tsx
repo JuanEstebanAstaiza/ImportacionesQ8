@@ -160,7 +160,7 @@ export const LISTA_CERRADA = {
 
 function AvisoListaCerrada({ onAvisame }: { onAvisame: () => void }) {
   return (
-    <div className="mx-auto mb-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/25 bg-card/80 px-5 py-5 text-center backdrop-blur-sm dark:border-accent/25">
+    <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/25 bg-card/80 px-5 py-5 text-center backdrop-blur-sm dark:border-accent/25">
       <p className="flex items-start gap-2 text-sm leading-relaxed sm:items-center">
         <LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary dark:text-accent sm:mt-0" />
         <span>
@@ -195,7 +195,6 @@ export function SeccionPlanes({ onInscribirme, onCondiciones, onAvisame }: {
     <section id="planes" className="scroll-mt-20 py-20 px-6 bg-muted relative overflow-hidden">
       <div className="zarpi-blob zarpi-blob-violet absolute -right-24 top-10 pointer-events-none opacity-30 scale-90" />
       <div className="max-w-7xl mx-auto relative z-10">
-        <AvisoListaCerrada onAvisame={onAvisame} />
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Precio de lanzamiento</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Elige cómo entrar a Zarpi</h2>
@@ -214,6 +213,7 @@ export function SeccionPlanes({ onInscribirme, onCondiciones, onAvisame }: {
             {planes.map((plan) => <Tarjeta key={plan.id} plan={plan} onInscribirme={onInscribirme} />)}
           </div>
         )}
+        <AvisoListaCerrada onAvisame={onAvisame} />
         <p className="mt-8 max-w-5xl mx-auto text-center text-xs leading-relaxed text-muted-foreground">
           Una solicitud es una publicación con producto y cantidad que llega a las empresas importadoras. Si no recibe
           propuestas en 72 horas, la unidad vuelve a tu saldo. Pago por transferencia; activamos tu plan en máximo 2 horas
