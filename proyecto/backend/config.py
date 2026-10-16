@@ -179,8 +179,15 @@ NOTIFICACIONES_EMAIL = os.getenv("NOTIFICACIONES_EMAIL", "true").lower() == "tru
 # Módulo educativo (cursos/LMS). Apagarlo deja la API de cursos en 404 y el
 # frontend oculta la sección; no borra ningún dato.
 MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").lower() == "true"
-# Registro público de cotizantes (el admin lo puede cerrar en Módulos).
-REGISTRO_PUBLICO_HABILITADO = os.getenv("REGISTRO_PUBLICO_HABILITADO", "true").lower() == "true"
+# Registro público de cotizantes (el admin lo abre o cierra en Módulos). Cerrado
+# por defecto mientras el acceso es por lista cerrada: la cuenta se crea al
+# activar la inscripción a un plan. Abierto en tests: los de registro lo usan.
+REGISTRO_PUBLICO_HABILITADO = os.getenv(
+    "REGISTRO_PUBLICO_HABILITADO", "true" if APP_ENV == "test" else "false").lower() == "true"
+# Solo publican solicitudes los cotizantes con un plan vigente (Módulos). Apagado
+# en tests: casi todas crean cotizaciones sin plan.
+PUBLICAR_SOLO_CON_PLAN = os.getenv(
+    "PUBLICAR_SOLO_CON_PLAN", "false" if APP_ENV == "test" else "true").lower() == "true"
 # Mientras no hay pasarela, cada curso con precio se desbloquea cuando el equipo
 # aprueba el comprobante de pago (o da el acceso a mano). Apagado en tests: los
 # de cursos se inscriben directo.

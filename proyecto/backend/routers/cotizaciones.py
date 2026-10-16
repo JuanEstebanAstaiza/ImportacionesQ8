@@ -488,6 +488,11 @@ async def crear_cotizacion(
     from services import modulos as modulos_svc
     from services import tokens_cotizacion
 
+    # Acceso por lista cerrada: sin un plan vigente no se publica (Módulos › Solo publican con plan).
+    if (solicitante.rol == "solicitante" and modulos_svc.activo(db, "solo_con_plan")
+            and not tokens_cotizacion.plan_vigente(solicitante)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=tokens_cotizacion.MENSAJE_SIN_PLAN)
+
     cobra_tokens = solicitante.rol == "solicitante" and modulos_svc.activo(db, "cobro_cotizaciones")
     if cobra_tokens and tokens_cotizacion.saldo(solicitante) < 1:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=tokens_cotizacion.MENSAJE_SIN_TOKENS)

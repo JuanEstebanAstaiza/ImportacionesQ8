@@ -330,6 +330,9 @@ export interface BackendUserProfile {
   es_curador?: boolean;
   /** Cotizaciones gratis ganadas en el reto: se gastan antes que los tokens. */
   cotizaciones_gratis?: number;
+  /** Plan de acceso vigente y las solicitudes que le quedan (se gastan antes que los tokens). */
+  plan_vigente?: boolean;
+  solicitudes_plan_vigentes?: number;
 }
 
 export interface BackendCotizantePerfilPublico {

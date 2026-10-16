@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Check, Clapperboard, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, Video, X } from "lucide-react";
+import { Check, Clapperboard, Download, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, Video, X } from "lucide-react";
 
 import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
@@ -37,6 +37,30 @@ const PESTANAS: { estado: EstadoInscripcion; texto: string }[] = [
   { estado: "activa", texto: "Activas" },
   { estado: "rechazada", texto: "Rechazadas" },
 ];
+
+const ORIGEN_ESPERA: Record<string, string> = {
+  apertura: "Apertura al público",
+  sin_cupos: "Plan sin cupos",
+};
+
+/** La lista de espera en CSV (Excel la abre): para compartirla con las importadoras. */
+function descargarListaEspera(filas: InscripcionAdmin[]) {
+  const celda = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lineas = [
+    ["Fecha", "Nombre", "WhatsApp", "Correo", "Sector", "Qué le gustaría importar", "Origen", "Plan"].map(celda).join(";"),
+    ...filas.map((f) => [
+      f.fecha ? new Date(f.fecha).toLocaleString("es-CO") : "", f.nombre, f.telefono, f.email, f.sector, f.interes,
+      f.origen_espera ? ORIGEN_ESPERA[f.origen_espera] : "", f.plan.nombre,
+    ].map(celda).join(";")),
+  ];
+  const blob = new Blob(["\ufeff" + lineas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `lista-de-espera-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: () => void }) {
   const [rechazando, setRechazando] = useState(false);
@@ -79,10 +103,21 @@ function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: (
     <li className="space-y-3 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 text-sm">
-          <p className="font-semibold">{ins.nombre} <span className="font-normal text-muted-foreground">· {ins.plan.nombre}</span></p>
-          <p className="text-xs text-muted-foreground">
-            {ins.email} · {ins.telefono} · {ins.documento}{ins.ciudad ? ` · ${ins.ciudad}` : ""}
+          <p className="font-semibold">
+            {ins.nombre}{" "}
+            <span className="font-normal text-muted-foreground">
+              · {ins.origen_espera === "apertura" ? ORIGEN_ESPERA.apertura : ins.plan.nombre}
+            </span>
           </p>
+          <p className="text-xs text-muted-foreground">
+            {[ins.email, ins.telefono, ins.documento, ins.ciudad].filter(Boolean).join(" · ")}
+          </p>
+          {ins.sector && (
+            <p className="mt-1 text-sm"><span className="text-muted-foreground">Sector:</span> {ins.sector}</p>
+          )}
+          {ins.interes && (
+            <p className="mt-1 text-sm"><span className="text-muted-foreground">Quiere importar:</span> {ins.interes}</p>
+          )}
           <p className="text-xs text-muted-foreground">
             {ins.total_cop !== null ? `${pesos(ins.total_cop)} con IVA · ` : ""}{fechaCorta(ins.fecha)}
             {ins.vence_en ? ` · vence el ${fechaCorta(ins.vence_en)}` : ""}
@@ -155,9 +190,16 @@ function Inscripciones({ onCambio }: { onCambio: () => void }) {
           <p className="text-base font-semibold">Inscripciones</p>
           <p className="text-sm text-muted-foreground">Confirma la transferencia en el banco antes de activar. Al activar se crea la cuenta y le llega el acceso.</p>
         </div>
-        <button type="button" onClick={() => void cargar()} className={CLASE_BOTON_SECUNDARIO} disabled={cargando}>
-          <RefreshCw className={`h-4 w-4 ${cargando ? "animate-spin" : ""}`} /> Actualizar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {estado === "lista_espera" && filas.length > 0 && (
+            <button type="button" onClick={() => descargarListaEspera(filas)} className={CLASE_BOTON_SECUNDARIO}>
+              <Download className="h-4 w-4" /> Descargar CSV
+            </button>
+          )}
+          <button type="button" onClick={() => void cargar()} className={CLASE_BOTON_SECUNDARIO} disabled={cargando}>
+            <RefreshCw className={`h-4 w-4 ${cargando ? "animate-spin" : ""}`} /> Actualizar
+          </button>
+        </div>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 px-4 pt-3">
         {PESTANAS.map((p) => (

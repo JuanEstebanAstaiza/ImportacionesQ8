@@ -24,14 +24,20 @@ COTIZACION = {"modalidad": "abierta", "pais_importacion": "China", "nombre_produ
               "tipo_calidad": "estandar", "cantidad_minima": 100}
 PERSONA = {"email": "Ana@Example.com", "tipo_persona": "natural", "nombre": "Ana", "apellido": "Gómez",
            "tipo_documento": "CC", "numero_documento": "123456", "telefono": "3001234567",
-           "ciudad": "Cali", "acepto_condiciones": True, "acepto_datos": True}
+           "ciudad": "Cali", "sector": "Textil", "acepto_condiciones": True, "acepto_datos": True}
+
+
+# Lista de espera: nombre, WhatsApp, correo, sector y qué quiere importar.
+ESPERA = {"email": "Luis@Example.com", "nombre": "Luis Pérez", "telefono": "3109876543", "sector": "  Televenta ",
+          "interes": "Termos  de acero\npara regalos corporativos", "acepto_datos": True}
 
 
 @pytest.fixture(autouse=True)
 def config_limpia(db_session):
     yield
-    db_session.query(ConfiguracionPlataforma).filter(ConfiguracionPlataforma.clave.like("modulos.%")).delete(
-        synchronize_session=False)
+    for prefijo in ("modulos.%", "lista_espera.%", "inscripcion_plan.%"):
+        db_session.query(ConfiguracionPlataforma).filter(ConfiguracionPlataforma.clave.like(prefijo)).delete(
+            synchronize_session=False)
     db_session.commit()
 
 
@@ -102,16 +108,21 @@ def test_inscripcion_sin_sesion_con_comprobante_llega_a_pagos(client, db_session
     assert a_pagos["responder_a"] == "ana@example.com"
     nombres = [a[0] for a in a_pagos["adjuntos"]]
     assert "pago.png" in nombres and any(n.endswith(".pdf") for n in nombres)
+    assert "Sector: Textil" in a_pagos["texto"]
     assert any(c["para"] == "ana@example.com" for c in correos)  # acuse
 
-    # Ocupa cupo, y no se puede mandar dos veces la misma.
-    assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 1
+    # Ocupa cupo (por activar), y no se puede mandar dos veces la misma.
+    importador = client.get("/planes").json()["planes"][0]
+    assert importador["cupos_restantes"] == 1
+    assert importador["cupos_por_activar"] == 1 and importador["cupos_activos"] == 0
     assert _inscribir(client).status_code == 409
 
     # Solo el admin descarga el comprobante.
     url = f"/planes/admin/inscripciones/{ins.id}/comprobante"
     assert client.get(url).status_code in (401, 403)
     assert client.get(url, headers=admin_h).content == PNG
+    fila = client.get("/planes/admin/inscripciones?estado=pendiente", headers=admin_h).json()[0]
+    assert fila["sector"] == "Textil" and fila["interes"] is None
 
 
 def test_valida_datos_y_archivo(client, planes, correos):
@@ -123,6 +134,7 @@ def test_valida_datos_y_archivo(client, planes, correos):
     # Dice ser PNG pero no lo es.
     assert _inscribir(client, persona={**PERSONA, "email": "c@x.com"}, archivo=b"hola").status_code == 422
     assert _inscribir(client, clave="viejo").status_code == 404
+    assert _inscribir(client, persona={**PERSONA, "email": "d@x.com", "sector": " "}).status_code == 422
 
 
 def test_sin_cupos_pasa_a_lista_de_espera_y_el_rechazo_libera(client, db_session, planes, correos):
@@ -132,9 +144,9 @@ def test_sin_cupos_pasa_a_lista_de_espera_y_el_rechazo_libera(client, db_session
     lleno = _inscribir(client, persona={**PERSONA, "email": "tres@x.com"})
     assert lleno.status_code == 409 and lleno.json()["detail"]["codigo"] == "sin_cupos"
 
-    espera = client.post("/planes/importador/lista-espera", json={**PERSONA, "email": "tres@x.com"})
+    espera = client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "tres@x.com"})
     assert espera.status_code == 201
-    assert client.post("/planes/importador/lista-espera", json={**PERSONA, "email": "tres@x.com"}).status_code == 409
+    assert client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "tres@x.com"}).status_code == 409
 
     pendiente = client.get("/planes/admin/inscripciones?estado=pendiente", headers=admin_h).json()
     assert len(pendiente) == 2
@@ -144,6 +156,34 @@ def test_sin_cupos_pasa_a_lista_de_espera_y_el_rechazo_libera(client, db_session
     assert any("no aparece" in c["texto"] for c in correos if c["para"] == "ana@example.com")
     assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 1
     assert _inscribir(client, persona={**PERSONA, "email": "tres@x.com"}).status_code == 201
+
+
+def test_avisame_cuando_abra_deja_en_lista_de_espera_con_lo_que_quiere_importar(client, db_session, planes, correos):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    r = client.post("/planes/lista-espera", json=ESPERA)
+    assert r.status_code == 201, r.text
+    assert r.json()["estado"] == "lista_espera"
+    # No ocupa cupo y no se repite.
+    assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 2
+    assert client.post("/planes/lista-espera", json=ESPERA).status_code == 409
+
+    # Solo pide nombre, WhatsApp, correo, sector, qué quiere importar y la autorización de datos.
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "sector": ""}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "interes": ""}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "acepto_datos": False}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "telefono": "123"}).status_code == 422
+
+    # Llega a la pestaña «Lista de espera» del admin, con fecha.
+    filas = client.get("/planes/admin/inscripciones?estado=lista_espera", headers=admin_h).json()
+    assert len(filas) == 1
+    fila = filas[0]
+    assert fila["email"] == "luis@example.com" and fila["nombre"] == "Luis Pérez"
+    assert fila["telefono"] == "+57 3109876543" and fila["fecha"]
+    assert fila["interes"] == "Termos de acero para regalos corporativos"
+    assert fila["sector"] == "Televenta"
+    assert fila["origen_espera"] == "apertura"
+    acuse = next(c for c in correos if c["para"] == "luis@example.com")
+    assert "abramos al público" in acuse["texto"]
 
 
 def test_activar_crea_la_cuenta_y_acredita_el_plan(client, db_session, planes, correos):
@@ -165,6 +205,9 @@ def test_activar_crea_la_cuenta_y_acredita_el_plan(client, db_session, planes, c
     assert "restablecer-password?token=" in bienvenida["texto"]
 
     assert client.post(f"/planes/admin/inscripciones/{ins.id}/activar", headers=admin_h).status_code == 409
+    # En el contador de la tarjeta pasa de «por activar» a «activa».
+    vip = next(p for p in client.get("/planes").json()["planes"] if p["clave"] == "vip")
+    assert vip["cupos_por_activar"] == 0 and vip["cupos_activos"] == 1
 
     # Con sesión: el resumen de pagos muestra el plan y el precio VIP de la solicitud adicional.
     from utils.security import create_access_token
@@ -230,6 +273,36 @@ def test_el_cobro_gasta_primero_el_plan_y_luego_los_tokens(client, db_session, p
     db_session.commit()
     assert tokens_cotizacion.saldo(usuario) == 0
     assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 402
+
+
+def test_con_lista_cerrada_solo_publica_quien_tiene_plan_vigente(client, db_session, planes):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    _modulo(client, admin_h, solo_con_plan=True)
+    assert client.get("/configuracion-publica").json()["solo_con_plan"] is True
+    usuario, headers = crear_usuario_con_token(db_session)
+    usuario.puntos_cotizacion = 3  # tokens sueltos no bastan: hace falta el plan
+    db_session.commit()
+
+    r = client.post("/cotizaciones", json=COTIZACION, headers=headers)
+    assert r.status_code == 403 and "plan activo" in r.text
+    assert client.get("/usuarios/me", headers=headers).json()["plan_vigente"] is False
+
+    usuario.plan_id, usuario.solicitudes_plan = planes["vip"].id, 10
+    usuario.plan_vence_en = datetime.utcnow() + timedelta(days=30)
+    db_session.commit()
+    yo = client.get("/usuarios/me", headers=headers).json()
+    assert yo["plan_vigente"] is True and yo["solicitudes_plan_vigentes"] == 10
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+    # Vencido, vuelve a quedar por fuera.
+    db_session.refresh(usuario)
+    usuario.plan_vence_en = datetime.utcnow() - timedelta(days=1)
+    db_session.commit()
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 403
+
+    # Al abrir al público se apaga y vuelve a publicar cualquiera.
+    _modulo(client, admin_h, solo_con_plan=False)
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
 
 
 def test_sin_propuestas_en_72_horas_la_unidad_vuelve(client, db_session, planes, correos):

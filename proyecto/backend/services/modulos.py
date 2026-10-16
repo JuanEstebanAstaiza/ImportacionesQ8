@@ -25,6 +25,12 @@ MODULOS = {
         "Registro público",
         "Que los cotizantes se creen la cuenta solos. Apagado, solo el equipo crea cuentas desde Usuarios.",
     ),
+    "solo_con_plan": (
+        "modulos.solo_con_plan",
+        "Solo publican con plan",
+        "Mientras el acceso es por lista cerrada, solo publican solicitudes los cotizantes con un plan "
+        "vigente. Las importadoras siguen igual. Apágalo al abrir al público.",
+    ),
     "cobro_cotizaciones": (
         "modulos.cobro_cotizaciones",
         "Cobro por cotización",
@@ -45,6 +51,8 @@ def _por_defecto(nombre: str) -> bool:
         return bool(config.MODULO_EDUCATIVO_HABILITADO)
     if nombre == "registro":
         return bool(config.REGISTRO_PUBLICO_HABILITADO)
+    if nombre == "solo_con_plan":
+        return bool(config.PUBLICAR_SOLO_CON_PLAN)
     if nombre == "cobro_cotizaciones":
         return bool(config.COBRO_COTIZACIONES_TOKENS)
     if nombre == "pago_manual_cursos":

@@ -14,6 +14,30 @@ Textos de la sección: `zarpi-home-copy-v1.md` (raíz del repositorio). Código:
 
   O lo **rechaza** con motivo, y el cupo se libera.
 - Sin cupos, la misma pantalla deja a la persona en la **lista de espera**, sin comprobante.
+- **Acceso por lista cerrada:** hasta que los VIP prueben la plataforma no se abre al público.
+  - Debajo de las tarjetas de la sección Planes va el aviso «Acceso por lista cerrada…» y el botón **«Avísame cuando abra»**, que lleva a `/lista-espera`, una pantalla pública.
+  - Para ocultar un plan (por ejemplo, el Paquete) se despublica en Admin › Planes.
+  - **Registro público apagado** (módulo `registro`): nadie crea cuenta por su lado. Quien llega a `/registro` ve la misma línea y el botón a la lista de espera.
+  - **Solo publican con plan** (módulo `solo_con_plan`): solo los compradores con plan vigente crean solicitudes. Las importadoras siguen igual.
+  - Ambos módulos se manejan en *Admin › Módulos*; ver `28-Pagos-Manuales-y-Modulos.md`.
+- **Contador de cupos** en la tarjeta del plan, si tiene límite: «N de M cupos tomados», con una barra y la leyenda «X activas · Y por activar».
+  - Por activar: comprobante enviado, sin revisar.
+  - Activas: pago confirmado.
+  - Las rechazadas y la lista de espera no ocupan cupo.
+
+### Lista de espera
+
+- Pide **nombre, WhatsApp, correo, sector y «¿qué te gustaría importar?»** (texto libre), más la autorización de datos.
+- **Sector** (también en la inscripción con comprobante): qué le interesa traer. El selector usa las categorías de las importadoras (`lib/categorias.ts`: Textil, Tecnología, Televenta…) y «Otro» con texto libre. Sale en el admin, en el CSV, en el aviso al admin y en la copia a pagos@.
+- Hay dos maneras de llegar:
+  - `apertura`: desde «Avísame cuando abra»;
+  - `sin_cupos`: desde la inscripción a un plan que se quedó sin cupos.
+- Se ve en **Admin › Planes › Lista de espera**, con la fecha, lo que la persona quiere importar y el origen. Desde ahí se descarga en CSV para compartirla con las importadoras.
+- **Cómo se guarda (sin migración):**
+  - La persona queda como una inscripción en estado `lista_espera`.
+  - La de la apertura cuelga del primer plan publicado, porque la tabla exige un plan.
+  - El sector, el texto de lo que quiere importar y el origen van en `configuracion_plataforma`, con la clave `lista_espera.<id de la inscripción>`.
+  - El sector de una inscripción con comprobante va en la misma tabla, con la clave `inscripcion_plan.<id de la inscripción>`.
 
 La migración siembra el **Paquete Importador** y el **Plan VIP** del copy v1, sin límite de cupos. Los cupos se fijan en Admin › Planes.
 
@@ -33,13 +57,14 @@ La migración siembra el **Paquete Importador** y el **Plan VIP** del copy v1, s
 
 | Método | Ruta | Quién | Qué hace |
 |---|---|---|---|
-| GET | `/planes` | Público | Planes activos con `precio_cop`, `iva_cop`, `total_cop`, `incluye[]` y `cupos_restantes` (`null` = sin límite); también `datos_pago` |
+| GET | `/planes` | Público | Planes activos con `precio_cop`, `iva_cop`, `total_cop`, `incluye[]`, `cupos_restantes` (`null` = sin límite) y el contador de la tarjeta: `cupos_por_activar` (comprobante por revisar) y `cupos_activos` (pago confirmado); también `datos_pago` |
 | POST | `/planes/{clave}/inscripcion` | Público (con sesión, la asocia a la cuenta) | multipart: `datos` (JSON) + `comprobante` (PDF/JPG/PNG/WEBP ≤ 10 MB, se valida la firma del archivo). 409 `{"codigo":"sin_cupos"}` si no quedan cupos; 409 si ya hay una pendiente con ese correo |
-| POST | `/planes/{clave}/lista-espera` | Público | JSON con los mismos `datos` |
+| POST | `/planes/lista-espera` | Público | «Avísame cuando abra». JSON: `email`, `nombre`, `indicativo_pais_telefono`, `telefono` (WhatsApp), `sector` (2–80 caracteres), `interes` (qué le gustaría importar, 3–500 caracteres) y `acepto_datos: true`. 409 si ese correo ya está en la lista |
+| POST | `/planes/{clave}/lista-espera` | Público | Lista de espera de un plan sin cupos; el mismo JSON |
 | GET | `/planes/admin/planes` | Admin | Todos los planes, con conteo de inscripciones por estado |
 | POST | `/planes/admin/planes` | Admin | Crear (`clave` en minúsculas: es la del enlace) |
 | PUT | `/planes/admin/planes/{id}` | Admin | Editar. No cambia las inscripciones ya hechas, que guardan lo que costaban |
-| GET | `/planes/admin/inscripciones?estado=` | Admin | `pendiente` \| `activa` \| `rechazada` \| `lista_espera` |
+| GET | `/planes/admin/inscripciones?estado=` | Admin | `pendiente` \| `activa` \| `rechazada` \| `lista_espera`. Cada fila trae `sector` (null en las de antes de pedirlo); en la lista de espera, además, `interes` y `origen_espera` (`apertura` \| `sin_cupos`) |
 | GET | `/planes/admin/inscripciones/{id}/comprobante` | Admin | Descarga el comprobante |
 | POST | `/planes/admin/inscripciones/{id}/activar` | Admin | Crea o usa la cuenta y acredita el plan |
 | POST | `/planes/admin/inscripciones/{id}/rechazar` | Admin | `{"motivo": "..."}`; le llega a la persona |
@@ -47,7 +72,7 @@ La migración siembra el **Paquete Importador** y el **Plan VIP** del copy v1, s
 `datos`: `email`, `tipo_persona` (`natural` \| `juridica`).
 - Si es natural: `nombre`, `apellido`, `tipo_documento`, `numero_documento`.
 - Si es jurídica: `razon_social`, `nit`.
-- Comunes: `indicativo_pais_telefono`, `telefono`, `ciudad?`, `acepto_condiciones` y `acepto_datos` (ambos deben ser `true`).
+- Comunes: `indicativo_pais_telefono`, `telefono`, `ciudad?`, `sector` (obligatorio, 2–80 caracteres), `acepto_condiciones` y `acepto_datos` (ambos deben ser `true`).
 
 ## Correos
 
@@ -56,7 +81,7 @@ La migración siembra el **Paquete Importador** y el **Plan VIP** del copy v1, s
   - el acuse al inscribirse;
   - la activación, con enlace y código para crear la contraseña;
   - el rechazo, con el motivo;
-  - la confirmación de la lista de espera.
+  - la confirmación de la lista de espera, que en la de la apertura dice que se le avisa cuando Zarpi abra al público.
 - **A los admins:** aviso en la campana, que lleva a `/admin/planes`.
 
 ## Archivos
