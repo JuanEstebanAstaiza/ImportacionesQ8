@@ -5490,8 +5490,11 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 {/* Transferir solo tiene sentido en el hilo con el cliente: el
                     canal interno es de un asesor concreto por definición, un
                     ticket de soporte no se pasa a una empresa y el canal del
-                    equipo de Zarpi no tiene asesores a quién pasarlo. */}
-                {conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&(<>
+                    equipo de Zarpi no tiene asesores a quién pasarlo. Y solo
+                    para la cuenta dueña de la empresa: es la única que puede
+                    reasignar (`PUT /importadores/cotizaciones/{id}/asignar`);
+                    el comprador no tiene subcuentas y el asesor no reasigna. */}
+                {currentUserRole==="importadora"&&conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">
