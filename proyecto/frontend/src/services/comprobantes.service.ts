@@ -66,6 +66,8 @@ export interface ResumenPagos {
   datos_pago: string | null;
   tokens: number;
   cotizaciones_gratis: number;
+  /** Plan de acceso de la cuenta (inscripción activada o plan dado por el admin). */
+  plan: { id: string; nombre: string | null; solicitudes: number; vence_en: string | null; vigente: boolean } | null;
   suscripcion: { precio_cop: number | null; dias: number; vigente_hasta: string | null };
 }
 

@@ -345,6 +345,7 @@ def configuracion_publica(db=Depends(get_db)):
     registro_abierto = modulos.activo(db, "registro")
     cobro_cotizaciones = modulos.activo(db, "cobro_cotizaciones")
     solo_con_plan = modulos.activo(db, "solo_con_plan")
+    cotizaciones_abiertas = modulos.activo(db, "cotizaciones_abiertas")
 
     return {
         "modulo_educativo_habilitado": modulo_educativo,
@@ -353,6 +354,8 @@ def configuracion_publica(db=Depends(get_db)):
         "cobro_cotizaciones": cobro_cotizaciones,
         # Solo publican solicitudes los cotizantes con plan vigente.
         "solo_con_plan": solo_con_plan,
+        # Apagadas, el formulario solo ofrece la cotización dirigida.
+        "cotizaciones_abiertas": cotizaciones_abiertas,
         "correo_contacto": app_config.CONTACT_EMAIL,
         "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
         "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,

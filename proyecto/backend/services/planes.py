@@ -616,6 +616,35 @@ def activar(db: Session, inscripcion_id: str, admin: Usuario) -> InscripcionPlan
     return ins
 
 
+def otorgar_a_cuenta(db: Session, usuario_id: str, plan_id: str, admin: Usuario) -> InscripcionPlan:
+    """Acredita un plan a un comprador que ya tiene cuenta, sin inscripción ni
+    comprobante. Usa la misma activación: suma solicitudes y alarga la vigencia."""
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if usuario is None or usuario.rol != "solicitante":
+        raise _error(status.HTTP_404_NOT_FOUND, "Elige un comprador que ya tenga cuenta")
+    if not usuario.activo:
+        raise _error(status.HTTP_409_CONFLICT, "Esa cuenta está desactivada")
+    plan = db.query(Plan).filter(Plan.id == plan_id, Plan.activo.is_(True)).first()
+    if plan is None:
+        raise _error(status.HTTP_404_NOT_FOUND, "Ese plan no existe o ya no está disponible")
+
+    ins = InscripcionPlan(
+        plan_id=plan.id, estado=EstadoInscripcionPlan.pendiente.value, usuario_id=usuario.id,
+        email=usuario.email, tipo_persona=usuario.tipo_persona or "natural",
+        nombre=usuario.nombre, apellido=usuario.apellido, tipo_documento=usuario.tipo_documento,
+        numero_documento=usuario.numero_documento, razon_social=usuario.razon_social, nit=usuario.nit,
+        indicativo_pais_telefono=usuario.indicativo_pais_telefono or "+57",
+        telefono=usuario.telefono or "3000000000", ciudad=None,
+        precio_cop=plan.precio_cop, iva_cop=iva_de(plan.precio_cop, plan.iva_pct),
+        total_cop=con_iva(plan.precio_cop, plan.iva_pct),
+        acepto_condiciones=True, acepto_datos=bool(usuario.acepto_politica_datos),
+        fecha_aceptacion=datetime.utcnow(),
+    )
+    db.add(ins)
+    db.flush()
+    return activar(db, ins.id, admin)
+
+
 def rechazar(db: Session, inscripcion_id: str, admin: Usuario, motivo: str) -> InscripcionPlan:
     ins = _pendiente(db, inscripcion_id)
     plan = db.query(Plan).filter(Plan.id == ins.plan_id).first()

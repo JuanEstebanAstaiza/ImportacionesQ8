@@ -170,6 +170,11 @@ export const planesService = {
     return apiRequest(`/planes/admin/inscripciones/${id}/activar`, { method: "POST" });
   },
 
+  /** Acredita el plan a un comprador que ya tiene cuenta, sin comprobante. */
+  otorgar(usuarioId: string, planId: string): Promise<InscripcionAdmin> {
+    return apiRequest("/planes/admin/otorgar", { method: "POST", body: { usuario_id: usuarioId, plan_id: planId } });
+  },
+
   rechazar(id: string, motivo: string): Promise<InscripcionAdmin> {
     return apiRequest(`/planes/admin/inscripciones/${id}/rechazar`, { method: "POST", body: { motivo } });
   },

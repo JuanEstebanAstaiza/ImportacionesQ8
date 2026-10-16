@@ -11,7 +11,7 @@ from datetime import datetime
 import config
 from schemas.orden import (
     OrdenResponse, EstadoOrdenUpdate, DocumentoOrdenItem, DocumentoOrdenCreate,
-    ReportarProblemaRequest, ResolverDisputaRequest
+    ReportarProblemaRequest, ResolverDisputaRequest, ComprobantePagoOrdenCreate, RechazoComprobanteOrden
 )
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
 from models.usuario import Usuario
@@ -42,8 +42,9 @@ ESTADOS_VALIDOS = {
 # Cómo se lee cada estado fuera del código: los mensajes que ve el cliente no
 # pueden decir "aduana_nacionalizacion".
 ETIQUETAS_ESTADO = {
-    "cotizacion_aceptada": "cotización aceptada",
-    "en_produccion": "en producción",
+    # La orden nace esperando el pago del cliente (ver services/pagos_orden.py).
+    "cotizacion_aceptada": "orden generada · pago pendiente",
+    "en_produccion": "orden en producción",
     "transito_internacional": "en tránsito internacional",
     "aduana_nacionalizacion": "en aduana / nacionalización",
     "bodega_local": "en bodega local",
@@ -390,6 +391,13 @@ async def actualizar_estado_orden(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Transición de estado inválida: {estado_actual} → {nuevo_estado_valor}. Estados permitidos: {estados_permitidos}"
         )
+
+    # Sin pago confirmado no hay producción (se fabrique o ya esté hecho).
+    if nuevo_estado_valor == EstadoOrden.en_produccion.value:
+        from services import pagos_orden
+
+        if not pagos_orden.pago_confirmado(db, orden_id_str):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=pagos_orden.MENSAJE_FALTA_PAGO)
     
     # Actualizar el estado de la orden
     orden.estado = nuevo_estado_valor
@@ -517,6 +525,86 @@ async def agregar_documento_orden(
         url=nuevo_documento.url,
         tipo=nuevo_documento.tipo.value if isinstance(nuevo_documento.tipo, TipoDocumentoOrden) else nuevo_documento.tipo
     )
+
+# ==================== Pago del cliente a la empresa ====================
+# Cada orden tiene su carpeta de pagos en la gestión documental del cliente; ahí
+# sube el comprobante y la empresa lo confirma. Ver services/pagos_orden.py.
+
+def _id_orden(orden_id: str) -> str:
+    try:
+        return str(PyUUID(orden_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ID de operación inválido")
+
+
+@router.get("/{orden_id}/pagos")
+def pagos_de_la_orden(
+    orden_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Estado del pago de la orden: monto acordado, comprobantes enviados y si
+    ya está confirmado. Al cliente le devuelve la carpeta de pagos de la
+    operación (`carpeta_id`) para subir ahí el comprobante."""
+    from services import pagos_orden
+
+    orden = pagos_orden.orden_visible(db, _id_orden(orden_id), current_user)
+    return pagos_orden.resumen(db, orden, current_user)
+
+
+@router.post("/{orden_id}/pagos", status_code=status.HTTP_201_CREATED)
+def enviar_comprobante_orden(
+    orden_id: str,
+    datos: ComprobantePagoOrdenCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol("solicitante")),
+):
+    """El cliente envía a la empresa el comprobante de pago (un archivo ya subido
+    a su gestión documental; queda en la carpeta de pagos de la operación)."""
+    from services import pagos_orden
+
+    orden = pagos_orden.orden_visible(db, _id_orden(orden_id), current_user)
+    usuario = db.query(Usuario).filter(Usuario.id == str(current_user["user_id"])).first()
+    comprobante = pagos_orden.subir(
+        db, orden, usuario, archivo_id=datos.archivo_id, monto_cop=datos.monto_cop, nota=datos.nota,
+    )
+    db.commit()
+    return pagos_orden.a_dict(db, comprobante)
+
+
+@router.post("/{orden_id}/pagos/{comprobante_id}/confirmar")
+def confirmar_pago_orden(
+    orden_id: str,
+    comprobante_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """La empresa confirma que recibió el pago: desde aquí la orden puede pasar a producción."""
+    from services import pagos_orden
+
+    orden = pagos_orden.orden_visible(db, _id_orden(orden_id), current_user)
+    comprobante = pagos_orden.confirmar(db, orden, comprobante_id, current_user)
+    db.commit()
+    return pagos_orden.a_dict(db, comprobante)
+
+
+@router.post("/{orden_id}/pagos/{comprobante_id}/rechazar")
+def rechazar_pago_orden(
+    orden_id: str,
+    comprobante_id: str,
+    datos: RechazoComprobanteOrden,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_rol_in("importador", "asesor")),
+):
+    """La empresa no reconoce el pago (no llegó, monto distinto...): el cliente
+    recibe el motivo y puede enviar otro comprobante."""
+    from services import pagos_orden
+
+    orden = pagos_orden.orden_visible(db, _id_orden(orden_id), current_user)
+    comprobante = pagos_orden.rechazar(db, orden, comprobante_id, current_user, datos.motivo)
+    db.commit()
+    return pagos_orden.a_dict(db, comprobante)
+
 
 # NOTA (Semana 4 - Fase 5): `POST /ordenes/crear-orden` fue eliminado. La orden
 # ahora se crea automáticamente cuando ambas partes (solicitante y empresa)

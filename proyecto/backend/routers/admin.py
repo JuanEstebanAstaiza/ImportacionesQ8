@@ -562,6 +562,7 @@ class CambioModulos(BaseModel):
     academico: Optional[bool] = None
     registro: Optional[bool] = None
     solo_con_plan: Optional[bool] = None
+    cotizaciones_abiertas: Optional[bool] = None
     cobro_cotizaciones: Optional[bool] = None
     pago_manual_cursos: Optional[bool] = None
 

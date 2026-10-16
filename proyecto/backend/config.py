@@ -184,6 +184,9 @@ MODULO_EDUCATIVO_HABILITADO = os.getenv("MODULO_EDUCATIVO_HABILITADO", "true").l
 # activar la inscripción a un plan. Abierto en tests: los de registro lo usan.
 REGISTRO_PUBLICO_HABILITADO = os.getenv(
     "REGISTRO_PUBLICO_HABILITADO", "true" if APP_ENV == "test" else "false").lower() == "true"
+# Cotizaciones abiertas (repartidas entre importadoras compatibles). El admin las
+# puede apagar en Módulos: entonces solo se crean cotizaciones dirigidas.
+COTIZACIONES_ABIERTAS = os.getenv("COTIZACIONES_ABIERTAS", "true").lower() == "true"
 # Solo publican solicitudes los cotizantes con un plan vigente (Módulos). Apagado
 # en tests: casi todas crean cotizaciones sin plan.
 PUBLICAR_SOLO_CON_PLAN = os.getenv(

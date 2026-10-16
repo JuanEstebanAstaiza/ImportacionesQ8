@@ -31,6 +31,12 @@ MODULOS = {
         "Mientras el acceso es por lista cerrada, solo publican solicitudes los cotizantes con un plan "
         "vigente. Las importadoras siguen igual. Apágalo al abrir al público.",
     ),
+    "cotizaciones_abiertas": (
+        "modulos.cotizaciones_abiertas",
+        "Cotizaciones abiertas",
+        "Que el comprador publique una cotización abierta, repartida entre las importadoras compatibles. "
+        "Apagado, solo puede elegir una empresa (dirigida); las abiertas que ya existen siguen su curso.",
+    ),
     "cobro_cotizaciones": (
         "modulos.cobro_cotizaciones",
         "Cobro por cotización",
@@ -51,6 +57,8 @@ def _por_defecto(nombre: str) -> bool:
         return bool(config.MODULO_EDUCATIVO_HABILITADO)
     if nombre == "registro":
         return bool(config.REGISTRO_PUBLICO_HABILITADO)
+    if nombre == "cotizaciones_abiertas":
+        return bool(config.COTIZACIONES_ABIERTAS)
     if nombre == "solo_con_plan":
         return bool(config.PUBLICAR_SOLO_CON_PLAN)
     if nombre == "cobro_cotizaciones":

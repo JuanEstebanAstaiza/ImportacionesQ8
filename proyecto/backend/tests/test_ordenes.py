@@ -9,7 +9,7 @@ from models.propuesta import Propuesta, EstadoPropuesta
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.usuario import Usuario
 from utils.security import hash_password, create_access_token
-from conftest import crear_empresa_importadora, auth_headers_for
+from conftest import crear_empresa_importadora, auth_headers_for, confirmar_pago_orden
 
 
 @pytest.fixture()
@@ -192,6 +192,14 @@ class TestActualizarEstadoOrden:
         db_session.add(orden)
         db_session.commit()
         
+        response = client.put(
+            f"/ordenes/{orden.id}/estado",
+            json={"estado": "en_produccion"},
+            headers=auth_headers_importador
+        )
+        assert response.status_code == 409  # sin pago confirmado no pasa a producción
+
+        confirmar_pago_orden(db_session, orden)
         response = client.put(
             f"/ordenes/{orden.id}/estado",
             json={"estado": "en_produccion"},

@@ -135,6 +135,12 @@ class Rechazo(BaseModel):
     motivo: str = Field(..., min_length=3, max_length=500)
 
 
+class OtorgarPlan(BaseModel):
+    """Plan para un comprador que ya tiene cuenta: no pasa por el comprobante."""
+    usuario_id: str
+    plan_id: str
+
+
 def _usuario_opcional(db: Session, current_user: Optional[dict]) -> Optional[Usuario]:
     if not current_user:
         return None
@@ -289,6 +295,15 @@ def admin_comprobante(inscripcion_id: str, db: Session = Depends(get_db),
 def admin_activar(inscripcion_id: str, db: Session = Depends(get_db),
                   current_user: dict = Depends(require_rol("admin"))):
     ins = svc.activar(db, inscripcion_id, _admin(db, current_user))
+    db.commit()
+    return svc.ins_a_dict(db, ins)
+
+
+@router.post("/admin/otorgar", status_code=status.HTTP_201_CREATED)
+def admin_otorgar(datos: OtorgarPlan, db: Session = Depends(get_db),
+                  current_user: dict = Depends(require_rol("admin"))):
+    """Acredita un plan a un comprador que ya existe, sin crear otra cuenta."""
+    ins = svc.otorgar_a_cuenta(db, datos.usuario_id, datos.plan_id, _admin(db, current_user))
     db.commit()
     return svc.ins_a_dict(db, ins)
 

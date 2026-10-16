@@ -236,6 +236,22 @@ def test_renovar_suma_lo_que_quedaba_y_cuenta_existente_no_se_duplica(client, db
     assert _inscribir(client, persona={**PERSONA, "email": "otra@x.com"}, headers=importador_h).status_code == 403
 
 
+def test_otorgar_plan_a_comprador_que_ya_tiene_cuenta(client, db_session, planes):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    cliente, _ = crear_usuario_con_token(db_session, email="cliente@q8demo.com")
+    r = client.post("/planes/admin/otorgar", headers=admin_h,
+                    json={"usuario_id": cliente.id, "plan_id": planes["importador"].id})
+    assert r.status_code == 201, r.text
+    assert r.json()["email"] == "cliente@q8demo.com" and r.json()["estado"] == "activa"
+    db_session.refresh(cliente)
+    assert cliente.plan_id == planes["importador"].id and cliente.solicitudes_plan == 10
+    assert db_session.query(Usuario).filter(Usuario.email == "cliente@q8demo.com").count() == 1
+    # Una empresa no se puede elegir como comprador del plan.
+    empresa, _ = crear_usuario_con_token(db_session, rol="importador", email="empresa@q8demo.com")
+    assert client.post("/planes/admin/otorgar", headers=admin_h,
+                       json={"usuario_id": empresa.id, "plan_id": planes["importador"].id}).status_code == 404
+
+
 def test_el_admin_edita_los_planes(client, db_session, planes):
     _, admin_h = crear_usuario_con_token(db_session, rol="admin")
     _, comprador_h = crear_usuario_con_token(db_session)
@@ -302,6 +318,21 @@ def test_con_lista_cerrada_solo_publica_quien_tiene_plan_vigente(client, db_sess
 
     # Al abrir al público se apaga y vuelve a publicar cualquiera.
     _modulo(client, admin_h, solo_con_plan=False)
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+
+def test_el_admin_apaga_las_cotizaciones_abiertas(client, db_session, planes):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    _, headers = crear_usuario_con_token(db_session)
+    assert client.get("/configuracion-publica").json()["cotizaciones_abiertas"] is True
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+    _modulo(client, admin_h, cotizaciones_abiertas=False)
+    assert client.get("/configuracion-publica").json()["cotizaciones_abiertas"] is False
+    r = client.post("/cotizaciones", json=COTIZACION, headers=headers)
+    assert r.status_code == 400 and "abiertas están desactivadas" in r.text
+
+    _modulo(client, admin_h, cotizaciones_abiertas=True)
     assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
 
 

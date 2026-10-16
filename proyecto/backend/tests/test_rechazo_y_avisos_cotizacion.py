@@ -146,19 +146,22 @@ def test_orden_de_compra_y_cambios_de_estado_por_correo(client, db_session, esce
     assert client.post(f"/propuestas/{p.id}/pre-aceptar", json={"aceptar": True},
                        headers=auth_headers_for(dueño)).status_code == 200
     al_cotizante = [x for x in correos if x["para"] == solicitante.email]
-    assert [x["titulo"] for x in al_cotizante] == ["Tu cotización ya es una operación"]
+    assert [x["titulo"] for x in al_cotizante] == ["Orden generada: pago pendiente"]
     assert "Importa Rechazos" in al_cotizante[0]["mensaje"] and "US$1,250.00" in al_cotizante[0]["mensaje"]
     assert al_cotizante[0]["buzon"] == "notificaciones"
 
     from models.orden import Orden
 
     orden = db_session.query(Orden).filter(Orden.cotizacion_id == c.id).one()
+    from conftest import confirmar_pago_orden
+
+    confirmar_pago_orden(db_session, orden)
     correos.clear()
     r = client.put(f"/ordenes/{orden.id}/estado", json={"estado": "en_produccion"}, headers=auth_headers_for(dueño))
     assert r.status_code == 200, r.text
     estado = [x for x in correos if x["para"] == solicitante.email]
-    assert estado[0]["titulo"] == "Nuevo estado de tu operación: en producción" and estado[0]["buzon"] == "notificaciones"
-    assert "Termos de acero" in estado[0]["mensaje"] and "«cotización aceptada»" in estado[0]["mensaje"]
+    assert estado[0]["titulo"] == "Nuevo estado de tu operación: orden en producción" and estado[0]["buzon"] == "notificaciones"
+    assert "Termos de acero" in estado[0]["mensaje"] and "«orden generada · pago pendiente»" in estado[0]["mensaje"]
 
 
 def test_cotizacion_nueva_avisa_a_empresa_y_asesores(db_session, escenario, correos):
