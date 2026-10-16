@@ -130,5 +130,17 @@ class Usuario(Base):
     perfil_completo = Column(Boolean, default=False)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
+    @property
+    def plan_vigente(self) -> bool:
+        from services.tokens_cotizacion import plan_vigente
+
+        return plan_vigente(self)
+
+    @property
+    def solicitudes_plan_vigentes(self) -> int:
+        from services.tokens_cotizacion import solicitudes_plan_vigentes
+
+        return solicitudes_plan_vigentes(self)
+
     def __repr__(self):
         return f"<Usuario(id={self.id}, email={self.email}, rol={self.rol})>"

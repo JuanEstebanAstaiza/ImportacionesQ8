@@ -63,16 +63,19 @@ export interface DatosInscripcion {
   indicativo_pais_telefono: string;
   telefono: string;
   ciudad?: string;
+  /** Qué le interesa traer: Textil, Tecnología, Televenta… */
+  sector: string;
   acepto_condiciones: boolean;
   acepto_datos: boolean;
 }
 
-/** Lista de espera: nombre, WhatsApp, correo y qué le gustaría importar. */
+/** Lista de espera: nombre, WhatsApp, correo, sector y qué le gustaría importar. */
 export interface DatosListaEspera {
   email: string;
   nombre: string;
   indicativo_pais_telefono: string;
   telefono: string;
+  sector: string;
   interes: string;
   acepto_datos: boolean;
 }
@@ -100,6 +103,8 @@ export interface InscripcionAdmin {
   vence_en: string | null;
   revisado_en: string | null;
   fecha: string | null;
+  /** Null en las inscripciones de antes de pedirlo. */
+  sector: string | null;
   /** Solo en la lista de espera: «¿qué te gustaría importar?». */
   interes: string | null;
   origen_espera: OrigenEspera | null;

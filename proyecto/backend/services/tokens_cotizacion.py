@@ -32,6 +32,11 @@ MENSAJE_SIN_TOKENS = (
 )
 
 
+MENSAJE_SIN_PLAN = (
+    "Por ahora solo publican solicitudes quienes tienen un plan activo. Apertura al público: próximamente."
+)
+
+
 class SinTokens(Exception):
     pass
 

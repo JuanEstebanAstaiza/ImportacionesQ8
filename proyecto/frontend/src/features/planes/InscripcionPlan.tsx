@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Check, CheckCircle2, FileUp, Loader2 } from "lucide-react";
 
 import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
-import { EncabezadoPlanes, FormularioListaEspera } from "@/features/planes/ListaEspera";
+import { CampoSector, EncabezadoPlanes, FormularioListaEspera } from "@/features/planes/ListaEspera";
 import { ApiError } from "@/services/api-client";
 import { planesService, pesos, type DatosInscripcion, type Plan } from "@/services/planes.service";
 
@@ -55,6 +55,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
   const [indicativo, setIndicativo] = useState("+57");
   const [telefono, setTelefono] = useState(prefill?.telefono ?? "");
   const [ciudad, setCiudad] = useState("");
+  const [sector, setSector] = useState("");
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [aceptoCondiciones, setAceptoCondiciones] = useState(false);
   const [aceptoDatos, setAceptoDatos] = useState(false);
@@ -93,6 +94,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
     if (tipoPersona === "juridica" && (!razonSocial.trim() || !nit.trim())) {
       setError("Escribe la razón social y el NIT de la empresa."); return;
     }
+    if (sector.trim().length < 2) { setError("Elige tu sector."); return; }
     if (!comprobante) { setError("Adjunta el comprobante de la transferencia."); return; }
     if (comprobante && comprobante.size > MAX_BYTES) { setError("El comprobante supera los 10 MB."); return; }
     if (!aceptoCondiciones || !aceptoDatos) { setError("Para continuar, acepta las condiciones y la autorización de datos."); return; }
@@ -103,6 +105,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
       indicativo_pais_telefono: indicativo.trim() || "+57",
       telefono: telefono.trim(),
       ciudad: ciudad.trim() || undefined,
+      sector: sector.trim(),
       acepto_condiciones: aceptoCondiciones,
       acepto_datos: aceptoDatos,
       ...(tipoPersona === "natural"
@@ -232,6 +235,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
                     </div>
                   </label>
                   <label className="text-sm font-medium">Ciudad (opcional)<input value={ciudad} onChange={(e) => setCiudad(e.target.value)} autoComplete="address-level2" maxLength={100} className={CAMPO} /></label>
+                  <CampoSector valor={sector} onChange={setSector} className="sm:col-span-2" />
                 </div>
               </fieldset>
 

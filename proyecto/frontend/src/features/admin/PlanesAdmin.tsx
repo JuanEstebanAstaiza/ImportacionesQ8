@@ -47,9 +47,9 @@ const ORIGEN_ESPERA: Record<string, string> = {
 function descargarListaEspera(filas: InscripcionAdmin[]) {
   const celda = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lineas = [
-    ["Fecha", "Nombre", "WhatsApp", "Correo", "Qué le gustaría importar", "Origen", "Plan"].map(celda).join(";"),
+    ["Fecha", "Nombre", "WhatsApp", "Correo", "Sector", "Qué le gustaría importar", "Origen", "Plan"].map(celda).join(";"),
     ...filas.map((f) => [
-      f.fecha ? new Date(f.fecha).toLocaleString("es-CO") : "", f.nombre, f.telefono, f.email, f.interes,
+      f.fecha ? new Date(f.fecha).toLocaleString("es-CO") : "", f.nombre, f.telefono, f.email, f.sector, f.interes,
       f.origen_espera ? ORIGEN_ESPERA[f.origen_espera] : "", f.plan.nombre,
     ].map(celda).join(";")),
   ];
@@ -112,6 +112,9 @@ function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: (
           <p className="text-xs text-muted-foreground">
             {[ins.email, ins.telefono, ins.documento, ins.ciudad].filter(Boolean).join(" · ")}
           </p>
+          {ins.sector && (
+            <p className="mt-1 text-sm"><span className="text-muted-foreground">Sector:</span> {ins.sector}</p>
+          )}
           {ins.interes && (
             <p className="mt-1 text-sm"><span className="text-muted-foreground">Quiere importar:</span> {ins.interes}</p>
           )}

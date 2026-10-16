@@ -28,6 +28,9 @@ class UsuarioMeResponse(BaseModel):
     # Curador de Tendencias (capacidad aparte del rol): aprueba las fichas.
     es_curador: bool = False
     cotizaciones_gratis: int = 0
+    # Plan de acceso: si está vigente y cuántas solicitudes le quedan.
+    plan_vigente: bool = False
+    solicitudes_plan_vigentes: int = 0
 
     model_config = {"from_attributes": True}
 

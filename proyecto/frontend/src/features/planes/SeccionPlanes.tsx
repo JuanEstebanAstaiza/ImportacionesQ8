@@ -152,14 +152,19 @@ function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Pl
  * Hasta que los VIP prueben la plataforma no se abre al público: la sección lo
  * dice arriba y ofrece la lista de espera de la apertura.
  */
+/** La línea de la lista cerrada: la usan esta sección y el registro cerrado. */
+export const LISTA_CERRADA = {
+  titulo: "Acceso por lista cerrada.",
+  texto: "Por ahora solo publican solicitudes quienes entran con el plan de lanzamiento. Apertura al público: próximamente.",
+};
+
 function AvisoListaCerrada({ onAvisame }: { onAvisame: () => void }) {
   return (
     <div className="mx-auto mb-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/25 bg-card/80 px-5 py-5 text-center backdrop-blur-sm dark:border-accent/25">
       <p className="flex items-start gap-2 text-sm leading-relaxed sm:items-center">
         <LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary dark:text-accent sm:mt-0" />
         <span>
-          <strong className="font-semibold">Acceso por lista cerrada.</strong> Por ahora solo publican solicitudes quienes
-          entran con el plan de lanzamiento. Apertura al público: próximamente.
+          <strong className="font-semibold">{LISTA_CERRADA.titulo}</strong> {LISTA_CERRADA.texto}
         </span>
       </p>
       <button

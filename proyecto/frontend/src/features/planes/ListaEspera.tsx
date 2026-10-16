@@ -3,10 +3,11 @@ import { CheckCircle2, ChevronLeft, Loader2, Moon, Sun } from "lucide-react";
 
 import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 import { planesService, type DatosListaEspera, type Plan } from "@/services/planes.service";
 
 /**
- * Lista de espera. Pide nombre, WhatsApp, correo y «¿qué te gustaría
+ * Lista de espera. Pide nombre, WhatsApp, correo, sector y «¿qué te gustaría
  * importar?», y llega a Admin › Planes › Lista de espera con la fecha.
  *
  * - Sin plan: la de la apertura al público (`/lista-espera`, el botón
@@ -20,6 +21,41 @@ export interface PrefillListaEspera {
   email?: string;
   nombre?: string;
   telefono?: string;
+}
+
+const OTRO_SECTOR = "Otro";
+
+/**
+ * Sector: qué le interesa traer. Las mismas categorías de las importadoras
+ * (`lib/categorias.ts`), para cruzarlas después, y «Otro» con texto libre.
+ */
+export function CampoSector({ valor, onChange, className = "" }: {
+  valor: string;
+  onChange: (valor: string) => void;
+  className?: string;
+}) {
+  const [otro, setOtro] = useState(() => valor !== "" && !(CATEGORIAS_PRODUCTO as readonly string[]).includes(valor));
+  return (
+    <div className={className}>
+      <label className="block text-sm font-medium">Sector
+        <select value={otro ? OTRO_SECTOR : valor} className={CAMPO}
+          onChange={(e) => {
+            const elegido = e.target.value;
+            setOtro(elegido === OTRO_SECTOR);
+            onChange(elegido === OTRO_SECTOR ? "" : elegido);
+          }}>
+          <option value="" disabled>Elige el sector</option>
+          {CATEGORIAS_PRODUCTO.map((c) => <option key={c} value={c}>{c}</option>)}
+          <option value={OTRO_SECTOR}>Otro</option>
+        </select>
+      </label>
+      {otro && (
+        <input value={valor} onChange={(e) => onChange(e.target.value)} maxLength={80} autoFocus
+          aria-label="¿Cuál sector?" placeholder="¿Cuál?" className={CAMPO} />
+      )}
+      <span className="mt-1 block text-xs text-muted-foreground">Lo que te interesa traer: textiles, tecnología, televenta…</span>
+    </div>
+  );
 }
 
 /** Encabezado de las páginas públicas de planes: logo, tema y «Volver». */
@@ -56,6 +92,7 @@ export function FormularioListaEspera({ plan, prefill, aviso, encabezado, onPoli
   const [email, setEmail] = useState(prefill?.email ?? "");
   const [indicativo, setIndicativo] = useState("+57");
   const [telefono, setTelefono] = useState(prefill?.telefono ?? "");
+  const [sector, setSector] = useState("");
   const [interes, setInteres] = useState("");
   const [aceptoDatos, setAceptoDatos] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -68,6 +105,7 @@ export function FormularioListaEspera({ plan, prefill, aviso, encabezado, onPoli
     if (nombre.trim().length < 2) { setError("Escribe tu nombre."); return; }
     if (telefono.trim().length < 7) { setError("Escribe tu número de WhatsApp."); return; }
     if (!email.trim()) { setError("Escribe tu correo."); return; }
+    if (sector.trim().length < 2) { setError("Elige tu sector."); return; }
     if (interes.trim().length < 3) { setError("Cuéntanos qué te gustaría importar."); return; }
     if (!aceptoDatos) { setError("Para continuar, autoriza el tratamiento de tus datos."); return; }
 
@@ -76,6 +114,7 @@ export function FormularioListaEspera({ plan, prefill, aviso, encabezado, onPoli
       email: email.trim(),
       indicativo_pais_telefono: indicativo.trim() || "+57",
       telefono: telefono.trim(),
+      sector: sector.trim(),
       interes: interes.trim(),
       acepto_datos: aceptoDatos,
     };
@@ -132,6 +171,7 @@ export function FormularioListaEspera({ plan, prefill, aviso, encabezado, onPoli
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className={CAMPO} />
           </label>
         </div>
+        <CampoSector valor={sector} onChange={setSector} />
         <label className="block text-sm font-medium">¿Qué te gustaría importar?
           <textarea value={interes} onChange={(e) => setInteres(e.target.value)} maxLength={500} rows={3}
             placeholder="Ej. termos de acero para regalos corporativos, unas 500 unidades"

@@ -36,6 +36,7 @@ class DatosInscripcion(BaseModel):
     indicativo_pais_telefono: str = Field("+57", pattern=r"^\+\d{1,4}$")
     telefono: str = Field(..., min_length=7, max_length=30)
     ciudad: Optional[str] = Field(None, max_length=100)
+    sector: str = Field(..., max_length=80)  # qué le interesa traer: Textil, Tecnología, Televenta…
     acepto_condiciones: bool
     acepto_datos: bool
 
@@ -47,6 +48,7 @@ class DatosInscripcion(BaseModel):
             if isinstance(valor, str):
                 setattr(self, campo, valor.strip() or None)
         self.email = self.email.lower()
+        self.sector = _sector(self.sector)
         requeridos = ("razon_social", "nit") if self.tipo_persona == "juridica" else (
             "nombre", "apellido", "tipo_documento", "numero_documento")
         faltan = [c for c in requeridos if not getattr(self, c)]
@@ -59,12 +61,20 @@ class DatosInscripcion(BaseModel):
         return self
 
 
+def _sector(valor: str) -> str:
+    sector = " ".join(valor.split())
+    if len(sector) < 2:
+        raise ValueError("Elige tu sector")
+    return sector
+
+
 class DatosListaEspera(BaseModel):
     """Lista de espera: lo justo para escribirle y saber qué quiere traer."""
     email: EmailStr
     nombre: str = Field(..., min_length=2, max_length=120)
     indicativo_pais_telefono: str = Field("+57", pattern=r"^\+\d{1,4}$")
     telefono: str = Field(..., min_length=7, max_length=30)  # WhatsApp
+    sector: str = Field(..., max_length=80)
     interes: str = Field(..., min_length=3, max_length=500)  # «¿Qué te gustaría importar?»
     acepto_datos: bool
 
@@ -74,6 +84,7 @@ class DatosListaEspera(BaseModel):
         self.nombre = self.nombre.strip()
         self.telefono = self.telefono.strip()
         self.interes = " ".join(self.interes.split())
+        self.sector = _sector(self.sector)
         if len(self.nombre) < 2:
             raise ValueError("Escribe tu nombre")
         if len(self.interes) < 3:
@@ -259,7 +270,7 @@ def admin_inscripciones(
     current_user: dict = Depends(require_rol("admin")),
 ):
     inscripciones = svc.listar_inscripciones(db, estado)
-    extras = svc.extras_lista_espera(db, [i.id for i in inscripciones if i.estado == "lista_espera"])
+    extras = svc.extras_inscripciones(db, [i.id for i in inscripciones])
     return [svc.ins_a_dict(db, i, extras) for i in inscripciones]
 
 
