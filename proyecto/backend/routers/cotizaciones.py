@@ -493,6 +493,13 @@ async def crear_cotizacion(
             and not tokens_cotizacion.plan_vigente(solicitante)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=tokens_cotizacion.MENSAJE_SIN_PLAN)
 
+    # Módulos › Cotizaciones abiertas: apagadas, solo se crean dirigidas.
+    if cotizacion_data.modalidad == "abierta" and not modulos_svc.activo(db, "cotizaciones_abiertas"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Por ahora las cotizaciones abiertas están desactivadas: elige una empresa importadora.",
+        )
+
     cobra_tokens = solicitante.rol == "solicitante" and modulos_svc.activo(db, "cobro_cotizaciones")
     if cobra_tokens and tokens_cotizacion.saldo(solicitante) < 1:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=tokens_cotizacion.MENSAJE_SIN_TOKENS)
@@ -1940,6 +1947,15 @@ async def pre_aceptar_propuesta(
                 db, nueva_orden, estado_anterior=None, estado_nuevo=EstadoOrden.cotizacion_aceptada.value,
                 usuario=current_user, cotizacion=cotizacion,
             )
+            # Carpeta de pagos de la operación en la gestión documental del
+            # cliente: ahí sube el comprobante que la empresa confirma.
+            try:
+                from services.pagos_orden import carpeta_de_pagos
+
+                with db.begin_nested():
+                    carpeta_de_pagos(db, nueva_orden)
+            except Exception:
+                logger.warning("No se pudo crear la carpeta de pagos de la orden %s", nueva_orden.id)
 
         evento_propuesta(
             db, TiposEvento.PROPUESTA_ACEPTADA, propuesta, cotizacion, usuario=current_user,
@@ -1997,11 +2013,12 @@ async def pre_aceptar_propuesta(
                 conversacion_id=conversacion.id,
                 remitente_id=responsable_id or user_id_str,
                 contenido=(
-                    "La empresa confirmó la propuesta y se creó la operación. "
+                    "La empresa confirmó la propuesta y se generó la orden (pago pendiente). "
                     "Esta conversación pasa a ser el seguimiento del embarque: "
                     "aquí se irán informando los cambios de estado.\n\n"
-                    f"Solicitud de pago: debes realizar el pago acordado de {precio_pago} "
-                    "para continuar con la operación y enviar el comprobante por el chat."
+                    f"Solicitud de pago: realiza el pago acordado de {precio_pago} y sube el "
+                    "comprobante en la sección «Pago» de la operación. Cuando la empresa "
+                    "confirme el pago, la orden pasa a producción."
                 ),
                 tipo=TipoMensajeChat.sistema,
                 metadata_json={
@@ -2035,11 +2052,12 @@ async def pre_aceptar_propuesta(
             db,
             usuario_id=cotizacion.solicitante_id,
             tipo="orden",
-            titulo="Tu cotización ya es una operación",
+            titulo="Orden generada: pago pendiente",
             mensaje=(
                 f"{_nombre_empresa(db, propuesta.importador_id)} confirmó la propuesta para "
-                f"{cotizacion.nombre_producto} y se creó la operación.{precio} "
-                "Debes realizar el pago acordado para continuar y enviar el comprobante por el chat. "
+                f"{cotizacion.nombre_producto} y se generó la orden.{precio} "
+                "Realiza el pago acordado y sube el comprobante en la sección «Pago» de la operación: "
+                "cuando la empresa lo confirme, la orden pasa a producción. "
                 "Te avisaremos de cada cambio de estado del embarque."
             ),
             data={"cotizacion_id": str(cotizacion.id), "orden_id": str(nueva_orden.id)},

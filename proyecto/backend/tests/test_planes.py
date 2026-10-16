@@ -321,6 +321,21 @@ def test_con_lista_cerrada_solo_publica_quien_tiene_plan_vigente(client, db_sess
     assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
 
 
+def test_el_admin_apaga_las_cotizaciones_abiertas(client, db_session, planes):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    _, headers = crear_usuario_con_token(db_session)
+    assert client.get("/configuracion-publica").json()["cotizaciones_abiertas"] is True
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+    _modulo(client, admin_h, cotizaciones_abiertas=False)
+    assert client.get("/configuracion-publica").json()["cotizaciones_abiertas"] is False
+    r = client.post("/cotizaciones", json=COTIZACION, headers=headers)
+    assert r.status_code == 400 and "abiertas están desactivadas" in r.text
+
+    _modulo(client, admin_h, cotizaciones_abiertas=True)
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+
 def test_sin_propuestas_en_72_horas_la_unidad_vuelve(client, db_session, planes, correos):
     usuario, _ = crear_usuario_con_token(db_session)
     importador, _ = crear_empresa_importadora(db_session)

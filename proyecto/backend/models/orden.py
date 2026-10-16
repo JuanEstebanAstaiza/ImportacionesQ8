@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship, object_session
 from uuid import uuid4
 from datetime import datetime
@@ -6,6 +6,9 @@ import enum
 from database import Base
 
 class EstadoOrden(str, enum.Enum):
+    # «Orden generada · pago pendiente»: el valor se conserva por compatibilidad
+    # (eventos, métricas, órdenes ya creadas). No pasa a producción hasta que la
+    # empresa confirma un comprobante de pago del cliente (ComprobantePagoOrden).
     cotizacion_aceptada = "cotizacion_aceptada"
     en_produccion = "en_produccion"
     transito_internacional = "transito_internacional"
@@ -96,3 +99,33 @@ class DocumentoOrden(Base):
 
     def __repr__(self):
         return f"<DocumentoOrden(orden_id={self.orden_id}, tipo={self.tipo})>"
+
+
+class EstadoComprobanteOrden(str, enum.Enum):
+    pendiente = "pendiente"
+    confirmado = "confirmado"
+    rechazado = "rechazado"
+
+
+class ComprobantePagoOrden(Base):
+    """Comprobante del pago del cliente a la empresa importadora por una orden.
+
+    El cliente lo sube a la carpeta de pagos de la operación (en su gestión
+    documental, ver `services/pagos_orden.py`); la empresa lo confirma o lo
+    rechaza. Con un comprobante confirmado la orden puede pasar a producción.
+    """
+    __tablename__ = "comprobantes_pago_orden"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    orden_id = Column(String(36), ForeignKey("ordenes.id"), nullable=False, index=True)
+    archivo_id = Column(String(36), ForeignKey("archivos.id"), nullable=False, index=True)
+    subido_por = Column(String(36), ForeignKey("usuarios.id"), nullable=False)
+    # Lo que declara el cliente.
+    monto_cop = Column(Integer, nullable=True)
+    nota = Column(String(500), nullable=True)
+    estado = Column(String(20), nullable=False, default=EstadoComprobanteOrden.pendiente.value, index=True)
+    # Lo que decide la empresa.
+    motivo_rechazo = Column(String(300), nullable=True)
+    revisado_por = Column(String(36), ForeignKey("usuarios.id"), nullable=True)
+    revisado_en = Column(DateTime, nullable=True)
+    fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow)

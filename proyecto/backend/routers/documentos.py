@@ -1079,6 +1079,15 @@ async def descargar_archivo(
         allowed = puede_ver_archivo(db, archivo_id, _current_user_id(current_user), current_user.get("rol", ""))
 
     if not allowed and current_user is not None:
+        # Comprobante del pago de una orden: el cliente, la empresa y el admin.
+        from services import pagos_orden
+
+        allowed = pagos_orden.puede_ver_archivo(
+            db, archivo_id, _current_user_id(current_user), current_user.get("rol", ""),
+            current_user.get("importador_id"),
+        )
+
+    if not allowed and current_user is not None:
         user_id = _current_user_id(current_user)
         # El owner puede descargar siempre; quienes lo reciben por chat y los
         # alumnos del curso donde está vinculado, también.

@@ -20,7 +20,7 @@ from models.orden import EstadoOrden, Orden
 from models.propuesta import EstadoPropuesta, Propuesta
 from models.usuario import Usuario
 from utils.security import hash_password
-from conftest import auth_headers_for, crear_empresa_importadora
+from conftest import auth_headers_for, confirmar_pago_orden, crear_empresa_importadora
 
 
 @pytest.fixture()
@@ -179,6 +179,7 @@ class TestSeguimientoTrasLaOrden:
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        confirmar_pago_orden(db_session, orden)
         assert orden is not None
 
         conversacion = db_session.query(ConversacionChat).filter(
@@ -197,6 +198,7 @@ class TestSeguimientoTrasLaOrden:
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        confirmar_pago_orden(db_session, orden)
 
         response = client.put(
             f"/ordenes/{orden.id}/estado",
@@ -217,6 +219,7 @@ class TestSeguimientoTrasLaOrden:
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        confirmar_pago_orden(db_session, orden)
         client.put(
             f"/ordenes/{orden.id}/estado",
             json={"estado": EstadoOrden.en_produccion.value},
@@ -242,6 +245,7 @@ class TestSeguimientoTrasLaOrden:
         client.post(f"/propuestas/{propuesta.id}/pre-aceptar", json={"aceptar": True}, headers=auth_headers_for(dueño))
 
         orden = db_session.query(Orden).filter(Orden.cotizacion_id == cotizacion.id).first()
+        confirmar_pago_orden(db_session, orden)
 
         response = client.put(
             f"/ordenes/{orden.id}/estado",

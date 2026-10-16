@@ -245,6 +245,25 @@ def crear_empresa_importadora(db_session, nombre_empresa="Empresa Importadora Te
     db_session.refresh(dueño)
     return importador, dueño
 
+def confirmar_pago_orden(db_session, orden):
+    """Helper: deja confirmado el pago del cliente de una orden, que es lo que
+    exige pasarla a producción (services/pagos_orden.py)."""
+    from models.documental import Archivo
+    from models.orden import ComprobantePagoOrden
+
+    archivo = Archivo(
+        owner_user_id=orden.solicitante_id, nombre="comprobante.pdf", extension="pdf",
+        mime_type="application/pdf", tipo_recurso="documento", origen="comprobante-pago",
+    )
+    db_session.add(archivo)
+    db_session.flush()
+    db_session.add(ComprobantePagoOrden(
+        orden_id=orden.id, archivo_id=archivo.id, subido_por=orden.solicitante_id,
+        estado="confirmado", revisado_en=datetime.utcnow(),
+    ))
+    db_session.commit()
+
+
 def registro_payload(email, password="ClaveSegura1", rol="solicitante", tipo_persona="natural", **overrides):
     """
     Devuelve un payload válido para POST /auth/register (Semana 4: distingue

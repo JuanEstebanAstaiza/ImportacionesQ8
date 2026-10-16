@@ -162,7 +162,7 @@ class TestAmbosLadosFinalizan:
         assert "US$3.20" in mensaje_sistema.contenido
         assert mensaje_sistema.metadata_json["tipo_evento"] == "solicitud_pago_orden"
         assert mensaje_sistema.metadata_json["orden_id"] == str(orden.id)
-        assert "enviar el comprobante por el chat" in mensaje_sistema.contenido
+        assert "sube el comprobante en la sección «Pago» de la operación" in mensaje_sistema.contenido
 
     def test_asesor_asignado_no_puede_finalizar_por_la_empresa(self, client, db_session, solicitante, empresa, asesor):
         """El asesor negocia; comprometer a la empresa es de la cuenta dueña.

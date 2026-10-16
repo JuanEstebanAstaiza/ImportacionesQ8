@@ -72,10 +72,11 @@ El token también desbloquea a las empresas de nivel superior, así que no se co
 | `academico` | `MODULO_EDUCATIVO_HABILITADO` | Cursos fuera del menú; `/cursos` responde 404 |
 | `registro` | `REGISTRO_PUBLICO_HABILITADO` (apagado, salvo en tests) | `/auth/register` responde 403. La landing y el login no ofrecen «Crear cuenta». `/registro` muestra la línea de la lista cerrada y «Avísame cuando abra», que lleva a `/lista-espera`. La cuenta se crea al activar la inscripción a un plan, o la crea el equipo desde *Usuarios* |
 | `solo_con_plan` | `PUBLICAR_SOLO_CON_PLAN` (encendido, salvo en tests) | Encendido, `POST /cotizaciones` responde 403 a un comprador sin plan vigente (`plan_vence_en` en el futuro), aunque tenga tokens sueltos. El formulario de «Nueva solicitud» muestra el aviso y no deja enviar. Las importadoras no cambian. Se apaga al abrir al público |
+| `cotizaciones_abiertas` | `COTIZACIONES_ABIERTAS` (encendido) | `POST /cotizaciones` con `modalidad: "abierta"` responde 400. El formulario de «Nueva solicitud» solo ofrece la cotización dirigida. Las abiertas que ya existen siguen su curso |
 | `cobro_cotizaciones` | `COBRO_COTIZACIONES_TOKENS` (encendido, salvo en tests) | Cotizar no consume tokens |
 | `pago_manual_cursos` | `PAGO_MANUAL_CURSOS` (encendido, salvo en tests) | Los cursos se compran directo, como antes |
 
-`/configuracion-publica` expone `registro_abierto`, `cobro_cotizaciones`, `solo_con_plan` y `correo_contacto`. `/usuarios/me` trae `plan_vigente` y `solicitudes_plan_vigentes`; el formulario de «Nueva solicitud» cuenta esas solicitudes como saldo, junto con los tokens y las gratis.
+`/configuracion-publica` expone `registro_abierto`, `cobro_cotizaciones`, `solo_con_plan`, `cotizaciones_abiertas` y `correo_contacto`. `/usuarios/me` trae `plan_vigente` y `solicitudes_plan_vigentes`; el formulario de «Nueva solicitud» cuenta esas solicitudes como saldo, junto con los tokens y las gratis.
 
 ## Carpetas por módulo en gestión documental
 

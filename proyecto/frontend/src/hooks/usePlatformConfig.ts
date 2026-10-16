@@ -17,6 +17,8 @@ export interface PlatformConfig {
   cobro_cotizaciones: boolean;
   /** Solo publican solicitudes los cotizantes con plan vigente (lista cerrada). */
   solo_con_plan: boolean;
+  /** Apagadas, el formulario de cotización solo ofrece la dirigida. */
+  cotizaciones_abiertas: boolean;
   correo_contacto: string;
   notificaciones_email: boolean;
   /** Tamaño máximo por archivo subido, en bytes. Ver `lib/limite-subida.ts`. */
@@ -30,6 +32,7 @@ const DEFAULT_CONFIG: PlatformConfig = {
   registro_abierto: true,
   cobro_cotizaciones: false,
   solo_con_plan: false,
+  cotizaciones_abiertas: true,
   correo_contacto: "contacto@zarpi.co",
   notificaciones_email: false,
   max_subida_bytes: 300 * 1024 * 1024,

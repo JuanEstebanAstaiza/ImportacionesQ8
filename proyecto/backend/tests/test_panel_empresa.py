@@ -102,6 +102,9 @@ def test_panel_completo(client, db_session):
     # El pedido ganado avanza a "en producción" (etapa embarque).
     from models.orden import Orden
     orden = db_session.query(Orden).filter(Orden.cotizacion_id == ganada).one()
+    from conftest import confirmar_pago_orden
+
+    confirmar_pago_orden(db_session, orden)
     assert client.put(f"/ordenes/{orden.id}/estado", json={"estado": "en_produccion"}, headers=h_yo).status_code == 200
 
     # La solicitud sin responder lleva 30 h esperando.

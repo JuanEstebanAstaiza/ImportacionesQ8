@@ -55,6 +55,14 @@ class ReportarProblemaRequest(BaseModel):
 class ResolverDisputaRequest(BaseModel):
     resolucion: str = Field(..., min_length=5, description="Notas de la resolución aplicada por el admin")
 
+class ComprobantePagoOrdenCreate(BaseModel):
+    archivo_id: str
+    monto_cop: Optional[int] = Field(None, ge=0, le=100_000_000_000)
+    nota: Optional[str] = Field(None, max_length=500)
+
+class RechazoComprobanteOrden(BaseModel):
+    motivo: str = Field(..., min_length=5, max_length=300)
+
 class EstadoOrdenUpdate(BaseModel):
     estado: str  # Nuevo estado de la orden
 

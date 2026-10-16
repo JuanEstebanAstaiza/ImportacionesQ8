@@ -271,6 +271,10 @@ class TestCierreYPedido:
         assert hito.datos["etapa"] == "compra"
         assert hito.orden_id == aceptada.orden_id
 
+        from conftest import confirmar_pago_orden
+        from models.orden import Orden
+
+        confirmar_pago_orden(db_session, db_session.query(Orden).filter(Orden.id == hito.orden_id).one())
         r = client.put(f"/ordenes/{hito.orden_id}/estado", json={"estado": "en_produccion"}, headers=auth_headers_for(dueño_a))
         assert r.status_code == 200, r.text
         hitos = _eventos(db_session, cotizacion_id, "pedido_hito")

@@ -56,6 +56,7 @@ import { ListaEsperaApertura } from "@/features/planes/ListaEspera";
 import { InscripcionPlan } from "@/features/planes/InscripcionPlan";
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
+import { PagoOrden } from "@/features/ordenes/PagoOrden";
 import { fijarRegistro, registroAbierto } from "@/app/registro";
 import { RetoPagina } from "@/features/reto/RetoPagina";
 import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
@@ -573,9 +574,11 @@ const ORDER_LIFECYCLE_STEPS=[
 // del ciclo completo (incluye pasos previos a la orden y un "en ruta" que el
 // backend no distingue); usar sus claves para escribir era el motivo de que
 // actualizar el estado no hiciera nada: el backend las rechazaba por inválidas.
+// La orden nace esperando el pago del cliente; pasa a producción cuando la
+// empresa confirma el comprobante (ver features/ordenes/PagoOrden.tsx).
 const ORDER_STATES=[
-  {key:"cotizacion_aceptada",     label:"Cotización aceptada"},
-  {key:"en_produccion",           label:"En producción"},
+  {key:"cotizacion_aceptada",     label:"Orden generada · pago pendiente"},
+  {key:"en_produccion",           label:"Orden en producción"},
   {key:"transito_internacional",  label:"Tránsito internacional"},
   {key:"aduana_nacionalizacion",  label:"Aduana / nacionalización"},
   {key:"bodega_local",            label:"Bodega local"},
@@ -3739,8 +3742,10 @@ function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advisorName,onViewImporterProfile,canManageOrder,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];advisorName?:string;onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
+function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advisorName,onViewImporterProfile,canManageOrder,esCliente=false,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];advisorName?:string;onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;esCliente?:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
   const [isAdvancing,setIsAdvancing]=useState(false);
+  // Lo informa la tarjeta «Pago de la orden»: sin pago confirmado no hay producción.
+  const [pagoConfirmado,setPagoConfirmado]=useState<boolean|null>(null);
   const [advanceMessage,setAdvanceMessage]=useState("");
   const [advanceError,setAdvanceError]=useState("");
   // Anclas de las tarjetas a las que saltan los botones de la cabecera: la
@@ -3799,6 +3804,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
   );
 
   const siguienteEstadoOrden = nextOrderState(order.status);
+  const esperaPago = order.status==="cotizacion_aceptada"&&pagoConfirmado!==true;
 
   async function avanzarEstado(){
     if(!order||!siguienteEstadoOrden)return;
@@ -3848,6 +3854,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                 ))}</div>
                 <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
               </Card>
+              <PagoOrden ordenId={order.id} esCliente={esCliente} onPagoConfirmado={setPagoConfirmado}/>
               <div ref={seguimientoRef}>
                 <Card padding="md">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
@@ -3861,12 +3868,14 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                     <div className="mt-5 pt-4 border-t border-border">
                       {siguienteEstadoOrden?(
                         <div className="flex items-center gap-3 flex-wrap">
-                          <Button variant="primary" size="sm" loading={isAdvancing}
+                          <Button variant="primary" size="sm" loading={isAdvancing} disabled={esperaPago}
                             onClick={()=>{void avanzarEstado();}}>
                             Marcar «{siguienteEstadoOrden.label}»
                           </Button>
                           <p className="text-xs text-muted-foreground">
-                            El cliente lo verá en el chat de seguimiento y recibirá el aviso.
+                            {esperaPago
+                              ?"Primero confirma el pago del cliente en «Pago de la orden»."
+                              :"El cliente lo verá en el chat de seguimiento y recibirá el aviso."}
                           </p>
                         </div>
                       ):(
@@ -3919,7 +3928,7 @@ function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advis
                   <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
                 </div>
               </Card>
-              <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">{order.status || "En seguimiento"}</span></div><p className="text-xs text-muted-foreground">Última actualización: {history.length>0?formatShortDate(history[history.length-1].fecha):"Reciente"}</p></Card>
+              <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">{order.status ? orderStateLabel(order.status) : "En seguimiento"}</span></div><p className="text-xs text-muted-foreground">Última actualización: {history.length>0?formatShortDate(history[history.length-1].fecha):"Reciente"}</p></Card>
               {relChatId&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta operación</h3><p className="text-xs text-muted-foreground mb-3">Abrir conversación asociada a la operación.</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Abrir chat</Button></Card>}
             </div>
           </div>
@@ -7028,15 +7037,20 @@ function normalizeTargetPriceInput(value: string): string {
 }
 function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
 
-function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[]}) {
+function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers,permiteAbierta=true}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[];permiteAbierta?:boolean}) {
   const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
   const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||(imp.certs??[]).length>0;return ms&&mc&&mcat&&mr;});
   const hasF=cs||cc||ccat||cr;
 
   return (
     <div className="space-y-6">
-      {/* SELECCIÓN DE MODALIDAD */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* SELECCIÓN DE MODALIDAD (la abierta se apaga en Admin › Módulos) */}
+      {!permiteAbierta && (
+        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Por ahora las cotizaciones se envían a una empresa importadora que elijas. Las abiertas no están disponibles.
+        </p>
+      )}
+      <div className={clsx("grid grid-cols-1 gap-4", permiteAbierta && "sm:grid-cols-2")}>
         {[
           {
             m: "dirigida" as const,
@@ -7050,7 +7064,7 @@ function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,im
             title: "Cotización abierta",
             desc: "La solicitud se distribuirá automáticamente entre importadores compatibles.",
           },
-        ].map(({ m, icon: Icon, title, desc }) => {
+        ].filter(({ m }) => permiteAbierta || m !== "abierta").map(({ m, icon: Icon, title, desc }) => {
           const seleccionada = modalidad === m;
           return (
             <button
@@ -7922,9 +7936,10 @@ interface OrigenSolicitud {
   catalogoProductoId?:string;
 }
 
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null,cobroTokens=false,cotizacionesGratis=0,solicitudesPlan=0,sinPlan=false,onIrAPagos,onVerPlanes}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null;cobroTokens?:boolean;cotizacionesGratis?:number;solicitudesPlan?:number;sinPlan?:boolean;onIrAPagos?:()=>void;onVerPlanes?:()=>void}) {
+function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null,cobroTokens=false,cotizacionesGratis=0,solicitudesPlan=0,sinPlan=false,permiteAbierta=true,onIrAPagos,onVerPlanes}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null;cobroTokens?:boolean;cotizacionesGratis?:number;solicitudesPlan?:number;sinPlan?:boolean;permiteAbierta?:boolean;onIrAPagos?:()=>void;onVerPlanes?:()=>void}) {
   const [step,setStep]=useState(1);
-  const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId?"dirigida":null);
+  // Sin cotizaciones abiertas (Admin › Módulos) la única modalidad es la dirigida.
+  const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId||!permiteAbierta?"dirigida":null);
   const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
   // Producto recomendado por una importadora: la solicitud solo puede ir a ella.
   const dirigidaFija=origen?.origen==="tendencias"&&!!origen.importadorId&&selectedId===origen.importadorId;
@@ -7985,6 +8000,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
     if(sinPlan){setStepError(`${LISTA_CERRADA.titulo} Por ahora solo publican solicitudes quienes tienen un plan activo.`);return;}
     if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
     if(!modalidad){setStepError("Selecciona una modalidad.");return;}
+    if(modalidad==="abierta"&&!permiteAbierta){setStepError("Por ahora las cotizaciones abiertas están desactivadas: elige una empresa importadora.");return;}
     if(tierBloqueado && !forceUnlock){
       setStepError(`Esta empresa requiere nivel ${tierRequerido} o superior. Tu nivel actual es ${tierCotizante}.`);
       return;
@@ -8118,7 +8134,7 @@ function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote
                     {step===1 && dirigidaFija && (
                       <Card padding="md"><div className="flex items-start gap-3"><Lock className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-sm font-semibold">Cotización dirigida a {origen?.nombreEmpresa||"la importadora que lo recomienda"}</p><p className="text-xs text-muted-foreground mt-1">Este producto lo recomendó esa importadora, así que la solicitud va solo a ella. Para pedir propuestas a otras empresas, crea una cotización nueva desde Cotizaciones.</p></div></div></Card>
                     )}
-                    {step===1 && !dirigidaFija && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers}/>}
+                    {step===1 && !dirigidaFija && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers} permiteAbierta={permiteAbierta}/>}
                     {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>{
                       const url=toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
                       if(prev.productPhotoUrls.length>=MAX_FOTOS_PRODUCTO||prev.productPhotoUrls.includes(url))return prev;
@@ -13199,7 +13215,7 @@ export default function App() {
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} solicitudesPlan={Number(currentUserProfile?.solicitudes_plan_vigentes ?? 0)} sinPlan={platformConfig.solo_con_plan&&userRole==="solicitante"&&currentUserProfile!==null&&!currentUserProfile.plan_vigente} onIrAPagos={()=>goTo("pagos")} onVerPlanes={irAPlanesDelInicio}/>;
+    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} solicitudesPlan={Number(currentUserProfile?.solicitudes_plan_vigentes ?? 0)} sinPlan={platformConfig.solo_con_plan&&userRole==="solicitante"&&currentUserProfile!==null&&!currentUserProfile.plan_vigente} permiteAbierta={platformConfig.cotizaciones_abiertas} onIrAPagos={()=>goTo("pagos")} onVerPlanes={irAPlanesDelInicio}/>;
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
     if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
     if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
@@ -13227,7 +13243,7 @@ export default function App() {
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
-    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
+    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} esCliente={userRole==="solicitante"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)} carpetaInicial={carpetaPagos}/></PantallaPortal>;
     if(screen==="user-profile")return (
