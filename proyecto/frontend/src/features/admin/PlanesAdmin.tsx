@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Check, Clapperboard, Download, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, Video, X } from "lucide-react";
+import { Check, Clapperboard, Download, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, UserPlus, Video, X } from "lucide-react";
+
+import { BuscadorUsuarios, UsuarioElegido } from "@/app/components/busqueda/BuscadorUsuarios";
+import type { UsuarioEncontrado } from "@/services/admin.service";
 
 import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
@@ -163,7 +166,57 @@ function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: (
   );
 }
 
-function Inscripciones({ onCambio }: { onCambio: () => void }) {
+function DarPlanACuenta({ planes, onOtorgado }: { planes: PlanAdmin[]; onOtorgado: () => void }) {
+  const activos = planes.filter((p) => p.activo);
+  const [usuario, setUsuario] = useState<UsuarioEncontrado | null>(null);
+  const [planId, setPlanId] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  const dar = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!usuario || !planId) return;
+    setEnviando(true);
+    try {
+      const ins = await planesService.otorgar(usuario.id, planId);
+      toast.success(`${ins.email} ya tiene ${ins.plan.nombre}.`);
+      setUsuario(null);
+      onOtorgado();
+    } catch (err) {
+      toast.error(mensajeError(err, "No se pudo dar el plan."));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <form onSubmit={(ev) => void dar(ev)} className="border-b border-border p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <UserPlus className="h-4 w-4 text-primary dark:text-accent" /> Cuenta que ya existe
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Búscalo por correo o nombre y dale el plan. No crea otra cuenta ni pide comprobante.
+      </p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1">
+          {usuario ? (
+            <UsuarioElegido email={usuario.email} nombre={usuario.nombre} onCambiar={() => setUsuario(null)} />
+          ) : (
+            <BuscadorUsuarios rol="solicitante" placeholder="Busca al comprador, por ejemplo cliente@q8demo.com" onSeleccionar={setUsuario} />
+          )}
+        </div>
+        <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={`${CLASE_INPUT} sm:w-56`} aria-label="Plan">
+          <option value="">Elige el plan</option>
+          {activos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+        </select>
+        <button type="submit" disabled={!usuario || !planId || enviando} className={CLASE_BOTON_PRIMARIO}>
+          {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Dar plan
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Inscripciones({ planes, onCambio }: { planes: PlanAdmin[]; onCambio: () => void }) {
   const [estado, setEstado] = useState<EstadoInscripcion>("pendiente");
   const [filas, setFilas] = useState<InscripcionAdmin[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -188,7 +241,7 @@ function Inscripciones({ onCambio }: { onCambio: () => void }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div>
           <p className="text-base font-semibold">Inscripciones</p>
-          <p className="text-sm text-muted-foreground">Confirma la transferencia en el banco antes de activar. Al activar se crea la cuenta y le llega el acceso.</p>
+          <p className="text-sm text-muted-foreground">Confirma la transferencia antes de activar una inscripción nueva. Si la persona ya tiene cuenta, búscala arriba y dale el plan directo.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {estado === "lista_espera" && filas.length > 0 && (
@@ -201,6 +254,7 @@ function Inscripciones({ onCambio }: { onCambio: () => void }) {
           </button>
         </div>
       </div>
+      <DarPlanACuenta planes={planes} onOtorgado={onCambio} />
       <div role="tablist" className="flex flex-wrap gap-2 px-4 pt-3">
         {PESTANAS.map((p) => (
           <button key={p.estado} type="button" role="tab" aria-selected={estado === p.estado} onClick={() => setEstado(p.estado)}
@@ -484,7 +538,7 @@ export function PlanesAdmin() {
 
   return (
     <div className="space-y-6">
-      <Inscripciones onCambio={() => void cargar()} />
+      <Inscripciones planes={planes} onCambio={() => void cargar()} />
 
       <section className="rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-card">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
