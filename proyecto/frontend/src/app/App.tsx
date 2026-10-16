@@ -52,6 +52,7 @@ import { AccesosCursos } from "@/features/admin/AccesosCursos";
 import { RevisionPresentaciones } from "@/features/admin/RevisionPresentaciones";
 import { PlanesAdmin } from "@/features/admin/PlanesAdmin";
 import { SeccionPlanes } from "@/features/planes/SeccionPlanes";
+import { ListaEsperaApertura } from "@/features/planes/ListaEspera";
 import { InscripcionPlan } from "@/features/planes/InscripcionPlan";
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
@@ -10153,7 +10154,7 @@ function PreguntasLanding({items}:{items:PreguntaLanding[]}) {
   );
 }
 
-function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void}) {
+function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse,onListaEspera}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void;onListaEspera:()=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [activeTab,setActiveTab]=useState<LandingTabKey>("home");
   // Sección a la que hay que bajar después de cambiar de pestaña (`planes`, `preguntas`).
@@ -10332,7 +10333,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       </section>
 
       {/* PLANES (id `planes`): valores y cupos desde Admin › Planes */}
-      <SeccionPlanes onInscribirme={plan=>onInscribirse(plan.clave)} onCondiciones={()=>onPolicy("planes")}/>
+      <SeccionPlanes onInscribirme={plan=>onInscribirse(plan.clave)} onCondiciones={()=>onPolicy("planes")} onAvisame={onListaEspera}/>
 
       {/* PARA EMPRESAS IMPORTADORAS */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
@@ -12264,7 +12265,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "tendencias", "tendencia-detalle", "reto"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto"];
     if (!publicScreens.includes(screen)) {
       setScreen("landing");
     }
@@ -13076,7 +13077,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "tendencias", "tendencia-detalle", "reto"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -13194,7 +13195,13 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
+  // «Avísame cuando abra» (sección Planes): lista de espera de la apertura al público.
+  if(screen==="lista-espera")return <ListaEsperaApertura
+    onVolver={()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing")}
+    onPoliticaDatos={()=>goTo("policy-data")}
+    prefill={isAuthenticated&&currentUserProfile?{email:currentUserProfile.email,nombre:currentUserProfile.nombre??undefined,telefono:currentUserProfile.telefono??undefined}:undefined}
+  />;
   // Inscripción a un plan: pública; con sesión de comprador se precargan sus datos.
   if(screen==="planes-inscripcion")return <InscripcionPlan
     key={planElegido}

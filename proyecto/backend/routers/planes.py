@@ -59,6 +59,30 @@ class DatosInscripcion(BaseModel):
         return self
 
 
+class DatosListaEspera(BaseModel):
+    """Lista de espera: lo justo para escribirle y saber qué quiere traer."""
+    email: EmailStr
+    nombre: str = Field(..., min_length=2, max_length=120)
+    indicativo_pais_telefono: str = Field("+57", pattern=r"^\+\d{1,4}$")
+    telefono: str = Field(..., min_length=7, max_length=30)  # WhatsApp
+    interes: str = Field(..., min_length=3, max_length=500)  # «¿Qué te gustaría importar?»
+    acepto_datos: bool
+
+    @model_validator(mode="after")
+    def validar(self):
+        self.email = self.email.lower()
+        self.nombre = self.nombre.strip()
+        self.telefono = self.telefono.strip()
+        self.interes = " ".join(self.interes.split())
+        if len(self.nombre) < 2:
+            raise ValueError("Escribe tu nombre")
+        if len(self.interes) < 3:
+            raise ValueError("Cuéntanos qué te gustaría importar")
+        if not self.acepto_datos:
+            raise ValueError("Debes autorizar el tratamiento de tus datos")
+        return self
+
+
 class PlanCampos(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=80)
     para_quien: Optional[str] = Field(None, max_length=200)
@@ -154,15 +178,32 @@ async def inscribirse(
     return {"id": ins.id, "estado": ins.estado, "total_cop": ins.total_cop}
 
 
+@router.post("/lista-espera", status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT_PLANES)
+async def entrar_lista_espera_apertura(
+    request: Request,
+    datos: DatosListaEspera,
+    db: Session = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_optional_current_user),
+):
+    """«Avísame cuando abra»: lista de espera de la apertura al público."""
+    plan = svc.plan_de_la_apertura(db)
+    ins = svc.lista_espera(db, plan, datos.model_dump(), _usuario_opcional(db, current_user),
+                           origen=svc.ORIGEN_APERTURA)
+    db.commit()
+    return {"id": ins.id, "estado": ins.estado}
+
+
 @router.post("/{clave}/lista-espera", status_code=status.HTTP_201_CREATED)
 @limiter.limit(RATE_LIMIT_PLANES)
 async def entrar_lista_espera(
     request: Request,
     clave: str,
-    datos: DatosInscripcion,
+    datos: DatosListaEspera,
     db: Session = Depends(get_db),
     current_user: Optional[dict] = Depends(get_optional_current_user),
 ):
+    """Lista de espera de un plan sin cupos."""
     plan = svc.por_clave(db, clave)
     ins = svc.lista_espera(db, plan, datos.model_dump(), _usuario_opcional(db, current_user))
     db.commit()
@@ -217,7 +258,9 @@ def admin_inscripciones(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_rol("admin")),
 ):
-    return [svc.ins_a_dict(db, i) for i in svc.listar_inscripciones(db, estado)]
+    inscripciones = svc.listar_inscripciones(db, estado)
+    extras = svc.extras_lista_espera(db, [i.id for i in inscripciones if i.estado == "lista_espera"])
+    return [svc.ins_a_dict(db, i, extras) for i in inscripciones]
 
 
 @router.get("/admin/inscripciones/{inscripcion_id}/comprobante")

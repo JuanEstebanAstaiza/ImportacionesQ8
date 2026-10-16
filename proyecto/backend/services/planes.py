@@ -11,10 +11,19 @@ Flujo:
    plan lo trae, los días de Tendencias. A una cuenta nueva le llega un enlace
    para crear su contraseña. O la rechaza con motivo, y el cupo se libera.
 4. Sin cupos, la inscripción pasa a lista de espera (sin comprobante).
+5. Mientras el acceso es por lista cerrada, «Avísame cuando abra» (en la sección
+   «Planes») deja a la persona en la lista de espera de la apertura al público:
+   `POST /planes/lista-espera`.
+
+La lista de espera pide nombre, WhatsApp, correo y «¿qué te gustaría
+importar?». Ese texto y el origen (apertura o plan sin cupos) no tienen columna
+en `inscripciones_plan`: van en `configuracion_plataforma` con la clave
+`lista_espera.<id de la inscripción>`, para no migrar la base.
 """
 from __future__ import annotations
 
 import calendar
+import json
 import logging
 import secrets
 from datetime import datetime, timedelta
@@ -25,6 +34,7 @@ from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import config
@@ -48,6 +58,10 @@ FORMATOS_COMPROBANTE = {
 MAX_COMPROBANTE_BYTES = 10 * 1024 * 1024
 
 OCUPAN_CUPO = (EstadoInscripcionPlan.pendiente.value, EstadoInscripcionPlan.activa.value)
+# De dónde llega cada persona a la lista de espera.
+ORIGEN_APERTURA = "apertura"     # «Avísame cuando abra»: apertura al público
+ORIGEN_SIN_CUPOS = "sin_cupos"   # el plan se quedó sin cupos
+PREFIJO_EXTRAS_ESPERA = "lista_espera."
 DIAS_ENLACE_BIENVENIDA = 7
 ENLACE_ADMIN = "/admin/planes"
 
@@ -85,6 +99,18 @@ def ocupados(db: Session, plan_id: str) -> int:
         InscripcionPlan.plan_id == plan_id, InscripcionPlan.estado.in_(OCUPAN_CUPO)).count()
 
 
+def ocupados_por_estado(db: Session, plan_id: str) -> Dict[str, int]:
+    """Cupos tomados, separados: los que pagaron y esperan activación
+    (`pendiente`) y los ya activos. Es lo que muestra el contador de la tarjeta."""
+    conteo = {estado: 0 for estado in OCUPAN_CUPO}
+    filas = db.query(InscripcionPlan.estado, func.count(InscripcionPlan.id)).filter(
+        InscripcionPlan.plan_id == plan_id, InscripcionPlan.estado.in_(OCUPAN_CUPO),
+    ).group_by(InscripcionPlan.estado).all()
+    for estado, cantidad in filas:
+        conteo[estado] = int(cantidad)
+    return conteo
+
+
 def cupos_restantes(db: Session, plan: Plan) -> Optional[int]:
     if plan.cupos_totales is None:
         return None
@@ -98,6 +124,7 @@ def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[s
         from services.videos_planes import videos_por_plan
 
         videos = videos_por_plan(db)
+    tomados = ocupados_por_estado(db, plan.id)
     datos = {
         "id": plan.id,
         "clave": plan.clave,
@@ -114,7 +141,11 @@ def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[s
         "total_solicitud_adicional_cop": con_iva(plan.precio_solicitud_adicional_cop, plan.iva_pct),
         "incluye": list(plan.incluye or []),
         "cupos_totales": plan.cupos_totales,
-        "cupos_restantes": cupos_restantes(db, plan),
+        "cupos_restantes": (None if plan.cupos_totales is None
+                            else max(0, int(plan.cupos_totales) - sum(tomados.values()))),
+        # Contador de la tarjeta: cuántos cupos están por activar y cuántos activos.
+        "cupos_por_activar": tomados[EstadoInscripcionPlan.pendiente.value],
+        "cupos_activos": tomados[EstadoInscripcionPlan.activa.value],
         "destacado": bool(plan.destacado),
         "orden": plan.orden,
         # Se reproduce en la tarjeta del plan (ver services/videos_planes.py).
@@ -298,21 +329,64 @@ def inscribir(db: Session, plan: Plan, datos: Dict, *, archivo_nombre: str, arch
     return ins
 
 
-def lista_espera(db: Session, plan: Plan, datos: Dict, usuario: Optional[Usuario]) -> InscripcionPlan:
+def plan_de_la_apertura(db: Session) -> Plan:
+    """La lista de espera de la apertura cuelga del primer plan publicado (la
+    tabla pide un plan); el origen `apertura` la distingue en el admin."""
+    plan = db.query(Plan).filter(Plan.activo.is_(True)).order_by(Plan.orden.asc(), Plan.precio_cop.asc()).first()
+    if plan is None:
+        raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "La lista de espera no está disponible en este momento")
+    return plan
+
+
+def extras_lista_espera(db: Session, ids: List[str]) -> Dict[str, Dict]:
+    """«¿Qué te gustaría importar?» y el origen de cada inscripción en espera."""
+    from models.configuracion import ConfiguracionPlataforma
+
+    if not ids:
+        return {}
+    claves = [PREFIJO_EXTRAS_ESPERA + i for i in ids]
+    extras = {}
+    for fila in db.query(ConfiguracionPlataforma).filter(ConfiguracionPlataforma.clave.in_(claves)).all():
+        try:
+            extras[fila.clave[len(PREFIJO_EXTRAS_ESPERA):]] = json.loads(fila.valor or "{}")
+        except ValueError:
+            continue
+    return extras
+
+
+def lista_espera(db: Session, plan: Plan, datos: Dict, usuario: Optional[Usuario], *,
+                 origen: str = ORIGEN_SIN_CUPOS) -> InscripcionPlan:
+    from services.configuracion import guardar
+
     _cuenta_compradora(usuario)
+    apertura = origen == ORIGEN_APERTURA
     if _ya_tiene(db, plan.id, datos["email"], (EstadoInscripcionPlan.lista_espera.value,)):
-        raise _error(status.HTTP_409_CONFLICT, "Ya estás en la lista de espera de este plan")
+        raise _error(status.HTTP_409_CONFLICT, "Ya estás en la lista de espera: te escribimos apenas abramos"
+                     if apertura else "Ya estás en la lista de espera de este plan")
+    datos = dict(datos)
+    interes = datos.pop("interes")
     ins = InscripcionPlan(**datos, plan_id=plan.id, estado=EstadoInscripcionPlan.lista_espera.value,
                           usuario_id=usuario.id if usuario else None, fecha_aceptacion=datetime.utcnow())
     db.add(ins)
     db.flush()
+    guardar(db, PREFIJO_EXTRAS_ESPERA + ins.id, json.dumps({"interes": interes, "origen": origen}, ensure_ascii=False))
+
+    motivo = "quiere que le avisemos cuando Zarpi abra al público" if apertura else \
+        f"quiere entrar a {plan.nombre}, que no tiene cupos"
     _avisar_admins(db, "Nueva persona en lista de espera",
-                   f"{_nombre(ins)} ({ins.email}) quiere entrar a {plan.nombre}, que no tiene cupos.",
-                   {"evento": "plan_lista_espera", "inscripcion_id": ins.id})
-    _enviar(ins.email, f"Quedaste en la lista de espera de {plan.nombre}",
-            [f"Hola {_nombre(ins)}.",
-             f"{plan.nombre} no tiene cupos en este momento y quedaste en la lista de espera.",
-             "Te escribimos apenas se abra un cupo."])
+                   f"{_nombre(ins)} ({ins.email}) {motivo}. Quiere importar: {interes}",
+                   {"evento": "plan_lista_espera", "inscripcion_id": ins.id, "origen": origen})
+    if apertura:
+        _enviar(ins.email, "Quedaste en la lista de espera de Zarpi",
+                [f"Hola {_nombre(ins)}.",
+                 "Por ahora el acceso a Zarpi es por lista cerrada. Quedaste en la lista de espera y te escribimos "
+                 "apenas abramos al público.",
+                 f"Nos contaste que te gustaría importar: {interes}"])
+    else:
+        _enviar(ins.email, f"Quedaste en la lista de espera de {plan.nombre}",
+                [f"Hola {_nombre(ins)}.",
+                 f"{plan.nombre} no tiene cupos en este momento y quedaste en la lista de espera.",
+                 "Te escribimos apenas se abra un cupo."])
     return ins
 
 
@@ -379,8 +453,12 @@ def _acuse(plan: Plan, ins: InscripcionPlan) -> bool:
 
 # ── Admin: revisar ───────────────────────────────────────────────────────────
 
-def ins_a_dict(db: Session, ins: InscripcionPlan) -> Dict:
+def ins_a_dict(db: Session, ins: InscripcionPlan, extras: Optional[Dict[str, Dict]] = None) -> Dict:
+    """`extras`: los de `extras_lista_espera`, para no leerlos uno por uno al listar."""
     plan = db.query(Plan).filter(Plan.id == ins.plan_id).first()
+    if extras is None:
+        extras = extras_lista_espera(db, [ins.id]) if ins.estado == EstadoInscripcionPlan.lista_espera.value else {}
+    extra = extras.get(ins.id, {})
     return {
         "id": ins.id,
         "estado": ins.estado,
@@ -402,6 +480,9 @@ def ins_a_dict(db: Session, ins: InscripcionPlan) -> Dict:
         "vence_en": ins.vence_en.isoformat() + "Z" if ins.vence_en else None,
         "revisado_en": ins.revisado_en.isoformat() + "Z" if ins.revisado_en else None,
         "fecha": ins.fecha_creacion.isoformat() + "Z" if ins.fecha_creacion else None,
+        # Solo en la lista de espera.
+        "interes": extra.get("interes"),
+        "origen_espera": extra.get("origen"),
     }
 
 

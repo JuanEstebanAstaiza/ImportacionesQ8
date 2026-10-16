@@ -27,11 +27,17 @@ PERSONA = {"email": "Ana@Example.com", "tipo_persona": "natural", "nombre": "Ana
            "ciudad": "Cali", "acepto_condiciones": True, "acepto_datos": True}
 
 
+# Lista de espera: nombre, WhatsApp, correo y qué quiere importar.
+ESPERA = {"email": "Luis@Example.com", "nombre": "Luis Pérez", "telefono": "3109876543",
+          "interes": "Termos  de acero\npara regalos corporativos", "acepto_datos": True}
+
+
 @pytest.fixture(autouse=True)
 def config_limpia(db_session):
     yield
-    db_session.query(ConfiguracionPlataforma).filter(ConfiguracionPlataforma.clave.like("modulos.%")).delete(
-        synchronize_session=False)
+    for prefijo in ("modulos.%", "lista_espera.%"):
+        db_session.query(ConfiguracionPlataforma).filter(ConfiguracionPlataforma.clave.like(prefijo)).delete(
+            synchronize_session=False)
     db_session.commit()
 
 
@@ -104,8 +110,10 @@ def test_inscripcion_sin_sesion_con_comprobante_llega_a_pagos(client, db_session
     assert "pago.png" in nombres and any(n.endswith(".pdf") for n in nombres)
     assert any(c["para"] == "ana@example.com" for c in correos)  # acuse
 
-    # Ocupa cupo, y no se puede mandar dos veces la misma.
-    assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 1
+    # Ocupa cupo (por activar), y no se puede mandar dos veces la misma.
+    importador = client.get("/planes").json()["planes"][0]
+    assert importador["cupos_restantes"] == 1
+    assert importador["cupos_por_activar"] == 1 and importador["cupos_activos"] == 0
     assert _inscribir(client).status_code == 409
 
     # Solo el admin descarga el comprobante.
@@ -132,9 +140,9 @@ def test_sin_cupos_pasa_a_lista_de_espera_y_el_rechazo_libera(client, db_session
     lleno = _inscribir(client, persona={**PERSONA, "email": "tres@x.com"})
     assert lleno.status_code == 409 and lleno.json()["detail"]["codigo"] == "sin_cupos"
 
-    espera = client.post("/planes/importador/lista-espera", json={**PERSONA, "email": "tres@x.com"})
+    espera = client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "tres@x.com"})
     assert espera.status_code == 201
-    assert client.post("/planes/importador/lista-espera", json={**PERSONA, "email": "tres@x.com"}).status_code == 409
+    assert client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "tres@x.com"}).status_code == 409
 
     pendiente = client.get("/planes/admin/inscripciones?estado=pendiente", headers=admin_h).json()
     assert len(pendiente) == 2
@@ -144,6 +152,32 @@ def test_sin_cupos_pasa_a_lista_de_espera_y_el_rechazo_libera(client, db_session
     assert any("no aparece" in c["texto"] for c in correos if c["para"] == "ana@example.com")
     assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 1
     assert _inscribir(client, persona={**PERSONA, "email": "tres@x.com"}).status_code == 201
+
+
+def test_avisame_cuando_abra_deja_en_lista_de_espera_con_lo_que_quiere_importar(client, db_session, planes, correos):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    r = client.post("/planes/lista-espera", json=ESPERA)
+    assert r.status_code == 201, r.text
+    assert r.json()["estado"] == "lista_espera"
+    # No ocupa cupo y no se repite.
+    assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 2
+    assert client.post("/planes/lista-espera", json=ESPERA).status_code == 409
+
+    # Solo pide nombre, WhatsApp, correo, qué quiere importar y la autorización de datos.
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "interes": ""}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "acepto_datos": False}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "b@x.com", "telefono": "123"}).status_code == 422
+
+    # Llega a la pestaña «Lista de espera» del admin, con fecha.
+    filas = client.get("/planes/admin/inscripciones?estado=lista_espera", headers=admin_h).json()
+    assert len(filas) == 1
+    fila = filas[0]
+    assert fila["email"] == "luis@example.com" and fila["nombre"] == "Luis Pérez"
+    assert fila["telefono"] == "+57 3109876543" and fila["fecha"]
+    assert fila["interes"] == "Termos de acero para regalos corporativos"
+    assert fila["origen_espera"] == "apertura"
+    acuse = next(c for c in correos if c["para"] == "luis@example.com")
+    assert "abramos al público" in acuse["texto"]
 
 
 def test_activar_crea_la_cuenta_y_acredita_el_plan(client, db_session, planes, correos):
@@ -165,6 +199,9 @@ def test_activar_crea_la_cuenta_y_acredita_el_plan(client, db_session, planes, c
     assert "restablecer-password?token=" in bienvenida["texto"]
 
     assert client.post(f"/planes/admin/inscripciones/{ins.id}/activar", headers=admin_h).status_code == 409
+    # En el contador de la tarjeta pasa de «por activar» a «activa».
+    vip = next(p for p in client.get("/planes").json()["planes"] if p["clave"] == "vip")
+    assert vip["cupos_por_activar"] == 0 and vip["cupos_activos"] == 1
 
     # Con sesión: el resumen de pagos muestra el plan y el precio VIP de la solicitud adicional.
     from utils.security import create_access_token

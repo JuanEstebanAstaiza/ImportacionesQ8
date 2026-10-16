@@ -24,6 +24,10 @@ export interface Plan {
   cupos_totales: number | null;
   /** null: sin límite de cupos. */
   cupos_restantes: number | null;
+  /** Cupos tomados: inscripciones con comprobante por revisar. */
+  cupos_por_activar: number;
+  /** Cupos tomados: inscripciones con el pago confirmado. */
+  cupos_activos: number;
   destacado: boolean;
   orden: number;
   /** Video de la tarjeta (Admin › Planes › Videos). null: sin video. */
@@ -63,6 +67,19 @@ export interface DatosInscripcion {
   acepto_datos: boolean;
 }
 
+/** Lista de espera: nombre, WhatsApp, correo y qué le gustaría importar. */
+export interface DatosListaEspera {
+  email: string;
+  nombre: string;
+  indicativo_pais_telefono: string;
+  telefono: string;
+  interes: string;
+  acepto_datos: boolean;
+}
+
+/** `apertura`: «Avísame cuando abra». `sin_cupos`: el plan se quedó sin cupos. */
+export type OrigenEspera = "apertura" | "sin_cupos";
+
 export interface InscripcionAdmin {
   id: string;
   estado: EstadoInscripcion;
@@ -83,9 +100,12 @@ export interface InscripcionAdmin {
   vence_en: string | null;
   revisado_en: string | null;
   fecha: string | null;
+  /** Solo en la lista de espera: «¿qué te gustaría importar?». */
+  interes: string | null;
+  origen_espera: OrigenEspera | null;
 }
 
-export type CamposPlan = Omit<Plan, "id" | "iva_cop" | "total_cop" | "total_solicitud_adicional_cop" | "cupos_restantes" | "video"> & {
+export type CamposPlan = Omit<Plan, "id" | "iva_cop" | "total_cop" | "total_solicitud_adicional_cop" | "cupos_restantes" | "cupos_por_activar" | "cupos_activos" | "video"> & {
   activo: boolean;
 };
 
@@ -106,8 +126,14 @@ export const planesService = {
     return apiRequest(`/planes/${encodeURIComponent(clave)}/inscripcion`, { method: "POST", body: form });
   },
 
-  listaEspera(clave: string, datos: DatosInscripcion): Promise<{ id: string }> {
+  /** Lista de espera de un plan sin cupos. */
+  listaEspera(clave: string, datos: DatosListaEspera): Promise<{ id: string }> {
     return apiRequest(`/planes/${encodeURIComponent(clave)}/lista-espera`, { method: "POST", body: datos });
+  },
+
+  /** «Avísame cuando abra»: lista de espera de la apertura al público. */
+  listaEsperaApertura(datos: DatosListaEspera): Promise<{ id: string }> {
+    return apiRequest("/planes/lista-espera", { method: "POST", body: datos });
   },
 
   // ── Admin ──

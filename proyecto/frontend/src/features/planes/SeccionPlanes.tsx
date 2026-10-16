@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2, Monitor, Smartphone } from "lucide-react";
+import { BellRing, Check, Loader2, LockKeyhole, Monitor, Smartphone } from "lucide-react";
 
 import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import { encuadreParaPantalla, useEncuadrePreferido, type Encuadre } from "@/app/components/media/VideoAdaptable";
@@ -60,6 +60,52 @@ function VideoTarjeta({ video, nombre }: { video: VideoPlan; nombre: string }) {
   );
 }
 
+/**
+ * Contador de cupos de la tarjeta: los tomados son los reales, es decir, las
+ * inscripciones por activar (comprobante enviado) más las activas (pago
+ * confirmado). Las rechazadas y la lista de espera no cuentan.
+ */
+function ContadorCupos({ plan }: { plan: Plan }) {
+  if (plan.cupos_totales === null) return null;
+  const total = plan.cupos_totales;
+  const tomados = Math.min(total, plan.cupos_por_activar + plan.cupos_activos);
+  const restantes = plan.cupos_restantes ?? Math.max(0, total - tomados);
+  const pct = (valor: number) => (total > 0 ? `${Math.min(100, (valor / total) * 100)}%` : "0%");
+  return (
+    <div className="mt-5 rounded-xl border border-border bg-muted/40 p-3.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold">
+          {tomados} de {total} cupos tomados
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {restantes < 1 ? "Sin cupos" : restantes === 1 ? "Queda 1" : `Quedan ${restantes}`}
+        </p>
+      </div>
+      <div
+        className="mt-2 flex h-2 overflow-hidden rounded-full bg-border"
+        role="progressbar"
+        aria-label={`Cupos de ${plan.nombre}`}
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={tomados}
+      >
+        <div className="h-full bg-primary dark:bg-accent" style={{ width: pct(plan.cupos_activos) }} />
+        <div className="h-full bg-primary/40 dark:bg-accent/45" style={{ width: pct(plan.cupos_por_activar) }} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-primary dark:bg-accent" />
+          {plan.cupos_activos} {plan.cupos_activos === 1 ? "activa" : "activas"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-primary/40 dark:bg-accent/45" />
+          {plan.cupos_por_activar} por activar
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Plan) => void }) {
   const sinCupos = plan.cupos_restantes !== null && plan.cupos_restantes < 1;
   return (
@@ -78,6 +124,7 @@ function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Pl
         {plan.iva_pct > 0 && <span className="ml-1 text-base font-semibold text-muted-foreground">+ IVA</span>}
       </p>
       {plan.iva_pct > 0 && <p className="text-xs text-muted-foreground">{pesos(plan.total_cop)} con IVA</p>}
+      <ContadorCupos plan={plan} />
       <ul className="mt-5 flex-1 space-y-2.5 text-sm">
         {plan.incluye.map((item) => (
           <li key={item} className="flex items-start gap-2">
@@ -97,18 +144,40 @@ function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Pl
       >
         {sinCupos ? "Lista de espera" : "Inscribirme"}
       </button>
-      {plan.cupos_restantes !== null && (
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          {sinCupos ? "Sin cupos por ahora" : `Quedan ${plan.cupos_restantes} ${plan.cupos_restantes === 1 ? "cupo" : "cupos"}`}
-        </p>
-      )}
     </article>
   );
 }
 
-export function SeccionPlanes({ onInscribirme, onCondiciones }: {
+/**
+ * Hasta que los VIP prueben la plataforma no se abre al público: la sección lo
+ * dice arriba y ofrece la lista de espera de la apertura.
+ */
+function AvisoListaCerrada({ onAvisame }: { onAvisame: () => void }) {
+  return (
+    <div className="mx-auto mb-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/25 bg-card/80 px-5 py-5 text-center backdrop-blur-sm dark:border-accent/25">
+      <p className="flex items-start gap-2 text-sm leading-relaxed sm:items-center">
+        <LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary dark:text-accent sm:mt-0" />
+        <span>
+          <strong className="font-semibold">Acceso por lista cerrada.</strong> Por ahora solo publican solicitudes quienes
+          entran con el plan de lanzamiento. Apertura al público: próximamente.
+        </span>
+      </p>
+      <button
+        type="button"
+        onClick={onAvisame}
+        className="inline-flex h-10 items-center gap-2 rounded-lg border border-primary px-5 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white dark:border-accent dark:text-accent dark:hover:bg-accent dark:hover:text-accent-foreground"
+      >
+        <BellRing className="h-4 w-4" /> Avísame cuando abra
+      </button>
+    </div>
+  );
+}
+
+export function SeccionPlanes({ onInscribirme, onCondiciones, onAvisame }: {
   onInscribirme: (plan: Plan) => void;
   onCondiciones: () => void;
+  /** «Avísame cuando abra»: lleva a la lista de espera de la apertura. */
+  onAvisame: () => void;
 }) {
   const [planes, setPlanes] = useState<Plan[] | null>(null);
   const [error, setError] = useState(false);
@@ -121,6 +190,7 @@ export function SeccionPlanes({ onInscribirme, onCondiciones }: {
     <section id="planes" className="scroll-mt-20 py-20 px-6 bg-muted relative overflow-hidden">
       <div className="zarpi-blob zarpi-blob-violet absolute -right-24 top-10 pointer-events-none opacity-30 scale-90" />
       <div className="max-w-7xl mx-auto relative z-10">
+        <AvisoListaCerrada onAvisame={onAvisame} />
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Precio de lanzamiento</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Elige cómo entrar a Zarpi</h2>
