@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Check, CheckCircle2, ChevronLeft, FileUp, Loader2, Moon, Sun } from "lucide-react";
 
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
 import { ApiError } from "@/services/api-client";
 import { planesService, pesos, type DatosInscripcion, type Plan } from "@/services/planes.service";
 
@@ -314,6 +315,9 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
           </div>
         )}
       </main>
+      <footer className="flex justify-center border-t border-border bg-background py-4">
+        <PublicSicLogo />
+      </footer>
     </div>
   );
 }

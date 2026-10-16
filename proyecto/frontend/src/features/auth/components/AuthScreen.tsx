@@ -9,6 +9,7 @@ import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/au
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
 import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
 import type { LegalPage } from "@/features/legal/types";
 
 type AuthView = "login" | "forgot" | "otp";
@@ -224,7 +225,7 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         </div>
       </main>
 
-      <footer className="flex items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+      <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
         <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
@@ -235,6 +236,7 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
         <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
           Pagos y Reembolsos
         </button>
+        <PublicSicLogo />
       </footer>
     </div>
   );

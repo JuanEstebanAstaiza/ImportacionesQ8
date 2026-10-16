@@ -5,6 +5,7 @@ import { DOCUMENTOS_LEGALES, ORDEN_DOCUMENTOS } from "@/features/legal/documento
 import { EMPRESA } from "@/features/legal/empresa";
 import type { LegalPage } from "@/features/legal/types";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
 
 type LegalPolicyScreenProps = {
   page: LegalPage;
@@ -144,7 +145,10 @@ export function LegalPolicyScreen({ page, onBack, onOpen }: LegalPolicyScreenPro
         </div>
       </main>
 
-      <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">© 2026 Zarpi. Todos los derechos reservados.</footer>
+      <footer className="flex flex-col items-center gap-3 border-t border-border py-6 text-center text-xs text-muted-foreground">
+        <span>© 2026 Zarpi. Todos los derechos reservados.</span>
+        <PublicSicLogo />
+      </footer>
     </div>
   );
 }
