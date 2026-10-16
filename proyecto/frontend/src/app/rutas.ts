@@ -21,6 +21,7 @@ export type Screen =
   | "policy-payments"
   | "policy-planes"
   | "planes-inscripcion"
+  | "lista-espera"
   | "admin-planes"
   | "dashboard"
   | "importer-profile"
@@ -99,6 +100,8 @@ export const RUTAS: Ruta[] = [
   { screen: "policy-planes", path: "/condiciones-de-los-planes" },
   // Inscripción a un plan (pública): /planes/inscripcion?plan=importador
   { screen: "planes-inscripcion", path: "/planes/inscripcion" },
+  // Lista de espera de la apertura al público (lista cerrada).
+  { screen: "lista-espera", path: "/lista-espera" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },

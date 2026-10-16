@@ -31,6 +31,12 @@ MODULOS = {
         "Cada cotización consume 1 token (primero las gratis del reto). Los tokens se compran subiendo "
         "el comprobante en Pagos.",
     ),
+    "solo_con_plan": (
+        "modulos.solo_con_plan",
+        "Publicar solo con plan",
+        "Lista cerrada: solo los compradores con un plan activo publican solicitudes. Apágalo al abrir al "
+        "público. Las empresas importadoras no cambian.",
+    ),
     "pago_manual_cursos": (
         "modulos.pago_manual_cursos",
         "Pago manual de cursos",
@@ -49,6 +55,8 @@ def _por_defecto(nombre: str) -> bool:
         return bool(config.COBRO_COTIZACIONES_TOKENS)
     if nombre == "pago_manual_cursos":
         return bool(config.PAGO_MANUAL_CURSOS)
+    if nombre == "solo_con_plan":
+        return bool(config.PUBLICAR_SOLO_CON_PLAN)
     return True
 
 

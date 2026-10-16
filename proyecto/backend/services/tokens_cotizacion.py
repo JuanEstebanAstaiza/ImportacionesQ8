@@ -31,6 +31,11 @@ MENSAJE_SIN_TOKENS = (
     "Pagos › Cargue y descargue de pagos y te los acreditamos apenas revisemos el comprobante."
 )
 
+MENSAJE_SIN_PLAN = (
+    "Por ahora solo publican solicitudes quienes tienen un plan activo. Acceso por lista cerrada: "
+    "apertura al público próximamente."
+)
+
 
 class SinTokens(Exception):
     pass

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Check, Clapperboard, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, Video, X } from "lucide-react";
+import { Check, Clapperboard, Download, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, Video, X } from "lucide-react";
 
 import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
@@ -27,8 +27,11 @@ import {
 /**
  * Admin › Planes. Arriba, las inscripciones: se abre el comprobante, se confirma
  * el pago en el banco y se activa (crea la cuenta si no existe y acredita el
- * plan) o se rechaza con motivo, que le llega a la persona. Abajo, los planes
- * que se publican en el inicio: precio, IVA, lo que incluyen y los cupos.
+ * plan) o se rechaza con motivo, que le llega a la persona. La lista de espera
+ * junta la de la apertura al público (sin plan) y la de los planes sin cupos, con
+ * lo que cada persona quiere importar; se descarga en CSV para las importadoras.
+ * Abajo, los planes que se publican en el inicio: precio, IVA, lo que incluyen y
+ * los cupos.
  */
 
 const PESTANAS: { estado: EstadoInscripcion; texto: string }[] = [
@@ -37,6 +40,30 @@ const PESTANAS: { estado: EstadoInscripcion; texto: string }[] = [
   { estado: "activa", texto: "Activas" },
   { estado: "rechazada", texto: "Rechazadas" },
 ];
+
+/** wa.me necesita solo dígitos: indicativo + número. */
+function enlaceWhatsApp(telefono: string): string {
+  return `https://wa.me/${telefono.replace(/\D/g, "")}`;
+}
+
+function csvListaEspera(filas: InscripcionAdmin[]): string {
+  const celda = (v: string | null | undefined) => `"${(v ?? "").replace(/"/g, '""')}"`;
+  const encabezado = ["Fecha", "Nombre", "WhatsApp", "Correo", "Qué quiere importar", "Lista"];
+  const lineas = filas.map((f) => [f.fecha ? new Date(f.fecha).toLocaleString("es-CO") : "", f.nombre, f.telefono, f.email,
+    f.que_importar, f.plan.nombre].map(celda).join(","));
+  return [encabezado.map(celda).join(","), ...lineas].join("\r\n");
+}
+
+function descargarCsv(filas: InscripcionAdmin[]) {
+  // BOM: que Excel abra las tildes bien.
+  const blob = new Blob(["\ufeff" + csvListaEspera(filas)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `lista-de-espera-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: () => void }) {
   const [rechazando, setRechazando] = useState(false);
@@ -81,8 +108,9 @@ function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: (
         <div className="min-w-0 text-sm">
           <p className="font-semibold">{ins.nombre} <span className="font-normal text-muted-foreground">· {ins.plan.nombre}</span></p>
           <p className="text-xs text-muted-foreground">
-            {ins.email} · {ins.telefono} · {ins.documento}{ins.ciudad ? ` · ${ins.ciudad}` : ""}
+            {[ins.email, ins.telefono, ins.documento, ins.ciudad].filter(Boolean).join(" · ")}
           </p>
+          {ins.que_importar && <p className="mt-1 whitespace-pre-line text-sm">Quiere importar: {ins.que_importar}</p>}
           <p className="text-xs text-muted-foreground">
             {ins.total_cop !== null ? `${pesos(ins.total_cop)} con IVA · ` : ""}{fechaCorta(ins.fecha)}
             {ins.vence_en ? ` · vence el ${fechaCorta(ins.vence_en)}` : ""}
@@ -107,7 +135,10 @@ function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: (
             </>
           )}
           {ins.estado === "lista_espera" && (
-            <a href={`mailto:${ins.email}`} className={CLASE_BOTON_SECUNDARIO}>Escribirle</a>
+            <>
+              <a href={enlaceWhatsApp(ins.telefono)} target="_blank" rel="noopener noreferrer" className={CLASE_BOTON_SECUNDARIO}>WhatsApp</a>
+              <a href={`mailto:${ins.email}`} className={CLASE_BOTON_SECUNDARIO}>Correo</a>
+            </>
           )}
         </div>
       </div>
@@ -155,9 +186,16 @@ function Inscripciones({ onCambio }: { onCambio: () => void }) {
           <p className="text-base font-semibold">Inscripciones</p>
           <p className="text-sm text-muted-foreground">Confirma la transferencia en el banco antes de activar. Al activar se crea la cuenta y le llega el acceso.</p>
         </div>
-        <button type="button" onClick={() => void cargar()} className={CLASE_BOTON_SECUNDARIO} disabled={cargando}>
-          <RefreshCw className={`h-4 w-4 ${cargando ? "animate-spin" : ""}`} /> Actualizar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {estado === "lista_espera" && filas.length > 0 && (
+            <button type="button" onClick={() => descargarCsv(filas)} className={CLASE_BOTON_SECUNDARIO}>
+              <Download className="h-4 w-4" /> Descargar CSV
+            </button>
+          )}
+          <button type="button" onClick={() => void cargar()} className={CLASE_BOTON_SECUNDARIO} disabled={cargando}>
+            <RefreshCw className={`h-4 w-4 ${cargando ? "animate-spin" : ""}`} /> Actualizar
+          </button>
+        </div>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 px-4 pt-3">
         {PESTANAS.map((p) => (
@@ -187,11 +225,11 @@ function Inscripciones({ onCambio }: { onCambio: () => void }) {
 }
 
 type Formulario = Record<"clave" | "nombre" | "para_quien" | "precio_cop" | "iva_pct" | "solicitudes_incluidas" | "vigencia_meses"
-  | "dias_tendencias" | "precio_solicitud_adicional_cop" | "cupos_totales" | "orden" | "incluye", string> & { destacado: boolean; activo: boolean };
+  | "dias_tendencias" | "precio_solicitud_adicional_cop" | "cupos_totales" | "orden" | "incluye" | "enlace_pago", string> & { destacado: boolean; activo: boolean };
 
 const VACIO: Formulario = {
   clave: "", nombre: "", para_quien: "", precio_cop: "", iva_pct: "19", solicitudes_incluidas: "10", vigencia_meses: "12",
-  dias_tendencias: "", precio_solicitud_adicional_cop: "", cupos_totales: "", orden: "0", incluye: "", destacado: false, activo: true,
+  dias_tendencias: "", precio_solicitud_adicional_cop: "", cupos_totales: "", orden: "0", incluye: "", enlace_pago: "", destacado: false, activo: true,
 };
 
 function aFormulario(p: PlanAdmin): Formulario {
@@ -200,7 +238,7 @@ function aFormulario(p: PlanAdmin): Formulario {
     clave: p.clave, nombre: p.nombre, para_quien: p.para_quien ?? "", precio_cop: t(p.precio_cop), iva_pct: t(p.iva_pct),
     solicitudes_incluidas: t(p.solicitudes_incluidas), vigencia_meses: t(p.vigencia_meses), dias_tendencias: t(p.dias_tendencias),
     precio_solicitud_adicional_cop: t(p.precio_solicitud_adicional_cop), cupos_totales: t(p.cupos_totales), orden: t(p.orden),
-    incluye: p.incluye.join("\n"), destacado: p.destacado, activo: p.activo,
+    incluye: p.incluye.join("\n"), enlace_pago: p.enlace_pago ?? "", destacado: p.destacado, activo: p.activo,
   };
 }
 
@@ -215,6 +253,7 @@ function EditorPlan({ plan, onGuardado, onCancelar }: { plan: PlanAdmin | null; 
     e.preventDefault();
     if (f.nombre.trim().length < 2 || num(f.precio_cop) === null) { setError("El plan necesita nombre y precio."); return; }
     if (!/^[a-z0-9-]{2,40}$/.test(f.clave)) { setError("La clave va en minúsculas, sin espacios (ej. vip). Es la que sale en el enlace."); return; }
+    if (f.enlace_pago.trim() && !/^https:\/\/\S+$/.test(f.enlace_pago.trim())) { setError("El enlace de pago debe empezar por https://"); return; }
     const datos: CamposPlan = {
       clave: f.clave, nombre: f.nombre.trim(), para_quien: f.para_quien.trim() || null,
       precio_cop: num(f.precio_cop) as number, iva_pct: num(f.iva_pct) ?? 0,
@@ -222,7 +261,7 @@ function EditorPlan({ plan, onGuardado, onCancelar }: { plan: PlanAdmin | null; 
       dias_tendencias: num(f.dias_tendencias) || null, precio_solicitud_adicional_cop: num(f.precio_solicitud_adicional_cop),
       cupos_totales: num(f.cupos_totales), orden: num(f.orden) ?? 0,
       incluye: f.incluye.split("\n").map((l) => l.trim()).filter(Boolean),
-      destacado: f.destacado, activo: f.activo,
+      enlace_pago: f.enlace_pago.trim() || null, destacado: f.destacado, activo: f.activo,
     };
     setGuardando(true);
     setError("");
@@ -256,6 +295,10 @@ function EditorPlan({ plan, onGuardado, onCancelar }: { plan: PlanAdmin | null; 
         <label className="flex items-center gap-2"><input type="checkbox" checked={f.destacado} onChange={(e) => setF((x) => ({ ...x, destacado: e.target.checked }))} /> Tarjeta destacada</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> Publicado</label>
       </div>
+      <label className={`${L} sm:col-span-2 lg:col-span-4`}>Enlace de pago Wompi (opcional)
+        <input value={f.enlace_pago} onChange={campo("enlace_pago")} maxLength={500} placeholder="https://checkout.wompi.co/l/…" className={`${CLASE_INPUT} mt-1`} />
+        <span className="mt-1 block font-normal">Sale en la inscripción como «Pagar con Wompi», además de la transferencia. La persona igual adjunta el comprobante.</span>
+      </label>
       <label className={`${L} sm:col-span-2 lg:col-span-4`}>Lo que incluye (una línea por punto, así sale en la tarjeta)
         <textarea value={f.incluye} onChange={campo("incluye")} rows={5} className={`${CLASE_INPUT} mt-1`} />
       </label>

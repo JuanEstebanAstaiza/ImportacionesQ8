@@ -9,7 +9,9 @@ Una inscripción es la compra de un plan desde `/planes/inscripcion`: la
 persona deja sus datos y el comprobante de la transferencia; el equipo la
 revisa y, al activarla, se crea la cuenta (si no existe) y se le acredita el
 plan. Las pendientes y las activas ocupan cupo; las rechazadas lo liberan. Con
-los cupos agotados, se entra a la lista de espera (sin comprobante).
+los cupos agotados, se entra a la lista de espera (sin comprobante). Mientras
+el acceso sea por lista cerrada, la lista de espera de la apertura al público
+también va aquí, sin plan.
 """
 import enum
 from datetime import datetime
@@ -45,6 +47,8 @@ class Plan(Base):
     destacado = Column(Boolean, nullable=False, default=False, server_default="0")
     orden = Column(Integer, nullable=False, default=0, server_default="0")
     activo = Column(Boolean, nullable=False, default=True, server_default="1")
+    # Enlace de pago (Wompi) que se ofrece en la inscripción junto a la transferencia.
+    enlace_pago = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow)
     fecha_actualizacion = Column(DateTime, nullable=True, onupdate=datetime.utcnow)
 
@@ -60,7 +64,8 @@ class InscripcionPlan(Base):
     __tablename__ = "inscripciones_plan"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    plan_id = Column(String(36), ForeignKey("planes.id"), nullable=False, index=True)
+    # Vacío: lista de espera de la apertura al público, que no es de ningún plan.
+    plan_id = Column(String(36), ForeignKey("planes.id"), nullable=True, index=True)
     estado = Column(String(20), nullable=False, default=EstadoInscripcionPlan.pendiente.value, index=True)
     # Cuenta a la que se acredita: la de quien se inscribió con sesión, o la que
     # se crea (o se encuentra por correo) al activarla.
@@ -78,6 +83,8 @@ class InscripcionPlan(Base):
     indicativo_pais_telefono = Column(String(6), nullable=False, default="+57")
     telefono = Column(String(30), nullable=False)
     ciudad = Column(String(100), nullable=True)
+    # Lista de espera: lo que le gustaría importar (se usa con las importadoras).
+    que_importar = Column(Text, nullable=True)
 
     # Lo que costaba al inscribirse (el admin puede cambiar el precio después).
     precio_cop = Column(Integer, nullable=True)

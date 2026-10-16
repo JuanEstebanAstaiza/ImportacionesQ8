@@ -264,3 +264,73 @@ def test_sin_propuestas_en_72_horas_la_unidad_vuelve(client, db_session, planes,
     assert reciente.unidad_devuelta_en is None
     # Una segunda vuelta no devuelve otra vez.
     assert tokens_cotizacion.devolver_sin_propuestas(db_session)["devueltas"] == 0
+
+
+# ── Lista cerrada ────────────────────────────────────────────────────────────
+
+ESPERA = {"nombre": "Luis Pérez", "email": "Luis@X.com", "telefono": "3009876543",
+          "que_importar": "Termos de acero para mi tienda", "acepto_datos": True}
+
+
+def test_lista_de_espera_de_la_apertura_cae_en_el_admin(client, db_session, planes, correos):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    r = client.post("/planes/lista-espera", json=ESPERA)
+    assert r.status_code == 201, r.text
+    ins = db_session.query(InscripcionPlan).one()
+    assert ins.plan_id is None and ins.email == "luis@x.com" and ins.estado == "lista_espera"
+    assert ins.que_importar == "Termos de acero para mi tienda" and ins.indicativo_pais_telefono == "+57"
+    assert any(c["para"] == "luis@x.com" for c in correos)  # confirmación
+    assert client.post("/planes/lista-espera", json=ESPERA).status_code == 409  # una sola vez
+
+    fila, = client.get("/planes/admin/inscripciones?estado=lista_espera", headers=admin_h).json()
+    assert fila["plan"]["nombre"] == "Apertura al público" and fila["plan"]["id"] is None
+    assert fila["que_importar"] == ESPERA["que_importar"] and fila["fecha"]
+    assert fila["nombre"] == "Luis Pérez" and fila["telefono"] == "+57 3009876543"
+    # Los conteos de los planes no la cuentan.
+    assert all(p["inscripciones"]["lista_espera"] == 0
+               for p in client.get("/planes/admin/planes", headers=admin_h).json())
+
+    # La de un plan sin cupos es aparte, con el mismo formulario corto.
+    assert client.post("/planes/lista-espera", json={**ESPERA, "plan": "vip"}).status_code == 201
+    assert client.post("/planes/lista-espera", json={**ESPERA, "plan": "viejo"}).status_code == 404
+
+
+def test_lista_de_espera_valida_los_datos(client, planes, correos):
+    assert client.post("/planes/lista-espera", json={**ESPERA, "acepto_datos": False}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "que_importar": "  "}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "telefono": "123"}).status_code == 422
+    assert client.post("/planes/lista-espera", json={**ESPERA, "email": "no-es-correo"}).status_code == 422
+
+
+def test_solo_publican_solicitudes_quienes_tienen_plan(client, db_session, planes):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    _modulo(client, admin_h, solo_con_plan=True)
+    assert client.get("/configuracion-publica").json()["publicar_solo_con_plan"] is True
+    usuario, headers = crear_usuario_con_token(db_session)
+    r = client.post("/cotizaciones", json=COTIZACION, headers=headers)
+    assert r.status_code == 403 and "plan activo" in r.json()["detail"]
+
+    usuario.plan_id, usuario.solicitudes_plan = planes["vip"].id, 10
+    usuario.plan_vence_en = datetime.utcnow() + timedelta(days=30)
+    db_session.commit()
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+    # Vencido, otra vez no.
+    usuario.plan_vence_en = datetime.utcnow() - timedelta(days=1)
+    db_session.commit()
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 403
+
+    # Al abrir al público se apaga y vuelve a publicar cualquiera.
+    _modulo(client, admin_h, solo_con_plan=False)
+    assert client.post("/cotizaciones", json=COTIZACION, headers=headers).status_code == 201
+
+
+def test_el_plan_tiene_enlace_de_pago(client, db_session, planes):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    url = f"/planes/admin/planes/{planes['vip'].id}"
+    assert client.put(url, json={"enlace_pago": "http://inseguro.co"}, headers=admin_h).status_code == 422
+    r = client.put(url, json={"enlace_pago": "https://checkout.wompi.co/l/abc123"}, headers=admin_h)
+    assert r.status_code == 200 and r.json()["enlace_pago"] == "https://checkout.wompi.co/l/abc123"
+    vip = next(p for p in client.get("/planes").json()["planes"] if p["clave"] == "vip")
+    assert vip["enlace_pago"] == "https://checkout.wompi.co/l/abc123"
+    assert client.put(url, json={"enlace_pago": None}, headers=admin_h).json()["enlace_pago"] is None

@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Check, CheckCircle2, ChevronLeft, FileUp, Loader2, Moon, Sun } from "lucide-react";
+import { Check, CheckCircle2, ChevronLeft, CreditCard, FileUp, Loader2, Moon, Sun } from "lucide-react";
 
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
 import { ApiError } from "@/services/api-client";
 import { planesService, pesos, type DatosInscripcion, type Plan } from "@/services/planes.service";
 
+import { FormularioListaEspera } from "./ListaEspera";
+
 /**
  * Inscripción a un plan (`/planes/inscripcion?plan=importador`). Pública: la
  * persona todavía no tiene cuenta. Deja sus datos, acepta las condiciones y
  * sube el comprobante de la transferencia; el equipo lo verifica en
- * Admin › Planes y, al activarlo, le llega el acceso por correo. Sin cupos, el
- * mismo formulario la deja en la lista de espera (sin comprobante).
+ * Admin › Planes y, al activarlo, le llega el acceso por correo. Si el plan
+ * tiene enlace de pago (Wompi), se ofrece junto a la transferencia. Sin cupos,
+ * queda el formulario corto de la lista de espera (sin comprobante).
  */
 
 const TIPOS_DOCUMENTO = ["CC", "CE", "Pasaporte", "PPT", "DNI"];
@@ -63,7 +66,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
 
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
-  const [listo, setListo] = useState<"inscripcion" | "espera" | null>(null);
+  const [listo, setListo] = useState(false);
 
   useEffect(() => {
     planesService.listar()
@@ -94,7 +97,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
     if (tipoPersona === "juridica" && (!razonSocial.trim() || !nit.trim())) {
       setError("Escribe la razón social y el NIT de la empresa."); return;
     }
-    if (!enEspera && !comprobante) { setError("Adjunta el comprobante de la transferencia."); return; }
+    if (!comprobante) { setError("Adjunta el comprobante del pago."); return; }
     if (comprobante && comprobante.size > MAX_BYTES) { setError("El comprobante supera los 10 MB."); return; }
     if (!aceptoCondiciones || !aceptoDatos) { setError("Para continuar, acepta las condiciones y la autorización de datos."); return; }
 
@@ -112,13 +115,8 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
     };
     setEnviando(true);
     try {
-      if (enEspera) {
-        await planesService.listaEspera(plan.clave, datos);
-        setListo("espera");
-      } else {
-        await planesService.inscribir(plan.clave, datos, comprobante as File);
-        setListo("inscripcion");
-      }
+      await planesService.inscribir(plan.clave, datos, comprobante);
+      setListo(true);
       window.scrollTo({ top: 0 });
     } catch (err) {
       const detalle = err instanceof ApiError ? err.detail : null;
@@ -152,22 +150,11 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
         {listo ? (
           <div className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-8 text-center">
             <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-primary dark:text-accent" />
-            {listo === "inscripcion" ? (
-              <>
-                <h1 className="text-xl font-bold">Recibimos tu inscripción</h1>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Verificamos tu pago y activamos tu plan en máximo 2 horas en horario hábil. Te escribimos a {email.trim()} con
-                  el acceso a tu cuenta.
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-xl font-bold">Quedaste en la lista de espera</h1>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Te escribimos a {email.trim()} apenas se abra un cupo en {plan?.nombre}.
-                </p>
-              </>
-            )}
+            <h1 className="text-xl font-bold">Recibimos tu inscripción</h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Verificamos tu pago y activamos tu plan en máximo 2 horas en horario hábil. Te escribimos a {email.trim()} con
+              el acceso a tu cuenta.
+            </p>
             <button type="button" onClick={onVolver} className="mt-6 h-10 rounded-lg bg-primary px-5 text-sm font-semibold text-white dark:bg-accent dark:text-accent-foreground">
               Volver al inicio
             </button>
@@ -193,17 +180,26 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
           </div>
         ) : (
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <form onSubmit={(e) => void enviar(e)} noValidate className="order-2 space-y-6 lg:order-1">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary dark:text-accent">
-                  {enEspera ? "Lista de espera" : "Inscripción"}
-                </p>
-                <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{plan.nombre}</h1>
-                {enEspera && (
+            {enEspera ? (
+              <div className="order-2 space-y-6 lg:order-1">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary dark:text-accent">Lista de espera</p>
+                  <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{plan.nombre}</h1>
                   <p className="mt-2 text-sm text-muted-foreground">
                     Este plan no tiene cupos en este momento. Déjanos tus datos y te escribimos apenas se abra uno; no tienes que pagar nada todavía.
                   </p>
-                )}
+                  {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5">
+                  <FormularioListaEspera key={plan.clave} plan={{ clave: plan.clave, nombre: plan.nombre }} onPoliticaDatos={onPoliticaDatos}
+                    prefill={{ nombre: [nombre, apellido].filter(Boolean).join(" "), email, telefono }} />
+                </div>
+              </div>
+            ) : (
+            <form onSubmit={(e) => void enviar(e)} noValidate className="order-2 space-y-6 lg:order-1">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary dark:text-accent">Inscripción</p>
+                <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{plan.nombre}</h1>
               </div>
 
               <fieldset className="space-y-4 rounded-2xl border border-border bg-card p-5">
@@ -251,11 +247,21 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
                 </div>
               </fieldset>
 
-              {!enEspera && (
-                <fieldset className="space-y-3 rounded-2xl border border-border bg-card p-5">
-                  <legend className="px-1 text-sm font-semibold">Pago por transferencia</legend>
+              <fieldset className="space-y-3 rounded-2xl border border-border bg-card p-5">
+                  <legend className="px-1 text-sm font-semibold">{plan.enlace_pago ? "Pago" : "Pago por transferencia"}</legend>
+                  {plan.enlace_pago && (
+                    <div className="space-y-2 rounded-lg border border-border px-4 py-3">
+                      <p className="text-sm text-muted-foreground">
+                        Paga <strong className="text-foreground">{pesos(plan.total_cop)}</strong> (IVA incluido) en línea con Wompi y adjunta aquí el comprobante.
+                      </p>
+                      <a href={plan.enlace_pago} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 dark:bg-accent dark:text-accent-foreground">
+                        <CreditCard className="h-4 w-4" /> Pagar con Wompi
+                      </a>
+                    </div>
+                  )}
                   <p className="text-sm text-muted-foreground">
-                    Transfiere <strong className="text-foreground">{pesos(plan.total_cop)}</strong> (IVA incluido) y adjunta el comprobante.
+                    {plan.enlace_pago ? "O transfiere" : "Transfiere"} <strong className="text-foreground">{pesos(plan.total_cop)}</strong> (IVA incluido) y adjunta el comprobante.
                   </p>
                   {datosPago ? (
                     <pre className="whitespace-pre-wrap rounded-lg bg-muted px-4 py-3 font-sans text-sm">{datosPago}</pre>
@@ -269,8 +275,7 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
                     <span className="min-w-0 flex-1 truncate">{comprobante ? comprobante.name : "Adjuntar comprobante (PDF o imagen, máximo 10 MB)"}</span>
                     <input type="file" accept={ACCEPT} className="sr-only" onChange={(e) => setComprobante(e.target.files?.[0] ?? null)} />
                   </label>
-                </fieldset>
-              )}
+              </fieldset>
 
               <div className="space-y-3 text-sm">
                 <label className="flex items-start gap-2">
@@ -287,9 +292,10 @@ export function InscripcionPlan({ claveInicial, onVolver, onVerPlanes, onCondici
               <button type="submit" disabled={enviando}
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60 dark:bg-accent dark:text-accent-foreground sm:w-auto sm:px-8">
                 {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
-                {enEspera ? "Entrar a la lista de espera" : "Enviar inscripción"}
+                Enviar inscripción
               </button>
             </form>
+            )}
 
             <aside className="order-1 lg:order-2">
               <div className="rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-20">

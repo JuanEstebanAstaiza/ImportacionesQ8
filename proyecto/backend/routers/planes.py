@@ -59,6 +59,33 @@ class DatosInscripcion(BaseModel):
         return self
 
 
+class DatosListaEspera(BaseModel):
+    """Lista de espera corta: nombre, WhatsApp, correo y qué quiere importar."""
+    nombre: str = Field(..., min_length=2, max_length=120)
+    email: EmailStr
+    indicativo_pais_telefono: str = Field("+57", pattern=r"^\+\d{1,4}$")
+    telefono: str = Field(..., min_length=7, max_length=30)
+    que_importar: str = Field(..., min_length=3, max_length=2000)
+    acepto_datos: bool
+    # Clave del plan sin cupos; vacío: la apertura al público.
+    plan: Optional[str] = Field(None, max_length=40)
+
+    @model_validator(mode="after")
+    def validar(self):
+        self.nombre = self.nombre.strip()
+        self.telefono = self.telefono.strip()
+        self.que_importar = self.que_importar.strip()
+        self.email = self.email.lower()
+        if len(self.nombre) < 2 or len(self.telefono) < 7 or len(self.que_importar) < 3:
+            raise ValueError("Escribe tu nombre, tu WhatsApp y qué te gustaría importar")
+        if not self.acepto_datos:
+            raise ValueError("Debes autorizar el tratamiento de tus datos")
+        return self
+
+
+ENLACE_PAGO = r"^https://\S+$"
+
+
 class PlanCampos(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=80)
     para_quien: Optional[str] = Field(None, max_length=200)
@@ -73,6 +100,7 @@ class PlanCampos(BaseModel):
     destacado: bool = False
     orden: int = Field(0, ge=0, le=1000)
     activo: bool = True
+    enlace_pago: Optional[str] = Field(None, max_length=500, pattern=ENLACE_PAGO)
 
 
 class PlanCrear(PlanCampos):
@@ -94,6 +122,7 @@ class PlanActualizar(BaseModel):
     destacado: Optional[bool] = None
     orden: Optional[int] = Field(None, ge=0, le=1000)
     activo: Optional[bool] = None
+    enlace_pago: Optional[str] = Field(None, max_length=500, pattern=ENLACE_PAGO)
 
 
 class Rechazo(BaseModel):
@@ -152,6 +181,22 @@ async def inscribirse(
                         archivo=contenido, usuario=_usuario_opcional(db, current_user))
     db.commit()
     return {"id": ins.id, "estado": ins.estado, "total_cop": ins.total_cop}
+
+
+@router.post("/lista-espera", status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT_PLANES)
+async def anotar_lista_espera(
+    request: Request,
+    datos: DatosListaEspera,
+    db: Session = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_optional_current_user),
+):
+    """Lista de espera de la apertura al público (o de un plan sin cupos, con
+    `plan`). Cae en Admin › Planes › Lista de espera, con fecha."""
+    plan = svc.por_clave(db, datos.plan) if datos.plan else None
+    ins = svc.anotar_lista_espera(db, datos.model_dump(), plan, _usuario_opcional(db, current_user))
+    db.commit()
+    return {"id": ins.id, "estado": ins.estado}
 
 
 @router.post("/{clave}/lista-espera", status_code=status.HTTP_201_CREATED)

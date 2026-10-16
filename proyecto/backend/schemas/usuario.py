@@ -28,6 +28,9 @@ class UsuarioMeResponse(BaseModel):
     # Curador de Tendencias (capacidad aparte del rol): aprueba las fichas.
     es_curador: bool = False
     cotizaciones_gratis: int = 0
+    # Hasta cuándo vale su plan (UTC). Con «Publicar solo con plan», sin plan
+    # vigente no publica solicitudes.
+    plan_vence_en: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

@@ -28,6 +28,8 @@ export interface Plan {
   orden: number;
   /** Video de la tarjeta (Admin › Planes › Videos). null: sin video. */
   video: VideoPlan | null;
+  /** Enlace de pago (Wompi) que se ofrece en la inscripción. null: solo transferencia. */
+  enlace_pago: string | null;
 }
 
 /**
@@ -63,10 +65,22 @@ export interface DatosInscripcion {
   acepto_datos: boolean;
 }
 
+/** Lista de espera corta. Sin `plan`: la de la apertura al público. */
+export interface DatosListaEspera {
+  nombre: string;
+  email: string;
+  indicativo_pais_telefono: string;
+  telefono: string;
+  que_importar: string;
+  acepto_datos: boolean;
+  plan?: string;
+}
+
 export interface InscripcionAdmin {
   id: string;
   estado: EstadoInscripcion;
-  plan: { id: string; nombre: string | null; clave: string | null };
+  /** `id` null: lista de espera de la apertura al público. */
+  plan: { id: string | null; nombre: string | null; clave: string | null };
   usuario_id: string | null;
   email: string;
   nombre: string;
@@ -74,6 +88,7 @@ export interface InscripcionAdmin {
   documento: string;
   telefono: string;
   ciudad: string | null;
+  que_importar: string | null;
   precio_cop: number | null;
   iva_cop: number | null;
   total_cop: number | null;
@@ -108,6 +123,11 @@ export const planesService = {
 
   listaEspera(clave: string, datos: DatosInscripcion): Promise<{ id: string }> {
     return apiRequest(`/planes/${encodeURIComponent(clave)}/lista-espera`, { method: "POST", body: datos });
+  },
+
+  /** Lista de espera de la apertura al público (o de un plan sin cupos). */
+  anotarListaEspera(datos: DatosListaEspera): Promise<{ id: string }> {
+    return apiRequest("/planes/lista-espera", { method: "POST", body: datos });
   },
 
   // ── Admin ──

@@ -11,6 +11,8 @@ Flujo:
    plan lo trae, los días de Tendencias. A una cuenta nueva le llega un enlace
    para crear su contraseña. O la rechaza con motivo, y el cupo se libera.
 4. Sin cupos, la inscripción pasa a lista de espera (sin comprobante).
+5. Mientras el acceso sea por lista cerrada, la lista de espera de la apertura
+   al público (`anotar_lista_espera` sin plan) también cae en Admin › Planes.
 """
 from __future__ import annotations
 
@@ -117,6 +119,7 @@ def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[s
         "cupos_restantes": cupos_restantes(db, plan),
         "destacado": bool(plan.destacado),
         "orden": plan.orden,
+        "enlace_pago": plan.enlace_pago,
         # Se reproduce en la tarjeta del plan (ver services/videos_planes.py).
         "video": videos.get(str(plan.id)),
     }
@@ -316,6 +319,45 @@ def lista_espera(db: Session, plan: Plan, datos: Dict, usuario: Optional[Usuario
     return ins
 
 
+APERTURA = "Apertura al público"
+
+
+def anotar_lista_espera(db: Session, datos: Dict, plan: Optional[Plan], usuario: Optional[Usuario]) -> InscripcionPlan:
+    """Lista de espera corta (nombre, WhatsApp, correo y qué quiere importar).
+    Sin plan es la de la apertura al público; con plan, la de un plan sin cupos.
+    Cae en la pestaña «Lista de espera» de Admin › Planes."""
+    if usuario is not None and usuario.rol != "solicitante":
+        usuario = None
+    plan_id = plan.id if plan else None
+    repetida = db.query(InscripcionPlan.id).filter(
+        InscripcionPlan.plan_id.is_(None) if plan_id is None else InscripcionPlan.plan_id == plan_id,
+        InscripcionPlan.email == datos["email"],
+        InscripcionPlan.estado == EstadoInscripcionPlan.lista_espera.value,
+    ).first()
+    if repetida:
+        raise _error(status.HTTP_409_CONFLICT, "Ya estás en la lista de espera: te escribimos apenas abramos")
+    ins = InscripcionPlan(
+        plan_id=plan_id, estado=EstadoInscripcionPlan.lista_espera.value,
+        usuario_id=usuario.id if usuario else None, email=datos["email"], tipo_persona="natural",
+        nombre=datos["nombre"], indicativo_pais_telefono=datos["indicativo_pais_telefono"],
+        telefono=datos["telefono"], que_importar=datos["que_importar"],
+        acepto_datos=bool(datos["acepto_datos"]), fecha_aceptacion=datetime.utcnow(),
+    )
+    db.add(ins)
+    db.flush()
+    destino = plan.nombre if plan else APERTURA.lower()
+    _avisar_admins(db, "Nueva persona en lista de espera",
+                   f"{ins.nombre} ({ins.email}) se anotó en la lista de espera ({destino}).",
+                   {"evento": "plan_lista_espera", "inscripcion_id": ins.id})
+    _enviar(ins.email, "Quedaste en la lista de espera de Zarpi", [
+        f"Hola {ins.nombre}.",
+        (f"{plan.nombre} no tiene cupos en este momento y quedaste en la lista de espera." if plan else
+         "Por ahora el acceso a Zarpi es por lista cerrada. Quedaste en la lista de espera para la apertura al público."),
+        "Te escribimos apenas abramos.",
+    ])
+    return ins
+
+
 # ── Correos ──────────────────────────────────────────────────────────────────
 
 def _enviar(destinatario: str, titulo: str, parrafos: List[str], *, responder_a: Optional[str] = None,
@@ -384,7 +426,8 @@ def ins_a_dict(db: Session, ins: InscripcionPlan) -> Dict:
     return {
         "id": ins.id,
         "estado": ins.estado,
-        "plan": {"id": ins.plan_id, "nombre": plan.nombre if plan else None, "clave": plan.clave if plan else None},
+        "plan": {"id": ins.plan_id, "nombre": plan.nombre if plan else (None if ins.plan_id else APERTURA),
+                 "clave": plan.clave if plan else None},
         "usuario_id": ins.usuario_id,
         "email": ins.email,
         "nombre": _nombre(ins),
@@ -393,6 +436,7 @@ def ins_a_dict(db: Session, ins: InscripcionPlan) -> Dict:
                       else f"{ins.tipo_documento or ''} {ins.numero_documento or ''}".strip()),
         "telefono": f"{ins.indicativo_pais_telefono} {ins.telefono}",
         "ciudad": ins.ciudad,
+        "que_importar": ins.que_importar,
         "precio_cop": ins.precio_cop,
         "iva_cop": ins.iva_cop,
         "total_cop": ins.total_cop,

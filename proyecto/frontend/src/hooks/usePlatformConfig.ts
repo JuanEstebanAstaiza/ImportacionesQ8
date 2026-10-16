@@ -15,6 +15,8 @@ export interface PlatformConfig {
   registro_abierto: boolean;
   /** Cada cotización consume 1 token. */
   cobro_cotizaciones: boolean;
+  /** Lista cerrada: solo publican solicitudes los compradores con plan vigente. */
+  publicar_solo_con_plan: boolean;
   correo_contacto: string;
   notificaciones_email: boolean;
   /** Tamaño máximo por archivo subido, en bytes. Ver `lib/limite-subida.ts`. */
@@ -25,8 +27,11 @@ const DEFAULT_CONFIG: PlatformConfig = {
   // Optimista mientras carga: evita que la navegación parpadee ocultando
   // "Cursos" durante el primer render y volviéndolo a mostrar al responder.
   modulo_educativo_habilitado: true,
-  registro_abierto: true,
+  // Lista cerrada mientras carga: que /registro no muestre un formulario que el
+  // backend va a rechazar.
+  registro_abierto: false,
   cobro_cotizaciones: false,
+  publicar_solo_con_plan: false,
   correo_contacto: "contacto@zarpi.co",
   notificaciones_email: false,
   max_subida_bytes: 300 * 1024 * 1024,

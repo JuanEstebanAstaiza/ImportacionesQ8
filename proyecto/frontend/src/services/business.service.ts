@@ -330,6 +330,8 @@ export interface BackendUserProfile {
   es_curador?: boolean;
   /** Cotizaciones gratis ganadas en el reto: se gastan antes que los tokens. */
   cotizaciones_gratis?: number;
+  /** Hasta cuándo vale su plan (UTC, sin zona). */
+  plan_vence_en?: string | null;
 }
 
 export interface BackendCotizantePerfilPublico {

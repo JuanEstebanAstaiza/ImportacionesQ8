@@ -53,6 +53,7 @@ import { RevisionPresentaciones } from "@/features/admin/RevisionPresentaciones"
 import { PlanesAdmin } from "@/features/admin/PlanesAdmin";
 import { SeccionPlanes } from "@/features/planes/SeccionPlanes";
 import { InscripcionPlan } from "@/features/planes/InscripcionPlan";
+import { AvisoListaCerrada, PantallaListaEspera, TEXTO_LISTA_CERRADA } from "@/features/planes/ListaEspera";
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
 import { fijarRegistro, registroAbierto } from "@/app/registro";
@@ -10153,7 +10154,7 @@ function PreguntasLanding({items}:{items:PreguntaLanding[]}) {
   );
 }
 
-function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void}) {
+function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse,onListaEspera}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void;onListaEspera:()=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [activeTab,setActiveTab]=useState<LandingTabKey>("home");
   // Sección a la que hay que bajar después de cambiar de pestaña (`planes`, `preguntas`).
@@ -10332,7 +10333,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
       </section>
 
       {/* PLANES (id `planes`): valores y cupos desde Admin › Planes */}
-      <SeccionPlanes onInscribirme={plan=>onInscribirse(plan.clave)} onCondiciones={()=>onPolicy("planes")}/>
+      <SeccionPlanes onInscribirme={plan=>onInscribirse(plan.clave)} onCondiciones={()=>onPolicy("planes")} onListaEspera={onListaEspera}/>
 
       {/* PARA EMPRESAS IMPORTADORAS */}
       <section className="py-20 px-6 bg-background relative overflow-hidden">
@@ -10703,7 +10704,7 @@ function LandingContactSection({perfilInicial="comprador",onLogin,onRegister}:{p
   const faqsContacto=[
     {q:"¿Cómo empiezo si quiero importar?",a:registroAbierto()
       ?"Crea tu cuenta gratis y publica tu primera solicitud de cotización sin costo."
-      :"Por ahora el acceso es por lista privada: pídelo con «Solicitar acceso» y te escribimos con el valor."},
+      :TEXTO_LISTA_CERRADA},
     {q:"¿Cómo empiezo si soy empresa importadora?",a:"Escríbenos desde este formulario: confirmamos tu existencia legal, tu actividad importadora real y tus referencias antes del alta. El Programa Fundadoras tiene cupos limitados."},
   ];
 
@@ -10829,91 +10830,22 @@ function LandingContactSection({perfilInicial="comprador",onLogin,onRegister}:{p
   );
 }
 // ─────────────────────────────────────────────────────────────────────────────
+/** El backend manda la fecha en UTC sin zona. */
+function planVigente(perfil:{plan_vence_en?:string|null}):boolean{
+  if(!perfil.plan_vence_en)return false;
+  const vence=/[zZ]|[+-]\d\d:?\d\d$/.test(perfil.plan_vence_en)?perfil.plan_vence_en:`${perfil.plan_vence_en}Z`;
+  return new Date(vence).getTime()>Date.now();
+}
+
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
-const CLASE_CAMPO_LISTA="focus:border-primary dark:focus:border-accent";
-
 /**
- * Lista privada: con el registro cerrado, los cotizantes dejan sus datos y por
- * qué quieren entrar. Llega a admin@ (`/landing/lista-privada`), que les responde
- * con el valor del acceso; las credenciales se crean cuando se registra el pago.
+ * Con el registro público cerrado (Admin › Módulos) nadie crea cuenta por su
+ * lado: la cuenta se crea al activar una inscripción. Aquí va el aviso de lista
+ * cerrada y el botón a la lista de espera de la apertura al público.
  */
-function FormularioListaPrivada() {
-  const [nombre,setNombre]=useState("");
-  const [email,setEmail]=useState("");
-  const [telefono,setTelefono]=useState("");
-  const [ciudad,setCiudad]=useState("");
-  const [empresa,setEmpresa]=useState("");
-  const [motivo,setMotivo]=useState("");
-  const [enviado,setEnviado]=useState(false);
-  const [enviando,setEnviando]=useState(false);
-  const [error,setError]=useState("");
-
-  async function enviar(event:React.FormEvent){
-    event.preventDefault();
-    setError("");
-    if(motivo.trim().length<20){setError("Cuéntanos un poco más por qué quieres entrar (mínimo 20 caracteres).");return;}
-    setEnviando(true);
-    try{
-      await landingService.solicitarListaPrivada({
-        nombre:nombre.trim(),
-        email:email.trim(),
-        telefono:telefono.trim(),
-        ciudad:ciudad.trim()||undefined,
-        empresa:empresa.trim()||undefined,
-        motivo:motivo.trim(),
-      });
-      setEnviado(true);
-    }catch(err){
-      setError(err instanceof Error&&err.message.trim()?err.message:"No se pudo enviar tu solicitud. Intenta nuevamente.");
-    }finally{
-      setEnviando(false);
-    }
-  }
-
-  if(enviado)return (
-    <div className="text-center py-6">
-      <CheckCircle2 className="w-10 h-10 text-accent mx-auto mb-3"/>
-      <p className="font-semibold">Recibimos tu solicitud.</p>
-      <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto leading-relaxed">
-        Te escribiremos a {email} con el valor del acceso. Cuando registremos el pago, creamos tus credenciales y te las enviamos.
-      </p>
-    </div>
-  );
-
-  return (
-    <form className="space-y-4 text-left" onSubmit={(event)=>{void enviar(event);}}>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Nombre completo" value={nombre} onChange={e=>setNombre(e.target.value)} required minLength={2} maxLength={150} autoComplete="name" className={CLASE_CAMPO_LISTA}/>
-        <Input label="Correo" type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email" className={CLASE_CAMPO_LISTA}/>
-        <Input label="Teléfono o WhatsApp" type="tel" value={telefono} onChange={e=>setTelefono(e.target.value)} required minLength={7} maxLength={40} autoComplete="tel" className={CLASE_CAMPO_LISTA}/>
-        <Input label="Ciudad (opcional)" value={ciudad} onChange={e=>setCiudad(e.target.value)} maxLength={100} autoComplete="address-level2" className={CLASE_CAMPO_LISTA}/>
-      </div>
-      <Input label="Empresa o emprendimiento (opcional)" value={empresa} onChange={e=>setEmpresa(e.target.value)} maxLength={150} autoComplete="organization" className={CLASE_CAMPO_LISTA}/>
-      <Textarea
-        label="¿Por qué quieres entrar?"
-        rows={4}
-        value={motivo}
-        onChange={e=>setMotivo(e.target.value)}
-        required
-        maxLength={2000}
-        placeholder="Qué vendes o quieres vender, qué te gustaría importar y cómo te ayudaría Zarpi."
-        className={CLASE_CAMPO_LISTA}
-      />
-      {error?<p className="text-sm text-destructive">{error}</p>:null}
-      <Button type="submit" variant="primary" fullWidth loading={enviando} className="dark:bg-accent dark:hover:bg-accent/80 dark:text-accent-foreground">
-        {enviando?"Enviando...":"Solicitar acceso"}
-      </Button>
-      <p className="text-xs text-muted-foreground leading-relaxed text-center">
-        El acceso a la lista privada tiene un costo. Te indicaremos el valor al responder tu solicitud, y tus credenciales se crean una vez registremos el pago.
-      </p>
-    </form>
-  );
-}
-
-/** Con el registro público cerrado (Admin › Módulos), se pide acceso a la lista privada. */
-function RegistroCerrado({onLogin,onLanding,onVerPlanes,onPolicy}:{onLogin:()=>void;onLanding:()=>void;onVerPlanes:()=>void;onPolicy:(page:LegalPage)=>void}) {
+function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
 
   return (
@@ -10947,16 +10879,11 @@ function RegistroCerrado({onLogin,onLanding,onVerPlanes,onPolicy}:{onLogin:()=>v
 
         <div className="relative z-10 w-full max-w-[480px]">
           <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8">
-            <div className="text-center mb-6">
+            <div className="text-center">
               <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
-              <h1 className="text-xl font-semibold tracking-tight mb-2">Zarpi funciona con planes de acceso</h1>
-              <p className="text-sm text-muted-foreground">
-                Elige tu plan, paga por transferencia y activamos tu cuenta en máximo 2 horas en horario hábil.
-              </p>
-              <Button variant="primary" className="mt-4 dark:bg-accent dark:text-accent-foreground" onClick={onVerPlanes}>Ver planes</Button>
+              <h1 className="sr-only">Registro en Zarpi</h1>
+              <AvisoListaCerrada onListaEspera={onListaEspera}/>
             </div>
-            <p className="mb-3 text-center text-xs text-muted-foreground">¿Prefieres que te contactemos antes? Déjanos tus datos.</p>
-            <FormularioListaPrivada/>
             <div className="mt-6 flex flex-col items-center gap-3">
               <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
               <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
@@ -12264,7 +12191,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "tendencias", "tendencia-detalle", "reto"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto"];
     if (!publicScreens.includes(screen)) {
       setScreen("landing");
     }
@@ -13076,7 +13003,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "tendencias", "tendencia-detalle", "reto"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -13194,7 +13121,8 @@ export default function App() {
     </div>
   );
 
-  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}}/>;
+  if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
+  if(screen==="lista-espera")return <PantallaListaEspera onVolver={()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing")} onPoliticaDatos={()=>goTo("policy-data")}/>;
   // Inscripción a un plan: pública; con sesión de comprador se precargan sus datos.
   if(screen==="planes-inscripcion")return <InscripcionPlan
     key={planElegido}
@@ -13205,7 +13133,7 @@ export default function App() {
     onPoliticaDatos={()=>goTo("policy-data")}
     prefill={isAuthenticated&&currentUserProfile?{email:currentUserProfile.email,nombre:currentUserProfile.nombre??undefined,telefono:currentUserProfile.telefono??undefined}:undefined}
   />;
-  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")} onVerPlanes={irAPlanesDelInicio} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
+  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que «Volver»
@@ -13247,6 +13175,15 @@ export default function App() {
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
     if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
+    // Lista cerrada: sin plan vigente no se publica (el backend también lo exige).
+    if(screen==="new-quote"&&platformConfig.publicar_solo_con_plan&&userRole==="solicitante"&&currentUserProfile&&!planVigente(currentUserProfile))return (
+      <PantallaPortal sb={sb} active="quotes" titulo="Nueva solicitud">
+        <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card px-6 py-10">
+          <Lock className="mx-auto mb-4 h-10 w-10 text-primary dark:text-accent"/>
+          <AvisoListaCerrada onListaEspera={()=>goTo("lista-espera")}/>
+        </div>
+      </PantallaPortal>
+    );
     if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} onIrAPagos={()=>goTo("pagos")}/>;
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
     if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;

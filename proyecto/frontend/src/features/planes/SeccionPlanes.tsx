@@ -5,10 +5,14 @@ import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
 import { encuadreParaPantalla, useEncuadrePreferido, type Encuadre } from "@/app/components/media/VideoAdaptable";
 import { planesService, pesos, type Plan, type VideoPlan } from "@/services/planes.service";
 
+import { AvisoListaCerrada } from "./ListaEspera";
+
 /**
  * Sección «Planes» del inicio (id `planes`, a la que lleva «Solicitar acceso»).
  * Precio, IVA, lo que incluye y cupos salen de Admin › Planes: aquí no hay
- * ningún valor escrito a mano.
+ * ningún valor escrito a mano. Solo se ven los planes publicados (en la lista
+ * cerrada, el VIP). Arriba va el aviso de lista cerrada con el botón a la lista
+ * de espera de la apertura al público.
  */
 
 /**
@@ -99,16 +103,20 @@ function Tarjeta({ plan, onInscribirme }: { plan: Plan; onInscribirme: (plan: Pl
       </button>
       {plan.cupos_restantes !== null && (
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          {sinCupos ? "Sin cupos por ahora" : `Quedan ${plan.cupos_restantes} ${plan.cupos_restantes === 1 ? "cupo" : "cupos"}`}
+          {sinCupos
+            ? "Sin cupos por ahora"
+            : `Quedan ${plan.cupos_restantes} de ${plan.cupos_totales} ${plan.cupos_totales === 1 ? "cupo" : "cupos"}`}
         </p>
       )}
     </article>
   );
 }
 
-export function SeccionPlanes({ onInscribirme, onCondiciones }: {
+export function SeccionPlanes({ onInscribirme, onCondiciones, onListaEspera }: {
   onInscribirme: (plan: Plan) => void;
   onCondiciones: () => void;
+  /** «Avísame cuando abra»: lista de espera de la apertura al público. */
+  onListaEspera: () => void;
 }) {
   const [planes, setPlanes] = useState<Plan[] | null>(null);
   const [error, setError] = useState(false);
@@ -121,6 +129,7 @@ export function SeccionPlanes({ onInscribirme, onCondiciones }: {
     <section id="planes" className="scroll-mt-20 py-20 px-6 bg-muted relative overflow-hidden">
       <div className="zarpi-blob zarpi-blob-violet absolute -right-24 top-10 pointer-events-none opacity-30 scale-90" />
       <div className="max-w-7xl mx-auto relative z-10">
+        <AvisoListaCerrada onListaEspera={onListaEspera} className="mb-12 border-b border-border pb-10" />
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.18em] text-primary dark:text-accent font-semibold mb-3">Precio de lanzamiento</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Elige cómo entrar a Zarpi</h2>

@@ -344,12 +344,15 @@ def configuracion_publica(db=Depends(get_db)):
     modulo_educativo = modulos.activo(db, "academico")
     registro_abierto = modulos.activo(db, "registro")
     cobro_cotizaciones = modulos.activo(db, "cobro_cotizaciones")
+    solo_con_plan = modulos.activo(db, "solo_con_plan")
 
     return {
         "modulo_educativo_habilitado": modulo_educativo,
         # Registro público abierto; si no, las cuentas las crea el equipo.
         "registro_abierto": registro_abierto,
         "cobro_cotizaciones": cobro_cotizaciones,
+        # Lista cerrada: solo publican solicitudes los compradores con plan vigente.
+        "publicar_solo_con_plan": solo_con_plan,
         "correo_contacto": app_config.CONTACT_EMAIL,
         "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
         "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
