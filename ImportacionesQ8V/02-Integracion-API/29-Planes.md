@@ -12,7 +12,7 @@ Textos de la sección: `zarpi-home-copy-v1.md` (raíz del repositorio). Código:
   - si el plan lo trae, da los días de Tendencias;
   - a una cuenta nueva le manda un enlace para crear la contraseña, que vale 7 días.
 
-  O lo **rechaza** con motivo, y el cupo se libera.
+  O lo **rechaza** con motivo.
 - Sin cupos, la misma pantalla deja a la persona en la **lista de espera**, sin comprobante.
 - **Acceso por lista cerrada:** hasta que los VIP prueben la plataforma no se abre al público.
   - Debajo de las tarjetas de la sección Planes va el aviso «Acceso por lista cerrada…» y el botón **«Avísame cuando abra»**, que lleva a `/lista-espera`, una pantalla pública.
@@ -20,10 +20,10 @@ Textos de la sección: `zarpi-home-copy-v1.md` (raíz del repositorio). Código:
   - **Registro público apagado** (módulo `registro`): nadie crea cuenta por su lado. Quien llega a `/registro` ve la misma línea y el botón a la lista de espera.
   - **Solo publican con plan** (módulo `solo_con_plan`): solo los compradores con plan vigente crean solicitudes. Las importadoras siguen igual.
   - Ambos módulos se manejan en *Admin › Módulos*; ver `28-Pagos-Manuales-y-Modulos.md`.
-- **Contador de cupos** en la tarjeta del plan, si tiene límite: «N de M cupos tomados», con una barra y la leyenda «X activas · Y por activar».
-  - Por activar: comprobante enviado, sin revisar.
-  - Activas: pago confirmado.
-  - Las rechazadas y la lista de espera no ocupan cupo.
+- **Cupos disponibles** en la tarjeta del plan, si tiene límite: solo «Quedan N cupos disponibles», sin cuántos están activos ni por activar.
+  - N es el número que el admin escribe en *Cupos disponibles* (Admin › Planes) y se cambia a mano cuando quiera: hoy 19, mañana 1, luego 10.
+  - Inscribirse, activar o rechazar no lo descuenta ni lo devuelve.
+  - En 0, la tarjeta dice «Sin cupos disponibles» y la inscripción pasa a la lista de espera.
 
 ### Lista de espera
 
@@ -57,7 +57,7 @@ La migración siembra el **Paquete Importador** y el **Plan VIP** del copy v1, s
 
 | Método | Ruta | Quién | Qué hace |
 |---|---|---|---|
-| GET | `/planes` | Público | Planes activos con `precio_cop`, `iva_cop`, `total_cop`, `incluye[]`, `cupos_restantes` (`null` = sin límite) y el contador de la tarjeta: `cupos_por_activar` (comprobante por revisar) y `cupos_activos` (pago confirmado); también `datos_pago` |
+| GET | `/planes` | Público | Planes activos con `precio_cop`, `iva_cop`, `total_cop`, `incluye[]`, `cupos_restantes` (los cupos disponibles que fijó el admin; `null` = sin límite); también `datos_pago` |
 | POST | `/planes/{clave}/inscripcion` | Público (con sesión, la asocia a la cuenta) | multipart: `datos` (JSON) + `comprobante` (PDF/JPG/PNG/WEBP ≤ 10 MB, se valida la firma del archivo). 409 `{"codigo":"sin_cupos"}` si no quedan cupos; 409 si ya hay una pendiente con ese correo |
 | POST | `/planes/lista-espera` | Público | «Avísame cuando abra». JSON: `email`, `nombre`, `indicativo_pais_telefono`, `telefono` (WhatsApp), `sector` (2–80 caracteres), `interes` (qué le gustaría importar, 3–500 caracteres) y `acepto_datos: true`. 409 si ese correo ya está en la lista |
 | POST | `/planes/{clave}/lista-espera` | Público | Lista de espera de un plan sin cupos; el mismo JSON |

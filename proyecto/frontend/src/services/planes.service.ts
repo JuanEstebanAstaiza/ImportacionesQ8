@@ -24,10 +24,6 @@ export interface Plan {
   cupos_totales: number | null;
   /** null: sin límite de cupos. */
   cupos_restantes: number | null;
-  /** Cupos tomados: inscripciones con comprobante por revisar. */
-  cupos_por_activar: number;
-  /** Cupos tomados: inscripciones con el pago confirmado. */
-  cupos_activos: number;
   destacado: boolean;
   orden: number;
   /** Video de la tarjeta (Admin › Planes › Videos). null: sin video. */
@@ -110,7 +106,7 @@ export interface InscripcionAdmin {
   origen_espera: OrigenEspera | null;
 }
 
-export type CamposPlan = Omit<Plan, "id" | "iva_cop" | "total_cop" | "total_solicitud_adicional_cop" | "cupos_restantes" | "cupos_por_activar" | "cupos_activos" | "video"> & {
+export type CamposPlan = Omit<Plan, "id" | "iva_cop" | "total_cop" | "total_solicitud_adicional_cop" | "cupos_restantes" | "video"> & {
   activo: boolean;
 };
 

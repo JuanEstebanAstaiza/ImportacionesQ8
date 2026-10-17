@@ -8,8 +8,9 @@ de las solicitudes adicionales) y los cupos. Todo lo edita el admin en
 Una inscripción es la compra de un plan desde `/planes/inscripcion`: la
 persona deja sus datos y el comprobante de la transferencia; el equipo la
 revisa y, al activarla, se crea la cuenta (si no existe) y se le acredita el
-plan. Las pendientes y las activas ocupan cupo; las rechazadas lo liberan. Con
-los cupos agotados, se entra a la lista de espera (sin comprobante).
+plan. Los cupos disponibles los fija el admin a mano (`cupos_totales`): las
+inscripciones no los descuentan. En 0, se entra a la lista de espera (sin
+comprobante).
 """
 import enum
 from datetime import datetime
@@ -40,7 +41,8 @@ class Plan(Base):
     precio_solicitud_adicional_cop = Column(Integer, nullable=True)
     # Lo que se lista en la tarjeta, en orden.
     incluye = Column(JSON, nullable=True)
-    # Vacío: sin límite de cupos.
+    # Cupos disponibles que muestra la tarjeta, puestos a mano por el admin
+    # (no se descuentan al inscribirse). Vacío: sin límite.
     cupos_totales = Column(Integer, nullable=True)
     destacado = Column(Boolean, nullable=False, default=False, server_default="0")
     orden = Column(Integer, nullable=False, default=0, server_default="0")
@@ -50,9 +52,9 @@ class Plan(Base):
 
 
 class EstadoInscripcionPlan(str, enum.Enum):
-    pendiente = "pendiente"      # comprobante enviado, por revisar (ocupa cupo)
-    activa = "activa"            # pago confirmado y plan acreditado (ocupa cupo)
-    rechazada = "rechazada"      # libera el cupo
+    pendiente = "pendiente"      # comprobante enviado, por revisar
+    activa = "activa"            # pago confirmado y plan acreditado
+    rechazada = "rechazada"
     lista_espera = "lista_espera"
 
 

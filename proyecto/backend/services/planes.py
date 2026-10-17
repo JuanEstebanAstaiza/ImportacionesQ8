@@ -2,15 +2,16 @@
 
 Flujo:
 1. La sección «Planes» del home lee `GET /planes` (precio, IVA, lo que
-   incluye y cupos restantes). Nada de eso está en el código del frontend.
+   incluye y cupos disponibles). Nada de eso está en el código del frontend.
 2. `/planes/inscripcion?plan=…`: la persona deja sus datos, acepta las
    condiciones y sube el comprobante de la transferencia. A pagos@ le llega una
-   copia con el comprobante y el concepto adjuntos; la inscripción ocupa cupo.
+   copia con el comprobante y el concepto adjuntos.
 3. En *Admin › Planes* el equipo la activa: se crea la cuenta (o se usa la que
    ya tiene ese correo), se acreditan las solicitudes con su vigencia y, si el
    plan lo trae, los días de Tendencias. A una cuenta nueva le llega un enlace
-   para crear su contraseña. O la rechaza con motivo, y el cupo se libera.
-4. Sin cupos, la inscripción pasa a lista de espera (sin comprobante).
+   para crear su contraseña. O la rechaza con motivo.
+4. Con los cupos disponibles en 0 (los pone el admin a mano), la inscripción
+   pasa a lista de espera (sin comprobante).
 5. Mientras el acceso es por lista cerrada, «Avísame cuando abra» (en la sección
    «Planes») deja a la persona en la lista de espera de la apertura al público:
    `POST /planes/lista-espera`.
@@ -36,7 +37,6 @@ from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import config
@@ -59,7 +59,6 @@ FORMATOS_COMPROBANTE = {
 }
 MAX_COMPROBANTE_BYTES = 10 * 1024 * 1024
 
-OCUPAN_CUPO = (EstadoInscripcionPlan.pendiente.value, EstadoInscripcionPlan.activa.value)
 # De dónde llega cada persona a la lista de espera.
 ORIGEN_APERTURA = "apertura"     # «Avísame cuando abra»: apertura al público
 ORIGEN_SIN_CUPOS = "sin_cupos"   # el plan se quedó sin cupos
@@ -97,27 +96,13 @@ def _cop(valor: Optional[int]) -> str:
 
 # ── Planes ───────────────────────────────────────────────────────────────────
 
-def ocupados(db: Session, plan_id: str) -> int:
-    return db.query(InscripcionPlan).filter(
-        InscripcionPlan.plan_id == plan_id, InscripcionPlan.estado.in_(OCUPAN_CUPO)).count()
-
-
-def ocupados_por_estado(db: Session, plan_id: str) -> Dict[str, int]:
-    """Cupos tomados, separados: los que pagaron y esperan activación
-    (`pendiente`) y los ya activos. Es lo que muestra el contador de la tarjeta."""
-    conteo = {estado: 0 for estado in OCUPAN_CUPO}
-    filas = db.query(InscripcionPlan.estado, func.count(InscripcionPlan.id)).filter(
-        InscripcionPlan.plan_id == plan_id, InscripcionPlan.estado.in_(OCUPAN_CUPO),
-    ).group_by(InscripcionPlan.estado).all()
-    for estado, cantidad in filas:
-        conteo[estado] = int(cantidad)
-    return conteo
-
-
 def cupos_restantes(db: Session, plan: Plan) -> Optional[int]:
+    """Los cupos disponibles son los que el admin escribe en el plan, tal cual:
+    hoy 19, mañana 1, luego 10. No se descuentan las inscripciones; el número
+    está para generar necesidad y se cambia a mano en Admin › Planes."""
     if plan.cupos_totales is None:
         return None
-    return max(0, int(plan.cupos_totales) - ocupados(db, plan.id))
+    return max(0, int(plan.cupos_totales))
 
 
 def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[str, dict]] = None) -> Dict:
@@ -127,7 +112,6 @@ def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[s
         from services.videos_planes import videos_por_plan
 
         videos = videos_por_plan(db)
-    tomados = ocupados_por_estado(db, plan.id)
     datos = {
         "id": plan.id,
         "clave": plan.clave,
@@ -144,11 +128,7 @@ def a_dict(db: Session, plan: Plan, admin: bool = False, videos: Optional[Dict[s
         "total_solicitud_adicional_cop": con_iva(plan.precio_solicitud_adicional_cop, plan.iva_pct),
         "incluye": list(plan.incluye or []),
         "cupos_totales": plan.cupos_totales,
-        "cupos_restantes": (None if plan.cupos_totales is None
-                            else max(0, int(plan.cupos_totales) - sum(tomados.values()))),
-        # Contador de la tarjeta: cuántos cupos están por activar y cuántos activos.
-        "cupos_por_activar": tomados[EstadoInscripcionPlan.pendiente.value],
-        "cupos_activos": tomados[EstadoInscripcionPlan.activa.value],
+        "cupos_restantes": cupos_restantes(db, plan),
         "destacado": bool(plan.destacado),
         "orden": plan.orden,
         # Se reproduce en la tarjeta del plan (ver services/videos_planes.py).

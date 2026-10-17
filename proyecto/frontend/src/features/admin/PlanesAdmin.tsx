@@ -88,7 +88,7 @@ function FilaInscripcion({ ins, onCambio }: { ins: InscripcionAdmin; onCambio: (
     setEnviando(true);
     try {
       await planesService.rechazar(ins.id, motivo.trim());
-      toast.success("Rechazada. Se liberó el cupo y la persona recibió el motivo.");
+      toast.success("Rechazada. La persona recibió el motivo.");
       onCambio();
     } catch (err) {
       toast.error(mensajeError(err, "No se pudo rechazar."));
@@ -352,7 +352,7 @@ function EditorPlan({ plan, onGuardado, onCancelar }: { plan: PlanAdmin | null; 
       <label className={L}>Vigencia (meses)<input value={f.vigencia_meses} onChange={campo("vigencia_meses")} inputMode="numeric" className={`${CLASE_INPUT} mt-1`} /></label>
       <label className={L}>Días de Tendencias<input value={f.dias_tendencias} onChange={campo("dias_tendencias")} inputMode="numeric" placeholder="Vacío: sin Tendencias" className={`${CLASE_INPUT} mt-1`} /></label>
       <label className={L}>Solicitud adicional sin IVA<input value={f.precio_solicitud_adicional_cop} onChange={campo("precio_solicitud_adicional_cop")} inputMode="numeric" placeholder="Vacío: precio general" className={`${CLASE_INPUT} mt-1`} /></label>
-      <label className={L}>Cupos<input value={f.cupos_totales} onChange={campo("cupos_totales")} inputMode="numeric" placeholder="Vacío: sin límite" className={`${CLASE_INPUT} mt-1`} /></label>
+      <label className={L}>Cupos disponibles<input value={f.cupos_totales} onChange={campo("cupos_totales")} inputMode="numeric" placeholder="Vacío: sin límite" title="Lo que dice la tarjeta: «Quedan N cupos disponibles». Cámbialo cuando quieras; inscribirse no lo descuenta." className={`${CLASE_INPUT} mt-1`} /></label>
       <div className="flex flex-col justify-end gap-1.5 text-sm">
         <label className="flex items-center gap-2"><input type="checkbox" checked={f.destacado} onChange={(e) => setF((x) => ({ ...x, destacado: e.target.checked }))} /> Tarjeta destacada</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={f.activo} onChange={(e) => setF((x) => ({ ...x, activo: e.target.checked }))} /> Publicado</label>
@@ -549,7 +549,7 @@ export function PlanesAdmin() {
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-base font-semibold">Planes publicados</p>
-            <p className="text-sm text-muted-foreground">Lo que se ve en la sección Planes del inicio. Los cupos cuentan las inscripciones por activar y las activas.</p>
+            <p className="text-sm text-muted-foreground">Lo que se ve en la sección Planes del inicio. Los cupos disponibles son el número que pongas en el plan: inscribirse no lo descuenta.</p>
           </div>
           {editando === null && (
             <button type="button" onClick={() => setEditando("nuevo")} className={CLASE_BOTON_PRIMARIO}><Plus className="h-4 w-4" /> Nuevo plan</button>
@@ -578,7 +578,7 @@ export function PlanesAdmin() {
                       {p.precio_solicitud_adicional_cop !== null ? ` · adicional ${pesos(p.precio_solicitud_adicional_cop)} + IVA` : ""}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {p.cupos_totales === null ? "Sin límite de cupos" : `Quedan ${p.cupos_restantes} de ${p.cupos_totales} cupos`}
+                      {p.cupos_totales === null ? "Sin límite de cupos" : `${p.cupos_restantes === 1 ? "Queda 1 cupo disponible" : `Quedan ${p.cupos_restantes} cupos disponibles`} en la tarjeta`}
                       {" · "}{p.inscripciones.pendiente} por activar · {p.inscripciones.activa} activas · {p.inscripciones.lista_espera} en espera
                     </p>
                   </div>

@@ -111,10 +111,11 @@ def test_inscripcion_sin_sesion_con_comprobante_llega_a_pagos(client, db_session
     assert "Sector: Textil" in a_pagos["texto"]
     assert any(c["para"] == "ana@example.com" for c in correos)  # acuse
 
-    # Ocupa cupo (por activar), y no se puede mandar dos veces la misma.
+    # Los cupos disponibles son los que puso el admin: inscribirse no los descuenta.
     importador = client.get("/planes").json()["planes"][0]
-    assert importador["cupos_restantes"] == 1
-    assert importador["cupos_por_activar"] == 1 and importador["cupos_activos"] == 0
+    assert importador["cupos_restantes"] == 2
+    assert "cupos_por_activar" not in importador and "cupos_activos" not in importador
+    # No se puede mandar dos veces la misma.
     assert _inscribir(client).status_code == 409
 
     # Solo el admin descarga el comprobante.
@@ -137,25 +138,37 @@ def test_valida_datos_y_archivo(client, planes, correos):
     assert _inscribir(client, persona={**PERSONA, "email": "d@x.com", "sector": " "}).status_code == 422
 
 
-def test_sin_cupos_pasa_a_lista_de_espera_y_el_rechazo_libera(client, db_session, planes, correos):
-    admin, admin_h = crear_usuario_con_token(db_session, rol="admin")
-    assert _inscribir(client).status_code == 201
-    assert _inscribir(client, persona={**PERSONA, "email": "dos@x.com"}).status_code == 201
-    lleno = _inscribir(client, persona={**PERSONA, "email": "tres@x.com"})
+def test_el_admin_cambia_a_mano_los_cupos_disponibles(client, db_session, planes, correos):
+    _, admin_h = crear_usuario_con_token(db_session, rol="admin")
+    url = f"/planes/admin/planes/{planes['importador'].id}"
+
+    def disponibles():
+        return client.get("/planes").json()["planes"][0]["cupos_restantes"]
+
+    # Hoy quedan 19, mañana 1, luego 10: es el número que escribe el admin.
+    for cupos in (19, 1, 10):
+        assert client.put(url, json={"cupos_totales": cupos}, headers=admin_h).status_code == 200
+        assert disponibles() == cupos
+
+    # En 0, la inscripción pasa a la lista de espera.
+    assert client.put(url, json={"cupos_totales": 0}, headers=admin_h).status_code == 200
+    lleno = _inscribir(client)
     assert lleno.status_code == 409 and lleno.json()["detail"]["codigo"] == "sin_cupos"
-
-    espera = client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "tres@x.com"})
+    espera = client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "ana@example.com"})
     assert espera.status_code == 201
-    assert client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "tres@x.com"}).status_code == 409
+    assert client.post("/planes/importador/lista-espera", json={**ESPERA, "email": "ana@example.com"}).status_code == 409
 
+    # Al volver a abrir cupos, se puede inscribir.
+    assert client.put(url, json={"cupos_totales": 10}, headers=admin_h).status_code == 200
+    assert _inscribir(client).status_code == 201
+    assert disponibles() == 10
+
+    # El rechazo le llega con el motivo.
     pendiente = client.get("/planes/admin/inscripciones?estado=pendiente", headers=admin_h).json()
-    assert len(pendiente) == 2
     r = client.post(f"/planes/admin/inscripciones/{pendiente[0]['id']}/rechazar",
                     json={"motivo": "La transferencia no aparece"}, headers=admin_h)
     assert r.status_code == 200 and r.json()["estado"] == "rechazada"
     assert any("no aparece" in c["texto"] for c in correos if c["para"] == "ana@example.com")
-    assert client.get("/planes").json()["planes"][0]["cupos_restantes"] == 1
-    assert _inscribir(client, persona={**PERSONA, "email": "tres@x.com"}).status_code == 201
 
 
 def test_avisame_cuando_abra_deja_en_lista_de_espera_con_lo_que_quiere_importar(client, db_session, planes, correos):
@@ -205,10 +218,6 @@ def test_activar_crea_la_cuenta_y_acredita_el_plan(client, db_session, planes, c
     assert "restablecer-password?token=" in bienvenida["texto"]
 
     assert client.post(f"/planes/admin/inscripciones/{ins.id}/activar", headers=admin_h).status_code == 409
-    # En el contador de la tarjeta pasa de «por activar» a «activa».
-    vip = next(p for p in client.get("/planes").json()["planes"] if p["clave"] == "vip")
-    assert vip["cupos_por_activar"] == 0 and vip["cupos_activos"] == 1
-
     # Con sesión: el resumen de pagos muestra el plan y el precio VIP de la solicitud adicional.
     from utils.security import create_access_token
     h = {"Authorization": f"Bearer {create_access_token(usuario.id, 'solicitante')}"}
