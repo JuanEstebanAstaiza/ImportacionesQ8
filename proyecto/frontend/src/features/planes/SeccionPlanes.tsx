@@ -61,48 +61,21 @@ function VideoTarjeta({ video, nombre }: { video: VideoPlan; nombre: string }) {
 }
 
 /**
- * Contador de cupos de la tarjeta: los tomados son los reales, es decir, las
- * inscripciones por activar (comprobante enviado) más las activas (pago
- * confirmado). Las rechazadas y la lista de espera no cuentan.
+ * Cupos disponibles de la tarjeta: el número que el admin pone a mano en
+ * Admin › Planes (hoy 19, mañana 1). Solo dice cuántos quedan, sin detalle.
  */
 function ContadorCupos({ plan }: { plan: Plan }) {
-  if (plan.cupos_totales === null) return null;
-  const total = plan.cupos_totales;
-  const tomados = Math.min(total, plan.cupos_por_activar + plan.cupos_activos);
-  const restantes = plan.cupos_restantes ?? Math.max(0, total - tomados);
-  const pct = (valor: number) => (total > 0 ? `${Math.min(100, (valor / total) * 100)}%` : "0%");
+  if (plan.cupos_restantes === null) return null;
+  const restantes = plan.cupos_restantes;
   return (
-    <div className="mt-5 rounded-xl border border-border bg-muted/40 p-3.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold">
-          {tomados} de {total} cupos tomados
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {restantes < 1 ? "Sin cupos" : restantes === 1 ? "Queda 1" : `Quedan ${restantes}`}
-        </p>
-      </div>
-      <div
-        className="mt-2 flex h-2 overflow-hidden rounded-full bg-border"
-        role="progressbar"
-        aria-label={`Cupos de ${plan.nombre}`}
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={tomados}
-      >
-        <div className="h-full bg-primary dark:bg-accent" style={{ width: pct(plan.cupos_activos) }} />
-        <div className="h-full bg-primary/40 dark:bg-accent/45" style={{ width: pct(plan.cupos_por_activar) }} />
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-primary dark:bg-accent" />
-          {plan.cupos_activos} {plan.cupos_activos === 1 ? "activa" : "activas"}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-primary/40 dark:bg-accent/45" />
-          {plan.cupos_por_activar} por activar
-        </span>
-      </div>
-    </div>
+    <p className="mt-5 inline-flex w-fit items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-sm font-semibold">
+      <span className={`h-2 w-2 rounded-full ${restantes < 1 ? "bg-muted-foreground" : "bg-primary dark:bg-accent"}`} />
+      {restantes < 1
+        ? "Sin cupos disponibles"
+        : restantes === 1
+          ? "Queda 1 cupo disponible"
+          : `Quedan ${restantes} cupos disponibles`}
+    </p>
   );
 }
 
