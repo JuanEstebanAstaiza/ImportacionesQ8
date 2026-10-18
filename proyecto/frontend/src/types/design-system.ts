@@ -2,6 +2,7 @@ import { ComponentPropsWithoutRef, ReactNode } from "react";
 
 export type BadgeVariant = 
   | "created" | "directed" | "open" | "accepted" | "active-order" | "neutral"
+  | "rejected-importer"
   | "resp-nueva" | "resp-vista" | "resp-aceptada" | "resp-rechazada" 
   | "info" | "warning" | "success";
 
