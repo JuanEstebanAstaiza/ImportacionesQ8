@@ -33,7 +33,7 @@ export interface AdminSoporteTabProps {
   onNextPage: () => void;
 }
 
-export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversationsTotal, conversationPage, supportTeam, disputes, openConversation, conversationMessages, isLoadingMessages, isSendingReply, onOpenConversation, onChangeAgentLevel, onResolveDispute, onCloseConversation, onSendReply, onPreviousPage, onNextPage }: AdminSoporteTabProps) {
+export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversationsTotal, conversationSearch, onSearchChange, conversationPage, supportTeam, disputes, openConversation, conversationMessages, isLoadingMessages, isSendingReply, onOpenConversation, onChangeAgentLevel, onResolveDispute, onCloseConversation, onSendReply, onPreviousPage, onNextPage }: AdminSoporteTabProps) {
   const [supportReply, setSupportReply] = useState("");
   const [disputeResolution, setDisputeResolution] = useState("");
   return (
@@ -308,6 +308,5 @@ export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversati
       </div>    </section>
   );
 }
-
 
 

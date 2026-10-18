@@ -781,6 +781,7 @@ function etiquetaSitioWeb(valor: string | null | undefined): string {
 }
 
 const ROL_ASESOR_PUBLICO: Record<string, string> = { asesor: "Asesor", importador: "Responsable de la cuenta" };
+const PRICE_CURRENCIES = ["USD", "EUR", "COP", "MXN", "CLP", "PEN", "GBP"];
 
 /**
  * Contacto principal de la empresa. Manda lo que la empresa escribió en su
@@ -1361,8 +1362,8 @@ export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoport
                       </div>
                       {isExpanded&&<ChevronDown className={clsx("ml-auto w-4 h-4 transition-transform duration-200",isOpen&&"rotate-180")}/>}
                     </button>
-                    {isExpanded&&(
-                      <div className={clsx("grid transition-[grid-template-rows] duration-200",isOpen?"grid-rows-[1fr]":"grid-rows-[0fr]")}>
+                    {isExpanded&&isOpen&&(
+                      <div className="grid grid-rows-[1fr]">
                         <div className="min-h-0 overflow-hidden">
                           <div className="ml-2 border-l border-border pl-2 pt-0.5">
                             {groupItems.map(({icon:Icon,label,key})=>{

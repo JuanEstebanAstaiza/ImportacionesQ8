@@ -264,7 +264,7 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
     window.addEventListener("popstate", syncPath);
     return () => window.removeEventListener("popstate", syncPath);
   }, []);
-  const tab = section ? adminTabFromPath(path) : "metricas";
+  const tab = section ?? adminTabFromPath(path) ?? "metricas";
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const { user, appRole, signOut } = useAuth();
