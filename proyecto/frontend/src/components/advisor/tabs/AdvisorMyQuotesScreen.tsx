@@ -12,6 +12,7 @@ import type { LegalPage } from "@/features/legal/types";
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 
 import { Badge, Button, Card } from "@/app/components/design-system";
+import { puedeRechazarse } from "@/utils/quotes";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.

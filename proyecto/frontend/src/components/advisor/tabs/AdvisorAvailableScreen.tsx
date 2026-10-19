@@ -12,15 +12,12 @@ import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion
 import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
 
 import { Button, Card } from "@/app/components/design-system";
+import { puedeRechazarse } from "@/utils/quotes";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 
 import { Sidebar, AppHeader } from "@/app/App";
-
-export function puedeRechazarse(q: Quote): boolean {
-  return q.status === "created" || q.status === "directed" || q.status === "open";
-}
 
 export function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
   const [claimingId,setClaimingId]=useState<string|null>(null);

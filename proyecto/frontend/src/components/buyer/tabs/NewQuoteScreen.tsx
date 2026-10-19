@@ -25,7 +25,8 @@ import type { SidebarCtrl } from "@/types/portal";
 import type { Importer } from "@/types/importer";
 import type { BackendArchivoItem, CreateCotizacionPayload } from "@/services/business.service";
 
-import { Sidebar, AppHeader, USER, cantidadConUnidad } from "@/app/App";
+import { Sidebar, AppHeader, USER } from "@/app/App";
+import { cantidadConUnidad } from "@/utils/formatos";
 
 const STEPS = ["Modalidad", "Información del producto", "Confirmación"];
 const COUNTRIES = ["China", "Estados Unidos", "Alemania", "Japón", "India", "Italia", "Francia", "España", "Brasil", "Corea del Sur", "Turquía", "México", "Colombia"];

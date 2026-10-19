@@ -29,7 +29,7 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 };
 
 import { Sidebar, AppHeader, USER } from "@/app/App";
-import type { QuoteResponse } from "@/app/App";
+import type { QuoteResponse } from "@/types/response";
 
 export function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[];onViewQuote:(quoteId:string)=>void}) {
   const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[empresaF,setEmpresaF]=useState("");

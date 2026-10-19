@@ -32,8 +32,10 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER, inferLifecycleStageIndex, buildLifecycleTimeline, cantidadConUnidad } from "@/app/App";
-import type { QuoteResponse, Order, ChatConv } from "@/app/App";
+import { Sidebar, AppHeader, USER, inferLifecycleStageIndex, buildLifecycleTimeline } from "@/app/App";
+import type { Order, ChatConv } from "@/app/App";
+import type { QuoteResponse } from "@/types/response";
+import { cantidadConUnidad } from "@/utils/formatos";
 
 export function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb,responses,quotes,chats,importers,orders,onRefreshData}:{
   responseId:string;from:ResponseFrom;fromQuoteId?:string;

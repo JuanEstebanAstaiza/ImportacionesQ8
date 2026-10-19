@@ -21,7 +21,8 @@ import { leerPropuesta, pesos as pesosCop } from "@/features/propuestas/calculo"
 import { TierBadge } from "@/features/cotizante/TierBadge";
 
 import { Sidebar, AppHeader, USER } from "@/app/App";
-import type { QuoteResponse } from "@/app/App";
+import type { QuoteResponse } from "@/types/response";
+import { cantidadConUnidad } from "@/utils/formatos";
 
 export function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb, quotes, responses }: { onNewQuote: () => void; onViewDetail: (id: string) => void; onRefreshQuotes?: () => Promise<void>; creditos: number; sb: SidebarCtrl; quotes: Quote[]; responses: QuoteResponse[] }) {
   const [search, setSearch] = useState("");
@@ -431,14 +432,6 @@ const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string
 ];
 
 /** "500 u" o "2,5 m?". */
-function cantidadConUnidad(cantidad: string | number | null | undefined, unidad?: string | null, largo = false): string {
-  if (cantidad === null || cantidad === undefined || cantidad === "") return "—";
-  const numero = Number(cantidad);
-  const texto = Number.isFinite(numero) ? numero.toLocaleString("es-CO", { maximumFractionDigits: 2 }) : String(cantidad);
-  if (unidad === "m3") return `${texto} m³`;
-  return `${texto} ${largo ? "unidades" : "u"}`;
-}
-
 function formatoPesos(valor: number): string {
   return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
 }

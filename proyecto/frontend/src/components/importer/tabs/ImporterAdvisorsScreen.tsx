@@ -30,8 +30,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
-import type { CompanyAdvisor } from "@/app/App";
+import { Modal, Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import type { CompanyAdvisor } from "@/types/portal";
 
 export function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive,onOpenInternalChat}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<string>;onOpenInternalChat:(advisorId:string)=>Promise<void>}) {
   const [advisors,setAdvisors]=useState(initialAdvisors);

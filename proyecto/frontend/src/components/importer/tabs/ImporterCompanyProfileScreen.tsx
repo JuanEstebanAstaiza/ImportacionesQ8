@@ -24,6 +24,7 @@ import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
 import { EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
 
 import { componerShippingMark, LONGITUD_MAX_PREFIJO_SHIPPING_MARK } from "@/lib/shipping-mark";
+import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
 
 import { RUTA_RESTABLECER, type Screen } from "@/app/rutas";
 
@@ -39,6 +40,40 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 };
 
 import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import { IndicadorAutoguardado } from "@/components/importer/IndicadorAutoguardado";
+
+const COUNTRIES = ["China", "Estados Unidos", "Alemania", "Japón", "India", "Italia", "Francia", "España", "Brasil", "Corea del Sur", "Turquía", "México", "Colombia"];
+const BANNER_EXTENSIONS = ["png", "jpg", "jpeg", "webp"];
+const BANNER_FORMATS_LABEL = "PNG, JPG o WebP";
+const BANNER_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
+const BANNER_MAX_BYTES = 5 * 1024 * 1024;
+const RETARDO_AUTOGUARDADO_MS = 1200;
+
+function initialsFromName(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "IM";
+}
+
+function importerColorFromId(id: string): string {
+  const palette = ["bg-blue-600", "bg-emerald-600", "bg-cyan-600", "bg-orange-600", "bg-slate-600", "bg-rose-600", "bg-indigo-600"];
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash + id.charCodeAt(i)) % 997;
+  }
+  return palette[hash % palette.length];
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 export type FormularioEmpresa = {
   razonSocial:string;description:string;year:string;website:string;email:string;logoUrl:string;
@@ -542,7 +577,7 @@ export function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Categorías</p>
-                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40 hover:bg-primary/20")}>{c}</button>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{CATEGORIAS_PRODUCTO.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40 hover:bg-primary/20")}>{c}</button>)}</div>
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-1.5">Países atendidos</p>

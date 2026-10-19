@@ -34,8 +34,14 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
-import type { CompanyAdvisor, ChatConv } from "@/app/App";
+import { Modal, Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
+import type { CompanyAdvisor } from "@/types/portal";
+import type { ChatConv } from "@/app/App";
+
+function puedeRechazarse(q: Quote): boolean {
+  return q.status === "created" || q.status === "directed" || q.status === "open";
+}
 
 export function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");

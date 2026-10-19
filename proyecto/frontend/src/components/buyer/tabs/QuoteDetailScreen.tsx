@@ -18,6 +18,7 @@ import type { LegalPage } from "@/features/legal/types";
 import type { Screen } from "@/app/rutas";
 import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";
+import { cantidadConUnidad } from "@/utils/formatos";
 
 const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
 /** Producto de Tendencias que un visitante quiso cotizar antes de registrarse. */
@@ -36,7 +37,6 @@ import {
   USER,
   inferLifecycleStageIndex,
   buildLifecycleTimeline,
-  cantidadConUnidad,
   initialsFromName,
   GaleriaFotosProducto,
   Modal,

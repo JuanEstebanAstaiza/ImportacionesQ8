@@ -13,6 +13,7 @@ import { Button, Card } from "@/app/components/design-system";
 import { type BackendPropuesta } from "@/services/business.service";
 
 import { safeHttpUrl } from "@/utils/safe-url";
+import { cantidadConUnidad } from "@/utils/formatos";
 
 import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
 import { TierBadge } from "@/features/cotizante/TierBadge";
@@ -30,6 +31,7 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
+import { Modal, GaleriaFotosProducto, findCustomFieldValue, getQuoteAttachmentLinks } from "@/app/App";
 import type { ChatConv } from "@/app/App";
 
 export function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting,proposal,negotiationChat,onConfirmProposal,onOpenChat}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean;proposal?:BackendPropuesta;negotiationChat?:ChatConv;onConfirmProposal?:(propuestaId:string)=>Promise<void>;onOpenChat?:(conversationId:string)=>void}) {

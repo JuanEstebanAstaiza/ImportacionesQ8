@@ -5,7 +5,8 @@ import { Badge, Button, Card } from "@/app/components/design-system";
 import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
 import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";
-import type { CompanyAdvisor, ChatConv } from "@/app/App";
+import type { CompanyAdvisor } from "@/types/portal";
+import type { ChatConv } from "@/app/App";
 import type { BadgeVariant } from "@/types/design-system";
 
 export function ImporterDashboardScreen({sb,quotes,advisors,chats,companyName}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];companyName:string}) {

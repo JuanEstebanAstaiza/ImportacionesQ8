@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
+﻿import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Film,
   Star,
@@ -24,9 +24,10 @@ import { clsx } from "clsx";
 import { toast } from "sonner";
 
 import { Quote } from "../types/quote";
-import type { ResponseFrom, ResponseStatus } from "../types/quote";
+import type { QuoteResponse, ResponseFrom, ResponseStatus } from "../types/response";
 import { Importer } from "../types/importer";
-import { SidebarCtrl } from "../types/portal";
+import type { CompanyAdvisor, SidebarCtrl } from "../types/portal";
+import type { TimelineStage } from "../types/design-system";
 import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
 import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
@@ -142,19 +143,11 @@ import {
   LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
 } from "@/lib/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
-import { RUTA_RESTABLECER, destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
+import { destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 import type { UrgenciaSoporte } from "@/services/business.service";
+import { cantidadConUnidad } from "@/utils/formatos";
+import { CLAVE_PREFILL_PENDIENTE, RESET_PASSWORD_PATH } from "@/utils/paths";
 
-const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
-export function cantidadConUnidad(cantidad: string | number | null | undefined, unidad?: string | null, largo = false): string {
-  if (cantidad === null || cantidad === undefined || cantidad === "") return "—";
-  const numero = Number(cantidad);
-  const texto = Number.isFinite(numero) ? numero.toLocaleString("es-CO", { maximumFractionDigits: 2 }) : String(cantidad);
-  if (unidad === "m3") return `${texto} m³`;
-  return `${texto} ${largo ? "unidades" : "u"}`;
-}
-/** Producto de Tendencias que un visitante quiso cotizar antes de registrarse. */
-const CLAVE_PREFILL_PENDIENTE = "zarpi:prefill-pendiente";
 /** Pantalla (y por tanto URL) de cada documento legal. */
 const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   data: "policy-data",
@@ -163,63 +156,11 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
+const MAX_FOTOS_PRODUCTO = 10;
+
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // DATA
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const QUOTES:Quote[]=[
-  {id:"q001",code:"COT-2025-0089",date:"12 Mar 2025",product:"Café Verde Colombiano Premium",importer:"FoodTrade SRL",       mode:"Abierta", status:"open",        updatedAt:"Hace 2 horas", country:"Colombia",       productLine:"Alimentos",    quality:"Premium",  minQuantity:"500",  targetPrice:"8.50 USD/kg",  incoterm:"FOB"},
-  {id:"q002",code:"COT-2025-0081",date:"05 Mar 2025",product:"Telas Sintéticas 400 GSM",    importer:"TextilMax Corp.",      mode:"Dirigida",status:"directed",    updatedAt:"Hace 1 día",   country:"China",          productLine:"Textil",       quality:"Estándar", minQuantity:"1000", targetPrice:"3.20 USD/m",   incoterm:"CIF"},
-  {id:"q003",code:"COT-2025-0074",date:"28 Feb 2025",product:"Repuestos Motor Diesel HD",   importer:"MecanicaQ Ltda.",      mode:"Dirigida",status:"accepted",    updatedAt:"Hace 3 días",  country:"Alemania",       productLine:"Maquinaria",   quality:"Premium",  minQuantity:"50",   targetPrice:"420 USD/set",  incoterm:"DDP"},
-  {id:"q004",code:"COT-2025-0068",date:"20 Feb 2025",product:"Laptops Dell Latitude 5540",  importer:"TechImport S.A.",      mode:"Abierta", status:"active-order",updatedAt:"Hace 5 días",  country:"Estados Unidos", productLine:"Tecnología",   quality:"Premium",  minQuantity:"20",   targetPrice:"950 USD/u",    incoterm:"FOB"},
-  {id:"q005",code:"COT-2025-0055",date:"10 Feb 2025",product:"Aceite de Oliva Extra Virgen",importer:"FoodTrade SRL",        mode:"Abierta", status:"accepted",    updatedAt:"Hace 8 días",  country:"España",         productLine:"Alimentos",    quality:"Estándar", minQuantity:"200",  targetPrice:"12.00 USD/L",  incoterm:"CIF"},
-  {id:"q006",code:"COT-2025-0043",date:"01 Feb 2025",product:"Válvulas Industriales ANSI",  importer:"IndustrialK S.A.",     mode:"Dirigida",status:"created",     updatedAt:"Hace 12 días", country:"Japón",          productLine:"Maquinaria",   quality:"Estándar", minQuantity:"100",  targetPrice:"85 USD/u",     incoterm:"EXW"},
-  {id:"q007",code:"COT-2025-0031",date:"20 Ene 2025",product:"Fertilizantes NPK 20-20-20", importer:"AgroSur Trading",      mode:"Abierta", status:"directed",    updatedAt:"Hace 18 días", country:"India",          productLine:"Agroindustria",quality:"Estándar", minQuantity:"5000", targetPrice:"0.45 USD/kg",  incoterm:"CFR"},
-  {id:"q008",code:"COT-2025-0017",date:"08 Ene 2025",product:"Cámaras CCTV IP 4K Dahua",   importer:"SecureVision Corp",    mode:"Dirigida",status:"active-order",updatedAt:"Hace 26 días", country:"China",          productLine:"Tecnología",   quality:"Premium",  minQuantity:"30",   targetPrice:"180 USD/u",    incoterm:"CIF"},
-];
-
-const IMPORTERS:Importer[]=[
-  {id:"nexus",     name:"Grupo Nexus S.A.",  specialty:"Tecnología & Electrónica",rating:4.8,responseTime:"~24h",initials:"GN",color:"bg-blue-600",   memberSince:"Ene 2020",projects:147,verified:true, country:"Colombia",      categories:["Tecnología","Electrónica"],  advisor:{name:"Carlos Mendoza", role:"Asesor Senior",     initials:"CM",color:"bg-blue-600",   email:"c.mendoza@nexus.co"}},
-  {id:"textil",    name:"TextilMax Corp.",   specialty:"Textiles & Confección",   rating:4.6,responseTime:"~36h",initials:"TM",color:"bg-purple-600", memberSince:"Mar 2021",projects:89, verified:true, country:"China",         categories:["Textil","Confección"],       advisor:{name:"Laura Gómez",    role:"Asesora Comercial", initials:"LG",color:"bg-purple-600", email:"l.gomez@textilmax.co"}},
-  {id:"food",      name:"FoodTrade SRL",     specialty:"Alimentos & Bebidas",     rating:4.9,responseTime:"~18h",initials:"FT",color:"bg-emerald-600",memberSince:"Jun 2019",projects:213,verified:true, country:"España",        categories:["Alimentos","Bebidas"],       advisor:{name:"Andrés Peña",    role:"Asesor Principal",  initials:"AP",color:"bg-emerald-600", email:"a.pena@foodtrade.co"}},
-  {id:"mecanica",  name:"MecanicaQ Ltda.",   specialty:"Maquinaria & Repuestos",  rating:4.5,responseTime:"~48h",initials:"MQ",color:"bg-orange-600", memberSince:"Sep 2022",projects:54, verified:false,country:"Alemania",      categories:["Maquinaria","Industrial"],   advisor:{name:"Juliana Ríos",   role:"Asesora Técnica",   initials:"JR",color:"bg-orange-600", email:"j.rios@mecanicaq.co"}},
-  {id:"agro",      name:"AgroSur Trading",   specialty:"Agroindustria & Insumos", rating:4.7,responseTime:"~30h",initials:"AS",color:"bg-lime-600",   memberSince:"Nov 2020",projects:102,verified:true, country:"Brasil",        categories:["Agroindustria","Química"],   advisor:{name:"Miguel Castillo",role:"Asesor Agro",       initials:"MC",color:"bg-lime-600",   email:"m.castillo@agrosur.co"}},
-  {id:"techimport",name:"TechImport S.A.",   specialty:"Tecnología & Cómputo",    rating:4.4,responseTime:"~40h",initials:"TI",color:"bg-cyan-600",   memberSince:"Abr 2021",projects:67, verified:true, country:"Estados Unidos",categories:["Tecnología","Software"],     advisor:{name:"Raúl Herrera",   role:"Asesor Tech",       initials:"RH",color:"bg-cyan-600",   email:"r.herrera@techimport.co"}},
-  {id:"industrialk",name:"IndustrialK S.A.", specialty:"Industria & Manufactura", rating:4.3,responseTime:"~52h",initials:"IK",color:"bg-slate-600",  memberSince:"Jul 2020",projects:38, verified:false,country:"Japón",         categories:["Industrial","Maquinaria"],   advisor:{name:"Paola Vásquez", role:"Asesora Industrial",initials:"PV",color:"bg-slate-600",  email:"p.vasquez@industrialk.co"}},
-  {id:"secvision", name:"SecureVision Corp", specialty:"Seguridad & Vigilancia",  rating:4.6,responseTime:"~28h",initials:"SV",color:"bg-rose-600",   memberSince:"Feb 2022",projects:81, verified:true, country:"China",         categories:["Tecnología","Seguridad"],    advisor:{name:"Diego Salazar",  role:"Asesor Seguridad",  initials:"DS",color:"bg-rose-600",   email:"d.salazar@secvision.co"}},
-];
-
-const IMP_DESCRIPTIONS:Record<string,string>={
-  nexus:      "Especialistas en electrónica de consumo e industrial. Presencia en Corea, China y EE.UU. con capacidad de distribución global.",
-  textil:     "Confección a gran escala con certificación OEKO-TEX. Producción propia en China continental y control de calidad integral.",
-  food:       "Alimentos gourmet y de consumo masivo. Red logística refrigerada en Europa con trazabilidad completa desde origen.",
-  mecanica:   "Repuestos OEM y aftermarket para maquinaria pesada. Garantía extendida de 24 meses y soporte técnico especializado.",
-  agro:       "Insumos agrícolas y fertilizantes orgánicos certificados. Experiencia exportando a más de 12 países de Latinoamérica.",
-  techimport: "Tecnología corporativa y consumer. Distribuidor autorizado de marcas globales con soporte técnico local en Colombia.",
-  industrialk:"Componentes industriales bajo especificación JIT. Fabricación a medida y gestión de inventario en planta.",
-  secvision:  "Sistemas de vigilancia IP y analítica de video con IA. Toda la línea certificada CE, IP67 y FCC.",
-};
-
-const IMP_CERTS:Record<string,string[]>={
-  nexus:       ["ISO 9001","CE"],
-  textil:      ["OEKO-TEX","ISO 14001"],
-  food:        ["FDA","HACCP"],
-  mecanica:    ["ISO 9001","DIN"],
-  agro:        ["USDA Organic","GlobalG.A.P."],
-  techimport:  ["Apple Auth.","MS Partner"],
-  industrialk: ["ISO 9001","JIS"],
-  secvision:   ["CE","IP67"],
-};
-
-export interface QuoteResponse {id:string;importerId:string;quoteId:string;price:string;deliveryTime:string;incoterm:string;date:string;status:ResponseStatus;moq:string;origin:string;production:string;customization:string;observations:string;}
-
-const RESPONSES:QuoteResponse[]=[
-  {id:"r001",importerId:"nexus",    quoteId:"q001",price:"9.20 USD/kg", deliveryTime:"28 días",incoterm:"FOB",date:"14 Mar 2025",status:"resp-nueva",    moq:"300 kg",  origin:"Colombia",production:"Propia",     customization:"Marca blanca",             observations:"Café lavado, proceso húmedo, tostado medio."},
-  {id:"r002",importerId:"food",     quoteId:"q001",price:"8.80 USD/kg", deliveryTime:"21 días",incoterm:"CIF",date:"13 Mar 2025",status:"resp-vista",    moq:"500 kg",  origin:"Colombia",production:"Tercerizada",customization:"Estándar",                 observations:"Stock disponible inmediato."},
-  {id:"r003",importerId:"textil",   quoteId:"q002",price:"3.45 USD/m",  deliveryTime:"45 días",incoterm:"CIF",date:"08 Mar 2025",status:"resp-vista",    moq:"800 m",   origin:"China",   production:"Propia",     customization:"Personalización completa", observations:"Certificación OEKO-TEX disponible."},
-  {id:"r004",importerId:"mecanica", quoteId:"q003",price:"398 USD/set", deliveryTime:"60 días",incoterm:"DDP",date:"03 Mar 2025",status:"resp-aceptada", moq:"10 sets", origin:"Alemania",production:"OEM",        customization:"Estándar",                 observations:"Garantía 24 meses incluida."},
-  {id:"r005",importerId:"secvision",quoteId:"q008",price:"165 USD/u",   deliveryTime:"35 días",incoterm:"CIF",date:"12 Ene 2025",status:"resp-aceptada", moq:"10 u",    origin:"China",   production:"Propia",     customization:"Marca blanca",             observations:"Certificación CE e IP67."},
-];
-
 export interface OrderHistoryItem {estado:string;fecha:string;nota:string|null;}
 export interface OrderDocumentItem {name:string;date:string;status:string;url:string;type:string;}
 export interface LifecycleDocItem {label:string;name:string;status:string;url:string|null;source:string;}
@@ -398,6 +339,41 @@ export function PrecioPropuesta({ propuesta, trm, tamano = "sm" }: { propuesta: 
         <p className={clase}>{pesosCop(nueva.totales.total_cop)}</p>
         <p className="text-[11px] text-muted-foreground">con IVA · {pesosCop(nueva.totales.unitario_cop)} por unidad</p>
       </>
+    );
+  }
+
+  function formatoPesos(valor: number): string {
+    return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
+  }
+
+  function DatosDeContactoEmpresa({ imp }: { imp: Importer }) {
+    const datos = [
+      ["Sitio web", imp.website],
+      ["Correo", imp.email],
+      ["Teléfono", imp.phone],
+      ["Dirección", imp.address],
+      ["Fundada", imp.foundedYear],
+    ].filter(([, value]) => value);
+
+    if (datos.length === 0) {
+      return null;
+    }
+
+    return (
+      <Card padding="md">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-primary" />
+          Datos de contacto
+        </h3>
+        <div className="grid gap-2 text-sm">
+          {datos.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <span className="text-muted-foreground">{label}</span>
+              <span className="text-right">{value}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
     );
   }
   return (
@@ -699,7 +675,7 @@ function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   return "dashboard";
 }
 
-function formatShortDate(value: string): string {
+export function formatShortDate(value: string): string {
   const d = parseBackendDate(value);
   if (Number.isNaN(d.getTime())) {
     return value;
@@ -943,7 +919,7 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
   return String(value ?? "").trim().toLowerCase();
 }
 
-function findCustomFieldValue(customFields: Record<string, unknown> | null | undefined, aliases: string[]): string {
+export function findCustomFieldValue(customFields: Record<string, unknown> | null | undefined, aliases: string[]): string {
   if (!customFields) {
     return "";
   }
@@ -1004,7 +980,7 @@ export function GaleriaFotosProducto({fotos}:{fotos:string[]}) {
   );
 }
 
-function getQuoteAttachmentLinks(quote: Quote): string[] {
+export function getQuoteAttachmentLinks(quote: Quote): string[] {
   const links = new Set<string>();
   const maybePushLink = (value: unknown) => {
     const text = String(value ?? "").trim();
@@ -1203,19 +1179,6 @@ function extractFirstNumber(value: string | null | undefined): number {
 
   return Math.round(parsed);
 }
-
-export interface CompanyAdvisor {
-  id:string;name:string;role:string;email:string;phone:string;
-  initials:string;color:string;status:"activo"|"inactivo"|"ausente";
-  availability:"alta"|"media"|"baja";activeQuotes:number;avgResponse:string;joinDate:string;
-}
-
-const COMPANY_ADVISORS:CompanyAdvisor[]=[
-  {id:"adv1",name:"Carlos Mendoza",role:"Asesor Senior",email:"c.mendoza@nexus.co",phone:"+57 310 123 4567",initials:"CM",color:"bg-blue-600",status:"activo",availability:"alta",activeQuotes:4,avgResponse:"~20h",joinDate:"Ene 2022"},
-  {id:"adv2",name:"Laura Gómez",role:"Asesora Comercial",email:"l.gomez@nexus.co",phone:"+57 311 234 5678",initials:"LG",color:"bg-purple-600",status:"activo",availability:"media",activeQuotes:2,avgResponse:"~32h",joinDate:"Mar 2022"},
-  {id:"adv3",name:"Andrés Peña",role:"Asesor Técnico",email:"a.pena@nexus.co",phone:"+57 312 345 6789",initials:"AP",color:"bg-emerald-600",status:"ausente",availability:"baja",activeQuotes:0,avgResponse:"~48h",joinDate:"Jul 2023"},
-  {id:"adv4",name:"Juliana Ríos",role:"Asesora Junior",email:"j.rios@nexus.co",phone:"+57 313 456 7890",initials:"JR",color:"bg-orange-600",status:"inactivo",availability:"baja",activeQuotes:0,avgResponse:"?",joinDate:"Nov 2023"},
-];
 
 interface AppNotification {
   id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
@@ -1763,13 +1726,12 @@ export function ImporterCard({
 }) {
   const desc =
     imp.description ||
-    IMP_DESCRIPTIONS[imp.id] ||
-    "Importadora con experiencia en comercio internacional.";
+    "Esta empresa aún no ha publicado su descripción.";
 
   const certs =
     imp.certs && imp.certs.length > 0
       ? imp.certs
-      : IMP_CERTS[imp.id] || [];
+      : [];
 
   const platformCerts = imp.platformCerts ?? [];
   const bannerUrl = imp.bannerUrl ? resolveApiUrl(imp.bannerUrl) : "";
@@ -1970,18 +1932,17 @@ export function ImporterCard({
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // IMPORTER PROFILE SCREEN ? read-only public profile for the requester
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,onAbrirTendencia}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];onAbrirTendencia:(id:string)=>void;
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,quotes,onAbrirTendencia}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];quotes:Quote[];onAbrirTendencia:(id:string)=>void;
 }) {
-  const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
-  // Lo que la empresa configuró en su perfil manda; los textos de ejemplo solo
-  // se usan para las importadoras de demostración, que no tienen perfil real.
-  const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Esta empresa aún no ha publicado su descripción.";
-  const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
+  const imp=importers.find(i=>i.id===importerId)||importers[0];
+  if (!imp) return null;
+  const desc=imp.description||"Esta empresa aún no ha publicado su descripción.";
+  const certs=imp.certs ?? [];
   const platformCerts=imp.platformCerts ?? [];
   const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
   const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
-  const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
+  const relQuotes=quotes.filter(q=>q.importer===imp.name);
   const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
 
@@ -2369,9 +2330,10 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
 
   const filteredConvs=conversations.filter(c=>{
     // Los chats de los asesores no se mezclan con los propios: van en su
-    // pestaña, agrupados por asesor.
+    // pestaña, agrupados por asesor. La pestaña sigue siendo un filtro
+    // específico, pero sus conversaciones también deben aparecer en "Todas":
+    // el contador global se calcula sobre todos los hilos cargados.
     if(filter==="asesores")return Boolean(c.atiendeNombre)&&(!searchConv||[c.atiendeNombre,c.refCode,c.counterpartName||""].some(t=>t.toLowerCase().includes(searchConv.toLowerCase())));
-    if(c.atiendeNombre)return false;
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
     if(filter==="interno"&&c.type!=="interno")return false;
@@ -5335,7 +5297,7 @@ const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/web
 const BANNER_MAX_BYTES=5*1024*1024;
 
 /** Estado del autoguardado del perfil de empresa, en la cabecera. */
-function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
+export function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
   if(estado==="sin-cambios"){
     return <span className="text-xs text-muted-foreground">Se guarda automáticamente</span>;
   }
@@ -7734,6 +7696,13 @@ export default function App() {
     void reloadDocumentExplorer();
   }, [isAuthenticated, token, isInitializing, reloadCurrentUserProfile, reloadChatData, reloadDocumentExplorer]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !token || isInitializing || screen !== "chats") {
+      return;
+    }
+    void reloadChatData();
+  }, [isAuthenticated, token, isInitializing, screen, reloadChatData]);
+
   // El plan o el saldo pueden cambiar sin que el comprador haga nada (el admin le
   // da un plan, aprueba un comprobante): se releen al abrir una solicitud nueva o Pagos.
   useEffect(() => {
@@ -7913,10 +7882,9 @@ export default function App() {
   });
 
   const unreadCount=notifications.filter(n=>!n.read).length;
-  const chatUnreadCount=Math.max(
-    notifications.filter((n)=>!n.read&&n.type==="message").length,
-    chatConversations.reduce((acc,conversation)=>acc+(conversation.unread||0),0),
-  );
+  const chatUnreadCount=chatConversations
+    .filter((conversation)=>conversation.type!=="equipo"&&!conversation.closed)
+    .reduce((acc,conversation)=>acc+(conversation.unread||0),0);
   const activeChatCount = chatConversations.filter((conversation)=>conversation.status==="activa").length;
   const headerSubtitle = resolveHeaderSubtitle({
     role: userRole,
@@ -8683,7 +8651,7 @@ export default function App() {
 
     // â”€â”€ Solicitante portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)} />;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} solicitudesPlan={Number(currentUserProfile?.solicitudes_plan_vigentes ?? 0)} sinPlan={platformConfig.solo_con_plan&&userRole==="solicitante"&&currentUserProfile!==null&&!currentUserProfile.plan_vigente} permiteAbierta={platformConfig.cotizaciones_abiertas} onIrAPagos={()=>goTo("pagos")} onVerPlanes={irAPlanesDelInicio}/>;
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
