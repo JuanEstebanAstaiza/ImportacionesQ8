@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Archive, ExternalLink, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import { tendenciasService, type ItemAprobacion } from "@/services/tendencias.service";
 
 import {

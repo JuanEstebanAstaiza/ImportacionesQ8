@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
+﻿import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Film,
   Star,
@@ -24,28 +24,46 @@ import { clsx } from "clsx";
 import { toast } from "sonner";
 
 import { Quote } from "../types/quote";
-import type { ResponseFrom, ResponseStatus } from "../types/quote";
+import type { QuoteResponse, ResponseFrom, ResponseStatus } from "../types/response";
 import { Importer } from "../types/importer";
-import { SidebarCtrl } from "../types/portal";
-import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import type { CompanyAdvisor, SidebarCtrl } from "../types/portal";
+import type { TimelineStage } from "../types/design-system";
+import { ProtectedRoute } from "@/components/guards/ProtectedRoute";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
-import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
+import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
 import type { LegalPage } from "@/features/legal/types";
 import { EMPRESA } from "@/features/legal/empresa";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
+import { DashboardScreen } from "@/pages/buyer/BuyerDashboard";
+import { ImporterDashboardScreen } from "@/pages/importer/ImporterDashboard";
+import { QuotesScreen } from "@/components/buyer/tabs/QuotesScreen";
+import { QuoteDetailScreen } from "@/components/buyer/tabs/QuoteDetailScreen";
+import { ResponseDetailScreen } from "@/components/buyer/tabs/ResponseDetailScreen";
+import { ResponsesScreen } from "@/components/buyer/tabs/ResponsesScreen";
+import { OrdersScreen } from "@/components/buyer/tabs/OrdersScreen";
+import { OrderDetailScreen } from "@/components/buyer/tabs/OrderDetailScreen";
+import { NewQuoteScreen } from "@/components/buyer/tabs/NewQuoteScreen";
+import type { QuoteFormState, OrigenSolicitud } from "@/components/buyer/tabs/NewQuoteScreen";
+import { ImporterCompanyProfileScreen } from "@/components/importer/tabs/ImporterCompanyProfileScreen";
+import { ImporterAdvisorsScreen } from "@/components/importer/tabs/ImporterAdvisorsScreen";
+import { ImporterQuotesScreen } from "@/components/importer/tabs/ImporterQuotesScreen";
+import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
+import { AdvisorDashboardScreen } from "@/components/advisor/tabs/AdvisorDashboardScreen";
+import { AdvisorAvailableScreen } from "@/components/advisor/tabs/AdvisorAvailableScreen";
+import { AdvisorMyQuotesScreen } from "@/components/advisor/tabs/AdvisorMyQuotesScreen";
+import { ImpAdvisorDashboard } from "@/pages/advisor/AdvisorDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import { TendenciasFeed } from "@/features/tendencias/Feed";
 import { TendenciaFicha } from "@/features/tendencias/Ficha";
 import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
 import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
 import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
-import { AdminTendencias } from "@/features/tendencias/AdminTendencias";
 import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
 import { RevisionPagos } from "@/features/admin/RevisionPagos";
 import { AccesosCursos } from "@/features/admin/AccesosCursos";
@@ -73,6 +91,11 @@ import { usePlatformConfig } from "@/hooks/usePlatformConfig";
 import { authService } from "@/services/auth.service";
 import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import {
+  Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Logo, NotifIcon,
+  openSmartContact, Select, Textarea, Timeline,
+} from "@/components/design-system";
+import { formatChatTime, parseBackendDate } from "@/utils/date";
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 import { HELP_SUPPORT_CONTENT, normalizeHelpRole } from "@/features/help/help-support-content";
@@ -103,10 +126,10 @@ import { CondicionesEmpresa } from "@/features/propuestas/CondicionesEmpresa";
 import { leerPropuesta, pesos as pesosCop, type FormularioPropuesta as FormularioPropuestaDatos } from "@/features/propuestas/calculo";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { landingService, leerVideosQuienesSomos, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
-import { CarruselVideos } from "@/app/components/media/CarruselVideos";
+import { CarruselVideos } from "@/components/media/CarruselVideos";
 import { safeHttpUrl } from "@/utils/safe-url";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
-import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
+import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
 import { ResenasImportador } from "@/features/resenas/ResenasImportador";
 import { PendientesDeResena } from "@/features/resenas/PendientesDeResena";
 import { PresentacionPublica, EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
@@ -118,14 +141,13 @@ import {
   componerShippingMark,
   LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
   LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
-} from "@/lib/shipping-mark";
+} from "@/utils/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
-import { RUTA_RESTABLECER, destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
+import { destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 import type { UrgenciaSoporte } from "@/services/business.service";
+import { cantidadConUnidad } from "@/utils/formatos";
+import { CLAVE_PREFILL_PENDIENTE, RESET_PASSWORD_PATH } from "@/utils/paths";
 
-const RESET_PASSWORD_PATH = RUTA_RESTABLECER;
-/** Producto de Tendencias que un visitante quiso cotizar antes de registrarse. */
-const CLAVE_PREFILL_PENDIENTE = "zarpi:prefill-pendiente";
 /** Pantalla (y por tanto URL) de cada documento legal. */
 const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   data: "policy-data",
@@ -134,407 +156,15 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DESIGN SYSTEM COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
+const MAX_FOTOS_PRODUCTO = 10;
 
-type BadgeVariant = "created"|"directed"|"open"|"accepted"|"active-order"|"neutral"|
-  "rejected-importer"|"resp-nueva"|"resp-vista"|"resp-aceptada"|"resp-rechazada"|"info"|"warning"|"success";
-
-const BADGE_MAP: Record<BadgeVariant, { label: string; cls: string; dot: string }> = {
-  // --- BADGES MÁS COMUNES ---
-
-  // 1. Abierta / Nueva: Verde Accent (Neón en Dark Mode)
-  "open": {
-    label: "Abierta",
-    cls: "bg-accent/15 text-emerald-800 border border-accent/40 dark:bg-accent/20 dark:text-accent dark:border-accent/50",
-    dot: "bg-emerald-600 dark:bg-accent",
-  },
-
-  // 2. Orden activa: Destacado Neón / Glow con borde Accent
-  "active-order": {
-    label: "Operación activa",
-    cls: "bg-primary/15 text-primary border border-primary/40 dark:bg-accent/20 dark:text-accent dark:border-accent/60 dark:shadow-[0_0_8px_rgba(16,185,129,0.2)]",
-    dot: "bg-primary dark:bg-accent",
-  },
-
-  // 3. Dirigida / Vista: Morado Primary Brand
-  "directed": {
-    label: "Dirigida",
-    cls: "bg-primary/10 text-primary border border-primary/30 dark:bg-primary/20 dark:text-purple-300 dark:border-primary/50",
-    dot: "bg-primary dark:bg-purple-300",
-  },
-
-
-  // --- RESTO DE ESTADOS Y VARIANTES ---
-
-  // Creada / Neutral: Gris / Slate (Monocromático con borde)
-  "created": {
-    label: "Creada",
-    cls: "bg-slate-500/10 text-slate-700 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/40",
-    dot: "bg-slate-500 dark:bg-slate-300",
-  },
-
-  // Aceptada / Éxito: Verde Estado (Emerald)
-  "accepted": {
-    label: "Aceptada",
-    cls: "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/40",
-    dot: "bg-emerald-600 dark:bg-emerald-400",
-  },
-
-  // Rechazada: Rojo / Rosa (Rose)
-  "rejected-importer": {
-    label: "Rechazada por importadora",
-    cls: "bg-rose-500/10 text-rose-800 border border-rose-500/30 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/40",
-    dot: "bg-rose-600 dark:bg-rose-400",
-  },
-
-  "neutral": {
-    label: "",
-    cls: "bg-slate-500/10 text-slate-700 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/40",
-    dot: "bg-slate-500 dark:bg-slate-300",
-  },
-
-  // Respuestas
-  "resp-nueva": {
-    label: "Nueva",
-    cls: "bg-accent/15 text-emerald-800 border border-accent/40 dark:bg-accent/20 dark:text-accent dark:border-accent/50",
-    dot: "bg-emerald-600 dark:bg-accent",
-  },
-  "resp-vista": {
-    label: "Vista",
-    cls: "bg-primary/10 text-primary border border-primary/30 dark:bg-primary/20 dark:text-purple-300 dark:border-primary/50",
-    dot: "bg-primary dark:bg-purple-300",
-  },
-  "resp-aceptada": {
-    label: "Aceptada",
-    cls: "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/40",
-    dot: "bg-emerald-600 dark:bg-emerald-400",
-  },
-  "resp-rechazada": {
-    label: "Rechazada",
-    cls: "bg-rose-500/10 text-rose-800 border border-rose-500/30 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/40",
-    dot: "bg-rose-600 dark:bg-rose-400",
-  },
-
-  // Estados Auxiliares
-  "info": {
-    label: "",
-    cls: "bg-sky-500/10 text-sky-800 border border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-400 dark:border-sky-500/40",
-    dot: "bg-sky-600 dark:bg-sky-400",
-  },
-  "warning": {
-    label: "",
-    cls: "bg-amber-500/10 text-amber-800 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/40",
-    dot: "bg-amber-600 dark:bg-amber-400",
-  },
-  "success": {
-    label: "",
-    cls: "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/40",
-    dot: "bg-emerald-600 dark:bg-emerald-400",
-  },
-};
-
-function Badge({variant,label,className}:{variant:BadgeVariant;label?:string;className?:string}) {
-  const c = BADGE_MAP[variant];
-  return (
-    <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap",c.cls,className)}>
-      <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0",c.dot)}/>
-      {label??c.label}
-    </span>
-  );
-}
-
-function formatChatTime(value: string): string {
-  const d = parseBackendDate(value);
-  if (Number.isNaN(d.getTime())) {
-    return value;
-  }
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
-
-type BtnVariant="primary"|"secondary"|"danger"|"ghost";
-interface BtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?:BtnVariant; size?:"sm"|"md"|"lg";
-  loading?:boolean; fullWidth?:boolean; icon?:React.ReactNode; iconRight?:React.ReactNode;
-}
-function Button({variant="primary",size="md",loading=false,fullWidth=false,icon,iconRight,children,className,disabled,...props}:BtnProps) {
-  const base="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none";
-  const variants:Record<BtnVariant,string>={
-    primary:"bg-primary text-primary-foreground hover:bg-[#3f05bc] active:bg-[#2e038a] shadow-sm",
-    secondary:"bg-muted text-foreground border border-border hover:bg-accent hover:text-accent-foreground hover:border-accent active:bg-accent active:text-accent-foreground shadow-sm",
-    danger:"bg-destructive text-white hover:bg-red-700 shadow-sm",
-    ghost:"text-muted-foreground hover:text-foreground hover:bg-muted",
-  };
-  const sizes:Record<"sm"|"md"|"lg",string>={sm:"h-8 px-3 text-xs",md:"h-9 px-4 text-sm",lg:"h-10 px-5 text-sm"};
-  return (
-    <button className={clsx(base,variants[variant],sizes[size],fullWidth&&"w-full",className)} disabled={disabled||loading} {...props}>
-      {loading?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:icon}{children}{!loading&&iconRight}
-    </button>
-  );
-}
-
-// ─── Unified contact action button ───────────────────────────────────────────
-type ContactType="chat"|"email";
-function ContactBtn({type,size="sm",label,className,onClick,disabled,title}:{type:ContactType;size?:"sm"|"md";label?:string;className?:string;onClick?:()=>void;disabled?:boolean;title?:string}) {
-  const cfg:Record<ContactType,{icon:React.FC<{className?:string}>;defaultLabel:string;cls:string}>={
-    chat:    {icon:MessageCircle, defaultLabel:"Chat",    cls:"border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"},
-    email:   {icon:MailIcon,      defaultLabel:"Correo",  cls:"border-slate-200 bg-white text-slate-700 hover:bg-slate-50"},
-  };
-  const c=cfg[type];const Icon=c.icon;
-  const iconSize=size==="sm"?"w-3.5 h-3.5":"w-4 h-4";
-  return <Button variant="secondary" size={size} icon={<Icon className={iconSize}/>} className={clsx(c.cls,className)} onClick={onClick} disabled={disabled} title={title}>{label??c.defaultLabel}</Button>;
-}
-
-function openSmartContact({type,email,onOpenChat}:{type:ContactType;email?:string|null;onOpenChat?:()=>void}){
-  if(type==="chat"){
-    if(onOpenChat){
-      onOpenChat();
-      return;
-    }
-    toast.error("No hay chat disponible para esta conversación.");
-    return;
-  }
-
-  const normalizedEmail=String(email||"").trim();
-  if(type==="email"&&normalizedEmail){
-    window.open(`mailto:${normalizedEmail}`, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  toast.error("No hay correo disponible para este contacto.");
-}
-
-type InputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>,"prefix"> & {
-  label?:string;error?:string;hint?:string;prefix?:React.ReactNode;suffix?:React.ReactNode;rightLabel?:React.ReactNode;
-};
-function Input({label,error,hint,prefix,suffix,rightLabel,className,id,...props}:InputProps) {
-  const iid=id||label?.toLowerCase().replace(/\s+/g,"-");
-  return (
-    <div className="flex flex-col gap-1.5">
-      {(label||rightLabel)&&<div className="flex items-center justify-between">
-        {label&&<label htmlFor={iid} className="text-sm font-medium text-foreground">{label}</label>}
-        {rightLabel}
-      </div>}
-      <div className="relative flex items-center">
-        {prefix&&<span className="absolute left-3 text-muted-foreground flex items-center pointer-events-none">{prefix}</span>}
-        <input id={iid} className={clsx("w-full h-10 bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary",error?"border-destructive":"border-border",prefix?"pl-9":"pl-3",suffix?"pr-10":"pr-3",className)} {...props}/>
-        {suffix&&<span className="absolute right-3 text-muted-foreground flex items-center">{suffix}</span>}
-      </div>
-      {error&&<p className="flex items-center gap-1 text-xs text-destructive"><AlertCircle className="w-3 h-3 flex-shrink-0"/>{error}</p>}
-      {hint&&!error&&<p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {label?:string;error?:string;hint?:string;}
-function Textarea({label,error,hint,className,id,...props}:TextareaProps) {
-  const iid=id||label?.toLowerCase().replace(/\s+/g,"-");
-  return (
-    <div className="flex flex-col gap-1.5">
-      {label&&<label htmlFor={iid} className="text-sm font-medium text-foreground">{label}</label>}
-      <textarea id={iid} className={clsx("w-full bg-white border rounded-lg text-sm text-foreground placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none px-3 py-2.5",error?"border-destructive":"border-border",className)} {...props}/>
-      {hint&&!error&&<p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {label?:string;}
-function Select({label,children,className,id,...props}:SelectProps) {
-  const iid=id||label?.toLowerCase().replace(/\s+/g,"-");
-  return (
-    <div className="flex flex-col gap-1.5">
-      {label&&<label htmlFor={iid} className="text-sm font-medium text-foreground">{label}</label>}
-      <div className="relative">
-        <select id={iid} className={clsx("w-full h-10 pl-3 pr-8 bg-white border border-border rounded-lg text-sm text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer",className)} {...props}>{children}</select>
-        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"/>
-      </div>
-    </div>
-  );
-}
-
-type CardProps = React.HTMLAttributes<HTMLDivElement> & {
-  children:React.ReactNode;
-  padding?:"none"|"sm"|"md"|"lg";
-};
-
-function Card({children,className,padding="md",...props}:CardProps) {
-  const p={none:"",sm:"p-4",md:"p-5",lg:"p-6"};
-  return <div className={clsx("bg-white border border-border rounded-xl shadow-sm",p[padding],className)} {...props}>{children}</div>;
-}
-
-/**
- * Avatar de persona (redondo) o logo de empresa (`variant="logo"`).
- *
- * Los tamaños `2xl`/`3xl` y la variante de logo existen porque el logo de la
- * empresa se pintaba a 48 px y recortado en círculo: las marcas apaisadas
- * perdían el texto y la ficha parecía no tener logo. En `logo` la imagen se
- * escala entera (`object-contain`) sobre fondo blanco.
- */
-function Avatar({initials,size="md",color="bg-primary",src,variant="avatar"}:{initials:string;size?:"sm"|"md"|"lg"|"xl"|"2xl"|"3xl";color?:string;src?:string;variant?:"avatar"|"logo"}) {
-  const s={sm:"w-7 h-7 text-xs",md:"w-9 h-9 text-sm",lg:"w-10 h-10 text-sm",xl:"w-12 h-12 text-base","2xl":"w-20 h-20 text-2xl","3xl":"w-28 h-28 text-3xl"};
-  const esLogo=variant==="logo";
-  if(src){
-    return <img src={src} alt={initials} className={clsx("flex-shrink-0 border border-border",esLogo?"rounded-xl object-contain bg-white p-1":"rounded-full object-cover",s[size])}/>;
-  }
-  return <div className={clsx("flex items-center justify-center font-semibold text-white flex-shrink-0",esLogo?"rounded-xl":"rounded-full",color,s[size])}>{initials}</div>;
-}
-
-function Logo() {
-  const { dark } = useBrandTheme();
-  return (
-    <div className="flex items-center overflow-hidden">
-      <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-8 w-28 object-contain object-left" />
-    </div>
-  );
-}
-
-// ─── Enhanced Timeline ────────────────────────────────────────────────────────
-interface TimelineStage {label:string;icon:React.ReactNode;status:"done"|"current"|"pending";date?:string;}
-
-function Timeline({ stages }: { stages: TimelineStage[] }) {
-  return (
-    <div className="relative">
-      <div className="absolute left-4 top-5 bottom-5 w-0.5 bg-border" />
-      <div className="space-y-0">
-        {stages.map((s, i) => (
-          <div key={i} className="flex items-start gap-3 relative">
-            <div
-              className={clsx(
-                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 border-2 mt-0.5 transition-colors",
-                s.status === "done"
-                  ? "bg-primary border-primary text-primary-foreground dark:bg-accent dark:border-accent dark:text-accent-foreground"
-                  : s.status === "current"
-                  ? "bg-card border-primary text-primary ring-4 ring-primary/15 dark:border-accent dark:text-accent dark:ring-accent/20"
-                  : "bg-card border-border text-muted-foreground/50"
-              )}
-            >
-              {s.status === "done" ? <Check className="w-3.5 h-3.5" /> : s.icon}
-            </div>
-            <div
-              className={clsx(
-                "pb-5 min-w-0 flex-1",
-                i === stages.length - 1 && "pb-0"
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className={clsx(
-                    "text-sm font-medium",
-                    s.status === "pending"
-                      ? "text-muted-foreground"
-                      : "text-foreground"
-                  )}
-                >
-                  {s.label}
-                </p>
-                {s.date && (
-                  <span
-                    className={clsx(
-                      "text-xs flex-shrink-0",
-                      s.status === "pending"
-                        ? "text-muted-foreground/60"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {s.date}
-                  </span>
-                )}
-              </div>
-              {s.status === "current" && (
-                <p className="text-xs font-medium mt-0.5 text-primary dark:text-accent">
-                  En curso
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Notification icon with badge ─────────────────────────────────────────────
-function NotifIcon({icon,count=0,onClick,title}:{icon:React.ReactNode;count?:number;onClick?:()=>void;title?:string}) {
-  return (
-    <div className="relative">
-      <button
-        onClick={onClick}
-        title={title}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-      >
-        {icon}
-      </button>
-      {count>0&&(
-        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">
-          {count>9?"9+":count}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // DATA
-// ─────────────────────────────────────────────────────────────────────────────
-const QUOTES:Quote[]=[
-  {id:"q001",code:"COT-2025-0089",date:"12 Mar 2025",product:"Café Verde Colombiano Premium",importer:"FoodTrade SRL",       mode:"Abierta", status:"open",        updatedAt:"Hace 2 horas", country:"Colombia",       productLine:"Alimentos",    quality:"Premium",  minQuantity:"500",  targetPrice:"8.50 USD/kg",  incoterm:"FOB"},
-  {id:"q002",code:"COT-2025-0081",date:"05 Mar 2025",product:"Telas Sintéticas 400 GSM",    importer:"TextilMax Corp.",      mode:"Dirigida",status:"directed",    updatedAt:"Hace 1 día",   country:"China",          productLine:"Textil",       quality:"Estándar", minQuantity:"1000", targetPrice:"3.20 USD/m",   incoterm:"CIF"},
-  {id:"q003",code:"COT-2025-0074",date:"28 Feb 2025",product:"Repuestos Motor Diesel HD",   importer:"MecanicaQ Ltda.",      mode:"Dirigida",status:"accepted",    updatedAt:"Hace 3 días",  country:"Alemania",       productLine:"Maquinaria",   quality:"Premium",  minQuantity:"50",   targetPrice:"420 USD/set",  incoterm:"DDP"},
-  {id:"q004",code:"COT-2025-0068",date:"20 Feb 2025",product:"Laptops Dell Latitude 5540",  importer:"TechImport S.A.",      mode:"Abierta", status:"active-order",updatedAt:"Hace 5 días",  country:"Estados Unidos", productLine:"Tecnología",   quality:"Premium",  minQuantity:"20",   targetPrice:"950 USD/u",    incoterm:"FOB"},
-  {id:"q005",code:"COT-2025-0055",date:"10 Feb 2025",product:"Aceite de Oliva Extra Virgen",importer:"FoodTrade SRL",        mode:"Abierta", status:"accepted",    updatedAt:"Hace 8 días",  country:"España",         productLine:"Alimentos",    quality:"Estándar", minQuantity:"200",  targetPrice:"12.00 USD/L",  incoterm:"CIF"},
-  {id:"q006",code:"COT-2025-0043",date:"01 Feb 2025",product:"Válvulas Industriales ANSI",  importer:"IndustrialK S.A.",     mode:"Dirigida",status:"created",     updatedAt:"Hace 12 días", country:"Japón",          productLine:"Maquinaria",   quality:"Estándar", minQuantity:"100",  targetPrice:"85 USD/u",     incoterm:"EXW"},
-  {id:"q007",code:"COT-2025-0031",date:"20 Ene 2025",product:"Fertilizantes NPK 20-20-20", importer:"AgroSur Trading",      mode:"Abierta", status:"directed",    updatedAt:"Hace 18 días", country:"India",          productLine:"Agroindustria",quality:"Estándar", minQuantity:"5000", targetPrice:"0.45 USD/kg",  incoterm:"CFR"},
-  {id:"q008",code:"COT-2025-0017",date:"08 Ene 2025",product:"Cámaras CCTV IP 4K Dahua",   importer:"SecureVision Corp",    mode:"Dirigida",status:"active-order",updatedAt:"Hace 26 días", country:"China",          productLine:"Tecnología",   quality:"Premium",  minQuantity:"30",   targetPrice:"180 USD/u",    incoterm:"CIF"},
-];
-
-const IMPORTERS:Importer[]=[
-  {id:"nexus",     name:"Grupo Nexus S.A.",  specialty:"Tecnología & Electrónica",rating:4.8,responseTime:"~24h",initials:"GN",color:"bg-blue-600",   memberSince:"Ene 2020",projects:147,verified:true, country:"Colombia",      categories:["Tecnología","Electrónica"],  advisor:{name:"Carlos Mendoza", role:"Asesor Senior",     initials:"CM",color:"bg-blue-600",   email:"c.mendoza@nexus.co"}},
-  {id:"textil",    name:"TextilMax Corp.",   specialty:"Textiles & Confección",   rating:4.6,responseTime:"~36h",initials:"TM",color:"bg-purple-600", memberSince:"Mar 2021",projects:89, verified:true, country:"China",         categories:["Textil","Confección"],       advisor:{name:"Laura Gómez",    role:"Asesora Comercial", initials:"LG",color:"bg-purple-600", email:"l.gomez@textilmax.co"}},
-  {id:"food",      name:"FoodTrade SRL",     specialty:"Alimentos & Bebidas",     rating:4.9,responseTime:"~18h",initials:"FT",color:"bg-emerald-600",memberSince:"Jun 2019",projects:213,verified:true, country:"España",        categories:["Alimentos","Bebidas"],       advisor:{name:"Andrés Peña",    role:"Asesor Principal",  initials:"AP",color:"bg-emerald-600", email:"a.pena@foodtrade.co"}},
-  {id:"mecanica",  name:"MecanicaQ Ltda.",   specialty:"Maquinaria & Repuestos",  rating:4.5,responseTime:"~48h",initials:"MQ",color:"bg-orange-600", memberSince:"Sep 2022",projects:54, verified:false,country:"Alemania",      categories:["Maquinaria","Industrial"],   advisor:{name:"Juliana Ríos",   role:"Asesora Técnica",   initials:"JR",color:"bg-orange-600", email:"j.rios@mecanicaq.co"}},
-  {id:"agro",      name:"AgroSur Trading",   specialty:"Agroindustria & Insumos", rating:4.7,responseTime:"~30h",initials:"AS",color:"bg-lime-600",   memberSince:"Nov 2020",projects:102,verified:true, country:"Brasil",        categories:["Agroindustria","Química"],   advisor:{name:"Miguel Castillo",role:"Asesor Agro",       initials:"MC",color:"bg-lime-600",   email:"m.castillo@agrosur.co"}},
-  {id:"techimport",name:"TechImport S.A.",   specialty:"Tecnología & Cómputo",    rating:4.4,responseTime:"~40h",initials:"TI",color:"bg-cyan-600",   memberSince:"Abr 2021",projects:67, verified:true, country:"Estados Unidos",categories:["Tecnología","Software"],     advisor:{name:"Raúl Herrera",   role:"Asesor Tech",       initials:"RH",color:"bg-cyan-600",   email:"r.herrera@techimport.co"}},
-  {id:"industrialk",name:"IndustrialK S.A.", specialty:"Industria & Manufactura", rating:4.3,responseTime:"~52h",initials:"IK",color:"bg-slate-600",  memberSince:"Jul 2020",projects:38, verified:false,country:"Japón",         categories:["Industrial","Maquinaria"],   advisor:{name:"Paola Vásquez", role:"Asesora Industrial",initials:"PV",color:"bg-slate-600",  email:"p.vasquez@industrialk.co"}},
-  {id:"secvision", name:"SecureVision Corp", specialty:"Seguridad & Vigilancia",  rating:4.6,responseTime:"~28h",initials:"SV",color:"bg-rose-600",   memberSince:"Feb 2022",projects:81, verified:true, country:"China",         categories:["Tecnología","Seguridad"],    advisor:{name:"Diego Salazar",  role:"Asesor Seguridad",  initials:"DS",color:"bg-rose-600",   email:"d.salazar@secvision.co"}},
-];
-
-const IMP_DESCRIPTIONS:Record<string,string>={
-  nexus:      "Especialistas en electrónica de consumo e industrial. Presencia en Corea, China y EE.UU. con capacidad de distribución global.",
-  textil:     "Confección a gran escala con certificación OEKO-TEX. Producción propia en China continental y control de calidad integral.",
-  food:       "Alimentos gourmet y de consumo masivo. Red logística refrigerada en Europa con trazabilidad completa desde origen.",
-  mecanica:   "Repuestos OEM y aftermarket para maquinaria pesada. Garantía extendida de 24 meses y soporte técnico especializado.",
-  agro:       "Insumos agrícolas y fertilizantes orgánicos certificados. Experiencia exportando a más de 12 países de Latinoamérica.",
-  techimport: "Tecnología corporativa y consumer. Distribuidor autorizado de marcas globales con soporte técnico local en Colombia.",
-  industrialk:"Componentes industriales bajo especificación JIT. Fabricación a medida y gestión de inventario en planta.",
-  secvision:  "Sistemas de vigilancia IP y analítica de video con IA. Toda la línea certificada CE, IP67 y FCC.",
-};
-
-const IMP_CERTS:Record<string,string[]>={
-  nexus:       ["ISO 9001","CE"],
-  textil:      ["OEKO-TEX","ISO 14001"],
-  food:        ["FDA","HACCP"],
-  mecanica:    ["ISO 9001","DIN"],
-  agro:        ["USDA Organic","GlobalG.A.P."],
-  techimport:  ["Apple Auth.","MS Partner"],
-  industrialk: ["ISO 9001","JIS"],
-  secvision:   ["CE","IP67"],
-};
-
-interface QuoteResponse {id:string;importerId:string;quoteId:string;price:string;deliveryTime:string;incoterm:string;date:string;status:ResponseStatus;moq:string;origin:string;production:string;customization:string;observations:string;}
-
-const RESPONSES:QuoteResponse[]=[
-  {id:"r001",importerId:"nexus",    quoteId:"q001",price:"9.20 USD/kg", deliveryTime:"28 días",incoterm:"FOB",date:"14 Mar 2025",status:"resp-nueva",    moq:"300 kg",  origin:"Colombia",production:"Propia",     customization:"Marca blanca",             observations:"Café lavado, proceso húmedo, tostado medio."},
-  {id:"r002",importerId:"food",     quoteId:"q001",price:"8.80 USD/kg", deliveryTime:"21 días",incoterm:"CIF",date:"13 Mar 2025",status:"resp-vista",    moq:"500 kg",  origin:"Colombia",production:"Tercerizada",customization:"Estándar",                 observations:"Stock disponible inmediato."},
-  {id:"r003",importerId:"textil",   quoteId:"q002",price:"3.45 USD/m",  deliveryTime:"45 días",incoterm:"CIF",date:"08 Mar 2025",status:"resp-vista",    moq:"800 m",   origin:"China",   production:"Propia",     customization:"Personalización completa", observations:"Certificación OEKO-TEX disponible."},
-  {id:"r004",importerId:"mecanica", quoteId:"q003",price:"398 USD/set", deliveryTime:"60 días",incoterm:"DDP",date:"03 Mar 2025",status:"resp-aceptada", moq:"10 sets", origin:"Alemania",production:"OEM",        customization:"Estándar",                 observations:"Garantía 24 meses incluida."},
-  {id:"r005",importerId:"secvision",quoteId:"q008",price:"165 USD/u",   deliveryTime:"35 días",incoterm:"CIF",date:"12 Ene 2025",status:"resp-aceptada", moq:"10 u",    origin:"China",   production:"Propia",     customization:"Marca blanca",             observations:"Certificación CE e IP67."},
-];
-
-interface OrderHistoryItem {estado:string;fecha:string;nota:string|null;}
-interface OrderDocumentItem {name:string;date:string;status:string;url:string;type:string;}
-interface LifecycleDocItem {label:string;name:string;status:string;url:string|null;source:string;}
-interface Order {
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export interface OrderHistoryItem {estado:string;fecha:string;nota:string|null;}
+export interface OrderDocumentItem {name:string;date:string;status:string;url:string;type:string;}
+export interface LifecycleDocItem {label:string;name:string;status:string;url:string|null;source:string;}
+export interface Order {
   id:string;
   code:string;
   quoteCode:string;
@@ -592,24 +222,24 @@ const ORDER_DOCUMENT_LABELS:Record<string,string>={
   comprobante_pago:"Comprobante de pago",
 };
 
-function orderDocumentTypeLabel(tipo:string|undefined|null):string{
+export function orderDocumentTypeLabel(tipo:string|undefined|null):string{
   return ORDER_DOCUMENT_LABELS[String(tipo||"")]||"Documento";
 }
 
-function orderStateLabel(key:string|undefined|null):string{
+export function orderStateLabel(key:string|undefined|null):string{
   const found=ORDER_STATES.find((s)=>s.key===String(key||""));
   return found?found.label:(key?String(key):"Sin estado");
 }
 
-/** Único estado al que el backend deja avanzar desde el actual (cadena lineal). */
-function nextOrderState(current:string|undefined|null):{key:string;label:string}|null{
+/** ?nico estado al que el backend deja avanzar desde el actual (cadena lineal). */
+export function nextOrderState(current:string|undefined|null):{key:string;label:string}|null{
   const index=ORDER_STATES.findIndex((s)=>s.key===String(current||""));
   if(index<0||index>=ORDER_STATES.length-1)return null;
   const next=ORDER_STATES[index+1];
   return {key:next.key,label:next.label};
 }
 
-function inferLifecycleStageIndex(rawState:string|undefined|null):number{
+export function inferLifecycleStageIndex(rawState:string|undefined|null):number{
   const normalized=String(rawState||"").trim().toLowerCase();
   if(!normalized)return 0;
   if(normalized.includes("entreg"))return 8;
@@ -623,7 +253,7 @@ function inferLifecycleStageIndex(rawState:string|undefined|null):number{
   return 0;
 }
 
-function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
+export function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
   const bounded=Math.max(0,Math.min(ORDER_LIFECYCLE_STEPS.length-1,currentStageIndex));
   return ORDER_LIFECYCLE_STEPS.map((step,index)=>({
     label:step.label,
@@ -632,7 +262,7 @@ function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
   }));
 }
 
-// ─── Chat data ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Chat data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // "interno" es el canal de la empresa con su asesor (coordinación del equipo);
 // "soporte" es un ticket con el equipo de la plataforma. Ninguno de los dos
 // cuelga de una cotización o una orden.
@@ -645,7 +275,123 @@ const URGENCIA_SOPORTE:Record<string,{label:string;clase:string;peso:number}>={
   baja:   {label:"Baja",    clase:"bg-slate-100 text-slate-700 border-slate-200",  peso:1},
 };
 
-interface ChatConv {
+
+
+export const INCOTERM_INCLUYE: Record<string,string> = {
+  EXW:"Mercancía en fábrica; tú pones el transporte",
+  FCA:"Entregada al transportista en origen",
+  FOB:"Puesta en el barco en origen; flete y seguro aparte",
+  CFR:"Flete hasta el puerto de destino; seguro aparte",
+  CIF:"Flete y seguro hasta el puerto de destino",
+  CPT:"Transporte pagado hasta destino; seguro aparte",
+  CIP:"Transporte y seguro pagados hasta destino",
+  DAP:"Hasta tu puerta, sin impuestos de importación",
+  DPU:"Descargada en destino, sin impuestos",
+  DDP:"Puerta a puerta con impuestos y nacionalización",
+};
+
+/** Las observaciones de una propuesta: texto libre o el JSON del formulario de respuesta. */
+
+export function leerCondicionesPropuesta(texto: string | null | undefined): { descripcion: string; ventajas: string; detalles: string[] } {
+  const vacio = { descripcion: "", ventajas: "", detalles: [] as string[] };
+  if (!texto) return vacio;
+  // Propuesta rápida (precio cerrado en pesos): su detalle completo está en la
+  // tarjeta del chat; aquí basta la nota y lo esencial.
+  const nueva = leerPropuesta(texto);
+  if (nueva) {
+    const f = nueva.formulario;
+    const detalles = [
+      f.entrega_modo === "cliente" ? `Puesto en ${f.bodega_ciudad}; flete a ${f.ciudad_destino} a cargo del cliente` : `Entregado en ${f.ciudad_destino}`,
+      f.requiere_permisos && f.permiso_cual ? `${f.permiso_cual} (${f.permiso_gestiona === "importadora" ? "incluido" : "lo gestiona el cliente"})` : "",
+      `Válida hasta ${new Date(`${nueva.vigencia_hasta}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`,
+    ].filter(Boolean);
+    return { descripcion: f.nota || "", ventajas: "", detalles };
+  }
+  try {
+    const datos = JSON.parse(texto) as Record<string, unknown>;
+    if (datos && typeof datos === "object" && datos.schema === "create-response-v1") {
+      const campo = (clave: string) => (typeof datos[clave] === "string" ? String(datos[clave]).trim() : "");
+      const detalles = [
+        campo("moq") && `MOQ ${campo("moq")}`,
+        campo("port") && `Puerto ${campo("port")}`,
+        campo("productionTime") && `Producción ${campo("productionTime")}`,
+        campo("shippingTime") && `Envío ${campo("shippingTime")}`,
+      ].filter(Boolean) as string[];
+      return { descripcion: campo("description"), ventajas: campo("advantages"), detalles };
+    }
+  } catch {
+    // Texto libre.
+  }
+  return { ...vacio, descripcion: texto };
+}
+
+/**
+ * Precio de una propuesta para comparar. Las del formato nuevo son un precio
+ * cerrado en pesos con IVA; las anteriores, USD con el equivalente a la TRM.
+ */
+
+export function PrecioPropuesta({ propuesta, trm, tamano = "sm" }: { propuesta: BackendPropuesta; trm?: number | null; tamano?: "sm" | "base" }) {
+  const nueva = leerPropuesta(propuesta.condiciones_adicionales);
+  const clase = clsx("font-semibold", tamano === "base" ? "text-base" : "text-sm");
+  if (nueva) {
+    return (
+      <>
+        <p className={clase}>{pesosCop(nueva.totales.total_cop)}</p>
+        <p className="text-[11px] text-muted-foreground">con IVA · {pesosCop(nueva.totales.unitario_cop)} por unidad</p>
+      </>
+    );
+  }
+
+  function formatoPesos(valor: number): string {
+    return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
+  }
+
+  function DatosDeContactoEmpresa({ imp }: { imp: Importer }) {
+    const datos = [
+      ["Sitio web", imp.website],
+      ["Correo", imp.email],
+      ["Teléfono", imp.phone],
+      ["Dirección", imp.address],
+      ["Fundada", imp.foundedYear],
+    ].filter(([, value]) => value);
+
+    if (datos.length === 0) {
+      return null;
+    }
+
+    return (
+      <Card padding="md">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-primary" />
+          Datos de contacto
+        </h3>
+        <div className="grid gap-2 text-sm">
+          {datos.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <span className="text-muted-foreground">{label}</span>
+              <span className="text-right">{value}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <>
+      <p className={clase}>US${propuesta.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
+      {trm ? <p className="text-[11px] text-muted-foreground">≈ {formatoPesos(propuesta.precio_ofrecido_usd * trm)}</p> : null}
+    </>
+  );
+}
+
+export const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string }[] = [
+  { clave: "precio", etiqueta: "Precio", ayuda: "Me salió mejor en costo" },
+  { clave: "tiempo", etiqueta: "Tiempo de entrega", ayuda: "Llega antes" },
+  { clave: "condiciones", etiqueta: "Condiciones", ayuda: "Lo que incluye, pagos, garantías" },
+  { clave: "otro", etiqueta: "Otro motivo", ayuda: "Confianza, atención, recomendación..." },
+];
+
+export interface ChatConv {
   id:string;type:ChatType;refCode:string;refId:string;importerId:string;
   // `refId` pasa a apuntar a la orden en cuanto existe; la cotización se guarda
   // aparte porque es lo que identifica al responsable que se puede reasignar.
@@ -702,10 +448,10 @@ function mapBackendChatMessage(
   message:{id:string;remitente_id:string;contenido:string;tipo:string;fecha_envio:string;metadata:Record<string,unknown>|null;remitente_nombre?:string|null;de_mi_lado?:boolean|null},
   currentUserId:string|undefined,
 ):ChatMsg{
-  const proposal=message.tipo==="propuesta"?leerPropuestaDeMensaje(message.metadata)??undefined:undefined;
+  const proposal=message.tipo==="propuesta" ? leerPropuestaDeMensaje(message.metadata) : undefined;
   return {
     id:message.id,
-    sender:(message.de_mi_lado??message.remitente_id===currentUserId)?"client":"provider",
+    sender:message.de_mi_lado && message.remitente_id===currentUserId ? "client" : "provider",
     authorName:message.remitente_id!==currentUserId?(message.remitente_nombre||undefined):undefined,
     text:message.contenido,
     time:formatChatTime(message.fecha_envio),
@@ -719,13 +465,13 @@ const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","
 // Una sola lista para la línea de producto que pide el cliente y para las
 // categorías que declara la empresa: eran dos listas distintas y el backend
 // compara ambas para decidir si la empresa puede responder. Ver
-// `src/lib/categorias.ts`.
+// `src/utils/categorias.ts`.
 const LINES=CATEGORIAS_PRODUCTO;
 const ALL_CATEGORIES=CATEGORIAS_PRODUCTO;
-const SYSTEM_ROOT_FOLDER_NAMES=["Órdenes","Cotizaciones","Respuestas","Cursos","Chats","Certificados"];
+const SYSTEM_ROOT_FOLDER_NAMES=["?rdenes","Cotizaciones","Respuestas","Cursos","Chats","Certificados"];
 // Buzón al que escribe quien quiere dar de alta una empresa importadora: el
 // alta la hace el equipo de la plataforma, no hay auto-registro.
-const CORREO_ADMINISTRACION="administracion@importacionesq8.com";
+const CORREO_ADMINISTRACION="admin@zarpi.co";
 
 function normalizeFolderName(value:string):string{
   return value
@@ -779,9 +525,9 @@ function FormatFileIcon({ extension, mimeType, compact = false }: { extension: s
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SIDEBAR — pinned / floating / toggle tab
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// SIDEBAR ? pinned / floating / toggle tab
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const NAV_ITEMS=[
   {icon:LayoutGrid,   label:"Dashboard",    key:"dashboard"},
   {icon:FileText,     label:"Cotizaciones", key:"quotes"},
@@ -818,14 +564,14 @@ const NAV_ASESOR=[
   {icon:MessageSquare, label:"Chats",           key:"chats"},
 ];
 
-// ─── Portal data ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Portal data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // "soporte" es el equipo de atención al cliente de la plataforma: atiende los
 // tickets y resuelve incidentes, pero no administra (ni empresas, ni cuentas,
 // ni certificaciones, ni copias de seguridad).
 // "designer" es el equipo de diseño: pone portada e imágenes con la identidad de
 // Zarpi a lo aprobado en Tendencias y lo publica. Está en el canal del equipo,
 // pero no ve soporte ni clientes.
-type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte"|"designer";
+export type UserRole="solicitante"|"importadora"|"asesor"|"admin"|"soporte"|"designer";
 
 // Cada área del panel es una entrada del sidebar, igual que en los demás
 // perfiles: así se navega con el mismo mecanismo que el resto de la aplicación
@@ -843,7 +589,7 @@ const NAV_ADMIN=[
   {icon:DatabaseBackup,label:"Respaldos",       key:"admin-respaldos"},
   {icon:Layers,        label:"Landing",         key:"admin-landing"},
   {icon:Flame,         label:"Tendencias",      key:"admin-tendencias"},
-  {icon:Sparkles,      label:"Aprobación",      key:"tendencias-aprobacion"},
+  {icon:Sparkles,      label:"Aprobación",      key:"admin-tendencias-aprobacion"},
   {icon:Palette,       label:"Diseño",          key:"diseno"},
   {icon:Trophy,        label:"Reto",            key:"admin-reto"},
   {icon:CreditCard,    label:"Pagos",           key:"admin-pagos"},
@@ -929,18 +675,7 @@ function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   return "dashboard";
 }
 
-function parseBackendDate(value: string): Date {
-  const normalized = String(value ?? "").trim();
-  // El backend persiste fechas UTC sin sufijo de zona (datetime naive). Sin
-  // esta marca, el navegador las interpreta como hora local y los chats se
-  // desplazan según la zona del servidor.
-  const utcValue = normalized.includes("T") && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized)
-    ? `${normalized}Z`
-    : normalized;
-  return new Date(utcValue);
-}
-
-function formatShortDate(value: string): string {
+export function formatShortDate(value: string): string {
   const d = parseBackendDate(value);
   if (Number.isNaN(d.getTime())) {
     return value;
@@ -948,7 +683,7 @@ function formatShortDate(value: string): string {
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function initialsFromName(name: string): string {
+export function initialsFromName(name: string): string {
   return name
     .split(" ")
     .filter(Boolean)
@@ -1022,6 +757,7 @@ function etiquetaSitioWeb(valor: string | null | undefined): string {
 }
 
 const ROL_ASESOR_PUBLICO: Record<string, string> = { asesor: "Asesor", importador: "Responsable de la cuenta" };
+const PRICE_CURRENCIES = ["USD", "EUR", "COP", "MXN", "CLP", "PEN", "GBP"];
 
 /**
  * Contacto principal de la empresa. Manda lo que la empresa escribió en su
@@ -1090,7 +826,7 @@ function mapBackendImporterToUi(imp: BackendImporter): Importer {
     initials: initialsFromName(name),
     color: importerColorFromId(imp.id),
     memberSince: formatShortDate(imp.fecha_registro),
-    // Órdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
+    // ?rdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
     // empresas se presentaban como si no hubieran cerrado ni un proyecto.
     projects: Number(imp.proyectos_completados ?? 0),
     verified: Boolean(imp.verificado),
@@ -1135,6 +871,8 @@ function backendEstadoToUi(estado: string): Quote["status"] {
   }
 }
 
+function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
+
 function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quote {
   const importerName = cot.importador_id
     ? importers.find((imp) => imp.id === cot.importador_id)?.name ?? "Importadora"
@@ -1177,13 +915,11 @@ function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quo
     solicitantePuntosCotizacion: cot.solicitante_puntos_cotizacion ?? 0,
     bloqueada: Boolean(cot.bloqueada),
   };
-}
-
-function normalizeText(value: unknown): string {
+}function normalizeText(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function findCustomFieldValue(customFields: Record<string, unknown> | null | undefined, aliases: string[]): string {
+export function findCustomFieldValue(customFields: Record<string, unknown> | null | undefined, aliases: string[]): string {
   if (!customFields) {
     return "";
   }
@@ -1229,7 +965,7 @@ function findCustomFieldValue(customFields: Record<string, unknown> | null | und
 }
 
 /** Miniaturas de las fotos del producto; al pulsar una se abre completa. */
-function GaleriaFotosProducto({fotos}:{fotos:string[]}) {
+export function GaleriaFotosProducto({fotos}:{fotos:string[]}) {
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-2">Fotos del producto ({fotos.length})</p>
@@ -1244,7 +980,7 @@ function GaleriaFotosProducto({fotos}:{fotos:string[]}) {
   );
 }
 
-function getQuoteAttachmentLinks(quote: Quote): string[] {
+export function getQuoteAttachmentLinks(quote: Quote): string[] {
   const links = new Set<string>();
   const maybePushLink = (value: unknown) => {
     const text = String(value ?? "").trim();
@@ -1444,19 +1180,6 @@ function extractFirstNumber(value: string | null | undefined): number {
   return Math.round(parsed);
 }
 
-interface CompanyAdvisor {
-  id:string;name:string;role:string;email:string;phone:string;
-  initials:string;color:string;status:"activo"|"inactivo"|"ausente";
-  availability:"alta"|"media"|"baja";activeQuotes:number;avgResponse:string;joinDate:string;
-}
-
-const COMPANY_ADVISORS:CompanyAdvisor[]=[
-  {id:"adv1",name:"Carlos Mendoza",role:"Asesor Senior",email:"c.mendoza@nexus.co",phone:"+57 310 123 4567",initials:"CM",color:"bg-blue-600",status:"activo",availability:"alta",activeQuotes:4,avgResponse:"~20h",joinDate:"Ene 2022"},
-  {id:"adv2",name:"Laura Gómez",role:"Asesora Comercial",email:"l.gomez@nexus.co",phone:"+57 311 234 5678",initials:"LG",color:"bg-purple-600",status:"activo",availability:"media",activeQuotes:2,avgResponse:"~32h",joinDate:"Mar 2022"},
-  {id:"adv3",name:"Andrés Peña",role:"Asesor Técnico",email:"a.pena@nexus.co",phone:"+57 312 345 6789",initials:"AP",color:"bg-emerald-600",status:"ausente",availability:"baja",activeQuotes:0,avgResponse:"~48h",joinDate:"Jul 2023"},
-  {id:"adv4",name:"Juliana Ríos",role:"Asesora Junior",email:"j.rios@nexus.co",phone:"+57 313 456 7890",initials:"JR",color:"bg-orange-600",status:"inactivo",availability:"baja",activeQuotes:0,avgResponse:"—",joinDate:"Nov 2023"},
-];
-
 interface AppNotification {
   id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
   title:string;body:string;date:string;read:boolean;
@@ -1484,7 +1207,7 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
   const company = companyName || (typeof data.nombre_empresa === "string" ? data.nombre_empresa : "la empresa importadora");
   const title = approval ? "Cotización Aprobada" : notification.titulo;
   const body = approval && cotizacionId
-    ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
+     ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
     : notification.mensaje;
   return {
     id: notification.id,
@@ -1507,7 +1230,7 @@ function mapBackendNotificationToUi(notification: { id: string; tipo: string; ti
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
-function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
+export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
@@ -1518,7 +1241,7 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
   const adminGroups=[
     {key:"gestion",label:"Gestión",icon:Building2,items:["admin-empresas","admin-presentaciones","admin-asignacion","admin-usuarios","admin-cotizantes"]},
     {key:"comunicacion",label:"Comunicación",icon:MessageSquare,items:["admin-correos","admin-soporte","chats","documentos"]},
-    {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","tendencias-aprobacion","diseno","admin-reto"]},
+    {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","admin-tendencias-aprobacion","diseno","admin-reto"]},
     {key:"finanzas",label:"Suscripciones",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
     {key:"configuracion",label:"Configuración",icon:ToggleRight,items:["admin-certificaciones","admin-respaldos","admin-tipografia","admin-modulos"]},
   ] as const;
@@ -1602,8 +1325,8 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
                       </div>
                       {isExpanded&&<ChevronDown className={clsx("ml-auto w-4 h-4 transition-transform duration-200",isOpen&&"rotate-180")}/>}
                     </button>
-                    {isExpanded&&(
-                      <div className={clsx("grid transition-[grid-template-rows] duration-200",isOpen?"grid-rows-[1fr]":"grid-rows-[0fr]")}>
+                    {isExpanded&&isOpen&&(
+                      <div className="grid grid-rows-[1fr]">
                         <div className="min-h-0 overflow-hidden">
                           <div className="ml-2 border-l border-border pl-2 pt-0.5">
                             {groupItems.map(({icon:Icon,label,key})=>{
@@ -1704,7 +1427,7 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
               "text-muted-foreground hover:text-foreground hover:bg-muted",
               isExpanded ? "gap-2.5" : "justify-center gap-0",
             )}
-            title={!isExpanded ? "Cerrar sesion" : undefined}
+            title={!isExpanded ? "Cerrar sesión" : undefined}
           >
             <LogIn className="w-4 h-4 flex-shrink-0 rotate-180"/>
             <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
@@ -1734,9 +1457,9 @@ function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showS
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SOPORTE TÉCNICO — formulario de apertura de ticket
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// SOPORTE TÉCNICO ? formulario de apertura de ticket
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onSubmit:(datos:{asunto:string;urgencia:UrgenciaSoporte;mensaje:string})=>Promise<void>}) {
   const [asunto,setAsunto]=useState("");
   const [urgencia,setUrgencia]=useState<UrgenciaSoporte>("media");
@@ -1818,10 +1541,10 @@ function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onS
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // APP HEADER
-// ─────────────────────────────────────────────────────────────────────────────
-function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { name: string; company: string; initials: string; photoUrl?: string }; notifCount?: number; onNotif?: () => void; onProfile?: () => void; sb?: SidebarCtrl }) {
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { name: string; company: string; initials: string; photoUrl?: string }; notifCount?: number; onNotif?: () => void; onProfile?: () => void; sb?: SidebarCtrl }) {
   const { dark, toggleTheme } = useBrandTheme();
   const { user: authUser } = useAuth();
   
@@ -1953,9 +1676,9 @@ function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { n
   );
 }
 
-const USER={name:"Ana García",company:"Importaciones del Norte S.A.",initials:"AG"};
-const USER_IMPORTADORA={name:"María López",company:"Grupo Nexus S.A.",initials:"ML"};
-const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. — Asesor",initials:"CM"};
+export const USER={name:"Ana García",company:"Importaciones del Norte S.A.",initials:"AG"};
+export const USER_IMPORTADORA={name:"María López",company:"Grupo Nexus S.A.",initials:"ML"};
+const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. ? Asesor",initials:"CM"};
 
 function CoursesPortalScreen({
   sb,
@@ -1987,10 +1710,10 @@ function CoursesPortalScreen({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTER CARD — used in Dashboard and profile screens
-// ─────────────────────────────────────────────────────────────────────────────
-function ImporterCard({
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// IMPORTER CARD ? used in Dashboard and profile screens
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function ImporterCard({
   imp,
   onViewProfile,
   onCreateQuote,
@@ -2003,13 +1726,12 @@ function ImporterCard({
 }) {
   const desc =
     imp.description ||
-    IMP_DESCRIPTIONS[imp.id] ||
-    "Importadora con experiencia en comercio internacional.";
+    "Esta empresa aún no ha publicado su descripción.";
 
   const certs =
     imp.certs && imp.certs.length > 0
       ? imp.certs
-      : IMP_CERTS[imp.id] || [];
+      : [];
 
   const platformCerts = imp.platformCerts ?? [];
   const bannerUrl = imp.bannerUrl ? resolveApiUrl(imp.bannerUrl) : "";
@@ -2204,258 +1926,23 @@ function ImporterCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DASHBOARD SCREEN — importer marketplace catalog
-// ─────────────────────────────────────────────────────────────────────────────
-function DashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;importers:Importer[]}) {
-  const [search,setSearch]=useState("");
-  const [catFilter,setCatFilter]=useState<string>("Todas");
-  // Sustituye al viejo filtro por calificación: se filtra por empresas con
-  // certificaciones registradas, que es un dato real y no una nota inventada.
-  const [certFilter,setCertFilter]=useState("");
-  const [countryFilter,setCountryFilter]=useState("");
-
-  const filtered=importers.filter(imp=>{
-    const ms=!search||[imp.name,imp.specialty,...imp.categories].some(v=>v.toLowerCase().includes(search.toLowerCase()));
-    const mc=catFilter==="Todas"||imp.categories.some(c=>c.toLowerCase()===catFilter.toLowerCase());
-    const certs=imp.certs??[];
-    const sellos=(imp.platformCerts??[]).map(c=>c.nombre);
-    const todas=[...sellos,...certs];
-    const mr=!certFilter||(certFilter==="certificadas"?todas.length>0:todas.some(c=>c===certFilter));
-    const mco=!countryFilter||imp.country===countryFilter;
-    return ms&&mc&&mr&&mco;
-  });
-
-  const certOptions=[...new Set(importers.flatMap(i=>[...(i.platformCerts??[]).map(c=>c.nombre),...(i.certs??[])]))].sort();
-  // El backend ya devuelve el catálogo ordenado por peso publicitario, así que
-  // basta con tomar las primeras: son las que más respaldo tienen.
-  const featured=importers.filter(i=>(i.platformCerts??[]).length>0||i.verified).slice(0,3);
-  const quickCats=["Todas","Tecnología","Textil","Alimentos","Maquinaria","Agroindustria","Industrial","Seguridad"];
-  const responseHours=importers
-    .map((imp)=>{
-      const match=imp.responseTime.match(/(\d+(?:[\.,]\d+)?)/);
-      return match?Number(match[1].replace(",",".")):null;
-    })
-    .filter((value):value is number=>value!==null&&!Number.isNaN(value));
-  const avgResponseHours=responseHours.length>0?Math.round(responseHours.reduce((acc,value)=>acc+value,0)/responseHours.length):null;
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="dashboard"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          {/* Page header */}
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Dashboard"}]}/>
-            <div className="mt-3 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">Marketplace de importadores</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Encuentra y contacta empresas importadoras verificadas para tu negocio.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{importers.filter(i=>i.verified).length} verificadas · {importers.length} en total</span>
-              </div>
-            </div>
-          </div>
-
-         {/* Stats bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              {label:"Importadoras activas",value:importers.length.toString(),icon:<Building2 className="w-4 h-4"/>,color:"text-primary dark:text-[#EDF953]"},
-              {label:"Verificadas",value:importers.filter(i=>i.verified).length.toString(),icon:<BadgeCheck className="w-4 h-4"/>,color:"text-emerald-600 dark:text-emerald-400"},
-              {label:"Respaldadas por Q8",value:importers.filter(i=>(i.platformCerts??[]).length>0).length.toString(),icon:<Shield className="w-4 h-4"/>,color:"text-emerald-600 dark:text-emerald-400"},
-              {label:"Tiempo prom. respuesta",value:avgResponseHours!==null?`~${avgResponseHours}h`:"N/D",icon:<Zap className="w-4 h-4"/>,color:"text-violet-600 dark:text-[#EDF953]"},
-            ].map(s=>(
-              <Card 
-                key={s.label} 
-                padding="md" 
-                className="metric-card flex flex-col gap-2 transition-all duration-300 dark:bg-[#EDF953]/10 dark:border-[#EDF953]/25 dark:shadow-[0_0_15px_rgba(237,249,83,0.15)]"
-              >
-                <div className={clsx("metric-icon w-7 h-7 rounded-lg flex items-center justify-center dark:bg-[#EDF953]/20", s.color)}>
-                  {s.icon}
-                </div>
-                <p className="text-xl font-semibold">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </Card>
-            ))}
-          </div>
-
-          {/* Featured */}
-          {!search&&catFilter==="Todas"&&!certFilter&&!countryFilter&&(
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Award className="w-4 h-4 text-amber-500 dark:text-accent"/>
-                <h2 className="text-sm font-semibold">Empresas destacadas</h2>
-                <span className="text-xs text-muted-foreground">· Con mayor respaldo de Zarpi</span>
-              </div>
-              <div className="grid grid-flow-col auto-cols-[85%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 md:overflow-visible">
-                {featured.map(imp=>(
-                  <ImporterCard key={imp.id} imp={imp} featured onViewProfile={onViewProfile} onCreateQuote={onCreateQuote}/>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Search + filters */}
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <Input 
-                  placeholder="Buscar por nombre, especialidad o categoría..." 
-                  value={search} 
-                  onChange={e => setSearch(e.target.value)} 
-                  prefix={<Search className="w-4 h-4"/>}
-                  className="dark:focus:border-accent dark:hover:border-accent/60"
-                />
-              </div>
-              <div className="w-44">
-                <Select 
-                  value={certFilter} 
-                  onChange={e => setCertFilter(e.target.value)}
-                  className={clsx(
-                    "dark:bg-background dark:border-border transition-colors",
-                    "focus:border-accent dark:focus:border-accent",
-                    "hover:border-accent dark:hover:border-accent",
-                    certFilter && "dark:border-accent border-accent"
-                  )}
-                >
-                  <option value="">Certificación</option>
-                  <option value="certificadas">Con certificaciones</option>
-                  {certOptions.map(c => <option key={c} value={c}>{c}</option>)}
-                </Select>
-              </div>
-              <div className="w-40">
-                <Select 
-                  value={countryFilter} 
-                  onChange={e => setCountryFilter(e.target.value)}
-                  className={clsx(
-                    "dark:bg-background dark:border-border transition-colors",
-                    "focus:border-accent dark:focus:border-accent",
-                    "hover:border-accent dark:hover:border-accent",
-                    countryFilter && "dark:border-accent border-accent"
-                  )}
-                >
-                  <option value="">País</option>
-                  {[...new Set(importers.map(i => i.country))].map(c => <option key={c}>{c}</option>)}
-                </Select>
-              </div>
-              {(search || certFilter || countryFilter || catFilter !== "Todas") && (
-                <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} onClick={()=>{setSearch("");setCertFilter("");setCountryFilter("");setCatFilter("Todas");}}>Limpiar</Button>
-              )}
-            </div>
-
-            {/* Category tabs */}
-            <div className="flex gap-1.5 flex-wrap">
-              {quickCats.map(cat => (
-                <button 
-                  key={cat} 
-                  onClick={() => setCatFilter(cat)}
-                  className={clsx(
-                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border",
-                    catFilter === cat ? (
-                      "bg-primary text-white border-primary dark:bg-accent dark:text-black dark:border-accent shadow-sm"
-                    ) : (
-                      "bg-white dark:bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary dark:hover:border-accent"
-                    )
-                  )}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Results */}
-          <div>
-            <p className="text-sm text-muted-foreground mb-4"><span className="font-medium text-foreground">{filtered.length}</span> importadoras {catFilter!=="Todas"&&`en ${catFilter}`}</p>
-            {filtered.length===0?(
-              <Card padding="lg" className="border-dashed">
-                <div className="flex flex-col items-center text-center py-8 gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><Search className="w-6 h-6 text-muted-foreground/40"/></div>
-                  <div><p className="font-semibold">Sin resultados</p><p className="text-sm text-muted-foreground mt-1">Intenta con otros filtros o términos de búsqueda.</p></div>
-                </div>
-              </Card>
-            ):(
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filtered.map(imp=>(
-                  <ImporterCard key={imp.id} imp={imp} onViewProfile={onViewProfile} onCreateQuote={onCreateQuote}/>
-                ))}
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-/** Sitio web, correo, teléfono, dirección y año de fundación de la empresa. */
-function DatosDeContactoEmpresa({imp}:{imp:Importer}) {
-  const sitio=enlaceSitioWeb(imp.website);
-  const filas:Array<{icono:React.ReactNode;etiqueta:string;valor:React.ReactNode}>=[];
-
-  if(sitio){
-    filas.push({
-      icono:<Globe className="w-3.5 h-3.5"/>,
-      etiqueta:"Sitio web",
-      valor:<a href={sitio} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{etiquetaSitioWeb(imp.website)}</a>,
-    });
-  }
-  if(imp.email){
-    filas.push({
-      icono:<MailIcon className="w-3.5 h-3.5"/>,
-      etiqueta:"Correo",
-      valor:<a href={`mailto:${imp.email}`} className="text-primary hover:underline break-all">{imp.email}</a>,
-    });
-  }
-  if(imp.phone){
-    filas.push({icono:<Phone className="w-3.5 h-3.5"/>,etiqueta:"Teléfono",valor:<span className="break-all">{imp.phone}</span>});
-  }
-  if(imp.address){
-    filas.push({icono:<MapPin className="w-3.5 h-3.5"/>,etiqueta:"Dirección",valor:<span>{imp.address}</span>});
-  }
-  if(imp.foundedYear){
-    filas.push({icono:<CalendarIcon className="w-3.5 h-3.5"/>,etiqueta:"Fundada en",valor:<span>{imp.foundedYear}</span>});
-  }
-
-  if(filas.length===0){
-    return null;
-  }
-
-  return (
-    <Card padding="md">
-      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary"/>Datos de la empresa</h3>
-      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
-        {filas.map(f=>(
-          <div key={f.etiqueta} className="flex items-start gap-2.5 min-w-0">
-            <span className="text-muted-foreground mt-0.5 flex-shrink-0">{f.icono}</span>
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{f.etiqueta}</p>
-              <p className="text-sm text-foreground mt-0.5">{f.valor}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTER PROFILE SCREEN — read-only public profile for the requester
-// ─────────────────────────────────────────────────────────────────────────────
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,onAbrirTendencia}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];onAbrirTendencia:(id:string)=>void;
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// DASHBOARD SCREEN ? importer marketplace catalog
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// IMPORTER PROFILE SCREEN ? read-only public profile for the requester
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,quotes,onAbrirTendencia}:{
+  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];quotes:Quote[];onAbrirTendencia:(id:string)=>void;
 }) {
-  const imp=importers.find(i=>i.id===importerId)||importers[0]||IMPORTERS[0];
-  // Lo que la empresa configuró en su perfil manda; los textos de ejemplo solo
-  // se usan para las importadoras de demostración, que no tienen perfil real.
-  const desc=imp.description||IMP_DESCRIPTIONS[imp.id]||"Esta empresa aún no ha publicado su descripción.";
-  const certs=(imp.certs&&imp.certs.length>0)?imp.certs:(IMP_CERTS[imp.id]||[]);
-  const platformCerts=imp.platformCerts??[];
+  const imp=importers.find(i=>i.id===importerId)||importers[0];
+  if (!imp) return null;
+  const desc=imp.description||"Esta empresa aún no ha publicado su descripción.";
+  const certs=imp.certs ?? [];
+  const platformCerts=imp.platformCerts ?? [];
   const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
   const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
-  const relQuotes=QUOTES.filter(q=>q.importer===imp.name);
+  const relQuotes=quotes.filter(q=>q.importer===imp.name);
   const relOrders=orders.filter(o=>o.importerId===imp.id);
   const relChats=chats.filter(c=>c.importerId===imp.id);
 
@@ -2653,1295 +2140,9 @@ function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,im
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // QUOTES SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-function QuotesScreen({ onNewQuote, onViewDetail, onRefreshQuotes, creditos, sb, quotes, responses }: { onNewQuote: () => void; onViewDetail: (id: string) => void; onRefreshQuotes?: () => Promise<void>; creditos: number; sb: SidebarCtrl; quotes: Quote[]; responses: QuoteResponse[] }) {
-  const [search, setSearch] = useState("");
-  const [statusF, setStatusF] = useState("");
-  const [modeF, setModeF] = useState("");
-  const [respF, setRespF] = useState("");
-  const [quoteToUnlock, setQuoteToUnlock] = useState<Quote | null>(null);
-  const [unlocking, setUnlocking] = useState(false);
-  const [unlockError, setUnlockError] = useState("");
-
-  // Estado para controlar el popover de créditos al lado del título
-  const [showCreditosPopover, setShowCreditosPopover] = useState(false);
-  const creditosPopoverRef = useRef<HTMLDivElement>(null);
-
-  const lastQ = quotes[0] ?? null;
-  const responseCountByQuoteId = responses.reduce<Record<string, number>>((acc, response) => {
-    acc[response.quoteId] = (acc[response.quoteId] || 0) + 1;
-    return acc;
-  }, {});
-
-  // Cierre automático del popover al hacer clic fuera
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (creditosPopoverRef.current && !creditosPopoverRef.current.contains(event.target as Node)) {
-        setShowCreditosPopover(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filtered = quotes.filter(q => {
-    const ms = !search || [q.code, q.product, q.importer].some(v => v.toLowerCase().includes(search.toLowerCase()));
-    const mst = !statusF || q.status === statusF;
-    const mm = !modeF || q.mode === modeF;
-    const count = responseCountByQuoteId[q.id] || 0;
-    const mr = !respF || (respF === "sin" ? count === 0 : count > 0);
-    return ms && mst && mm && mr;
-  });
-
-  async function unlockQuote() {
-    if (!quoteToUnlock) return;
-    setUnlocking(true);
-    setUnlockError("");
-    try {
-      await businessService.unlockQuoteByPoint(quoteToUnlock.id);
-      setQuoteToUnlock(null);
-      await onRefreshQuotes?.();
-    } catch (error) {
-      setUnlockError(error instanceof Error ? error.message : "No se pudo desbloquear la cotización.");
-    } finally {
-      setUnlocking(false);
-    }
-  }
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="quotes" />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb} />
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div>
-            <Breadcrumb items={[{ label: "Inicio", onClick: () => sb.onNav("dashboard") }, { label: "Cotizaciones" }]} />
-            <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-semibold tracking-tight">Cotizaciones</h1>
-                
-                {/* POP OVER DE CRÉDITOS ANIMADO EN EL ENCABEZADO */}
-                <div className="relative" ref={creditosPopoverRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreditosPopover((prev) => !prev)}
-                    onMouseEnter={() => setShowCreditosPopover(true)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  >
-                    <WalletCards className="h-3.5 w-3.5 animate-pulse" />
-                    <span>{creditos} créditos</span>
-                  </button>
-
-                  {showCreditosPopover && (
-                    <div className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
-                          <WalletCards className="h-4 w-4" />
-                        </div>
-                        <div className="space-y-1 text-left">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
-                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
-                              {creditos}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por desbloqueo
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowCreditosPopover(false)}
-                          className="font-medium text-primary hover:underline dark:text-accent"
-                        >
-                          Entendido
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <Button variant="primary" className="dark:bg-accent dark:text-black dark:hover:bg-accent/80" icon={<Plus className="w-4 h-4" />} onClick={onNewQuote}>Nueva cotización</Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card padding="md">
-              <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold">Última cotización</h2>{lastQ && <Badge variant={lastQ.status} />}</div>
-              {lastQ ? (
-                <>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Código</p><p className="text-sm font-mono font-medium">{lastQ.code}</p></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Fecha</p><p className="text-sm">{lastQ.date}</p></div>
-                    <div className="col-span-2"><p className="text-xs text-muted-foreground mb-0.5">Producto</p><p className="text-sm font-medium">{lastQ.product}</p></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Modalidad</p><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium rounded-full dark:!text-accent dark:!bg-accent/20", lastQ.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-primary/20 text-primary")}>{lastQ.mode}</span></div>
-                    <div><p className="text-xs text-muted-foreground mb-0.5">Respuestas</p><p className="text-sm font-medium text-muted-foreground">{responseCountByQuoteId[lastQ.id] || 0}</p></div>
-                  </div>
-                  <div className="pt-3 mt-3 border-t border-border">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<ExternalLink className="w-3 h-3" />}
-                      onClick={() => onViewDetail(lastQ.id)}
-                      className="hover:!bg-primary hover:!border-primary hover:!text-primary-foreground dark:hover:!bg-accent dark:hover:!border-accent dark:hover:!text-accent-foreground transition-colors"
-                    >
-                      Ver detalle
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="py-8 text-center">
-                  <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No hay cotizaciones registradas aún.</p>
-                </div>
-              )}
-            </Card>
-            <Card padding="md">
-              <h2 className="text-sm font-semibold mb-4">Estado de respuestas</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">Con propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) > 0).length}</p>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">Sin propuestas</p>
-                  <p className="text-xl font-semibold">{quotes.filter((quote) => (responseCountByQuoteId[quote.id] || 0) === 0).length}</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          <div>
-            <h2 className="text-base font-semibold mb-4">Historial de cotizaciones</h2>
-            <Card padding="sm" className="mb-4 bg-card border-border text-card-foreground">
-              <div className="flex flex-wrap gap-3 items-end">
-                {/* Campo Búsqueda */}
-                <div className="flex-1 min-w-[160px]">
-                  <Input
-                    placeholder="Buscar..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    prefix={<Search className="w-4 h-4 text-muted-foreground" />}
-                    className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-                  />
-                </div>
-
-                {/* Filtro Estado */}
-                <div className="w-44">
-                  <Select
-                    value={statusF}
-                    onChange={(e) => setStatusF(e.target.value)}
-                    className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
-                  >
-                    <option value="">Estado</option>
-                    <option value="created">Creada</option>
-                    <option value="directed">Dirigida</option>
-                    <option value="open">Abierta</option>
-                    <option value="accepted">Aceptada</option>
-                    <option value="active-order">Operación activa</option>
-                    <option value="rejected-importer">Rechazada por importadora</option>
-                  </Select>
-                </div>
-
-                {/* Filtro Modalidad */}
-                <div className="w-32">
-                  <Select
-                    value={modeF}
-                    onChange={(e) => setModeF(e.target.value)}
-                    className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
-                  >
-                    <option value="">Modalidad</option>
-                    <option value="Dirigida">Dirigida</option>
-                    <option value="Abierta">Abierta</option>
-                  </Select>
-                </div>
-
-                {/* Filtro Respuestas Recibidas */}
-                <div className="w-44">
-                  <Select
-                    value={respF}
-                    onChange={(e) => setRespF(e.target.value)}
-                    className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
-                  >
-                    <option value="">Respuestas recibidas</option>
-                    <option value="con">Con respuestas</option>
-                    <option value="sin">Sin respuestas</option>
-                  </Select>
-                </div>
-
-                {/* Botón Limpiar */}
-                {(search || statusF || modeF || respF) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSearch("");
-                      setStatusF("");
-                      setModeF("");
-                      setRespF("");
-                    }}
-                    className="hover:text-primary dark:hover:text-accent"
-                  >
-                    Limpiar
-                  </Button>
-                )}
-              </div>
-            </Card>
-
-            <Card padding="none">
-              <div className="px-5 py-3.5 border-b border-border"><p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">{filtered.length}</span> cotizaciones</p></div>
-              {filtered.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b border-border">{["Código", "Fecha", "Producto", "Importadora", "Modalidad", "Estado", "Resp.", "Últ. act.", ""].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
-                    <tbody>{filtered.map((row, i) => (
-                      <tr key={row.id} className={clsx("border-b border-border/60 hover:bg-muted/40 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
-                        <td className="px-4 py-3 font-mono text-xs font-medium">{row.code}</td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.date}</td>
-                        <td className="px-4 py-3 font-medium max-w-[180px]"><span className="truncate block">{row.product}</span></td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.importer}</td>
-                        <td className="px-4 py-3"><span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium rounded-full dark:!text-accent dark:!bg-accent/20", row.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-primary/20 text-primary")}>{row.mode}</span></td>
-                        <td className="px-4 py-3">
-                          {row.bloqueada ? (
-                            <div className="flex min-w-[150px] flex-col items-start gap-1">
-                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">Cotización bloqueada</span>
-                              <span className="text-[11px] text-muted-foreground">Requiere <TierBadge tier={row.tierMinimoRequerido} /></span>
-                            </div>
-                          ) : <Badge variant={row.status} />}
-                        </td>
-                        <td className="px-4 py-3 text-center"><span className="text-xs text-muted-foreground">{responseCountByQuoteId[row.id] || 0}</span></td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.updatedAt}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              icon={<ExternalLink className="w-3 h-3" />}
-                              onClick={() => onViewDetail(row.id)}
-                              className="hover:!bg-primary hover:!border-primary hover:!text-primary-foreground dark:hover:!bg-accent dark:hover:!border-accent dark:hover:!text-accent-foreground transition-colors"
-                            >
-                              Ver detalle
-                            </Button>
-                            {row.bloqueada && <Button variant="primary" size="sm" onClick={() => { setUnlockError(""); setQuoteToUnlock(row); }}>Desbloquear por 1 crédito</Button>}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              ) : <div className="py-16 text-center"><FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" /><p className="text-sm text-muted-foreground">No se encontraron cotizaciones</p></div>}
-            </Card>
-          </div>
-        </main>
-      </div>
-
-      <Modal open={Boolean(quoteToUnlock)} onClose={() => { if (!unlocking) setQuoteToUnlock(null); }} title="Desbloquear cotización">
-        <div className="space-y-4">
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <p className="text-sm font-semibold">{quoteToUnlock?.code} · {quoteToUnlock?.product}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>Tu nivel:</span><TierBadge tier={quoteToUnlock?.solicitanteTier} />
-              <span>Requerido:</span><TierBadge tier={quoteToUnlock?.tierMinimoRequerido} />
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">Se descontará 1 crédito de tu saldo para habilitar esta oportunidad.</p>
-          <p className="text-xs text-muted-foreground">Saldo disponible: <span className="font-semibold text-foreground">{quoteToUnlock?.solicitantePuntosCotizacion ?? creditos} créditos</span></p>
-          {unlockError && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">{unlockError}</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={unlocking} onClick={() => setQuoteToUnlock(null)}>Cancelar</Button>
-            <Button variant="primary" loading={unlocking} onClick={() => { void unlockQuote(); }}>Desbloquear por 1 crédito</Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// Qué cubre el precio según el incoterm, en palabras del comprador.
-const INCOTERM_INCLUYE: Record<string,string> = {
-  EXW:"Mercancía en fábrica; tú pones el transporte",
-  FCA:"Entregada al transportista en origen",
-  FOB:"Puesta en el barco en origen; flete y seguro aparte",
-  CFR:"Flete hasta el puerto de destino; seguro aparte",
-  CIF:"Flete y seguro hasta el puerto de destino",
-  CPT:"Transporte pagado hasta destino; seguro aparte",
-  CIP:"Transporte y seguro pagados hasta destino",
-  DAP:"Hasta tu puerta, sin impuestos de importación",
-  DPU:"Descargada en destino, sin impuestos",
-  DDP:"Puerta a puerta con impuestos y nacionalización",
-};
-
-/** Las observaciones de una propuesta: texto libre o el JSON del formulario de respuesta. */
-function leerCondicionesPropuesta(texto: string | null | undefined): { descripcion: string; ventajas: string; detalles: string[] } {
-  const vacio = { descripcion: "", ventajas: "", detalles: [] as string[] };
-  if (!texto) return vacio;
-  // Propuesta rápida (precio cerrado en pesos): su detalle completo está en la
-  // tarjeta del chat; aquí basta la nota y lo esencial.
-  const nueva = leerPropuesta(texto);
-  if (nueva) {
-    const f = nueva.formulario;
-    const detalles = [
-      f.entrega_modo === "cliente" ? `Puesto en ${f.bodega_ciudad}; flete a ${f.ciudad_destino} a cargo del cliente` : `Entregado en ${f.ciudad_destino}`,
-      f.requiere_permisos && f.permiso_cual ? `${f.permiso_cual} (${f.permiso_gestiona === "importadora" ? "incluido" : "lo gestiona el cliente"})` : "",
-      `Válida hasta ${new Date(`${nueva.vigencia_hasta}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`,
-    ].filter(Boolean);
-    return { descripcion: f.nota || "", ventajas: "", detalles };
-  }
-  try {
-    const datos = JSON.parse(texto) as Record<string, unknown>;
-    if (datos && typeof datos === "object" && datos.schema === "create-response-v1") {
-      const campo = (clave: string) => (typeof datos[clave] === "string" ? String(datos[clave]).trim() : "");
-      const detalles = [
-        campo("moq") && `MOQ ${campo("moq")}`,
-        campo("port") && `Puerto ${campo("port")}`,
-        campo("productionTime") && `Producción ${campo("productionTime")}`,
-        campo("shippingTime") && `Envío ${campo("shippingTime")}`,
-      ].filter(Boolean) as string[];
-      return { descripcion: campo("description"), ventajas: campo("advantages"), detalles };
-    }
-  } catch {
-    // Texto libre.
-  }
-  return { ...vacio, descripcion: texto };
-}
-
-/**
- * Precio de una propuesta para comparar. Las del formato nuevo son un precio
- * cerrado en pesos con IVA; las anteriores, USD con el equivalente a la TRM.
- */
-function PrecioPropuesta({ propuesta, trm, tamano = "sm" }: { propuesta: BackendPropuesta; trm?: number | null; tamano?: "sm" | "base" }) {
-  const nueva = leerPropuesta(propuesta.condiciones_adicionales);
-  const clase = clsx("font-semibold", tamano === "base" ? "text-base" : "text-sm");
-  if (nueva) {
-    return (
-      <>
-        <p className={clase}>{pesosCop(nueva.totales.total_cop)}</p>
-        <p className="text-[11px] text-muted-foreground">con IVA · {pesosCop(nueva.totales.unitario_cop)} por unidad</p>
-      </>
-    );
-  }
-  return (
-    <>
-      <p className={clase}>US${propuesta.precio_ofrecido_usd.toLocaleString("es-CO")}</p>
-      {trm ? <p className="text-[11px] text-muted-foreground">≈ {formatoPesos(propuesta.precio_ofrecido_usd * trm)}</p> : null}
-    </>
-  );
-}
-
-const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string }[] = [
-  { clave: "precio", etiqueta: "Precio", ayuda: "Me salió mejor en costo" },
-  { clave: "tiempo", etiqueta: "Tiempo de entrega", ayuda: "Llega antes" },
-  { clave: "condiciones", etiqueta: "Condiciones", ayuda: "Lo que incluye, pagos, garantías" },
-  { clave: "otro", etiqueta: "Otro motivo", ayuda: "Confianza, atención, recomendación..." },
-];
-
-/** "500 u" o "2,5 m³". */
-function cantidadConUnidad(cantidad: string | number | null | undefined, unidad?: string | null, largo = false): string {
-  if (cantidad === null || cantidad === undefined || cantidad === "") return "—";
-  const numero = Number(cantidad);
-  const texto = Number.isFinite(numero) ? numero.toLocaleString("es-CO", { maximumFractionDigits: 2 }) : String(cantidad);
-  if (unidad === "m3") return `${texto} m³`;
-  return `${texto} ${largo ? "unidades" : "u"}`;
-}
-
-function formatoPesos(valor: number): string {
-  return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// QUOTE DETAIL
-// ─────────────────────────────────────────────────────────────────────────────
-function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders,onDuplicate,userRole,onConfirmProposal}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[];onDuplicate:(quote:Quote)=>void;userRole:UserRole|"admin";onConfirmProposal?:(propuestaId:string)=>Promise<void>}) {
-  const quote=quotes.find(q=>q.id===quoteId)??null;
-  const [proposals,setProposals]=useState<BackendPropuesta[]>([]);
-  const [loadingProposals,setLoadingProposals]=useState(true);
-  const [actionMessage,setActionMessage]=useState("");
-  const [trm,setTrm]=useState<number|null>(null);
-  // Aceptar habiendo otras propuestas: antes se pregunta qué decidió la elección.
-  const [eligiendo,setEligiendo]=useState<BackendPropuesta|null>(null);
-  const [motivoEleccion,setMotivoEleccion]=useState<MotivoEleccion|null>(null);
-  const [motivoDetalle,setMotivoDetalle]=useState("");
-  const [decisionError,setDecisionError]=useState("");
-  const [confirmingCompanyProposal,setConfirmingCompanyProposal]=useState(false);
-  const [companyConfirmationError,setCompanyConfirmationError]=useState("");
-
-  useEffect(()=>{
-    let vigente=true;
-    businessService.getTrm().then((r)=>{if(vigente)setTrm(r.valor);}).catch(()=>{});
-    return ()=>{vigente=false;};
-  },[]);
-
-  const loadProposals=useCallback(async()=>{
-    if(!quote){
-      setProposals([]);
-      setLoadingProposals(false);
-      return;
-    }
-    setLoadingProposals(true);
-    try{
-      const rows=await businessService.listQuoteProposals(quote.id);
-      setProposals(rows);
-    }finally{
-      setLoadingProposals(false);
-    }
-  },[quote]);
-
-  useEffect(()=>{void loadProposals();},[loadProposals]);
-
-  const handleDecision=useCallback(async(propuestaId:string,aceptar:boolean,motivo?:{motivo_eleccion:MotivoEleccion;motivo_detalle?:string})=>{
-    setActionMessage("");
-    const targetProposal = proposals.find((proposal) => proposal.id === propuestaId);
-    if (!targetProposal) {
-      throw new Error("No se encontró la propuesta seleccionada.");
-    }
-
-    if (aceptar) {
-      await businessService.startProposalNegotiation(targetProposal.cotizacion_id, targetProposal.importador_id);
-    }
-
-    await businessService.preAcceptProposal(propuestaId,aceptar,motivo);
-    await loadProposals();
-    if(onRefreshQuotes){
-      await onRefreshQuotes();
-    }
-    setActionMessage(aceptar?"Oferta aceptada. Chat de negociación habilitado." :"Oferta rechazada.");
-  },[loadProposals,onRefreshQuotes,proposals]);
-
-  if(!quote){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="quotes"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6">
-            <Card padding="lg" className="max-w-xl mx-auto mt-10 text-center">
-              <ClipboardList className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3"/>
-              <p className="font-semibold">Cotización no encontrada</p>
-              <p className="text-sm text-muted-foreground mt-1">No se pudo cargar la cotización seleccionada desde la API.</p>
-              <Button variant="secondary" className="mt-4" onClick={onBack}>Volver</Button>
-            </Card>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  const visibleProposals = quote.mode === "Dirigida"
-    ? proposals.filter((proposal) => !quote.importadorId || proposal.importador_id === quote.importadorId)
-    : proposals;
-  const otrasPendientes=(id:string)=>visibleProposals.filter(p=>p.id!==id&&p.estado==="pendiente").length;
-  const aceptarPropuesta=(p:BackendPropuesta)=>{
-    setDecisionError("");
-    if(otrasPendientes(p.id)>0){
-      setMotivoEleccion(null);
-      setMotivoDetalle("");
-      setEligiendo(p);
-      return;
-    }
-    void handleDecision(p.id,true).catch((e)=>setDecisionError(e instanceof Error?e.message:"No se pudo aceptar la propuesta."));
-  };
-  const confirmarEleccion=async()=>{
-    if(!eligiendo||!motivoEleccion)return;
-    try{
-      await handleDecision(eligiendo.id,true,{motivo_eleccion:motivoEleccion,motivo_detalle:motivoDetalle.trim()||undefined});
-      setEligiendo(null);
-    }catch(e){
-      setDecisionError(e instanceof Error?e.message:"No se pudo aceptar la propuesta.");
-    }
-  };
-  const nombreEmpresa=(p:BackendPropuesta)=>p.empresa?.nombre_empresa||(quote.mode==="Dirigida"?quote.importer:"Empresa importadora");
-  const activeProposal=visibleProposals[0]??null;
-  const companyConfirmationProposal = visibleProposals.find((proposal) => (
-    proposal.estado==="pendiente"
-    && proposal.preaceptada_por_solicitante
-    && !proposal.preaceptada_por_empresa
-  )) ?? null;
-  const hayPropuestaAceptada = visibleProposals.some((proposal) => proposal.estado === "aceptada" || proposal.preaceptada_por_solicitante);
-  const contactAsesor=visibleProposals.find(p=>p.contacto_asesor)?.contacto_asesor??null;
-  const relChat=chats.find(c=>(c.type==="cotizacion"||c.type==="orden")&&(c.quoteId===quoteId||c.refId===quoteId));
-  const waitingCompanyConfirmation = userRole==="importadora"
-    && Boolean(onConfirmProposal)
-    && Boolean(companyConfirmationProposal);
-  const relatedOrder = orders.find((order) => order.quoteCode === quote.code) ?? null;
-  const quoteLifecycleIndex = relatedOrder
-    ? inferLifecycleStageIndex(relatedOrder.status || relatedOrder.history[relatedOrder.history.length - 1]?.estado)
-    : visibleProposals.length > 0
-      ? 2
-      : 0;
-  const quoteTimelineStages = buildLifecycleTimeline(quoteLifecycleIndex);
-
-  const orderDocByType = (matchers: string[]) => {
-    if (!relatedOrder) return null;
-    const matcher = matchers.map((value) => value.toLowerCase());
-    return relatedOrder.documents.find((doc) => matcher.some((item) => (doc.type || "").toLowerCase().includes(item))) ?? null;
-  };
-
-  const solicitudDoc = orderDocByType(["cotizacion", "solicitud"]);
-  const propuestaDoc = orderDocByType(["propuesta"]);
-  const ordenDoc = orderDocByType(["orden"]);
-
-  const lifecycleDocs: LifecycleDocItem[] = [
-    {
-      label: "Solicitud",
-      name: solicitudDoc?.name || `Solicitud-${quote.code}.pdf`,
-      status: solicitudDoc?.url ? "Disponible" : "Pendiente",
-      url: solicitudDoc?.url || null,
-      source: solicitudDoc ? "Operación" : "Pendiente de generación",
-    },
-    {
-      label: "Propuesta",
-      name: propuestaDoc?.name || `Propuesta-${quote.code}.pdf`,
-      status: propuestaDoc?.url ? "Disponible" : "Pendiente",
-      url: propuestaDoc?.url || null,
-      source: propuestaDoc ? "Operación" : (activeProposal ? "Negociación" : "Sin propuesta aceptada"),
-    },
-    {
-      label: "Operación",
-      name: ordenDoc?.name || `Operacion-${quote.code}.pdf`,
-      status: ordenDoc?.url ? "Disponible" : "Pendiente",
-      url: ordenDoc?.url || null,
-      source: relatedOrder ? "Operación activa" : "Aún no creada",
-    },
-  ];
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="quotes"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Cotizaciones",onClick:onBack},{label:quote.code}]}/>
-          <Card padding="md" className="mt-4 mb-5">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-mono text-lg font-semibold">{quote.code}</span>
-                  <Badge variant={quote.status}/>
-                  <span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium rounded-full dark:!text-accent dark:!bg-accent/20", quote.mode === "Dirigida" ? "bg-blue-50 text-blue-700" : "bg-primary/20 text-primary")}>{quote.mode}</span>
-                </div>
-                <div className="flex gap-6 flex-wrap">{[["Fecha",quote.date],["País",quote.country],["Incoterm",quote.incoterm],...(quote.shippingMark?[["Shipping mark",quote.shippingMark]]:[])].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}{quote.mode==="Dirigida"&&<div><p className="text-xs text-muted-foreground">Empresa</p><p className="text-sm font-medium">{quote.importer}</p></div>}</div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button variant="secondary" size="sm" icon={<Copy className="w-3.5 h-3.5"/>} onClick={()=>onDuplicate(quote)}>Duplicar</Button>
-                {relChat&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Chat</Button>}
-              </div>
-            </div>
-          </Card>
-          {quote.status==="rejected-importer"&&quote.motivoRechazo&&(
-            <Card padding="md" className="mb-5 border-rose-300/60 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30">
-              <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">{quote.importer} rechazó esta cotización</p>
-              <p className="mt-1 text-sm text-rose-800/90 dark:text-rose-200 whitespace-pre-line">Motivo: {quote.motivoRechazo}</p>
-            </Card>
-          )}
-          {waitingCompanyConfirmation&&companyConfirmationProposal&&(
-            <Card padding="md" className="mb-5 border-amber-300 bg-amber-50 dark:border-accent/40 dark:!bg-accent/10">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-amber-700 dark:text-accent flex-shrink-0 mt-0.5"/>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-amber-900 dark:!text-accent">El comprador ya aceptó la propuesta</p>
-                  <p className="text-xs text-amber-800 dark:!text-accent mt-0.5">Revisa la negociación y confirma para crear la operación.</p>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {relChat&&(
-                      <Button variant="secondary" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)} className="dark:!border-accent/40">
-                        Ver negociación
-                      </Button>
-                    )}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<CheckCircle2 className="w-3.5 h-3.5"/>}
-                      loading={confirmingCompanyProposal}
-                      onClick={()=>{
-                        if(!onConfirmProposal)return;
-                        setCompanyConfirmationError("");
-                        setConfirmingCompanyProposal(true);
-                        void onConfirmProposal(companyConfirmationProposal.id)
-                          .catch((error)=>setCompanyConfirmationError(error instanceof Error?error.message:"No se pudo confirmar la propuesta."))
-                          .finally(()=>setConfirmingCompanyProposal(false));
-                      }}
-                      className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
-                    >
-                      Confirmar y crear operación
-                    </Button>
-                  </div>
-                  {companyConfirmationError&&<p role="alert" className="text-xs text-destructive mt-2">{companyConfirmationError}</p>}
-                </div>
-              </div>
-            </Card>
-          )}
-          <div className="flex gap-5 items-start">
-            <div className="flex-1 min-w-0 space-y-5">
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Nombre",quote.product],["Línea",quote.productLine],["País",quote.country],["Calidad",quote.quality],["Descripción",quote.description||"—"]].map(([k,v])=><div key={k} className={k==="Descripción"?"col-span-2 sm:col-span-3":""}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5 whitespace-pre-line">{v}</p></div>)}</div>
-                {(quote.productPhotoUrls??[]).length>0&&<div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>}
-              </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">{[["Cantidad",cantidadConUnidad(quote.minQuantity,quote.unit)],["Precio objetivo",quote.targetPrice],["Incoterm",quote.incoterm],["Notas",quote.notes||"—"]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div>
-              </Card>
-              <Card padding="md">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary dark:text-accent"/>Documentos del ciclo</h3>
-                  <span className="text-xs text-muted-foreground">Solicitud · Propuesta · Operación</span>
-                </div>
-                <div className="space-y-2">
-                  {lifecycleDocs.map((doc) => (
-                    <div key={doc.label} className="rounded-xl border border-border px-3 py-2.5 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">{doc.label}</p>
-                        <p className="text-sm font-semibold truncate">{doc.name}</p>
-                        <p className="text-xs text-muted-foreground">{doc.source}</p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={clsx("text-[11px] font-medium px-2 py-0.5 rounded",doc.url?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-700")}>{doc.status}</span>
-                        {doc.url && (
-                          <>
-                            <Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>{void abrirArchivoEnPestana(doc.url);}}>Ver PDF</Button>
-                            <Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void descargarArchivo(doc.url, doc.name);}}>Descargar</Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-primary dark:text-accent"/>Ofertas recibidas{visibleProposals.length>0&&<span className="w-5 h-5 rounded-full bg-primary dark:bg-accent text-white dark:text-black text-[10px] font-bold flex items-center justify-center">{visibleProposals.length}</span>}</h3>
-                  {actionMessage&&<span className="text-xs text-emerald-600 font-medium">{actionMessage}</span>}
-                </div>
-                {loadingProposals?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><Loader2 className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2 animate-spin"/><p className="text-sm text-muted-foreground">Cargando ofertas...</p></div></Card>:visibleProposals.length===0?<Card padding="md" className="border-dashed"><div className="py-6 text-center"><ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/><p className="text-sm text-muted-foreground">Sin ofertas visibles para esta cotización.</p></div></Card>:(
-                  <>
-                    {quote.mode === "Abierta" && visibleProposals.length > 1 && (
-                      <Card padding="md" className="mb-3">
-                        <h4 className="text-sm font-semibold flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Comparador de propuestas</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5 mb-3">En el orden en que llegaron. Mira precio, tiempo, lo que incluye y cómo cumple cada empresa: lo más barato no siempre es lo que más conviene.</p>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                <th className="text-left py-2 pr-3 font-medium">Empresa</th>
-                                <th className="text-left py-2 pr-3 font-medium">Precio</th>
-                                <th className="text-left py-2 pr-3 font-medium">Tiempo</th>
-                                <th className="text-left py-2 pr-3 font-medium">Qué incluye</th>
-                                <th className="text-left py-2 font-medium">Cumplimiento</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/60 align-top">
-                              {visibleProposals.map((proposal) => {
-                                const condiciones=leerCondicionesPropuesta(proposal.condiciones_adicionales);
-                                const empresa=proposal.empresa;
-                                return (
-                                <tr key={`cmp-${proposal.id}`}>
-                                  <td className="py-2.5 pr-3">
-                                    <p className="font-medium flex items-center gap-1">{nombreEmpresa(proposal)}{empresa?.verificado&&<BadgeCheck className="w-3.5 h-3.5 text-primary" aria-label="Verificada"/>}</p>
-                                    <p className="text-[11px] text-muted-foreground">{proposal.estado==="pendiente"?(proposal.preaceptada_por_solicitante?"Aceptaste; falta que la empresa confirme":"Esperando tu respuesta"):proposal.estado==="aceptada"?"Elegida":proposal.estado==="rechazada"?"No elegida":proposal.estado}</p>
-                                  </td>
-                                  <td className="py-2.5 pr-3">
-                                    <PrecioPropuesta propuesta={proposal} trm={trm}/>
-                                    {proposal.cantidad?<p className="text-[11px] text-muted-foreground">por {cantidadConUnidad(proposal.cantidad,quote.unit)}</p>:null}
-                                  </td>
-                                  <td className="py-2.5 pr-3 font-medium">{proposal.tiempo_estimado_entrega}</td>
-                                  <td className="py-2.5 pr-3 max-w-[260px]">
-                                    <p className="font-medium">{proposal.incoterm}</p>
-                                    <p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(proposal.incoterm||"").toUpperCase()]??"Según lo acordado"}</p>
-                                    {condiciones.ventajas&&<p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{condiciones.ventajas}</p>}
-                                  </td>
-                                  <td className="py-2.5">
-                                    {empresa?(
-                                      <>
-                                        <p className="font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{empresa.calificacion_promedio.toFixed(1)}<span className="text-[11px] font-normal text-muted-foreground">({empresa.total_resenas} {empresa.total_resenas===1?"reseña":"reseñas"})</span></p>
-                                        <p className="text-[11px] text-muted-foreground">{empresa.pedidos_entregados} {empresa.pedidos_entregados===1?"pedido entregado":"pedidos entregados"} · {empresa.pedidos_en_curso} en curso</p>
-                                      </>
-                                    ):<span className="text-xs text-muted-foreground">—</span>}
-                                  </td>
-                                </tr>
-                              );})}
-                            </tbody>
-                          </table>
-                        </div>
-                      </Card>
-                    )}
-                  {decisionError&&<p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{decisionError}</p>}
-                  <div className="space-y-3">{visibleProposals.map(p=>{
-                    const contactName=p.contacto_asesor?.nombre||"Asesor de la empresa";
-                    const companyName=nombreEmpresa(p);
-                    const condiciones=leerCondicionesPropuesta(p.condiciones_adicionales);
-                    return(
-                      <Card key={p.id} padding="md" className="hover:shadow-md transition-shadow">
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-sm">{companyName}</p>
-                                <span className={clsx("px-2 py-0.5 rounded text-xs font-medium",p.estado==="aceptada"?"bg-emerald-50 text-emerald-700":p.estado==="rechazada"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-700")}>{p.estado}</span>
-                                {/* La empresa puede ajustar su propuesta tras enviarla para reflejar
-                                    lo negociado por chat. Se avisa de forma visible: lo que se está
-                                    comparando ya no es la oferta que llegó. */}
-                                {(p.revisiones??0)>0&&(
-                                  <span
-                                    className="px-2 py-0.5 rounded text-xs font-medium bg-sky-50 text-sky-700"
-                                    title={p.fecha_modificacion?`Última modificación: ${new Date(p.fecha_modificacion).toLocaleString("es-CO")}`:undefined}
-                                  >
-                                    Versión {(p.revisiones??0)+1}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">{contactName}</p>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Precio</p><PrecioPropuesta propuesta={p} trm={trm}/></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Tiempo</p><p className="text-sm font-semibold">{p.tiempo_estimado_entrega}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Incluye</p><p className="text-sm font-semibold">{p.incoterm}</p><p className="text-[11px] text-muted-foreground">{INCOTERM_INCLUYE[(p.incoterm||"").toUpperCase()]??"Según lo acordado"}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase">Cumplimiento</p>{p.empresa?<><p className="text-sm font-semibold flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500"/>{p.empresa.calificacion_promedio.toFixed(1)}</p><p className="text-[11px] text-muted-foreground">{p.empresa.pedidos_entregados} entregados</p></>:<p className="text-sm font-semibold">—</p>}</div>
-                              </div>
-                              {(condiciones.descripcion||condiciones.ventajas||condiciones.detalles.length>0)?(
-                                <div className="text-xs text-muted-foreground mt-3 leading-relaxed space-y-1">
-                                  {condiciones.descripcion&&<p>{condiciones.descripcion}</p>}
-                                  {condiciones.ventajas&&<p><span className="font-medium text-foreground">Ventajas:</span> {condiciones.ventajas}</p>}
-                                  {condiciones.detalles.length>0&&<p>{condiciones.detalles.join(" · ")}</p>}
-                                </div>
-                              ):<p className="text-xs text-muted-foreground mt-3">Sin observaciones adicionales.</p>}
-                              {(p.revisiones??0)>0&&p.fecha_modificacion&&(
-                                <p className="text-[11px] text-sky-700 mt-2">
-                                  La empresa modificó esta propuesta el {new Date(p.fecha_modificacion).toLocaleString("es-CO",{dateStyle:"medium",timeStyle:"short"})}
-                                  {(p.revisiones??0)>1?` (${p.revisiones} cambios desde que la envió)`:""}.
-                                </p>
-                              )}
-                              {p.estado==="rechazada"&&p.motivo_descarte&&<p className="text-[11px] text-muted-foreground mt-2">Elegiste otra propuesta por: {MOTIVOS_ELECCION.find(m=>m.clave===p.motivo_descarte)?.etiqueta??p.motivo_descarte}</p>}
-                            </div>
-                            <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                              {p.estado==="pendiente"&&!hayPropuestaAceptada?(
-                                <>
-                                  <Button variant="primary" size="sm" onClick={()=>aceptarPropuesta(p)}>Aceptar</Button>
-                                  <Button variant="secondary" size="sm" onClick={()=>void handleDecision(p.id,false)}>Rechazar</Button>
-                                </>
-                              ):(
-                                <span className="text-xs text-muted-foreground">Acción registrada</span>
-                              )}
-                                {relChat && <Button variant="ghost" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Ir al chat</Button>}
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    );})}
-                  </div>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="w-60 xl:w-64 flex-shrink-0 hidden lg:block space-y-4">
-              <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Línea de tiempo logística</h3><Timeline stages={quoteTimelineStages}/></Card>
-              {contactAsesor?<Card padding="md">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor asignado</h3>
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-start gap-2.5"><Avatar initials={initialsFromName(contactAsesor.nombre||"AS")} size="md"/><div><p className="text-sm font-semibold">{contactAsesor.nombre||"Asesor"}</p><p className="text-xs text-muted-foreground">Contacto de la propuesta</p></div></div>
-                  <div className="flex flex-col gap-1.5">
-                    <ContactBtn type="chat" size="sm" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
-                  </div>
-                </div>
-              </Card>:<Card padding="md" className="border-dashed"><div className="py-4 text-center"><p className="text-xs text-muted-foreground">Sin contacto de asesor todavía</p></div></Card>}
-              {relChat&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat asociado</h3><p className="text-xs text-muted-foreground mb-3">{quote.importer}</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChat.id)}>Abrir chat</Button></Card>}
-            </div>
-          </div>
-        </main>
-      </div>
-      <Modal open={Boolean(eligiendo)} onClose={()=>setEligiendo(null)} title="¿Qué te hizo elegir esta propuesta?">
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Elegiste la de <span className="font-medium text-foreground">{eligiendo?nombreEmpresa(eligiendo):""}</span>. Tu respuesta ayuda a las demás empresas a mejorar sus próximas propuestas; no ven quién ganó ni a qué precio.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Motivo de la elección">
-            {MOTIVOS_ELECCION.map(m=>(
-              <button
-                key={m.clave}
-                type="button"
-                role="radio"
-                aria-checked={motivoEleccion===m.clave}
-                onClick={()=>setMotivoEleccion(m.clave)}
-                className={clsx("rounded-xl border p-3 text-left transition-all",motivoEleccion===m.clave?"border-primary bg-primary/5":"border-border hover:border-primary/40")}
-              >
-                <p className="text-sm font-semibold">{m.etiqueta}</p>
-                <p className="text-xs text-muted-foreground">{m.ayuda}</p>
-              </button>
-            ))}
-          </div>
-          <Textarea label="Detalle (opcional)" placeholder="Cuéntanos en una frase" value={motivoDetalle} maxLength={500} onChange={e=>setMotivoDetalle(e.target.value)}/>
-          {decisionError&&<p role="alert" className="text-sm text-rose-700">{decisionError}</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={()=>setEligiendo(null)}>Cancelar</Button>
-            <Button variant="primary" disabled={!motivoEleccion} onClick={()=>{void confirmarEleccion();}}>Aceptar propuesta</Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RESPONSE DETAIL — contextual back navigation
-// ─────────────────────────────────────────────────────────────────────────────
-function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb,responses,quotes,chats,importers,orders,onRefreshData}:{
-  responseId:string;from:ResponseFrom;fromQuoteId?:string;
-  onBack:()=>void;onBackToQuote:(id:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;responses:QuoteResponse[];quotes:Quote[];chats:ChatConv[];importers:Importer[];orders:Order[];onRefreshData?:()=>Promise<void>;
-}) {
-  const resp=responses.find(r=>r.id===responseId)||responses[0];
-  if(!resp){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="responses"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden"><AppHeader user={USER} sb={sb}/><main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Respuesta no disponible.</p></Card></main></div>
-      </div>
-    );
-  }
-  const imp=importers.find(i=>i.id===resp.importerId)||importers[0]||null;
-  const quote=quotes.find(q=>q.id===resp.quoteId)||quotes[0];
-  const relChat=chats.find(c=>c.importerId===resp.importerId&&(c.refId===resp.quoteId||c.type==="cotizacion"));
-  const relatedOrder=orders.find((order)=>order.quoteCode===quote.code)||null;
-  const [accepting,setAccepting]=useState(false);
-  const [acceptedByMe,setAcceptedByMe]=useState(resp.status==="resp-aceptada");
-  const [acceptedByAdvisor,setAcceptedByAdvisor]=useState(resp.status==="resp-aceptada");
-  const orderCreated=orders.some((order)=>order.quoteCode===quote.code||order.id===quote.id);
-  async function handleAccept(){
-    setAccepting(true);
-    try{
-      await businessService.startProposalNegotiation(resp.quoteId, resp.importerId);
-      await businessService.preAcceptProposal(resp.id,true);
-      setAcceptedByMe(true);
-      setAcceptedByAdvisor(true);
-      if(onRefreshData){
-        await onRefreshData();
-      }
-    }finally{
-      setAccepting(false);
-    }
-  }
-  const responseLifecycleIndex = relatedOrder
-    ? inferLifecycleStageIndex(relatedOrder.status || relatedOrder.history[relatedOrder.history.length - 1]?.estado)
-    : (acceptedByMe || acceptedByAdvisor)
-      ? 2
-      : 1;
-  const negotiationStages=buildLifecycleTimeline(responseLifecycleIndex);
-
-  const companyName = imp?.name || "Empresa importadora";
-  const importerLogo = imp?.logoUrl ? resolveApiUrl(imp.logoUrl) : "";
-  const crumbs=from==="quote-detail"
-    ?[{label:"Cotizaciones",onClick:()=>onBackToQuote(fromQuoteId||quote.id)},{label:quote.code,onClick:()=>onBackToQuote(fromQuoteId||quote.id)},{label:`Respuesta — ${companyName}`}]
-    :[{label:"Respuestas",onClick:onBack},{label:`Respuesta de ${companyName}`}];
-
-  const compRows=[
-    {label:"Precio objetivo",target:quote.targetPrice,offer:resp.price,         result:"worse" as const},
-    {label:"Cantidad solicitada", target:cantidadConUnidad(quote.minQuantity,quote.unit),offer:resp.moq,       result:"better"as const},
-    {label:"Incoterm",       target:quote.incoterm,   offer:resp.incoterm,       result:(quote.incoterm===resp.incoterm?"equal":"worse")as"equal"|"worse"},
-    {label:"Plazo estimado", target:"30 días",        offer:resp.deliveryTime,   result:"equal" as const},
-  ];
-
-  if(orderCreated){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active={from==="quote-detail"?"quotes":"responses"}/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER} sb={sb}/>
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="flex flex-col items-center text-center gap-5 max-w-sm">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-8 h-8 text-emerald-500"/></div>
-              <div>
-                <h2 className="text-lg font-semibold">¡Operación creada!</h2>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">Ambas partes aceptaron. La respuesta fue <span className="font-medium text-emerald-600">Seleccionada</span> y las demás propuestas quedaron <span className="font-medium text-slate-500">Canceladas</span>.</p>
-              </div>
-              <div className="flex gap-2 flex-wrap justify-center">
-                <Button variant="secondary" onClick={onBack}>Volver</Button>
-                <Button variant="primary" icon={<ShoppingCart className="w-4 h-4"/>} onClick={()=>sb.onNav("orders")}>Ir a la operación</Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active={from==="quote-detail"?"quotes":"responses"}/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio",onClick:onBack},...crumbs]}/>
-          <Card padding="md" className="mt-4 mb-5">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex items-center gap-4 flex-1">
-                <Avatar initials={imp?.initials || "IM"} size="2xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap"><h1 className="text-lg font-semibold">{companyName}</h1>{imp?.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}<Badge variant={resp.status}/></div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"}</p>
-                  <div className="flex items-center gap-4 mt-1.5 flex-wrap"><div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp?.responseTime || "N/A"}</span></div><div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp?.country || "N/A"}</span></div></div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">Cotización: <span className="font-mono font-medium text-foreground">{quote.code}</span></p>
-            </div>
-          </Card>
-          <div className="flex gap-5 items-start">
-            <div className="flex-1 min-w-0 space-y-5">
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>Asesor asignado</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || initialsFromName(companyName)} size="xl" color={imp?.color || "bg-slate-600"} src={importerLogo||undefined} variant="logo"/><div><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Asesor"}</p><p className="text-xs text-primary mt-0.5">{companyName}</p></div></div>
-                <div className="flex gap-2">
-                  <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
-                  <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp?.advisor.email,onOpenChat:()=>{if(relChat)onOpenChat(relChat.id);}})}/>
-                </div>
-              </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary"/>Oferta comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">{[["Precio unitario",resp.price],["MOQ",resp.moq],["Plazo",resp.deliveryTime],["Incoterm",resp.incoterm],["País de origen",resp.origin],["Producción",resp.production],["Personalización",resp.customization]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-semibold mt-0.5">{v}</p></div>)}<div className="col-span-2 sm:col-span-3"><p className="text-xs text-muted-foreground">Observaciones</p><p className="text-sm mt-0.5 leading-relaxed">{resp.observations}</p></div></div>
-                <div className="mt-4 pt-4 border-t border-border"><p className="text-xs text-muted-foreground">Los adjuntos reales se consultan desde Chat y Documentos vinculados a esta cotización.</p></div>
-              </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><GitCompare className="w-4 h-4 text-primary"/>Objetivo vs Oferta</h3>
-                <table className="w-full text-sm"><thead><tr className="border-b border-border">{["Criterio","Tu objetivo","Oferta",""].map(h=><th key={h} className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide pb-2 pr-4">{h}</th>)}</tr></thead>
-                <tbody className="divide-y divide-border/60">{compRows.map(row=>(
-                  <tr key={row.label} className="hover:bg-muted/30 transition-colors">
-                    <td className="py-2.5 text-muted-foreground pr-4">{row.label}</td><td className="py-2.5 font-medium pr-4">{row.target}</td><td className="py-2.5 font-medium pr-4">{row.offer}</td>
-                    <td className="py-2.5">{row.result==="better"&&<div className="flex items-center gap-1 text-emerald-600 text-xs font-medium"><TrendingUp className="w-3.5 h-3.5"/>Mejor</div>}{row.result==="worse"&&<div className="flex items-center gap-1 text-red-500 text-xs font-medium"><TrendingDown className="w-3.5 h-3.5"/>Más alto</div>}{row.result==="equal"&&<div className="flex items-center gap-1 text-blue-600 text-xs font-medium"><Minus className="w-3.5 h-3.5"/>Igual</div>}</td>
-                  </tr>
-                ))}</tbody></table>
-              </Card>
-            </div>
-            <div className="w-64 flex-shrink-0 hidden lg:block space-y-4">
-              {/* Negotiation timeline */}
-              <Card padding="md">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Flujo de ciclo de vida</h3>
-                <Timeline stages={negotiationStages}/>
-              </Card>
-              {/* Accept actions */}
-              <Card padding="md">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Acciones</h3>
-                {acceptedByMe&&!orderCreated&&(
-                  <div className="mb-3 flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0"/>
-                    <p className="text-xs text-emerald-700">Has aceptado. Esperando al asesor…</p>
-                  </div>
-                )}
-                <div className="flex flex-col gap-2">
-                  {!acceptedByMe
-                    ?<Button variant="primary" fullWidth icon={<CheckCircle2 className="w-4 h-4"/>} loading={accepting} onClick={handleAccept}>Aceptar propuesta</Button>
-                    :<Button variant="secondary" fullWidth icon={<CheckCircle2 className="w-4 h-4 text-emerald-600"/>} disabled>Propuesta aceptada</Button>
-                  }
-                  <Button variant="secondary" fullWidth icon={<MessageCircle className="w-4 h-4"/>} onClick={()=>relChat&&onOpenChat(relChat.id)}>Negociar por chat</Button>
-                  <div className="pt-2 border-t border-border flex flex-col gap-1.5">
-                    <Button variant="ghost" fullWidth icon={<ExternalLink className="w-3.5 h-3.5"/>} className="text-primary hover:text-blue-700 hover:bg-primary/5" onClick={()=>onBackToQuote(resp.quoteId)}>Ver cotización</Button>
-                    {relChat&&<Button variant="ghost" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} className="text-foreground hover:bg-muted" onClick={()=>onOpenChat(relChat.id)}>Ver chat</Button>}
-                  </div>
-                </div>
-              </Card>
-              <Card padding="md"><div className="space-y-2">{[["Empresa",companyName],["Miembro desde",imp?.memberSince || "N/D"],["Proyectos",String(imp?.projects || 0)],["Resp. prom.",imp?.responseTime || "N/D"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium text-right">{v}</span></div>)}</div></Card>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RESPONSES SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[];onViewQuote:(quoteId:string)=>void}) {
-  const [search,setSearch]=useState("");const[statusF,setStatusF]=useState("");const[empresaF,setEmpresaF]=useState("");
-  const filtered=responses.filter(r=>{const imp=importers.find(i=>i.id===r.importerId);const q=quotes.find(q=>q.id===r.quoteId);
-    const ms=!search||[imp?.name||"",q?.product||"",r.price].some(v=>v.toLowerCase().includes(search.toLowerCase()));
-    return ms&&(!statusF||r.status===statusF)&&(!empresaF||r.importerId===empresaF);
-  });
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="responses"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("dashboard")},{label:"Respuestas"}]}/>
-            <div className="flex items-center justify-between mt-3">
-              <div><h1 className="text-xl font-semibold tracking-tight">Respuestas</h1><p className="text-sm text-muted-foreground mt-0.5">Propuestas de importadores a tus cotizaciones.</p></div>
-              {responses.filter(r=>r.status==="resp-nueva").length>0&&<span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs font-medium text-orange-700"><Bell className="w-3.5 h-3.5"/>{responses.filter(r=>r.status==="resp-nueva").length} nuevas</span>}
-            </div>
-          </div>
-          <Card padding="sm"><div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[160px]"><Input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-            <div className="w-36"><Select value={statusF} onChange={e=>setStatusF(e.target.value)}><option value="">Estado</option><option value="resp-nueva">Nueva</option><option value="resp-vista">Vista</option><option value="resp-aceptada">Aceptada</option><option value="resp-rechazada">Rechazada</option></Select></div>
-            <div className="w-44"><Select value={empresaF} onChange={e=>setEmpresaF(e.target.value)}><option value="">Empresa</option>{importers.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Select></div>
-            {(search||statusF||empresaF)&&<Button variant="ghost" size="sm" onClick={()=>{setSearch("");setStatusF("");setEmpresaF("");}}>Limpiar</Button>}
-          </div></Card>
-          <div>
-            <p className="text-sm text-muted-foreground mb-3"><span className="font-medium text-foreground">{filtered.length}</span> respuestas</p>
-            {filtered.length===0?<Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ClipboardList className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin respuestas</p><p className="text-sm text-muted-foreground">No hay propuestas registradas en backend para tus cotizaciones.</p></div></Card>:(
-              <div className="space-y-3">{filtered.map(r=>{const imp=importers.find(i=>i.id===r.importerId)||importers[0]||null;const q=quotes.find(q=>q.id===r.quoteId)||quotes[0]||null;return(
-                <Card key={r.id} padding="md" className="hover:shadow-md transition-all">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <Avatar initials={imp?.initials || "IM"} size="xl" color={imp?.color || "bg-slate-600"}/>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap"><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><Badge variant={r.status}/>{imp?.verified&&<span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium"><BadgeCheck className="w-2.5 h-2.5"/>Verificada</span>}</div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"} · {imp?.advisor.name || "Asesor"}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Cotización: <span className="font-mono font-medium text-foreground">{q?.code || "N/A"}</span></p>
-                        <div className="flex gap-4 mt-2 flex-wrap">{[["Precio",r.price],["Plazo",r.deliveryTime],["Incoterm",r.incoterm],["Fecha",r.date]].map(([k,v])=><div key={k}><span className="text-xs text-muted-foreground">{k}: </span><span className="text-xs font-semibold">{v}</span></div>)}</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 flex-wrap"><Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewDetail(r.id,"responses")}>Ver detalle</Button><Button variant="secondary" size="sm" icon={<GitCompare className="w-3 h-3"/>} disabled={!r.quoteId} title="Comparar todas las propuestas de esta cotizacion" onClick={()=>r.quoteId&&onViewQuote(r.quoteId)}>Comparar</Button><ContactBtn type="chat" size="sm" label="Contactar" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>onViewDetail(r.id,"responses")})}/></div>
-                  </div>
-                </Card>
-              );})}</div>
-            )}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ORDERS SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[];importers:Importer[]}) {
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="orders"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div><Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key || "dashboard")},{label:"Operaciones"}]}/><h1 className="text-xl font-semibold tracking-tight mt-3">Operaciones</h1></div>
-          <PendientesDeResena/>
-          {orders.length===0 ? (
-            <Card padding="lg" className="border-dashed"><div className="flex flex-col items-center text-center py-8 gap-2"><ShoppingCart className="w-10 h-10 text-muted-foreground/30"/><p className="font-medium">Sin operaciones</p><p className="text-sm text-muted-foreground">No tienes operaciones activas en backend.</p></div></Card>
-          ) : (
-          <div className="space-y-3">{orders.map(ord=>{const imp=importers.find(i=>i.id===ord.importerId);return(
-            <Card key={ord.id} padding="md" className="hover:shadow-md transition-all">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex items-start gap-3 flex-1">
-                  <Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap"><span className="font-mono font-semibold">{ord.code}</span><Badge variant="active-order"/></div>
-                    <p className="text-sm font-medium mt-0.5">{ord.product}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{imp?.name || "Empresa importadora"} · {ord.quantity}</p>
-                    <div className="flex gap-4 mt-2 flex-wrap">{[["Valor",ord.totalValue],["Creada",ord.created],["Estimada",ord.estimated]].map(([k,v])=><div key={k}><span className="text-xs text-muted-foreground">{k}: </span><span className="text-xs font-semibold">{v}</span></div>)}</div>
-                  </div>
-                </div>
-                <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(ord.id)}>Ver detalle</Button>
-              </div>
-            </Card>
-          );})}</div>
-          )}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ORDER DETAIL
-// ─────────────────────────────────────────────────────────────────────────────
-function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advisorName,onViewImporterProfile,canManageOrder,esCliente=false,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];advisorName?:string;onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;esCliente?:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
-  const [isAdvancing,setIsAdvancing]=useState(false);
-  // Lo informa la tarjeta «Pago de la orden»: sin pago confirmado no hay producción.
-  const [pagoConfirmado,setPagoConfirmado]=useState<boolean|null>(null);
-  const [advanceMessage,setAdvanceMessage]=useState("");
-  const [advanceError,setAdvanceError]=useState("");
-  // Anclas de las tarjetas a las que saltan los botones de la cabecera: la
-  // información ya está en esta misma pantalla, solo hay que llevar al
-  // usuario hasta ella.
-  const documentosRef=useRef<HTMLDivElement|null>(null);
-  const seguimientoRef=useRef<HTMLDivElement|null>(null);
-  const irA=(ref:React.RefObject<HTMLDivElement|null>)=>ref.current?.scrollIntoView({behavior:"smooth",block:"start"});
-  if(isLoading){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="orders"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin"/>Cargando detalle de la operación...</div></Card></main>
-        </div>
-      </div>
-    );
-  }
-
-  if(!order){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="orders"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6"><Card padding="lg" className="border-dashed"><p className="text-sm text-muted-foreground text-center">Operación no disponible.</p></Card></main>
-        </div>
-      </div>
-    );
-  }
-
-  const imp=importers.find(i=>i.id===order.importerId);
-  const resolvedAdvisorName = order.advisorName || advisorName;
-  const advisor=resolvedAdvisorName
-    ? {...(imp?.advisor || {initials: initialsFromName(resolvedAdvisorName), color: "bg-slate-500", role: "Asesor", email: ""}), name: resolvedAdvisorName}
-    : imp?.advisor;
-  const relChatId = order.conversationId;
-  const history = order.history;
-  const documents = order.documents;
-
-  const mapOrderStateIcon = (state: string) => {
-    const normalized = String(state || "").toLowerCase();
-    if (normalized.includes("produ")) return <Factory className="w-3.5 h-3.5"/>;
-    if (normalized.includes("inspec")) return <PackageCheck className="w-3.5 h-3.5"/>;
-    if (normalized.includes("carg")) return <Boxes className="w-3.5 h-3.5"/>;
-    if (normalized.includes("transit") || normalized.includes("envio")) return <Ship className="w-3.5 h-3.5"/>;
-    if (normalized.includes("aduan")) return <Anchor className="w-3.5 h-3.5"/>;
-    if (normalized.includes("bodega")) return <Warehouse className="w-3.5 h-3.5"/>;
-    if (normalized.includes("entrega")) return <Navigation2 className="w-3.5 h-3.5"/>;
-    return <CheckCircle2 className="w-3.5 h-3.5"/>;
-  };
-
-  const timelineStages: TimelineStage[] = buildLifecycleTimeline(
-    inferLifecycleStageIndex(order.status || history[history.length - 1]?.estado),
-  );
-
-  const siguienteEstadoOrden = nextOrderState(order.status);
-  const esperaPago = order.status==="cotizacion_aceptada"&&pagoConfirmado!==true;
-
-  async function avanzarEstado(){
-    if(!order||!siguienteEstadoOrden)return;
-    setAdvanceMessage("");
-    setAdvanceError("");
-    setIsAdvancing(true);
-    try{
-      await onUpdateOrderStatus(order.id, siguienteEstadoOrden.key);
-      setAdvanceMessage(`Operación marcada como «${siguienteEstadoOrden.label}».`);
-    }catch(error){
-      setAdvanceError(error instanceof Error&&error.message.trim()?error.message:"No se pudo actualizar el estado.");
-    }finally{
-      setIsAdvancing(false);
-    }
-  }
-
-  const historyEvents = history.length > 0
-    ? history
-    : [{ estado: order.status || "Sin estado", fecha: new Date().toISOString(), nota: null }];
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="orders"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Operaciones",onClick:onBack},{label:order.code}]}/>
-          <Card padding="md" className="mt-4 mb-5">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3 flex-wrap"><span className="font-mono text-lg font-semibold">{order.code}</span><Badge variant="active-order"/></div>
-                <div className="flex gap-6 flex-wrap">{[["Empresa",imp?.name || "Empresa importadora"],["Asesor",advisor?.name || "Asesor"],["Creada",order.created],["Entrega estimada",order.estimated]].map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium">{v}</p></div>)}</div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="chat" label="Contactar asesor" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
-                <Button variant="secondary" size="sm" icon={<FolderOpen className="w-3.5 h-3.5"/>} onClick={()=>irA(documentosRef)}>Ver documentos</Button>
-                {relChatId&&<Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Chat</Button>}
-                <Button variant="primary" size="sm" icon={<Navigation2 className="w-3.5 h-3.5"/>} onClick={()=>irA(seguimientoRef)}>Ver seguimiento</Button>
-              </div>
-            </div>
-          </Card>
-          <div className="flex gap-5 items-start">
-            <div className="flex-1 min-w-0 space-y-5">
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Resumen comercial</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">{[["Producto",order.product],["Cantidad",order.quantity],["Precio final",order.unitPrice],["Incoterm",order.incoterm],["Shipping mark",order.shippingMark||"Sin marca"],["Puerto de origen",order.originPort],["Puerto de destino",order.destPort],["Valor total",order.totalValue]].map(([k,v])=>(
-                  <div key={k} className={k==="Puerto de origen"||k==="Puerto de destino"||k==="Producto"?"col-span-2 sm:col-span-1":""}><p className="text-xs text-muted-foreground">{k}</p><p className={clsx("text-sm font-medium mt-0.5",k==="Valor total"&&"text-primary dark:text-accent font-semibold")}>{v}</p></div>
-                ))}</div>
-                <div className="mt-4 pt-3 border-t border-border flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-muted-foreground"/><span className="text-xs text-muted-foreground">Cotización origen:</span><span className="text-xs font-mono font-medium">{order.quoteCode}</span></div>
-              </Card>
-              <PagoOrden ordenId={order.id} esCliente={esCliente} onPagoConfirmado={setPagoConfirmado}/>
-              <div ref={seguimientoRef}>
-                <Card padding="md">
-                  <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-                    <h3 className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary dark:text-accent"/>Estado logístico</h3>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent">{orderStateLabel(order.status)}</span>
-                  </div>
-                  <Timeline stages={timelineStages}/>
-                  {/* La empresa y el asesor asignado mueven el embarque desde
-                      aquí; antes solo se podía desde el panel del chat. */}
-                  {canManageOrder&&(
-                    <div className="mt-5 pt-4 border-t border-border">
-                      {siguienteEstadoOrden?(
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Button variant="primary" size="sm" loading={isAdvancing} disabled={esperaPago}
-                            onClick={()=>{void avanzarEstado();}}>
-                            Marcar «{siguienteEstadoOrden.label}»
-                          </Button>
-                          <p className="text-xs text-muted-foreground">
-                            {esperaPago
-                              ?"Primero confirma el pago del cliente en «Pago de la orden»."
-                              :"El cliente lo verá en el chat de seguimiento y recibirá el aviso."}
-                          </p>
-                        </div>
-                      ):(
-                        <p className="text-xs text-muted-foreground">
-                          {order.status==="entregado"?"La operación está entregada: no hay más pasos.":"Sin siguiente estado disponible."}
-                        </p>
-                      )}
-                      {advanceMessage&&<p className="text-xs text-emerald-600 mt-2">{advanceMessage}</p>}
-                      {advanceError&&<p className="text-xs text-destructive mt-2">{advanceError}</p>}
-                    </div>
-                  )}
-                </Card>
-              </div>
-              <Card padding="none">
-                <div ref={documentosRef} className="px-5 py-3.5 border-b border-border flex items-center justify-between"><h3 className="text-sm font-semibold flex items-center gap-2"><FolderOpen className="w-4 h-4 text-primary dark:text-accent"/>Documentos</h3><span className="text-xs text-muted-foreground">{documents.filter(d=>d.status==="Disponible").length} disponibles</span></div>
-                <div className="divide-y divide-border/60">{documents.map(doc=>(
-                  <div key={doc.name} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-3"><FileCheck className={clsx("w-4 h-4 flex-shrink-0",doc.status==="Disponible"?"text-primary":"text-muted-foreground/40")}/><div><p className="text-sm font-medium">{doc.name}</p><p className="text-xs text-muted-foreground">{doc.date||orderDocumentTypeLabel(doc.type)}</p></div></div>
-                    <div className="flex items-center gap-2">
-                      <span className={clsx("text-xs font-medium px-2 py-0.5 rounded",doc.status==="Disponible"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500")}>{doc.status}</span>
-                      {doc.status==="Disponible"&&<><Button variant="ghost" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} className="text-xs" onClick={()=>{void abrirArchivoEnPestana(doc.url);}}>Ver</Button><Button variant="ghost" size="sm" icon={<Download className="w-3.5 h-3.5"/>} className="text-xs" onClick={()=>{void descargarArchivo(doc.url, doc.name);}}>Descargar</Button></>}
-                    </div>
-                  </div>
-                ))}</div>
-                {documents.length===0&&<div className="py-10 text-center text-sm text-muted-foreground">No hay documentos adjuntos para esta operación.</div>}
-              </Card>
-              <Card padding="md"><h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-primary dark:text-accent"/>Historial de eventos</h3>
-                <div className="relative"><div className="absolute left-3 top-3 bottom-3 w-0.5 bg-border"/>
-                  <div className="space-y-1">{historyEvents.map((ev,i)=>{
-                    // Los eventos guardan el estado real de la orden
-                    // (`en_produccion`), no las claves de la línea comercial.
-                    const label=orderStateLabel(ev.estado);
-                    return (
-                    <div key={`${ev.estado}-${ev.fecha}-${i}`} className="flex items-start gap-3"><div className="w-6 h-6 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center flex-shrink-0 z-10 text-primary">{mapOrderStateIcon(ev.estado)}</div><div className="pb-4 flex-1"><div className="flex items-center justify-between"><p className="text-sm">{label}</p><p className="text-xs text-muted-foreground">{formatShortDate(ev.fecha)}</p></div>{ev.nota&&<p className="text-xs text-muted-foreground mt-1">{ev.nota}</p>}</div></div>
-                    );
-                  })}</div>
-                </div>
-              </Card>
-            </div>
-            <div className="w-64 flex-shrink-0 hidden lg:block space-y-4">
-              <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa importadora</h3>
-                <div className="flex items-start gap-3 mb-4"><Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/><div><div className="flex items-start gap-1"><p className="font-semibold text-sm">{imp?.name || "Empresa importadora"}</p>{imp?.verified&&<BadgeCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5"/>}</div><p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Sin especialidad"}</p></div></div>
-                <div className="space-y-1.5 pt-3 border-t border-border mb-3">{[["Años en plataforma","5+"],["Proyectos",imp?.projects?.toString() || "N/D"],["Resp. prom.",imp?.responseTime || "N/D"]].map(([k,v])=><div key={k} className="flex justify-between"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium">{v}</span></div>)}</div>
-                <Button variant="secondary" size="sm" fullWidth disabled={!imp?.id} onClick={()=>imp?.id&&onViewImporterProfile(imp.id)}>Ver perfil</Button>
-              </Card>
-              <Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Asesor</h3>
-                <div className="flex items-start gap-2.5 mb-3"><Avatar initials={advisor?.initials || "AS"} size="lg" color={advisor?.color || "bg-slate-500"}/><div><p className="font-semibold text-sm">{advisor?.name || "Asesor"}</p><p className="text-xs text-muted-foreground mt-0.5">{advisor?.role || "Asesor"}</p></div></div>
-                <div className="flex gap-1.5">
-                  <ContactBtn type="chat" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
-                  <ContactBtn type="email" label="Email" size="sm" className="flex-1 justify-center" onClick={()=>openSmartContact({type:"email",email:advisor?.email,onOpenChat:()=>{if(relChatId)onOpenChat(relChatId);}})}/>
-                </div>
-              </Card>
-              <Card padding="md" className="border-purple-100 bg-purple-50/40"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estado actual</h3><div className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"/><span className="text-sm font-semibold text-purple-700">{order.status ? orderStateLabel(order.status) : "En seguimiento"}</span></div><p className="text-xs text-muted-foreground">Última actualización: {history.length>0?formatShortDate(history[history.length-1].fecha):"Reciente"}</p></Card>
-              {relChatId&&<Card padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Chat de esta operación</h3><p className="text-xs text-muted-foreground mb-3">Abrir conversación asociada a la operación.</p><Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChatId)}>Abrir chat</Button></Card>}
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHATS SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FileAttachmentBubble({file}:{file:MsgFile}) {
   const icons:Record<MsgFileType,{icon:React.ReactNode;bg:string;label:string}> = {
     pdf:   {icon:<FileIcon className="w-4 h-4 text-red-600"/>,   bg:"bg-red-50 border-red-100",   label:"PDF"},
@@ -3973,7 +2174,7 @@ const ETIQUETA_ROL_CONTRAPARTE: Record<string, string> = {
 
 /** Etiqueta legible de un rol; devuelve el valor crudo si no se conoce. */
 function etiquetaDeRol(rol:string|undefined|null):string{
-  const clave=String(rol??"").trim();
+  const clave=String(rol ?? "").trim();
   if(!clave)return "";
   return ETIQUETA_ROL_CONTRAPARTE[clave]||clave;
 }
@@ -4082,7 +2283,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
   const resourcePreviewRegistryRef=useRef<Record<string,string>>({});
   const attachmentThumbLoadingRef=useRef<Record<string,boolean>>({});
   const attachmentThumbRegistryRef=useRef<Record<string,string>>({});
-  const emojiOptions=["😀","😎","👍","✅","📦","🚢","💬","📌","🎯","🤝","🙏","🔥"];
+  const emojiOptions=["ðŸ˜€","ðŸ˜Ž","ðŸ‘","âœ…","ðŸ“¦","ðŸš¢","ðŸ’¬","ðŸ“Œ","ðŸŽ¯","ðŸ¤","ðŸ™","ðŸ”¥"];
 
   useEffect(()=>{
     setMsgs(messagesByConversation);
@@ -4129,9 +2330,10 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
 
   const filteredConvs=conversations.filter(c=>{
     // Los chats de los asesores no se mezclan con los propios: van en su
-    // pestaña, agrupados por asesor.
+    // pestaña, agrupados por asesor. La pestaña sigue siendo un filtro
+    // específico, pero sus conversaciones también deben aparecer en "Todas":
+    // el contador global se calcula sobre todos los hilos cargados.
     if(filter==="asesores")return Boolean(c.atiendeNombre)&&(!searchConv||[c.atiendeNombre,c.refCode,c.counterpartName||""].some(t=>t.toLowerCase().includes(searchConv.toLowerCase())));
-    if(c.atiendeNombre)return false;
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
     if(filter==="interno"&&c.type!=="interno")return false;
@@ -4164,7 +2366,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
    */
   function renderListaEquipo(){
     const q=searchConv.trim().toLowerCase();
-    const rolEquipo=(rol:string,nivel?:number|null)=>rol==="soporte"?`Soporte N${nivel??1}`:rol==="designer"?"Diseño":"Administración";
+    const rolEquipo=(rol:string,nivel?:number|null)=>rol==="soporte"?`Soporte N${nivel ? 1 : 0}`:rol==="designer"?"Diseño":"Administración";
     const salas=conversations.filter(c=>c.counterpartRole==="plataforma");
     const hiloDe=(id:string)=>conversations.find(c=>c.counterpartId===id&&c.counterpartRole!=="plataforma");
     const soloNoLeidas=filter==="no-leidas";
@@ -4185,7 +2387,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
             {unread>0&&<span className="w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">{unread}</span>}
           </div>
           <p className="text-[11px] text-muted-foreground truncate">{detalle}</p>
-          <p className="text-[11px] text-muted-foreground/80 truncate">{cargando?"Abriendo…":ultimo||"Escribirle en privado"}</p>
+          <p className="text-[11px] text-muted-foreground/80 truncate">{cargando?"Abriendoâ€¦":ultimo||"Escribirle en privado"}</p>
         </div>
       </button>
     );
@@ -4367,7 +2569,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
     && (!estadoPropuestaEmpresa || estadoPropuestaEmpresa==="borrador" || estadoPropuestaEmpresa==="pendiente");
   const textoBotonPropuesta = estadoPropuestaEmpresa==="pendiente" ? "Editar propuesta"
     : estadoPropuestaEmpresa==="borrador" ? "Revisar borrador" : "Nueva propuesta";
-  // Última versión de cada propuesta en el hilo: las anteriores salen como reemplazadas.
+  // ?ltima versión de cada propuesta en el hilo: las anteriores salen como reemplazadas.
   const versionVigente = new Map<string,number>();
   for(const m of (selectedId?msgs[selectedId]||[]:[])){
     if(m.proposal){
@@ -4870,7 +3072,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
         <AppHeader user={USER} sb={sb}/>
         <div className="flex-1 flex overflow-hidden">
 
-          {/* ── Left: conversation list ─────────────────────────────────── */}
+          {/* â”€â”€ Left: conversation list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="w-72 flex-shrink-0 border-r border-border bg-white flex flex-col">
             {modoEquipo&&(
               <div className="px-3 pt-3 pb-2 border-b border-border space-y-2">
@@ -4907,7 +3109,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                 const companyName = c.type==="interno"
                   ? (c.counterpartName || "Equipo")
                   : c.type==="soporte"
-                    ? [c.counterpartName, etiquetaDeRol(c.requesterRole)].filter(Boolean).join(" · ")
+                  ? [c.counterpartName, etiquetaDeRol(c.requesterRole)].filter(Boolean).join(" · ")
                     : (c.counterpartName || c.importerName || cImp?.name || "Empresa importadora");
                 const urgencia = c.type==="soporte" ? URGENCIA_SOPORTE[c.urgency||""] : undefined;
                 const isSelected=selectedId===c.id;
@@ -4966,7 +3168,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
             </div>
           </div>
 
-          {/* ── Center: chat area ───────────────────────────────────────── */}
+          {/* â”€â”€ Center: chat area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {!conv?(
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-8">
               <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
@@ -5140,7 +3342,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                             <span className="text-[10px] text-muted-foreground">{msg.time}</span>
                             {isClient&&(
                               <span className={clsx("text-[10px]",msg.read?"text-primary":"text-muted-foreground")}>
-                                {msg.read?"✓✓":"✓"}
+                                {msg.read?"âœ“âœ“":"âœ“"}
                               </span>
                             )}
                           </div>
@@ -5280,7 +3482,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
             </div>
           )}
 
-          {/* ── Right: context panel ────────────────────────────────────── */}
+          {/* â”€â”€ Right: context panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {conv&&showCtx&&(
             <div className="w-56 flex-shrink-0 border-l border-border bg-white overflow-y-auto flex flex-col">
               <div className="px-4 py-3 border-b border-border">
@@ -5301,13 +3503,13 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                     </p>
 
                     {[
-                      ["Asunto", conv.subject || "—"],
-                      ["Urgencia", URGENCIA_SOPORTE[conv.urgency || ""]?.label || "—"],
-                      ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "—"],
+                      ["Asunto", conv.subject || "?"],
+                      ["Urgencia", URGENCIA_SOPORTE[conv.urgency || ""]?.label || "?"],
+                      ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "?"],
                       ["Atiende", conv.agentName || "Sin asignar"],
-                      ["Solicita", conv.counterpartName || "—"],
-                      ["Perfil", etiquetaDeRol(conv.requesterRole) || "—"],
-                      ...(conv.closed ? [["Cerró", conv.closedBy || "—"]] : []),
+                      ["Solicita", conv.counterpartName || "?"],
+                      ["Perfil", etiquetaDeRol(conv.requesterRole) || "?"],
+                      ...(conv.closed ? [["Cerró", conv.closedBy || "?"]] : []),
                       ...(conv.rating ? [["Calificación", `${conv.rating} de 5`]] : []),
                     ].map(([k, v]) => (
                       <div key={k} className="flex justify-between items-start gap-1">
@@ -5356,7 +3558,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                           value={resolucionTicket}
                           onChange={(e)=>setResolucionTicket(e.target.value)}
                           rows={3}
-                          placeholder="Qué se hizo para resolverlo…"
+                          placeholder="Qué se hizo para resolverloâ€¦"
                           className="w-full resize-none rounded-md border border-rose-200 dark:border-border px-2 py-1.5 text-[11px] bg-white dark:bg-background text-foreground"
                         />
                         <Button 
@@ -5391,7 +3593,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                               )}
                               aria-label={`${n} de 5`}
                             >
-                              ★
+                              â˜…
                             </button>
                           ))}
                         </div>
@@ -5430,7 +3632,7 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
                   <div className="rounded-lg bg-amber-50 border border-amber-200 dark:!bg-accent/15 px-2.5 py-2">
                     <p className="text-[10px] font-semibold text-amber-800 dark:text-accent uppercase tracking-wide mb-1">Canal interno</p>
                     <p className="text-[11px] text-amber-900 dark:text-accent leading-snug">
-                      Coordinación entre la empresa y {conv.counterpartName||"el asesor"}. Úsalo para indicar
+                      Coordinación entre la empresa y {conv.counterpartName||"el asesor"}. ?salo para indicar
                       cuándo actualizar el estado de una operación. El comprador no ve estos mensajes.
                     </p>
                   </div>
@@ -5835,9 +4037,9 @@ function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onVie
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // DOCUMENTOS + PAGOS placeholders
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DocumentosScreen({
   sb,
   explorer,
@@ -6920,7 +5122,7 @@ function FooterPublico({ onLanding, onPlanes, onPolicy, onTendencias }: FooterPu
           <span className="font-semibold text-white/70">Aviso legal: </span>
           Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
         </p>
-        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
+        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">? 2026 Zarpi. Todos los derechos reservados.</p>
         <div className="flex justify-center border-t border-white/10 pt-5">
           <PublicSicLogo />
         </div>
@@ -7008,1267 +5210,11 @@ function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:strin
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // NEW QUOTE WIZARD
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STEPS=["Modalidad","Información del producto","Confirmación"];
-function Stepper({current}:{current:number}) {
-  return (
-    <div className="flex items-center">{STEPS.map((label,i)=>{
-      const step=i+1;const done=step<current;const active=step===current;
-      return (<div key={step} className="flex items-center flex-1 last:flex-none">
-        <div className="flex flex-col items-center gap-1.5">
-          <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300",done?"bg-primary dark:bg-accent text-white dark:text-black":active?"bg-primary dark:bg-accent text-white dark:text-black ring-4 ring-primary/20 dark:ring-accent/20":"bg-muted text-muted-foreground border border-border")}>{done?<Check className="w-4 h-4"/>:step}</div>
-          <span className={clsx("text-xs font-medium whitespace-nowrap hidden sm:block",active?"text-primary dark:text-accent":done?"text-foreground":"text-muted-foreground")}>{label}</span>
-        </div>
-        {i<STEPS.length-1&&<div className={clsx("flex-1 h-0.5 mx-2 mb-4 transition-all duration-300",step<current?"bg-primary dark:bg-accent":"bg-border")}/>}
-      </div>);
-    })}</div>
-  );
-}
-
-interface QuoteFormState {productName:string;description:string;referenceLink:string;productPhotoUrls:string[];country:string;productLine:string;quality:string;customization:string;purpose:"ecommerce"|"corporativo";minQuantity:string;unit:"unidades"|"m3";targetPrice:string;targetPriceCurrency:string;incoterm:string;notes:string;shippingMarkSufijo:string;deliveryCity:string;}
-/** Igual que `MAX_FOTOS_PRODUCTO` en backend/schemas/cotizacion.py. */
-const MAX_FOTOS_PRODUCTO=10;
-const EMPTY_FORM:QuoteFormState={productName:"",description:"",referenceLink:"",productPhotoUrls:[],country:"",productLine:"",quality:"",customization:"",purpose:"ecommerce",minQuantity:"",unit:"unidades",targetPrice:"",targetPriceCurrency:"USD",incoterm:"DDP",notes:"",shippingMarkSufijo:"",deliveryCity:""};
-const PRICE_CURRENCIES=["USD","EUR","COP","MXN","CLP","PEN","GBP"];
-const TIER_ORDER:Record<string,number>={Bronze:0,Silver:1,Gold:2,"Élite":3};
-const POSITIVE_DECIMAL_INPUT = /^\d*\.?\d*$/;
-function normalizeTargetPriceInput(value: string): string {
-  const normalized = value.replace(",", ".");
-  return POSITIVE_DECIMAL_INPUT.test(normalized) ? normalized : "";
-}
-function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
-
-function Step1({modalidad,setModalidad,selectedId,setSelectedId,preselectedId,importers,permiteAbierta=true}:{modalidad:"dirigida"|"abierta"|null;setModalidad:(m:"dirigida"|"abierta")=>void;selectedId:string|null;setSelectedId:(id:string|null)=>void;preselectedId?:string;importers:Importer[];permiteAbierta?:boolean}) {
-  const [cs,setCs]=useState("");const[cc,setCc]=useState("");const[ccat,setCcat]=useState("");const[cr,setCr]=useState("");
-  const fi=importers.filter(imp=>{const ms=!cs||imp.name.toLowerCase().includes(cs.toLowerCase());const mc=!cc||imp.country===cc;const mcat=!ccat||imp.categories.some(c=>c.toLowerCase().includes(ccat.toLowerCase()));const mr=!cr||(imp.certs??[]).length>0;return ms&&mc&&mcat&&mr;});
-  const hasF=cs||cc||ccat||cr;
-
-  return (
-    <div className="space-y-6">
-      {/* SELECCIÓN DE MODALIDAD (la abierta se apaga en Admin › Módulos) */}
-      {!permiteAbierta && (
-        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Por ahora las cotizaciones se envían a una empresa importadora que elijas. Las abiertas no están disponibles.
-        </p>
-      )}
-      <div className={clsx("grid grid-cols-1 gap-4", permiteAbierta && "sm:grid-cols-2")}>
-        {[
-          {
-            m: "dirigida" as const,
-            icon: Building2,
-            title: "Cotización dirigida",
-            desc: "Elige una empresa importadora específica para enviar directamente tu solicitud.",
-          },
-          {
-            m: "abierta" as const,
-            icon: Globe,
-            title: "Cotización abierta",
-            desc: "La solicitud se distribuirá automáticamente entre importadores compatibles.",
-          },
-        ].filter(({ m }) => permiteAbierta || m !== "abierta").map(({ m, icon: Icon, title, desc }) => {
-          const seleccionada = modalidad === m;
-          return (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setModalidad(m);
-                if (m === "abierta") setSelectedId(null);
-              }}
-              className={clsx(
-                "p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md",
-                seleccionada
-                  ? "border-primary dark:border-accent bg-primary/5 dark:bg-accent/10 shadow-md text-foreground"
-                  : "border-border bg-card hover:border-primary/40 dark:hover:border-accent/50 text-foreground"
-              )}
-            >
-              <div
-                className={clsx(
-                  "w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-colors",
-                  seleccionada
-                    ? "bg-primary dark:bg-accent"
-                    : "bg-muted group-hover:bg-primary/10 dark:group-hover:bg-accent/10"
-                )}
-              >
-                <Icon
-                  className={clsx(
-                    "w-5 h-5 transition-colors",
-                    seleccionada
-                      ? "text-primary-foreground dark:text-accent-foreground"
-                      : "text-muted-foreground"
-                  )}
-                />
-              </div>
-
-              <h3 className="font-semibold text-sm mb-1.5">{title}</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-
-              {seleccionada && (
-                <div className="mt-3 flex items-center gap-1 text-xs font-medium text-primary dark:text-accent">
-                  <Check className="w-3.5 h-3.5" />
-                  Seleccionada
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* SECCIÓN DE IMPORTADORAS */}
-      {modalidad === "dirigida" && (
-        <div>
-          <h3 className="text-sm font-semibold mb-3 text-foreground">Selecciona una importadora</h3>
-
-          {/* FILTROS Y BÚSQUEDA */}
-          <Card padding="sm" className="mb-4 bg-card border-border">
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[140px]">
-                <Input
-                  placeholder="Buscar empresa..."
-                  value={cs}
-                  onChange={(e) => setCs(e.target.value)}
-                  prefix={<Search className="w-4 h-4 text-muted-foreground" />}
-                  className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-                />
-              </div>
-              <div className="w-32">
-                <Select
-                  value={cc}
-                  onChange={(e) => setCc(e.target.value)}
-                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
-                >
-                  <option value="">País</option>
-                  {[...new Set(importers.map((i) => i.country))].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-36">
-                <Select
-                  value={ccat}
-                  onChange={(e) => setCcat(e.target.value)}
-                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
-                >
-                  <option value="">Categoría</option>
-                  {[...new Set(importers.flatMap((i) => i.categories))].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-44">
-                <Select
-                  value={cr}
-                  onChange={(e) => setCr(e.target.value)}
-                  className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
-                >
-                  <option value="">Certificación</option>
-                  <option value="certificadas">Con certificaciones</option>
-                </Select>
-              </div>
-              {hasF && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<RotateCcw className="w-3.5 h-3.5" />}
-                  onClick={() => {
-                    setCs("");
-                    setCc("");
-                    setCcat("");
-                    setCr("");
-                  }}
-                  className="hover:text-primary dark:hover:text-accent"
-                >
-                  Limpiar
-                </Button>
-              )}
-            </div>
-          </Card>
-
-          {/* TARJETAS DE IMPORTADORAS */}
-          {fi.length === 0 ? (
-            <Card padding="lg" className="border-dashed border-border bg-card">
-              <div className="py-6 text-center">
-                <p className="text-sm text-muted-foreground">No se encontraron empresas</p>
-              </div>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {fi.map((imp) => {
-                const sel = selectedId === imp.id;
-                return (
-                  <div
-                    key={imp.id}
-                    onClick={() => setSelectedId(sel ? null : imp.id)}
-                    className={clsx(
-                      "relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 bg-card text-card-foreground",
-                      sel
-                        ? "border-primary dark:border-accent shadow-lg"
-                        : "border-border hover:border-primary/40 dark:hover:border-accent/50 hover:shadow-md"
-                    )}
-                  >
-                    {/* Checkbox badge de selección */}
-                    {sel && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary dark:bg-accent flex items-center justify-center">
-                        <Check className="w-3 h-3 text-primary-foreground dark:text-accent-foreground" />
-                      </div>
-                    )}
-
-                    {/* Info de la empresa */}
-                    <div className="flex items-start gap-3 mb-3">
-                      <Avatar initials={imp.initials} size="lg" color={imp.color} />
-                      <div className="min-w-0">
-                        <div className="flex items-start gap-1">
-                          <p className="font-semibold text-sm leading-tight text-foreground">{imp.name}</p>
-                          {imp.verified && (
-                            <BadgeCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{imp.specialty}</p>
-                        <p className="text-xs text-muted-foreground/70 mt-0.5">{imp.country}</p>
-                      </div>
-                    </div>
-
-                    {/* Métricas */}
-                    <div className="flex items-center justify-between text-xs mb-3">
-                      <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                        {(imp.certs ?? []).length > 0 && (
-                          <>
-                            <Shield className="w-3 h-3" />
-                            <span className="font-medium">{(imp.certs ?? []).length} cert.</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        <span>{imp.responseTime}</span>
-                      </div>
-                    </div>
-
-                    {/* Botón de Selección */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedId(sel ? null : imp.id);
-                      }}
-                      className={clsx(
-                        "w-full h-8 rounded-lg text-xs font-medium transition-all",
-                        sel
-                          ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
-                          : "bg-muted text-foreground hover:bg-primary/10 dark:hover:bg-accent/10"
-                      )}
-                    >
-                      {sel ? "Seleccionada" : "Seleccionar"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RightPanel({
-  step,
-  modalidad,
-  si,
-  form,
-}: {
-  step: number;
-  modalidad: "dirigida" | "abierta" | null;
-  si: Importer | null;
-  form: QuoteFormState;
-}) {
-  const Summary = () => (
-    <Card padding="md" className="bg-card border-border text-card-foreground">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-        Resumen
-      </h3>
-      <div className="space-y-2">
-        {[
-          ["Producto", form.productName],
-          ["País", form.country],
-          ["Calidad", form.quality],
-          [
-            "Cantidad",
-            form.minQuantity
-              ? cantidadConUnidad(form.minQuantity, form.unit)
-              : "",
-          ],
-          ["Incoterm", form.incoterm],
-          ["Ciudad de entrega", form.deliveryCity],
-        ].map(([k, v]) => (
-          <div key={k} className="flex justify-between items-start gap-2">
-            <span className="text-xs text-muted-foreground flex-shrink-0">
-              {k}
-            </span>
-            <span className="text-xs font-medium text-right text-foreground">
-              {v || <span className="italic text-muted-foreground/50">—</span>}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-
-  if (modalidad === "dirigida" && si)
-    return (
-      <div className="space-y-4">
-        {/* Empresa seleccionada */}
-        <Card padding="md" className="bg-card border-border text-card-foreground">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Empresa seleccionada
-          </h3>
-          <div className="flex items-start gap-3 mb-3">
-            <Avatar initials={si.initials} size="xl" color={si.color} />
-            <div>
-              <p className="font-semibold text-sm text-foreground">{si.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {si.specialty}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-1.5 pt-3 border-t border-border">
-            {[
-              ["Miembro desde", si.memberSince],
-              ["Proyectos", si.projects.toString()],
-              ["Respuesta", si.responseTime],
-            ].map(([k, v]) => (
-              <div key={k} className="flex justify-between">
-                <span className="text-xs text-muted-foreground">{k}</span>
-                <span className="text-xs font-medium text-foreground">{v}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Asesor */}
-        <Card padding="md" className="bg-card border-border text-card-foreground">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Asesor
-          </h3>
-          <div className="flex items-start gap-2.5 mb-3">
-            <Avatar
-              initials={si.advisor.initials}
-              size="lg"
-              color={si.advisor.color}
-            />
-            <div>
-              <p className="font-semibold text-sm text-foreground">
-                {si.advisor.name}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {si.advisor.role}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <ContactBtn
-              type="chat"
-              size="sm"
-              className="flex-1 justify-center"
-              onClick={() =>
-                toast.info("El chat se habilita al enviar la cotización.")
-              }
-            />
-          </div>
-        </Card>
-
-        {step >= 2 && <Summary />}
-
-        {step === 3 && (
-          <Card
-            padding="md"
-            className="border-primary/20 bg-primary/5 dark:border-accent/30 dark:bg-accent/10"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary dark:bg-accent animate-pulse" />
-              <span className="text-xs font-semibold text-primary dark:text-accent">
-                Lista para enviar
-              </span>
-            </div>
-          </Card>
-        )}
-      </div>
-    );
-
-  if (modalidad === "abierta") {
-    if (step === 1)
-      return (
-        <Card padding="md" className="bg-card border-border text-card-foreground">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 dark:bg-accent/10 flex items-center justify-center">
-              <Globe className="w-4 h-4 text-primary dark:text-accent" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">
-              ¿Cómo funciona?
-            </h3>
-          </div>
-          <div className="space-y-3">
-            {[
-              {
-                i: Send,
-                t: "Tu solicitud llega a importadores activos compatibles.",
-              },
-              { i: Users, t: "Múltiples empresas enviarán propuestas." },
-              {
-                i: CheckCircle2,
-                t: "Compara y decide con cuál continuar.",
-              },
-            ].map(({ i: Icon, t }, idx) => (
-              <div key={idx} className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-primary/10 dark:bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Icon className="w-3 h-3 text-primary dark:text-accent" />
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      );
-
-    return (
-      <div className="space-y-4">
-        <Summary />
-        {step === 3 && (
-          <Card padding="md" className="bg-card border-border text-card-foreground">
-            <div className="space-y-2">
-              {[
-                ["Empresas potenciales", "23 activas"],
-                ["País", form.country || "—"],
-                ["Categoría", form.productLine || "—"],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <span className="text-xs text-muted-foreground">{k}</span>
-                  <span className="text-xs font-semibold text-foreground">
-                    {v}
-                  </span>
-                </div>
-              ))}
-              <div className="pt-2 border-t border-border flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-orange-400 dark:bg-amber-400 animate-pulse" />
-                <span className="text-xs font-semibold text-orange-600 dark:text-amber-400">
-                  Esperando propuestas
-                </span>
-              </div>
-            </div>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <Card padding="md" className="border-dashed border-border bg-card">
-      <div className="flex flex-col items-center text-center py-4 gap-2">
-        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-          <Building className="w-5 h-5 text-muted-foreground/50" />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Selecciona una modalidad.
-        </p>
-      </div>
-    </Card>
-  );
-}
-
-function Step2({
-  form,
-  setForm,
-  onProductPhotoUploaded,
-  importer,
-}: {
-  form: QuoteFormState;
-  setForm: React.Dispatch<React.SetStateAction<QuoteFormState>>;
-  onProductPhotoUploaded: (fileItem: BackendArchivoItem) => void | Promise<void>;
-  importer: Importer | null;
-}) {
-  const upd = (f: keyof QuoteFormState, v: string) =>
-    setForm((p) => ({ ...p, [f]: v }));
-  const fotos = form.productPhotoUrls;
-  const quitarFoto = (url: string) =>
-    setForm((p) => ({
-      ...p,
-      productPhotoUrls: p.productPhotoUrls.filter((f) => f !== url),
-    }));
-
-  return (
-    <div className="space-y-5">
-      {/* INFORMACIÓN DEL PRODUCTO */}
-      <Card padding="md" className="bg-card border-border text-card-foreground">
-        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-          <Tag className="w-4 h-4 text-primary dark:text-accent" />
-          Información del producto
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-medium mb-1.5 text-foreground">
-              Fotos{" "}
-              <span className="text-xs text-muted-foreground font-normal">
-                (opcional, hasta {MAX_FOTOS_PRODUCTO})
-              </span>
-            </p>
-            <div
-              className={clsx(
-                "border-2 border-dashed rounded-xl p-5 transition-all bg-card",
-                fotos.length
-                  ? "border-border"
-                  : "border-border hover:border-primary/40 dark:hover:border-accent/50 hover:bg-muted/30"
-              )}
-            >
-              {fotos.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  {fotos.map((url, i) => (
-                    <div
-                      key={url}
-                      className="relative group aspect-square rounded-lg overflow-hidden border border-border bg-muted"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void abrirArchivoEnPestana(url);
-                        }}
-                        className="block w-full h-full"
-                        title="Ver foto"
-                      >
-                        <ImagenArchivo
-                          src={url}
-                          alt={`Foto ${i + 1} del producto`}
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                      {i === 0 && (
-                        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                          Portada
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => quitarFoto(url)}
-                        aria-label={`Quitar foto ${i + 1}`}
-                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-3">
-                  <Upload className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Sube fotos reales del producto: el producto, la etiqueta, el
-                    empaque, las medidas
-                  </p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">
-                    PNG, JPG, JPEG o WebP · la primera será la portada
-                  </p>
-                </div>
-              )}
-              <div className="mt-3 flex items-center justify-center gap-3">
-                <DocumentUploadButton
-                  label={fotos.length ? "Agregar fotos" : "Subir fotos"}
-                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                  origen="cotizacion"
-                  multiple
-                  maxArchivos={MAX_FOTOS_PRODUCTO - fotos.length}
-                  disabled={fotos.length >= MAX_FOTOS_PRODUCTO}
-                  onUploaded={onProductPhotoUploaded}
-                  onError={(message) => toast.error(message)}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {fotos.length}/{MAX_FOTOS_PRODUCTO}
-                </span>
-              </div>
-            </div>
-          </div>
-          <Input
-            label="Nombre del producto"
-            placeholder="Ej. Café Verde Colombiano Premium"
-            value={form.productName}
-            onChange={(e) => upd("productName", e.target.value)}
-            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
-          />
-          <Textarea
-            label="Descripción"
-            placeholder="Describe el producto..."
-            rows={3}
-            value={form.description}
-            onChange={(e) => upd("description", e.target.value)}
-            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
-          />
-          <Input
-            label="Link de referencia"
-            placeholder="https://proveedor.com/producto"
-            type="url"
-            value={form.referenceLink}
-            onChange={(e) => upd("referenceLink", e.target.value)}
-            hint="URL del proveedor (opcional)"
-            className="focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:!border-accent dark:focus-within:!ring-accent/20"
-          />
-        </div>
-      </Card>
-
-      {/* CLASIFICACIÓN */}
-      <Card padding="md" className="bg-card border-border text-card-foreground">
-        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-          <Layers className="w-4 h-4 text-primary dark:text-accent" />
-          Clasificación
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="País de importación"
-            value={form.country}
-            onChange={(e) => upd("country", e.target.value)}
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          >
-            <option value="">Seleccionar</option>
-            {COUNTRIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </Select>
-
-          <Select
-            label="Línea de producto"
-            value={form.productLine}
-            onChange={(e) => upd("productLine", e.target.value)}
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          >
-            <option value="">Seleccionar</option>
-            {LINES.map((l) => (
-              <option key={l}>{l}</option>
-            ))}
-          </Select>
-
-          <Select
-            label="Calidad"
-            value={form.quality}
-            onChange={(e) => upd("quality", e.target.value)}
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          >
-            <option value="">Seleccionar</option>
-            {["Económica", "Estándar", "Premium", "Ultra premium"].map((q) => (
-              <option key={q}>{q}</option>
-            ))}
-          </Select>
-
-          <Select
-            label="Personalización"
-            value={form.customization}
-            onChange={(e) => upd("customization", e.target.value)}
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          >
-            <option value="">Seleccionar</option>
-            <option>Estándar</option>
-            <option>Personalización de marca</option>
-            <option>Personalización de diseño completo</option>
-          </Select>
-        </div>
-      </Card>
-
-      {/* IMPORTACIÓN */}
-      <Card padding="md" className="bg-card border-border text-card-foreground">
-        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-primary dark:text-accent" />
-          Importación
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-medium mb-2 text-foreground">Propósito</p>
-            <div className="flex gap-2">
-              {(["ecommerce", "corporativo"] as const).map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => upd("purpose", opt)}
-                  className={clsx(
-                    "flex-1 h-9 rounded-lg border text-sm font-medium transition-all",
-                    form.purpose === opt
-                      ? "bg-primary text-primary-foreground border-primary dark:bg-accent dark:text-accent-foreground dark:border-accent shadow-sm"
-                      : "bg-card text-muted-foreground border-border hover:border-primary/40 dark:hover:border-accent/50"
-                  )}
-                >
-                  {opt === "ecommerce" ? "Ecommerce" : "Corporativo"}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* CANTIDAD MÍNIMA CON SELECTOR DE UNIDADES */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="cantidad-minima"
-                className="text-sm font-medium text-foreground"
-              >
-                Cantidad mínima
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  id="cantidad-minima"
-                  type="number"
-                  min={form.unit === "m3" ? 0.1 : 1}
-                  step={form.unit === "m3" ? 0.1 : 1}
-                  inputMode={form.unit === "m3" ? "decimal" : "numeric"}
-                  placeholder={form.unit === "m3" ? "Ej. 2.5" : "Ej. 500"}
-                  value={form.minQuantity}
-                  onChange={(e) => {
-                    const valor = e.target.value;
-                    upd(
-                      "minQuantity",
-                      form.unit === "m3"
-                        ? valor
-                        : valor === ""
-                        ? ""
-                        : String(Math.max(1, Math.round(Number(valor))))
-                    );
-                  }}
-                  className="w-full h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent pl-3 pr-28 transition-colors"
-                />
-                <div
-                  className="absolute right-1 flex rounded-md border border-border bg-muted/40 p-0.5"
-                  role="radiogroup"
-                  aria-label="Unidad de la cantidad"
-                >
-                  {(["unidades", "m3"] as const).map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.unit === u}
-                      onClick={() =>
-                        setForm((p) => ({
-                          ...p,
-                          unit: u,
-                          minQuantity:
-                            u === "unidades" && p.minQuantity
-                              ? String(Math.max(1, Math.round(Number(p.minQuantity))))
-                              : p.minQuantity,
-                        }))
-                      }
-                      className={clsx(
-                        "h-7 rounded px-2 text-xs font-medium transition-colors",
-                        form.unit === u
-                          ? "bg-primary text-primary-foreground dark:bg-accent dark:text-accent-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {u === "m3" ? "m³" : "Unidades"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {form.unit === "m3"
-                  ? "Volumen en metros cúbicos; admite decimales"
-                  : "Número de piezas o unidades"}
-              </p>
-            </div>
-
-            {/* PRECIO OBJETIVO */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="precio-objetivo"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Precio objetivo
-                </label>
-              </div>
-              <div className="relative flex items-center">
-                <input
-                  id="precio-objetivo"
-                  type="text"
-                  inputMode="decimal"
-                  className="w-full h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/60 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent pl-3 pr-20"
-                  placeholder="Ej. 8.50"
-                  value={form.targetPrice}
-                  onChange={(e) =>
-                    upd("targetPrice", normalizeTargetPriceInput(e.target.value))
-                  }
-                />
-                <div className="absolute right-1">
-                  <select
-                    value={form.targetPriceCurrency}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        targetPriceCurrency: e.target.value,
-                      }))
-                    }
-                    className="h-8 rounded-md border border-border bg-card px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-accent/20 focus:border-primary dark:focus:border-accent appearance-none cursor-pointer pr-6"
-                  >
-                    {PRICE_CURRENCIES.map((currency) => (
-                      <option key={currency} value={currency}>
-                        {currency}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            <Select
-              label="Incoterm"
-              value={form.incoterm || "DDP"}
-              onChange={(e) => upd("incoterm", e.target.value)}
-              className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-            >
-              <option value="">Seleccionar</option>
-              {INCOTERMS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="rounded-lg border border-primary/20 bg-primary/5 dark:border-accent/30 dark:bg-accent/10 px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">
-                Importación incluida:
-              </span>{" "}
-              El proveedor se encargará de la nacionalización de la mercancía antes de
-              realizar la facturación electrónica correspondiente.
-            </p>
-          </div>
-          {/* La empresa arma la entrega de su propuesta con esto: hasta dónde
-              llega su precio y cuánto cuesta llevarlo. */}
-          <Input
-            label="Ciudad de entrega"
-            placeholder="Medellín"
-            maxLength={100}
-            value={form.deliveryCity}
-            onChange={(e) => upd("deliveryCity", e.target.value)}
-            hint="Dónde quieres recibir el producto. Las empresas la usan para calcular la entrega."
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          />
-          <Textarea
-            label="Notas"
-            placeholder="Información adicional..."
-            rows={3}
-            value={form.notes}
-            onChange={(e) => upd("notes", e.target.value)}
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          />
-        </div>
-      </Card>
-
-      {/* SHIPPING MARK */}
-      <Card padding="md" className="bg-card border-border text-card-foreground">
-        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <Package className="w-4 h-4 text-primary dark:text-accent" />
-          Shipping mark
-        </h3>
-        <p className="text-xs text-muted-foreground mb-4">
-          Cómo quieres que se rotulen tus cajas dentro del contenedor de la empresa
-          importadora.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-          <Input
-            label="Tu identificador"
-            placeholder="Prendas Control"
-            maxLength={LONGITUD_MAX_SUFIJO_SHIPPING_MARK}
-            value={form.shippingMarkSufijo}
-            onChange={(e) => upd("shippingMarkSufijo", e.target.value)}
-            hint="Opcional. El nombre con el que reconoces tu carga."
-            className="focus:border-primary focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20 focus-within:border-primary focus-within:ring-primary/20 dark:focus-within:border-accent dark:focus-within:ring-accent/20"
-          />
-          <div className="pt-1">
-            <p className="text-sm font-medium mb-1.5 text-foreground">
-              Marca resultante
-            </p>
-            <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 text-foreground truncate">
-              {componerShippingMark(
-                importer?.shippingMarkPrefix,
-                form.shippingMarkSufijo
-              ) || "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {importer
-                ? importer.shippingMarkPrefix
-                  ? `Prefijo de ${importer.name}: ${importer.shippingMarkPrefix}`
-                  : `${importer.name} todavía no configuró su prefijo.`
-                : "Se completará con el prefijo de la empresa que atienda tu solicitud."}
-            </p>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function Step3Dirigida({form,importer,confirmed,setConfirmed}:{form:QuoteFormState;importer:Importer;confirmed:boolean;setConfirmed:(v:boolean)=>void}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-2"><CheckCircle2 className="w-5 h-5 text-primary"/><h2 className="text-base font-semibold">Revisa tu solicitud</h2></div>
-      {[{title:"Empresa",icon:Building2,rows:[["Importadora",importer.name],["Especialidad",importer.specialty]]},{title:"Asesor",icon:UserRound,rows:[["Nombre",importer.advisor.name],["Cargo",importer.advisor.role]]},{title:"Producto",icon:Tag,rows:[["Nombre",form.productName||"—"],["País",form.country||"—"],["Calidad",form.quality||"—"]]},{title:"Importación",icon:MapPin,rows:[["Propósito",form.purpose==="ecommerce"?"Ecommerce":"Corporativo"],["Cantidad",form.minQuantity?cantidadConUnidad(form.minQuantity,form.unit):"—"],["Precio objetivo",form.targetPrice ? `${form.targetPrice} ${form.targetPriceCurrency || "USD"}` : "—"],["Incoterm",form.incoterm || "DDP"]]}].map(({title,icon:Icon,rows})=>(
-        <Card key={title} padding="md"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5"/>{title}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">{rows.map(([k,v])=><div key={k}><p className="text-xs text-muted-foreground">{k}</p><p className="text-sm font-medium mt-0.5">{v}</p></div>)}</div></Card>
-      ))}
-      <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"/><span className="text-sm leading-relaxed">Confirmo que la información es correcta y autorizo el envío de esta solicitud.</span></label>
-    </div>
-  );
-}
-
-function Step3Abierta() {
-  return (
-    <div className="space-y-4">
-      <div><h2 className="text-base font-semibold">Solicitudes abiertas</h2><p className="text-sm text-muted-foreground mt-1">Una vez envíes, los importadores comenzarán a responder.</p></div>
-      <Card padding="none"><div className="py-16 flex flex-col items-center text-center gap-3"><div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center"><ClipboardList className="w-6 h-6 text-muted-foreground/40"/></div><p className="font-medium text-sm">Todavía no hay propuestas</p><p className="text-xs text-muted-foreground">Aparecerán aquí cuando los importadores respondan.</p></div></Card>
-      <Card padding="md" className="border-primary dark:border-accent bg-primary/50 dark:bg-accent/50"><div className="flex gap-3"><Info className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-xs font-semibold text-primary dark:text-accent mb-1.5">Información importante</p>{["La cotización se convierte en operación al aceptar una propuesta.","La solicitud deja de estar disponible para los demás importadores."].map((t,i)=><div key={i} className="flex items-start gap-1.5"><span className="text-primary dark:text-accent text-xs mt-0.5">•</span><p className="text-xs text-primary dark:text-accent leading-relaxed">{t}</p></div>)}</div></div></Card>
-    </div>
-  );
-}
-
-/** Producto de Tendencias o de un catálogo del que sale una solicitud. */
-interface OrigenSolicitud {
-  origen:"tendencias"|"catalogo";
-  nombre:string;
-  revisarRequisitos:boolean;
-  tendenciaItemId?:string;
-  /** Si la ficha la recomienda una importadora, la solicitud va solo a ella. */
-  importadorId?:string;
-  nombreEmpresa?:string;
-  catalogoProductoId?:string;
-}
-
-function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubmitQuote,creditos,cotizanteTier="Bronze",prefill,origen=null,cobroTokens=false,cotizacionesGratis=0,solicitudesPlan=0,sinPlan=false,permiteAbierta=true,onIrAPagos,onVerPlanes}:{onBack:()=>void;sb:SidebarCtrl;preselectedImporterId?:string;importers:Importer[];onSubmitQuote:(payload:CreateCotizacionPayload,desbloquear?:boolean)=>Promise<void>;creditos:number;cotizanteTier?:string;prefill?:Partial<QuoteFormState>;origen?:OrigenSolicitud|null;cobroTokens?:boolean;cotizacionesGratis?:number;solicitudesPlan?:number;sinPlan?:boolean;permiteAbierta?:boolean;onIrAPagos?:()=>void;onVerPlanes?:()=>void}) {
-  const [step,setStep]=useState(1);
-  // Sin cotizaciones abiertas (Admin › Módulos) la única modalidad es la dirigida.
-  const [modalidad,setModalidad]=useState<"dirigida"|"abierta"|null>(preselectedImporterId||!permiteAbierta?"dirigida":null);
-  const [selectedId,setSelectedId]=useState<string|null>(preselectedImporterId||null);
-  // Producto recomendado por una importadora: la solicitud solo puede ir a ella.
-  const dirigidaFija=origen?.origen==="tendencias"&&!!origen.importadorId&&selectedId===origen.importadorId;
-  // `prefill` llega al duplicar una cotización existente: se copian sus datos
-  // y el usuario solo ajusta lo que cambie.
-  const [form,setForm]=useState<QuoteFormState>({...EMPTY_FORM,...prefill});
-  const [confirmed,setConfirmed]=useState(false);const[stepError,setStepError]=useState("");
-  // El error se pinta al final de la columna con scroll, y quien lo provoca
-  // está abajo, junto al botón de enviar: sin desplazarlo a la vista, un
-  // rechazo del servidor (p. ej. la empresa agotó su cupo diario) parecía un
-  // clic que no hacía nada.
-  const stepErrorRef=useRef<HTMLDivElement|null>(null);
-  useEffect(()=>{if(stepError)stepErrorRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[stepError]);
-  const [desbloquearPorCredito,setDesbloquearPorCredito]=useState(false);
-  const [submitted,setSubmitted]=useState(false);const[submitting,setSubmitting]=useState(false);
-  const [visible,setVisible]=useState(true);const[pendingStep,setPendingStep]=useState<number|null>(null);const[direction,setDirection]=useState<"fwd"|"back">("fwd");
-  const si=importers.find(i=>i.id===selectedId)??null;
-  const tierCotizante = cotizanteTier;
-  const tierRequerido = si?.tierMinimoRequerido || "Bronze";
-  // Con el cobro por tokens, el token de la cotización también desbloquea la empresa de nivel superior.
-  const tierBloqueado = !cobroTokens && Boolean(modalidad === "dirigida" && si && (TIER_ORDER[tierCotizante] ?? 0) < (TIER_ORDER[tierRequerido] ?? 0));
-  const saldoTokens = creditos + cotizacionesGratis + solicitudesPlan;
-  // Se gastan en este orden: gratis del reto, solicitudes del plan y tokens sueltos.
-  const partesSaldo = [
-    cotizacionesGratis > 0 ? `${cotizacionesGratis} ${cotizacionesGratis===1?"cotización gratis":"cotizaciones gratis"}` : "",
-    solicitudesPlan > 0 ? `${solicitudesPlan} ${solicitudesPlan===1?"solicitud":"solicitudes"} del plan` : "",
-    `${creditos} ${creditos===1?"token":"tokens"}`,
-  ].filter(Boolean);
-  const sinTokens = cobroTokens && saldoTokens < 1;
-  const navigate=useCallback((ns:number,dir:"fwd"|"back")=>{setDirection(dir);setVisible(false);setPendingStep(ns);},[]);
-  useEffect(()=>{if(!visible&&pendingStep!==null){const t=setTimeout(()=>{setStep(pendingStep);setPendingStep(null);setVisible(true);setStepError("");},180);return()=>clearTimeout(t);}},[visible,pendingStep]);
-  // El backend exige una descripcion de al menos 10 caracteres. Se comprueba
-  // aqui, en el paso donde se escribe, y no al enviar: llegar al final del
-  // formulario para que la peticion muera en un 422 no ayuda a nadie.
-  const DESCRIPCION_MINIMA=10;
-
-  function goNext(){
-    if(step===1){
-      if(!modalidad){setStepError("Selecciona una modalidad.");return;}
-      if(modalidad==="dirigida"&&!selectedId){setStepError("Selecciona una empresa importadora.");return;}
-    }
-    if(step===2){
-      if(!form.productName.trim()){setStepError("El nombre del producto es requerido.");return;}
-      const descripcion=form.description.trim();
-      if(descripcion.length<DESCRIPCION_MINIMA){
-        setStepError(`Describe el producto con al menos ${DESCRIPCION_MINIMA} caracteres (llevas ${descripcion.length}).`);
-        return;
-      }
-      if(!form.country){setStepError("Selecciona el pais de importacion.");return;}
-      if(!form.productLine){setStepError("Selecciona la linea de producto.");return;}
-      if(!form.incoterm){setStepError("Selecciona el incoterm.");return;}
-      if(form.deliveryCity.trim().length<2){setStepError("Escribe la ciudad de entrega.");return;}
-    }
-    setStepError("");
-    navigate(step+1,"fwd");
-  }
-  async function handleSubmit(forceUnlock = desbloquearPorCredito){
-    if(sinPlan){setStepError(`${LISTA_CERRADA.titulo} Por ahora solo publican solicitudes quienes tienen un plan activo.`);return;}
-    if(modalidad==="dirigida"&&!confirmed){setStepError("Debes confirmar la información.");return;}
-    if(!modalidad){setStepError("Selecciona una modalidad.");return;}
-    if(modalidad==="abierta"&&!permiteAbierta){setStepError("Por ahora las cotizaciones abiertas están desactivadas: elige una empresa importadora.");return;}
-    if(tierBloqueado && !forceUnlock){
-      setStepError(`Esta empresa requiere nivel ${tierRequerido} o superior. Tu nivel actual es ${tierCotizante}.`);
-      return;
-    }
-    if(tierBloqueado && creditos < 1){
-      setStepError("No tienes créditos suficientes para desbloquear esta cotización.");
-      return;
-    }
-    if(sinTokens){
-      setStepError("No tienes tokens de cotización. Cárgalos en Pagos y te los acreditamos al revisar el comprobante.");
-      return;
-    }
-
-    if(form.description.trim().length<DESCRIPCION_MINIMA){
-      setStepError(`Describe el producto con al menos ${DESCRIPCION_MINIMA} caracteres.`);
-      setStep(2);
-      return;
-    }
-
-    const parsedMinQuantity=form.unit==="m3"
-      ?Number.parseFloat(String(form.minQuantity).replace(",","."))
-      :Number.parseInt(form.minQuantity,10);
-    if(!Number.isFinite(parsedMinQuantity)||parsedMinQuantity<=0||(form.unit==="unidades"&&parsedMinQuantity<1)){setStepError("La cantidad mínima debe ser mayor a 0.");return;}
-
-    const quality=String(form.quality||"").toLowerCase();
-    const tipoCalidad:CreateCotizacionPayload["tipo_calidad"]=quality.includes("econ")
-      ?"economica"
-      :quality.includes("est")
-        ?"estandar"
-        :"premium";
-
-    const parsedTarget=form.targetPrice
-      ?Number.parseFloat(String(form.targetPrice).replace(/[^0-9.,]/g,"").replace(",","."))
-      :undefined;
-
-    const payload:CreateCotizacionPayload={
-      modalidad,
-      ...(modalidad==="dirigida"&&selectedId?{importador_id:selectedId}:{}),
-      ...(form.productPhotoUrls.length?{fotos_producto:form.productPhotoUrls}:{}),
-      pais_importacion:form.country,
-      nombre_producto:form.productName,
-      descripcion_cliente:form.description.trim(),
-      link_referencia:form.referenceLink||undefined,
-      linea_producto:form.productLine,
-      tipo_calidad:tipoCalidad,
-      nivel_personalizacion:form.customization||undefined,
-      modalidad_importacion:form.purpose,
-      cantidad_minima:parsedMinQuantity,
-      unidad_cantidad:form.unit,
-      precio_objetivo_usd:Number.isFinite(parsedTarget as number)?parsedTarget:undefined,
-      precio_objetivo_moneda:form.targetPriceCurrency || "USD",
-      incoterm:form.incoterm || "DDP",
-      notas_adicionales:form.notes||undefined,
-      shipping_mark_sufijo:form.shippingMarkSufijo.trim()||undefined,
-      ciudad_entrega:form.deliveryCity.trim()||undefined,
-      tier_minimo_requerido: modalidad === "dirigida" ? tierRequerido : "Bronze",
-      ...(origen?.origen==="tendencias"?{
-        origen:"tendencias" as const,
-        tendencia_item_id:origen.tendenciaItemId,
-      }:{}),
-      // Desde un catálogo solo vale si va dirigida a la empresa dueña; si el
-      // comprador cambió de empresa, la solicitud pasa a ser directa.
-      ...(origen?.origen==="catalogo"&&modalidad==="dirigida"&&selectedId===preselectedImporterId?{
-        origen:"catalogo" as const,
-        catalogo_producto_id:origen.catalogoProductoId,
-      }:{}),
-    };
-
-    try{
-      setSubmitting(true);
-      setStepError("");
-      await onSubmitQuote(payload, tierBloqueado && forceUnlock);
-      setSubmitted(true);
-    }catch(error){
-      setStepError(error instanceof Error?error.message:"No se pudo crear la cotización.");
-    }finally{
-      setSubmitting(false);
-    }
-  }
-  const slideStyle:React.CSSProperties={opacity:visible?1:0,transform:visible?"translateX(0)":direction==="fwd"?"translateX(12px)":"translateX(-12px)",transition:"opacity 180ms ease,transform 180ms ease"};
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="quotes"/>
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        {submitted ? (
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="flex flex-col items-center text-center gap-4 max-w-sm">
-              <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                <CheckCircle2 className="w-7 h-7 text-emerald-500"/>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Solicitud enviada</h2>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">Tu cotización ha sido registrada exitosamente.</p>
-              </div>
-              <Button variant="primary" onClick={onBack}>Ver mis cotizaciones</Button>
-            </div>
-          </div>
-        ) : (
-          <main className="flex-1 overflow-hidden px-6 pt-6 pb-4 flex flex-col min-h-0">
-            {/* Header del Formulario / Stepper (Fijos arriba) */}
-            <div className="flex-shrink-0">
-              <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Cotizaciones",onClick:onBack},{label:"Nueva cotización"}]}/>
-              <h1 className="text-xl font-semibold mt-3">Nueva cotización</h1>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">Solicita una nueva cotización para importar productos desde proveedores internacionales.</p>
-              <div className="mb-4"><Stepper current={step}/></div>
-            </div>
-
-            {/* Área Central Scrolleable (Formulario + Panel Lateral) */}
-            <div className="flex gap-6 items-start flex-1 min-h-0 overflow-hidden">
-              
-              {/* Columna Izquierda: Formulario (Con scroll independiente) */}
-              <div className="flex-1 min-w-0 flex flex-col h-full min-h-0">
-                <div className="flex-1 min-h-0 overflow-y-auto pr-2">
-                  {origen&&(
-                    <div className="mb-4 rounded-xl border border-primary/20 dark:border-accent/20 bg-primary/5 dark:bg-accent/5 px-4 py-3 text-sm">
-                      <p className="font-medium flex items-center gap-2">
-                        {origen.origen==="tendencias"?<Sparkles className="w-4 h-4 text-primary dark:text-accent"/>:<LibraryBig className="w-4 h-4 text-primary"/>}
-                        {origen.origen==="tendencias"?"Desde Tendencias":"Desde el catálogo de la empresa"}: {origen.nombre}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Ya cargamos el producto. Completa la cantidad, la calidad y lo que haga falta.</p>
-                      {origen.origen==="tendencias"&&origen.importadorId&&(
-                        <p className="mt-1 text-xs text-muted-foreground">Lo recomienda {origen.nombreEmpresa||"una importadora"}: la solicitud va dirigida solo a ella.</p>
-                      )}
-                      {origen.revisarRequisitos&&(
-                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/>Este producto puede requerir permisos o registros (INVIMA, ICA, etiquetado). Pídele a la empresa importadora que lo revise en su propuesta.</p>
-                      )}
-                    </div>
-                  )}
-                  <div style={slideStyle}>
-                    {step===1 && dirigidaFija && (
-                      <Card padding="md"><div className="flex items-start gap-3"><Lock className="w-4 h-4 text-primary dark:text-accent flex-shrink-0 mt-0.5"/><div><p className="text-sm font-semibold">Cotización dirigida a {origen?.nombreEmpresa||"la importadora que lo recomienda"}</p><p className="text-xs text-muted-foreground mt-1">Este producto lo recomendó esa importadora, así que la solicitud va solo a ella. Para pedir propuestas a otras empresas, crea una cotización nueva desde Cotizaciones.</p></div></div></Card>
-                    )}
-                    {step===1 && !dirigidaFija && <Step1 modalidad={modalidad} setModalidad={m=>{setModalidad(m);setDesbloquearPorCredito(false);setStepError("");}} selectedId={selectedId} setSelectedId={(id)=>{setSelectedId(id);setDesbloquearPorCredito(false);setStepError("");}} preselectedId={preselectedImporterId} importers={importers} permiteAbierta={permiteAbierta}/>}
-                    {step===2 && <Step2 form={form} setForm={setForm} importer={si} onProductPhotoUploaded={(fileItem)=>setForm(prev=>{
-                      const url=toApiPath(fileItem.storage_url||`/documentos/archivos/${fileItem.id}/descargar`);
-                      if(prev.productPhotoUrls.length>=MAX_FOTOS_PRODUCTO||prev.productPhotoUrls.includes(url))return prev;
-                      return {...prev,productPhotoUrls:[...prev.productPhotoUrls,url]};
-                    })}/>}
-                    {step===3 && modalidad==="dirigida" && si && <Step3Dirigida form={form} importer={si} confirmed={confirmed} setConfirmed={setConfirmed}/>}
-                    {step===3 && modalidad==="abierta" && <Step3Abierta/>}
-                  </div>
-                  {stepError && (
-                    <div ref={stepErrorRef} role="alert" className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0"/>
-                      <p className="text-sm text-destructive">{stepError}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Columna Derecha: Panel Lateral (Con scroll independiente para importadoras/filtros) */}
-              <div className="w-64 xl:w-72 flex-shrink-0 hidden lg:block h-full overflow-y-auto pr-1">
-                <RightPanel step={step} modalidad={modalidad} si={si} form={form}/>
-              </div>
-            </div>
-
-            {sinPlan && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-accent/30 dark:bg-accent/10">
-                <p className="text-xs text-amber-900 dark:text-accent">
-                  <span className="font-semibold">{LISTA_CERRADA.titulo}</span> Por ahora solo publican solicitudes quienes tienen un plan activo. Apertura al público: próximamente.
-                </p>
-                {onVerPlanes && (
-                  <Button variant="secondary" size="sm" onClick={onVerPlanes}>Ver planes</Button>
-                )}
-              </div>
-            )}
-
-            {cobroTokens && !sinPlan && (
-              <div className={clsx("mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2.5",
-                sinTokens ? "border-amber-200 bg-amber-50 dark:border-accent/30 dark:bg-accent/10" : "border-border bg-muted/40")}>
-                <p className={clsx("text-xs", sinTokens ? "font-semibold text-amber-900 dark:text-accent" : "text-muted-foreground")}>
-                  {sinTokens
-                    ? "No tienes tokens de cotización. Cada cotización usa 1."
-                    : `Esta cotización usa 1. Tienes ${partesSaldo.join(", ")}${partesSaldo.length>1?" (se usan en ese orden)":""}.`}
-                </p>
-                {sinTokens && onIrAPagos && (
-                  <Button variant="secondary" size="sm" icon={<WalletCards className="w-3.5 h-3.5"/>} onClick={onIrAPagos}>Cargar tokens</Button>
-                )}
-              </div>
-            )}
-
-            {tierBloqueado && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-accent/30 dark:bg-accent/10">
-                <p className="text-xs font-semibold text-amber-900 dark:text-accent">Esta empresa requiere nivel {tierRequerido} o superior. Tu nivel actual es {tierCotizante}.</p>
-                <p className="mt-1 text-xs text-amber-800 dark:text-accent/80">Saldo disponible: {creditos} créditos. 1 crédito desbloquea 1 cotización.</p>
-              </div>
-            )}
-
-            {/* Barra Inferior de Navegación (SIEMPRE FIJA EN EL BOTTOM) */}
-            <div className="pt-3 mt-3 border-t border-border flex-shrink-0 bg-background z-10">
-              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="ghost" size="sm" onClick={onBack}>
-                    Cancelar
-                  </Button>
-                  {step > 1 && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<ChevronLeft className="w-3.5 h-3.5" />}
-                      onClick={() => navigate(step - 1, "back")}
-                      className="hover:border-primary hover:bg-primary/10 hover:text-primary dark:hover:border-accent dark:hover:bg-accent/10 dark:hover:text-accent transition-colors"
-                    >
-                      Anterior
-                    </Button>
-                  )}
-                </div>
-
-                <div className="w-full sm:w-auto">
-                  {step < 3 ? (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      iconRight={<ChevronRight className="w-4 h-4" />}
-                      onClick={goNext}
-                      className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
-                    >
-                      Continuar
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      icon={<Send className="w-4 h-4" />}
-                      loading={submitting}
-                      disabled={tierBloqueado || sinTokens || sinPlan}
-                      onClick={() => {
-                        void handleSubmit(false);
-                      }}
-                      className="w-full sm:w-auto justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
-                    >
-                      {tierBloqueado ? "Solicitar cotización" : "Solicitar cotización"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {step === 3 && tierBloqueado && creditos >= 1 && (
-                <Button
-                  variant="primary"
-                  size="md"
-                  icon={<WalletCards className="w-4 h-4" />}
-                  loading={submitting}
-                  onClick={() => {
-                    setDesbloquearPorCredito(true);
-                    void handleSubmit(true);
-                  }}
-                  className="mt-2 w-full justify-center dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
-                >
-                  Desbloquear y enviar cotización por 1 crédito
-                </Button>
-              )}
-            </div>
-          </main>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MODAL HELPER
-// ─────────────────────────────────────────────────────────────────────────────
-function Modal({open,onClose,title,children,width="max-w-lg"}:{open:boolean;onClose:()=>void;title:string;children:React.ReactNode;width?:string}) {
+export function Modal({open,onClose,title,children,width="max-w-lg"}:{open:boolean;onClose:()=>void;title:string;children:React.ReactNode;width?:string}) {
   if(!open)return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{background:"rgba(0,0,0,0.35)"}}>
@@ -8283,9 +5229,9 @@ function Modal({open,onClose,title,children,width="max-w-lg"}:{open:boolean;onCl
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // NOTIFICATIONS SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onOpen:(notification:AppNotification)=>Promise<void>;onBack:()=>void;sb:SidebarCtrl}) {
   const NOTIF_ICON:Record<AppNotification["type"],React.ReactNode>={
     response:<ClipboardList className="w-4 h-4 text-blue-600"/>,
@@ -8337,70 +5283,12 @@ function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notificati
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTER PORTAL — DASHBOARD
-// ─────────────────────────────────────────────────────────────────────────────
-function ImporterDashboardScreen({sb,quotes,advisors,chats,companyName}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];companyName:string}) {
-  const activeChatsCount = chats.filter(c=>c.status==="activa").length;
-  const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="imp-dashboard"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_IMPORTADORA} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Dashboard"}]}/>
-            <h1 className="text-xl font-semibold mt-3">Panel de la empresa</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{companyName ? `${companyName} - Resumen de actividad` : "Resumen de actividad"}</p>
-          </div>
-          <PanelEmpresa
-            asesoresConectados={activeAdvisors}
-            chatsActivos={activeChatsCount}
-            onAbrirSolicitudes={()=>sb.onNav("imp-quotes")}
-            onAbrirPedidos={()=>sb.onNav("orders")}
-          />
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <Card padding="none">
-                <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                  <h2 className="font-semibold text-sm">Solicitudes recientes</h2>
-                  <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver todas</Button>
-                </div>
-                <div className="divide-y divide-border">
-                  {quotes.slice(0,5).map(q=>(
-                    <div key={q.id} className="flex items-center gap-4 px-5 py-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{q.product}</p>
-                        <p className="text-xs text-muted-foreground">{q.code} · {q.date}</p>
-                      </div>
-                      <Badge variant={q.status as BadgeVariant}/>
-                    </div>
-                  ))}
-                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin solicitudes todavía.</div>}
-                </div>
-              </Card>
-            </div>
-            <div className="space-y-4">
-              <Card padding="md">
-                <p className="text-sm font-semibold mb-3">Accesos rápidos</p>
-                <div className="space-y-2">
-                  <Button variant="secondary" size="sm" fullWidth icon={<Users className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-advisors")}>Gestionar asesores</Button>
-                  <Button variant="secondary" size="sm" fullWidth icon={<FileText className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver solicitudes</Button>
-                  <Button variant="secondary" size="sm" fullWidth icon={<Building2 className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-profile")}>Editar perfil</Button>
-                </div>
-              </Card>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTER PORTAL — COMPANY PROFILE
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// IMPORTER PORTAL ? DASHBOARD
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// IMPORTER PORTAL ? COMPANY PROFILE
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Formatos que gestión documental acepta como imagen (ver IMAGE_EXTENSIONS del backend). */
 const BANNER_EXTENSIONS=["png","jpg","jpeg","webp"];
@@ -8409,7 +5297,7 @@ const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/web
 const BANNER_MAX_BYTES=5*1024*1024;
 
 /** Estado del autoguardado del perfil de empresa, en la cabecera. */
-function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
+export function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
   if(estado==="sin-cambios"){
     return <span className="text-xs text-muted-foreground">Se guarda automáticamente</span>;
   }
@@ -8417,7 +5305,7 @@ function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guard
     return <span className="text-xs text-amber-700 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/>Cambios sin guardar</span>;
   }
   if(estado==="guardando"){
-    return <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/>Guardando…</span>;
+    return <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/>Guardandoâ€¦</span>;
   }
   return <span className="text-xs text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5"/>Guardado</span>;
 }
@@ -8429,1510 +5317,8 @@ function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guard
  */
 const RETARDO_AUTOGUARDADO_MS = 1200;
 
-type FormularioEmpresa = {
-  razonSocial:string;description:string;year:string;website:string;email:string;logoUrl:string;
-  phone:string;address:string;
-  categories:string[];countries:string[];industries:string[];
-  avgResponse:string;soloCotizacionesDirectas:boolean;
-  shippingMarkPrefijo:string;certs:string[];banner:string;
-  tierMinimoRequerido:"Bronze"|"Silver"|"Gold"|"Élite";
-  /** Vacío = sin límite. Texto para poder dejar el campo en blanco al editar. */
-  limiteCotizacionesDiarias:string;
-  /** Pedido mínimo que acepta la empresa; vacío = sin mínimo. */
-  pedidoMinimo:string;
-  pedidoMinimoUnidad:UnidadCantidad;
-};
-
-/** Pedido mínimo para el PUT: null si está vacío, undefined si no es un número válido. */
-function leerPedidoMinimo(texto:string):number|null|undefined{
-  const limpio=texto.trim().replace(",",".");
-  if(!limpio)return null;
-  const valor=Number.parseFloat(limpio);
-  return Number.isFinite(valor)&&valor>0?valor:undefined;
-}
-
-/**
- * Convierte lo escrito en el campo de límite diario al valor del PUT: null
- * (sin límite) si está vacío, el entero si es válido y undefined si no lo es,
- * para no pisar el límite guardado con un valor a medio escribir.
- */
-function leerLimiteDiario(texto:string):number|null|undefined{
-  const limpio=texto.trim();
-  if(!limpio)return null;
-  if(!/^\d+$/.test(limpio))return undefined;
-  const valor=Number.parseInt(limpio,10);
-  return valor>=1&&valor<=10000?valor:undefined;
-}
-
-// Formulario vacío de verdad. Antes venía sembrado con una dirección de Bogotá,
-// un teléfono y las certificaciones "ISO 9001"/"CE" de ejemplo: cualquier
-// empresa que guardara su perfil publicaba esos datos inventados como propios.
-const FORMULARIO_EMPRESA_VACIO:FormularioEmpresa={
-  razonSocial:"",description:"",year:"",website:"",email:"",logoUrl:"",
-  phone:"",address:"",
-  categories:[],countries:[],industries:[],
-  avgResponse:"~24h",soloCotizacionesDirectas:false,
-  shippingMarkPrefijo:"",certs:[],banner:"",
-  tierMinimoRequerido:"Bronze",
-  limiteCotizacionesDiarias:"",
-  pedidoMinimo:"",
-  pedidoMinimoUnidad:"unidades",
-};
-
-function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl;company:BackendImporter|null;onSave:(payload:{nombre_empresa:string;logo_url?:string;especialidad_producto:string[];paises_origen:string[];tiempo_respuesta_promedio:string;perfil_publico?:Record<string, unknown>;solo_cotizaciones_directas?:boolean;shipping_mark_prefijo?:string;limite_cotizaciones_diarias?:number|null;pedido_minimo?:number|null;pedido_minimo_unidad?:UnidadCantidad;})=>Promise<void>}) {
-  const [form,setForm]=useState<FormularioEmpresa>(FORMULARIO_EMPRESA_VACIO);
-  const [estadoGuardado,setEstadoGuardado]=useState<"sin-cambios"|"pendiente"|"guardando"|"guardado">("sin-cambios");
-  const [saveError,setSaveError]=useState("");
-  const [bannerUploading,setBannerUploading]=useState(false);
-  const [bannerError,setBannerError]=useState("");
-  const [logoUploading,setLogoUploading]=useState(false);
-  const [logoUploadError,setLogoUploadError]=useState("");
-  const bannerInputRef=useRef<HTMLInputElement>(null);
-  const logoInputRef=useRef<HTMLInputElement>(null);
-
-  /**
-   * Vistas previas del archivo que acaba de elegir el usuario, como `blob:`.
-   *
-   * Hacen falta porque el backend solo sirve una imagen sin sesión cuando ya
-   * figura como imagen pública de la empresa, y eso no ocurre hasta que el
-   * perfil se guarda. Entre la subida y el autoguardado, el `<img>` apuntando al
-   * servidor recibía un 401 y el navegador NO reintenta una imagen fallida: se
-   * quedaba rota hasta recargar la página, justo lo que hacía pensar que la
-   * subida no había funcionado.
-   */
-  const [previaLocal,setPreviaLocal]=useState<{logo:string;banner:string}>({logo:"",banner:""});
-  const previaLocalRef=useRef(previaLocal);
-  useEffect(()=>{previaLocalRef.current=previaLocal;},[previaLocal]);
-  // Un `blob:` retiene el archivo en memoria hasta que se revoca.
-  useEffect(()=>()=>{
-    Object.values(previaLocalRef.current).forEach((url)=>{if(url)URL.revokeObjectURL(url);});
-  },[]);
-
-  function fijarPreviaLocal(clave:"logo"|"banner",archivo:File|null){
-    setPreviaLocal((prev)=>{
-      if(prev[clave])URL.revokeObjectURL(prev[clave]);
-      return {...prev,[clave]:archivo?URL.createObjectURL(archivo):""};
-    });
-  }
-
-  // `revision` sube en cada edición del usuario (nunca al hidratar desde el
-  // servidor) y es lo que dispara el autoguardado con retardo.
-  const [revision,setRevision]=useState(0);
-  const formRef=useRef(form);
-  const [cupo,setCupo]=useState<BackendCupoDiario|null>(null);
-  const empresaHidratadaRef=useRef<string|null>(null);
-  const guardadoEnCursoRef=useRef(false);
-  const cambiosSinGuardarRef=useRef(false);
-
-  useEffect(()=>{formRef.current=form;},[form]);
-
-  // Uso del cupo diario. Es informativo: si falla, el campo sigue funcionando.
-  const cargarCupo=useCallback(async()=>{
-    try{setCupo(await businessService.getDailyQuoteQuota());}catch{setCupo(null);}
-  },[]);
-  useEffect(()=>{if(company?.id)void cargarCupo();},[company?.id,cargarCupo]);
-
-  useEffect(()=>{
-    if(!company)return;
-    // Se hidrata una sola vez por empresa. Volver a copiar la respuesta del
-    // servidor en cada recarga pisaba lo que el usuario estuviera escribiendo,
-    // y con autoguardado esa recarga ocurre cada pocos segundos.
-    if(empresaHidratadaRef.current===company.id)return;
-    empresaHidratadaRef.current=company.id;
-
-    const perfilPublico = company.perfil_publico && typeof company.perfil_publico === "object" ? company.perfil_publico : {};
-    const getString = (key: string) => {
-      const value = perfilPublico[key];
-      return typeof value === "string" ? value : "";
-    };
-    const getStringArray = (key: string) => {
-      const value = perfilPublico[key];
-      if (!Array.isArray(value)) {
-        return [] as string[];
-      }
-      return value.filter((entry): entry is string => typeof entry === "string");
-    };
-
-    setForm({
-      razonSocial:company.nombre_empresa,
-      logoUrl:company.logo_url || "",
-      description:getString("description"),
-      year:getString("year"),
-      website:getString("website"),
-      email:getString("email"),
-      phone:getString("phone"),
-      address:getString("address"),
-      categories:company.especialidad_producto ?? [],
-      countries:company.paises_origen ?? [],
-      industries:getStringArray("industries"),
-      avgResponse:company.tiempo_respuesta_promedio || "~24h",
-      certs:getStringArray("certs"),
-      banner:getString("banner"),
-      soloCotizacionesDirectas:Boolean(company.solo_cotizaciones_directas),
-      shippingMarkPrefijo:company.shipping_mark_prefijo || "",
-      tierMinimoRequerido: (["Bronze", "Silver", "Gold", "Élite"].includes(getString("tier_minimo_requerido")) ? getString("tier_minimo_requerido") : "Bronze") as FormularioEmpresa["tierMinimoRequerido"],
-      limiteCotizacionesDiarias:typeof company.limite_cotizaciones_diarias==="number"?String(company.limite_cotizaciones_diarias):"",
-      pedidoMinimo:typeof company.pedido_minimo==="number"?String(company.pedido_minimo):"",
-      pedidoMinimoUnidad:company.pedido_minimo_unidad==="m3"?"m3":"unidades",
-    });
-    cambiosSinGuardarRef.current=false;
-    setRevision(0);
-    setEstadoGuardado("sin-cambios");
-  },[company]);
-
-  /** Aplica un cambio del usuario y programa el autoguardado. */
-  const editar=useCallback((cambios:Partial<FormularioEmpresa>)=>{
-    setForm(p=>({...p,...cambios}));
-    cambiosSinGuardarRef.current=true;
-    setEstadoGuardado("pendiente");
-    setRevision(r=>r+1);
-  },[]);
-
-  function f(k:keyof FormularioEmpresa,v:string){editar({[k]:v} as Partial<FormularioEmpresa>);}
-
-  /** Alterna un valor dentro de una lista de etiquetas (categorías, países...). */
-  function alternar(clave:"categories"|"countries"|"certs",valor:string){
-    const actual=form[clave];
-    editar({[clave]:actual.includes(valor)?actual.filter(x=>x!==valor):[...actual,valor]} as Partial<FormularioEmpresa>);
-  }
-
-  const persistir=useCallback(async()=>{
-    if(guardadoEnCursoRef.current){
-      // Hay un envío en vuelo: se reintenta en el siguiente ciclo del retardo,
-      // en vez de solapar dos PUT sobre la misma empresa.
-      setRevision(r=>r+1);
-      return;
-    }
-
-    const actual=formRef.current;
-    guardadoEnCursoRef.current=true;
-    cambiosSinGuardarRef.current=false;
-    setEstadoGuardado("guardando");
-    setSaveError("");
-    try{
-      await onSave({
-        nombre_empresa:actual.razonSocial,
-        // Se manda siempre, también vacío: con `|| undefined` no había manera de
-        // quitar un logo ya puesto, porque el backend no veía el campo.
-        logo_url:actual.logoUrl.trim(),
-        especialidad_producto:actual.categories,
-        paises_origen:actual.countries,
-        shipping_mark_prefijo:actual.shippingMarkPrefijo.trim(),
-        tiempo_respuesta_promedio:actual.avgResponse,
-        perfil_publico: {
-          description: actual.description.trim(),
-          year: actual.year.trim(),
-          website: actual.website.trim(),
-          email: actual.email.trim(),
-          phone: actual.phone.trim(),
-          address: actual.address.trim(),
-          industries: actual.industries,
-          certs: actual.certs,
-          banner: actual.banner.trim(),
-          tier_minimo_requerido: actual.tierMinimoRequerido,
-        },
-        solo_cotizaciones_directas:actual.soloCotizacionesDirectas,
-        limite_cotizaciones_diarias:leerLimiteDiario(actual.limiteCotizacionesDiarias),
-        pedido_minimo:leerPedidoMinimo(actual.pedidoMinimo),
-        pedido_minimo_unidad:actual.pedidoMinimoUnidad,
-      });
-      setEstadoGuardado(prev=>prev==="guardando"?"guardado":prev);
-      void cargarCupo();
-    }catch(err){
-      // Lo escrito sigue en pantalla y vuelve a marcarse como pendiente: el
-      // siguiente intento (automático o manual) lo reenvía entero.
-      cambiosSinGuardarRef.current=true;
-      setEstadoGuardado("pendiente");
-      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el perfil de empresa.");
-    }finally{
-      guardadoEnCursoRef.current=false;
-    }
-  },[onSave,cargarCupo]);
-
-  // El envío se invoca siempre por referencia. `onSave` se redefine en cada
-  // render de la aplicación, así que depender de `persistir` en el efecto
-  // reiniciaba el temporizador con cada repintado ajeno (sondeos, chat...) y el
-  // autoguardado podía no llegar a dispararse nunca.
-  const persistirRef=useRef(persistir);
-  useEffect(()=>{persistirRef.current=persistir;},[persistir]);
-
-  // Autoguardado: cada edición reinicia el reloj, así que solo se envía cuando
-  // el usuario deja de escribir.
-  useEffect(()=>{
-    if(revision===0)return;
-    const temporizador=window.setTimeout(()=>{void persistirRef.current();},RETARDO_AUTOGUARDADO_MS);
-    return ()=>window.clearTimeout(temporizador);
-  },[revision]);
-
-  // Si se sale de la pantalla dentro de la ventana del retardo, lo último
-  // escrito se envía igualmente en lugar de perderse.
-  useEffect(()=>()=>{
-    if(cambiosSinGuardarRef.current){
-      void persistirRef.current();
-    }
-  },[]);
-
-  /**
-   * Sube una imagen del perfil (logo o banner) a gestión documental y devuelve
-   * su ruta canónica.
-   *
-   * La imagen tiene que vivir en la plataforma (no una URL pegada a mano) para
-   * que el backend la reconozca como imagen pública de la empresa y la sirva
-   * sin sesión al solicitante que abre la ficha.
-   */
-  async function subirImagenDePerfil(archivo:File):Promise<string>{
-    const extension=(archivo.name.split(".").pop()||"").toLowerCase();
-    if(!BANNER_EXTENSIONS.includes(extension)){
-      throw new Error(`Formato no soportado (.${extension}). Usa ${BANNER_FORMATS_LABEL}.`);
-    }
-    if(archivo.size>BANNER_MAX_BYTES){
-      throw new Error("La imagen supera 5 MB. Comprímela antes de subirla.");
-    }
-    const subido=await businessService.uploadDocumentFile(archivo,null,"perfil-empresa");
-    return toApiPath(subido.storage_url||`/documentos/archivos/${subido.id}/descargar`);
-  }
-
-  async function handleUploadBanner(archivo:File){
-    setBannerError("");
-    setBannerUploading(true);
-    try{
-      const ruta=await subirImagenDePerfil(archivo);
-      fijarPreviaLocal("banner",archivo);
-      editar({banner:ruta});
-    }catch(err){
-      setBannerError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir la imagen del banner.");
-    }finally{
-      setBannerUploading(false);
-    }
-  }
-
-  async function handleUploadLogo(archivo:File){
-    setLogoUploadError("");
-    setLogoUploading(true);
-    try{
-      const ruta=await subirImagenDePerfil(archivo);
-      fijarPreviaLocal("logo",archivo);
-      editar({logoUrl:ruta});
-    }catch(err){
-      setLogoUploadError(err instanceof Error&&err.message.trim()?err.message:"No se pudo subir el logo.");
-    }finally{
-      setLogoUploading(false);
-    }
-  }
-
-  const guardando=estadoGuardado==="guardando";
-  const logoPreview=previaLocal.logo||(form.logoUrl?resolveApiUrl(form.logoUrl):"");
-  const bannerPreview=previaLocal.banner||(form.banner?resolveApiUrl(form.banner):"");
-
-  if(!company){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active="imp-profile"/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader user={USER_IMPORTADORA} sb={sb}/>
-          <main className="flex-1 overflow-y-auto px-6 py-6">
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Mi empresa"}]}/>
-            <Card padding="lg" className="border-dashed mt-4 max-w-xl"><div className="text-center py-8"><p className="font-semibold">No hay datos de empresa disponibles</p><p className="text-sm text-muted-foreground mt-1">Verifica que tu usuario tenga importador asociado en /usuarios/me.</p></div></Card>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="imp-profile"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_IMPORTADORA} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Mi empresa"}]}/>
-              <h1 className="text-xl font-semibold mt-3">Perfil de la empresa</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Esta información es visible para los compradores.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* El formulario se guarda solo; el indicador es lo que le dice al
-                  usuario que no tiene que pulsar nada para no perder lo escrito. */}
-              <IndicadorAutoguardado estado={estadoGuardado}/>
-              <Button variant="primary" loading={guardando} icon={<Save className="w-4 h-4"/>} onClick={()=>{void persistir();}}>Guardar ahora</Button>
-            </div>
-          </div>
-          {saveError&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{saveError}</p></Card>}
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-5">
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary dark:text-accent"/>Información general</p>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {/* Razón social */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Razón social</label>
-                    <input
-                      type="text"
-                      value={form.razonSocial}
-                      onChange={e => f("razonSocial", e.target.value)}
-                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                    />
-                  </div>
-
-                  {/* Año de fundación */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Año de fundación</label>
-                    <input
-                      type="number"
-                      value={form.year}
-                      onChange={e => f("year", e.target.value)}
-                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                    />
-                  </div>
-
-                  {/* Sitio web */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Sitio web</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-muted-foreground"><Globe className="w-4 h-4"/></span>
-                      <input
-                        type="text"
-                        value={form.website}
-                        onChange={e => f("website", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* URL de logo/foto */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">URL de logo/foto</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-muted-foreground"><ImageIcon className="w-4 h-4"/></span>
-                      <input
-                        type="text"
-                        value={form.logoUrl}
-                        onChange={e => { fijarPreviaLocal("logo", null); f("logoUrl", e.target.value); }}
-                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">Súbelo desde aquí o pega la URL de tu logo.</p>
-                    <div className="mt-2 flex gap-2">
-                      <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Reemplazar logo":"Subir logo"}</Button>
-                      {form.logoUrl&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("logo",null);editar({logoUrl:""});}}>Quitar</Button>}
-                    </div>
-                    {logoUploadError&&<p className="text-xs text-destructive mt-2">{logoUploadError}</p>}
-                  </div>
-
-                  {/* Correo de contacto */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Correo de contacto</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-muted-foreground"><MailIcon className="w-4 h-4"/></span>
-                      <input
-                        type="email"
-                        value={form.email}
-                        onChange={e => f("email", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Teléfono */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Teléfono</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-muted-foreground"><Phone className="w-4 h-4"/></span>
-                      <input
-                        type="text"
-                        value={form.phone}
-                        onChange={e => f("phone", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Dirección */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Dirección</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-muted-foreground"><MapPin className="w-4 h-4"/></span>
-                      <input
-                        type="text"
-                        value={form.address}
-                        onChange={e => f("address", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm pl-9 pr-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Pedido mínimo */}
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="pedido-minimo" className="text-sm font-medium text-foreground">Pedido mínimo</label>
-                    <div className="flex gap-2">
-                      <input 
-                        id="pedido-minimo" 
-                        inputMode="decimal" 
-                        placeholder="Sin mínimo" 
-                        value={form.pedidoMinimo} 
-                        onChange={e => f("pedidoMinimo", e.target.value)} 
-                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                      <select 
-                        aria-label="Unidad del pedido mínimo" 
-                        value={form.pedidoMinimoUnidad} 
-                        onChange={e => editar({pedidoMinimoUnidad: e.target.value === "m3" ? "m3" : "unidades"})} 
-                        className="h-10 rounded-lg border border-border bg-white px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
-                      >
-                        <option value="unidades">Unidades</option>
-                        <option value="m3">m³</option>
-                      </select>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Zarpi lo usa para asignarte solicitudes que encajen contigo</p>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Descripción</label>
-                  <textarea
-                    rows={3}
-                    value={form.description}
-                    onChange={e => f("description", e.target.value)}
-                    className="w-full border rounded-lg text-sm p-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/25 resize-y"
-                  />
-                </div>
-                <div className="mt-4 flex items-center gap-2">
-                  <input id="solo-cotizaciones-directas" type="checkbox" checked={form.soloCotizacionesDirectas} onChange={e=>editar({soloCotizacionesDirectas:e.target.checked})} className="h-4 w-4 rounded border-border"/>
-                  <label htmlFor="solo-cotizaciones-directas" className="text-sm text-foreground">Solo cotizaciones dirigidas</label>
-                </div>
-              </Card>
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</p>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Tiempo promedio de respuesta</label>
-                    <select
-                      value={form.avgResponse}
-                      onChange={e => f("avgResponse", e.target.value)}
-                      className="w-full h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
-                    >
-                      {["~12h","~24h","~36h","~48h","~72h"].map(v => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Tier mínimo requerido para cotizar</label>
-                    <select
-                      value={form.tierMinimoRequerido}
-                      onChange={e => f("tierMinimoRequerido", e.target.value)}
-                      className="w-full h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent [&>option]:bg-white [&>option]:text-black dark:[&>option]:bg-card dark:[&>option]:text-white"
-                    >
-                      {["Bronze", "Silver", "Gold", "Élite"].map((tier) => (
-                        <option key={tier} value={tier}>{tier}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium mb-1.5">Categorías</p>
-                    <div className="flex flex-wrap gap-1.5">{ALL_CATEGORIES.map(c=><button key={c} onClick={()=>alternar("categories",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.categories.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40 hover:bg-primary/20")}>{c}</button>)}</div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium mb-1.5">Países atendidos</p>
-                    <div className="flex flex-wrap gap-1.5">{COUNTRIES.slice(0,8).map(c=><button key={c} onClick={()=>alternar("countries",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors",form.countries.includes(c)?"bg-primary text-white border-primary":"border-border hover:border-primary/40")}>{c}</button>)}</div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium mb-1.5">Certificaciones</p>
-                    <div className="flex flex-wrap gap-1.5">{["ISO 9001","CE","FDA","HACCP","OEKO-TEX","ISO 14001","DIN","JIS"].map(c=><button key={c} onClick={()=>alternar("certs",c)} className={clsx("px-2 py-1 text-xs rounded-md border transition-colors flex items-center gap-1",form.certs.includes(c)?"bg-emerald-600 text-white border-emerald-600":"border-border hover:border-emerald-300")}><Shield className="w-2.5 h-2.5"/>{c}</button>)}</div>
-                  </div>
-                </div>
-              </Card>
-              <Card padding="md">
-                {/* Cupo diario: tarjeta propia con interruptor. Como campo suelto
-                    dentro de "Información comercial" pasaba desapercibido. */}
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary dark:text-accent"/>Límite de cotizaciones por día</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Cuántas cotizaciones (dirigidas y abiertas) quiere recibir tu equipo cada día. Al llegar al tope,
-                      los clientes no pueden enviarte más dirigidas y las abiertas se reparten a otras empresas hasta la medianoche.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={form.limiteCotizacionesDiarias.trim()!==""}
-                    aria-label="Limitar cotizaciones por día"
-                    onClick={()=>editar({limiteCotizacionesDiarias:form.limiteCotizacionesDiarias.trim()?"":String(cupo?.limite_cotizaciones_diarias||20)})}
-                    className={clsx("relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors",form.limiteCotizacionesDiarias.trim()?"bg-primary dark:bg-accent":"bg-muted-foreground/30")}
-                  >
-                    <span className={clsx("inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",form.limiteCotizacionesDiarias.trim()?"translate-x-5":"translate-x-0.5")}/>
-                  </button>
-                </div>
-                {form.limiteCotizacionesDiarias.trim()!==""?(
-                  <div className="mt-4 grid sm:grid-cols-2 gap-4 items-start">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-foreground">Máximo por día</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={10000}
-                        value={form.limiteCotizacionesDiarias}
-                        onChange={e => f("limiteCotizacionesDiarias", e.target.value)}
-                        className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                      />
-                      {leerLimiteDiario(form.limiteCotizacionesDiarias) === undefined && (
-                        <p className="text-xs text-destructive">Escribe un número entero entre 1 y 10000.</p>
-                      )}
-                    </div>
-
-                    {cupo && cupo.limite_cotizaciones_diarias != null ? (
-                      <div>
-                        <p className="text-sm font-medium mb-1.5 text-foreground">Uso de hoy</p>
-                        <div className="h-2 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className={clsx("h-full transition-all", cupo.cupo_agotado ? "bg-destructive" : "bg-primary dark:bg-accent")}
-                            style={{ width: `${Math.min(100, Math.round((cupo.recibidas_hoy / Math.max(1, cupo.limite_cotizaciones_diarias)) * 100))}%` }}
-                          />
-                        </div>
-                        <p className={clsx("text-xs mt-1.5", cupo.cupo_agotado ? "text-destructive font-medium" : "text-muted-foreground")}>
-                          {cupo.recibidas_hoy} de {cupo.limite_cotizaciones_diarias} recibidas hoy.
-                          {cupo.cupo_agotado ? " Cupo agotado: no recibirás más hasta mañana." : ` Te quedan ${cupo.disponibles_hoy}.`}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground sm:mt-7">El uso de hoy aparece en cuanto se guarde el límite.</p>
-                    )}
-                  </div>
-                ):(
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Sin límite{cupo?`: hoy llevas ${cupo.recibidas_hoy} cotización(es) recibida(s).`:"."}
-                  </p>
-                )}
-              </Card>
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Package className="w-4 h-4 text-primary dark:text-accent"/>Shipping mark</p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Prefijo con el que se rotula la carga de tu empresa. Cada cliente añade su propio sufijo
-                  al pedir la cotización, y así se distinguen sus cajas dentro del contenedor.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-4 items-start">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Prefijo de la empresa</label>
-                    <input
-                      type="text"
-                      placeholder="ctl"
-                      maxLength={LONGITUD_MAX_PREFIJO_SHIPPING_MARK}
-                      value={form.shippingMarkPrefijo}
-                      onChange={e => f("shippingMarkPrefijo", e.target.value)}
-                      className="w-full h-10 border rounded-lg text-sm px-3 bg-white border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card dark:text-foreground dark:focus:border-accent dark:focus:ring-accent/20"
-                    />
-                    <p className="text-xs text-muted-foreground">Solo letras y números; se guarda en minúsculas.</p>
-                  </div>
-                  <div className="pt-1">
-                    <p className="text-sm font-medium mb-1.5">Así quedará</p>
-                    <p className="font-mono text-sm px-3 py-2 rounded-lg border border-border bg-muted/40 truncate">
-                      {componerShippingMark(form.shippingMarkPrefijo,"prendas control")||"—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">Ejemplo con un cliente llamado «Prendas Control».</p>
-                  </div>
-                </div>
-              </Card>
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><Film className="w-4 h-4 text-primary dark:text-accent"/>Presentación de la empresa</p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Un video corto de tu taller y algunas fotos de producto. Es lo primero que mira un cliente
-                  al abrir tu ficha; nuestro equipo lo revisa antes de publicarlo.
-                </p>
-                <EditorPresentacion/>
-              </Card>
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-1 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary dark:text-accent"/>Banner de portada</p>
-                <p className="text-xs text-muted-foreground mb-4">Imagen ancha que encabeza tu perfil público. Se recomienda 1600×400 px.</p>
-
-                <input
-                  ref={bannerInputRef}
-                  type="file"
-                  accept={BANNER_UPLOAD_ACCEPT}
-                  className="hidden"
-                  onChange={e=>{
-                    const archivo=e.target.files?.[0];
-                    e.target.value="";
-                    if(archivo)void handleUploadBanner(archivo);
-                  }}
-                />
-
-                {form.banner?(
-                  <div className="space-y-3">
-                    <div className="rounded-xl overflow-hidden border border-border bg-muted/40">
-                      <img src={bannerPreview} alt="Banner de la empresa" className="w-full h-32 object-cover"/>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="secondary" size="sm" loading={bannerUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>bannerInputRef.current?.click()}>Reemplazar</Button>
-                      <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} onClick={()=>{fijarPreviaLocal("banner",null);editar({banner:""});}}>Quitar</Button>
-                    </div>
-                  </div>
-                ):(
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center gap-2 text-center">
-                    <Upload className="w-8 h-8 text-muted-foreground/40"/>
-                    <p className="text-sm text-muted-foreground">Sube la imagen de portada de tu empresa</p>
-                    <p className="text-xs text-muted-foreground/60">PNG, JPG o WebP hasta 5 MB</p>
-                    <Button variant="secondary" size="sm" loading={bannerUploading} onClick={()=>bannerInputRef.current?.click()}>Seleccionar imagen</Button>
-                  </div>
-                )}
-
-                {bannerError&&<p className="text-xs text-destructive mt-3">{bannerError}</p>}
-              </Card>
-            </div>
-            <div>
-              <Card padding="md">
-                <p className="font-semibold text-sm mb-4">Vista previa del logo</p>
-                {/* Input oculto compartido por los dos botones de "subir logo". */}
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept={BANNER_UPLOAD_ACCEPT}
-                  className="hidden"
-                  onChange={e=>{
-                    const archivo=e.target.files?.[0];
-                    e.target.value="";
-                    if(archivo)void handleUploadLogo(archivo);
-                  }}
-                />
-                <div className="flex flex-col items-center gap-3">
-                  {/* Antes esta vista previa pintaba siempre las iniciales, así
-                      que tras subir el logo no cambiaba nada en pantalla y la
-                      subida parecía no haber funcionado. */}
-                  {logoPreview?(
-                    <img src={logoPreview} alt="Logo de la empresa" className="w-32 h-32 rounded-2xl border border-border bg-white object-contain p-2"/>
-                  ):(
-                    <div className={clsx("w-32 h-32 rounded-2xl flex items-center justify-center text-white text-3xl font-bold",importerColorFromId(company.id))}>{initialsFromName(company.nombre_empresa)}</div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" loading={logoUploading} icon={<Upload className="w-3.5 h-3.5"/>} onClick={()=>logoInputRef.current?.click()}>{form.logoUrl?"Cambiar logo":"Subir logo"}</Button>
-                    {form.logoUrl&&<Button variant="ghost" size="sm" onClick={()=>{void abrirArchivoEnPestana(form.logoUrl);}}>Ver</Button>}
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">PNG, JPG o WebP hasta 5 MB. Se recomienda un cuadrado de 512×512 px.</p>
-                </div>
-                <div className="mt-5 pt-5 border-t border-border space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Certificaciones</span><span className="font-semibold flex items-center gap-1 text-emerald-700"><Shield className="w-3 h-3"/>{form.certs.length}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Proyectos completados</span><span className="font-semibold">{company.proyectos_completados ?? 0}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Miembro desde</span><span className="font-semibold">{formatShortDate(company.fecha_registro)}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Verificada</span><span className="font-semibold flex items-center gap-1 text-emerald-600"><BadgeCheck className="w-3 h-3"/>{company.verificado?"Sí":"No"}</span></div>
-                </div>
-              </Card>
-            </div>
-          </div>
-          {/* Lo que cada propuesta trae listo: bodega, entrega, tiempos, pago,
-              cancelación (features/propuestas). No se autoguarda como el perfil:
-              tiene su propio botón. */}
-          <section id="condiciones-propuesta" className="scroll-mt-6 border-t border-border pt-6">
-            <CondicionesEmpresa puedeEditar/>
-          </section>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTER PORTAL — ADVISORS
-// ─────────────────────────────────────────────────────────────────────────────
-function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive,onOpenInternalChat}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<string>;onOpenInternalChat:(advisorId:string)=>Promise<void>}) {
-  const [advisors,setAdvisors]=useState(initialAdvisors);
-  const [search,setSearch]=useState("");
-  const [showModal,setShowModal]=useState(false);
-  const [showPassword,setShowPassword]=useState(false);
-  const [editAdv,setEditAdv]=useState<CompanyAdvisor|null>(null);
-  const [form,setForm]=useState({name:"",role:"",email:"",phone:"",password:"",status:"activo" as CompanyAdvisor["status"],availability:"alta" as CompanyAdvisor["availability"]});
-  const [formError,setFormError]=useState("");
-  const [statusMessage,setStatusMessage]=useState("");
-
-  const filtered=advisors.filter(a=>!search||[a.name,a.role,a.email].some(v=>v.toLowerCase().includes(search.toLowerCase())));
-
-  useEffect(()=>{
-    setAdvisors(initialAdvisors);
-  },[initialAdvisors]);
-
-  function openCreate(){setEditAdv(null);setFormError("");setShowPassword(false);setForm({name:"",role:"",email:"",phone:"",password:"",status:"activo",availability:"alta"});setShowModal(true);}
-  function openEdit(a:CompanyAdvisor){setEditAdv(a);setFormError("");setForm({name:a.name,role:a.role,email:a.email,phone:a.phone,password:"",status:a.status,availability:a.availability});setShowModal(true);}
-  async function save(){
-    if(editAdv){
-      setAdvisors(prev=>prev.map(a=>a.id===editAdv.id?{...a,...form}:a));
-      setShowModal(false);
-      return;
-    }
-
-    const password = form.password.trim();
-    if(password.length<9 || !/[A-Za-z]/.test(password) || !/\d/.test(password)){
-      setFormError("La contraseña debe tener mínimo 9 caracteres, al menos una letra y al menos un dígito.");
-      return;
-    }
-
-    const created=await onCreateAdvisor({
-      email:form.email,
-      password,
-      nombre:form.name,
-      telefono:form.phone,
-    });
-    setAdvisors(prev=>[created,...prev]);
-    setShowModal(false);
-  }
-  async function abrirCanal(asesor:CompanyAdvisor){
-    try{
-      await onOpenInternalChat(asesor.id);
-    }catch(err){
-      setStatusMessage(err instanceof Error ? err.message : "No se pudo abrir el canal con el asesor.");
-    }
-  }
-
-  async function reiniciarClave(asesor:CompanyAdvisor){
-    try{
-      await authService.forgotPassword({email:asesor.email});
-      setStatusMessage(`Se envió a ${asesor.email} un enlace para que ${asesor.name} defina una contraseña nueva.`);
-    }catch(err){
-      setStatusMessage(err instanceof Error ? err.message : "No se pudo enviar el correo de restablecimiento.");
-    }
-  }
-
-  async function toggle(id:string){
-    const target = advisors.find((advisor) => advisor.id === id);
-    if (!target) {
-      return;
-    }
-    const nextActivo = target.status !== "activo";
-    setStatusMessage(await onSetAdvisorActive(id, nextActivo));
-    setAdvisors((prev) => prev.map((advisor) => (
-      advisor.id === id
-        ? {
-            ...advisor,
-            status: nextActivo ? "activo" : "inactivo",
-          }
-        : advisor
-    )));
-  }
-  async function deactivate(id:string){
-    // Se advierte del traspaso: el backend mueve sus cotizaciones y chats a la
-    // cuenta dueña para que ninguna negociación quede sin responsable.
-    if(!confirm("¿Desactivar asesor? Sus cotizaciones y conversaciones abiertas pasarán a tu cuenta."))return;
-    setStatusMessage(await onSetAdvisorActive(id, false));
-    setAdvisors((prev) => prev.map((advisor) => (
-      advisor.id === id
-        ? {
-            ...advisor,
-            status: "inactivo",
-          }
-        : advisor
-    )));
-  }
-
-  const STATUS_CLS:Record<CompanyAdvisor["status"],string>={activo:"bg-emerald-50 text-emerald-700",inactivo:"bg-slate-100 text-slate-600",ausente:"bg-amber-50 text-amber-700"};
-  const AVAIL_CLS:Record<CompanyAdvisor["availability"],string>={alta:"text-emerald-600",media:"text-amber-600",baja:"text-rose-600"};
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="imp-advisors"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_IMPORTADORA} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Asesores"}]}/>
-              <h1 className="text-xl font-semibold mt-3">Gestión de asesores</h1>
-              <p className="text-sm text-muted-foreground">{advisors.filter(a=>a.status==="activo").length} activos · {advisors.length} en total</p>
-            </div>
-            <Button variant="primary" icon={<Plus className="w-4 h-4"/>} onClick={openCreate}>Nuevo asesor</Button>
-          </div>
-          {statusMessage&&(
-            <Card padding="sm" className="border-emerald-200 bg-emerald-50">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-xs text-emerald-800">{statusMessage}</p>
-                <button type="button" onClick={()=>setStatusMessage("")} className="text-emerald-700 hover:text-emerald-900" aria-label="Cerrar aviso"><X className="w-3.5 h-3.5"/></button>
-              </div>
-            </Card>
-          )}
-          <div className="max-w-sm">
-            <Input placeholder="Buscar por nombre, cargo o correo…" value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/>
-          </div>
-          <Card padding="none">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                  <th className="text-left px-5 py-3 font-medium">Asesor</th>
-                  <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Estado</th>
-                  <th className="text-left px-3 py-3 font-medium hidden lg:table-cell">Disponibilidad</th>
-                  <th className="text-left px-3 py-3 font-medium hidden lg:table-cell">Cotizaciones</th>
-                  <th className="text-left px-3 py-3 font-medium hidden xl:table-cell">Resp. prom.</th>
-                  <th className="text-right px-5 py-3 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map(a=>(
-                  <tr key={a.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar initials={a.initials} size="sm" color={a.color}/>
-                        <div>
-                          <p className="font-medium text-foreground">{a.name}</p>
-                          <p className="text-xs text-muted-foreground">{a.role} · {a.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 hidden md:table-cell"><span className={clsx("px-2 py-0.5 rounded-md text-xs font-medium capitalize",STATUS_CLS[a.status])}>{a.status}</span></td>
-                    <td className={clsx("px-3 py-3 text-xs font-medium capitalize hidden lg:table-cell",AVAIL_CLS[a.availability])}>{a.availability}</td>
-                    <td className="px-3 py-3 text-xs hidden lg:table-cell">{a.activeQuotes} activas</td>
-                    <td className="px-3 py-3 text-xs hidden xl:table-cell">{a.avgResponse}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>} title="Abrir canal interno para coordinar sus operaciones" onClick={()=>{void abrirCanal(a);}}/>
-                        <Button variant="ghost" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>openEdit(a)}/>
-                        <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5"/>} title="Enviar enlace para restablecer la contraseña" onClick={()=>{void reiniciarClave(a);}}/>
-                        <Button variant="ghost" size="sm" icon={a.status==="activo"?<Ban className="w-3.5 h-3.5"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} onClick={()=>{void toggle(a.id);}}/>
-                        <Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5 text-destructive"/>} onClick={()=>{void deactivate(a.id);}}/>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        </main>
-      </div>
-      <Modal open={showModal} onClose={()=>setShowModal(false)} title={editAdv?"Editar asesor":"Nuevo asesor"}>
-        <div className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Nombre completo" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
-            <Input label="Cargo" value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))}/>
-            <Input label="Correo" type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
-            <Input label="Teléfono" value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))}/>
-            {!editAdv&&<Input label="Contraseña temporal" type={showPassword?"text":"password"} value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} hint="Mínimo 9 caracteres. Úsala para el primer login del asesor." suffix={<button type="button" onClick={()=>setShowPassword(v=>!v)} className="text-muted-foreground hover:text-foreground transition-colors">{showPassword?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button>}/>}
-            <Select label="Estado" value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value as CompanyAdvisor["status"]}))}>
-              <option value="activo">Activo</option><option value="inactivo">Inactivo</option><option value="ausente">Ausente</option>
-            </Select>
-            <Select label="Disponibilidad" value={form.availability} onChange={e=>setForm(p=>({...p,availability:e.target.value as CompanyAdvisor["availability"]}))}>
-              <option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
-            </Select>
-          </div>
-          {formError&&<p className="text-xs text-destructive">{formError}</p>}
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
-            <Button variant="secondary" onClick={()=>setShowModal(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={save}>{editAdv?"Guardar cambios":"Crear asesor"}</Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTER PORTAL — QUOTES
-// ─────────────────────────────────────────────────────────────────────────────
-function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
-  const [filter,setFilter]=useState("todas");
-  const [rechazando,setRechazando]=useState<Quote|null>(null);
-  const [search,setSearch]=useState("");
-  const [detalle,setDetalle]=useState<Quote|null>(null);
-  const [asignando,setAsignando]=useState<Quote|null>(null);
-  const [mensaje,setMensaje]=useState("");
-  const [confirmando,setConfirmando]=useState("");
-  // La conversacion de una cotizacion solo existe cuando ya se abrio la
-  // negociacion; hasta entonces no hay chat al que llevar al usuario.
-  // Tras crearse la orden el mismo hilo pasa a tipo "orden", asi que se buscan
-  // los dos: es la misma conversacion con el cliente.
-  const chatDe=(quoteId:string)=>chats.find((c)=>(c.type==="cotizacion"||c.type==="orden")&&(c.refId===quoteId||c.quoteId===quoteId));
-
-  // El cliente ya aceptó y falta la firma de la empresa: hasta que la cuenta
-  // dueña confirme, no hay orden. Es el paso donde revisa la negociación que
-  // dejó su asesor en el chat.
-  const esperandoConfirmacion=quotes.filter((q)=>{
-    const p=proposalsByQuoteId[q.id];
-    return p&&p.estado==="pendiente"&&p.preaceptada_por_solicitante&&!p.preaceptada_por_empresa;
-  });
-
-  async function confirmar(quote:Quote){
-    const propuesta=proposalsByQuoteId[quote.id];
-    if(!propuesta)return;
-    setConfirmando(propuesta.id);
-    setMensaje("");
-    try{
-      await onConfirmProposal(propuesta.id);
-      setMensaje(`Confirmaste la propuesta de ${quote.product}. La operación ya está creada; el comprador fue avisado de realizar el pago y enviar el comprobante por el chat.`);
-    }catch(err){
-      setMensaje(err instanceof Error?err.message:"No se pudo confirmar la propuesta.");
-    }finally{
-      setConfirmando("");
-    }
-  }
-
-  async function asignar(quote:Quote,advisorId:string|null){
-    try{
-      await onAssignAdvisor(quote.id,advisorId);
-      setMensaje(advisorId?"Asesor asignado a la cotizacion.":"La cotizacion volvio al pool de la empresa.");
-    }catch(err){
-      setMensaje(err instanceof Error?err.message:"No se pudo reasignar la cotizacion.");
-    }finally{
-      setAsignando(null);
-    }
-  }
-  const tabs=["todas","disponibles","asignadas","respondidas","vencidas","abiertas","dirigidas"];
-  const filtered=quotes.filter(q=>{
-    const ms=!search||[q.product,q.code,q.importer].some(v=>v.toLowerCase().includes(search.toLowerCase()));
-    const mf=filter==="todas"||
-      (filter==="dirigidas"&&q.mode==="Dirigida")||
-      (filter==="abiertas"&&q.mode==="Abierta")||
-      (filter==="disponibles"&&q.status==="created")||
-      (filter==="asignadas"&&q.status==="directed")||
-      (filter==="respondidas"&&(q.status==="accepted"||q.status==="active-order"));
-    return ms&&mf;
-  });
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="imp-quotes"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER_IMPORTADORA} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Cotizaciones"}]}/>
-            <h1 className="text-xl font-semibold mt-3">Cotizaciones recibidas</h1>
-          </div>
-
-          {esperandoConfirmacion.length>0&&(
-            <Card padding="none" className="border-amber-300">
-              <div className="px-5 py-3 border-b border-amber-200 bg-amber-50 dark:!bg-accent/10">
-                <p className="font-semibold text-sm text-amber-900 dark:!text-accent">Esperan tu confirmación</p>
-                <p className="text-xs text-amber-800 dark:!text-accent mt-0.5">
-                  El cliente aceptó lo que negoció tu asesor. Revisa el chat y confirma para crear la operación.
-                </p>
-              </div>
-              <div className="divide-y divide-border">
-                {esperandoConfirmacion.map((q)=>{
-                  const propuesta=proposalsByQuoteId[q.id];
-                  const chat=chatDe(q.id);
-                  return (
-                    <div key={q.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{q.product}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {q.code} · {leerPropuesta(propuesta.condiciones_adicionales) ? `${pesosCop(leerPropuesta(propuesta.condiciones_adicionales)!.totales.total_cop)} con IVA` : `US$${propuesta.precio_ofrecido_usd}`} · {propuesta.tiempo_estimado_entrega} · {propuesta.incoterm}
-                        </p>
-                      </div>
-                      <Button variant="secondary" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>}
-                        disabled={!chat}
-                        title={chat?"Revisar la negociación del asesor":"Todavía no hay chat de esta cotización"}
-                        onClick={()=>{if(chat) onOpenChat(chat.id);}}>
-                        Ver negociación
-                      </Button>
-                      <Button variant="primary" size="sm" icon={<CheckCircle2 className="w-3.5 h-3.5"/>}
-                        loading={confirmando===propuesta.id}
-                        onClick={()=>{void confirmar(q);}}>
-                        Confirmar y crear operación
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex gap-1 flex-wrap">
-              {tabs.map(t=>
-                <button key={t}
-                  onClick={()=>setFilter(t)}
-                  className={clsx("px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors",filter===t?"bg-primary dark:bg-accent text-white dark:text-black":"border hover:bg-primary/20 dark:hover:bg-accent/20 hover:text-primary dark:hover:text-accent hover:!border-primary/40 dark:hover:!border-accent/40")}>{t}
-                </button>
-              )}
-            </div>
-            <div className="w-64"><Input placeholder="Buscar…" value={search} onChange={e=>setSearch(e.target.value)} prefix={<Search className="w-4 h-4"/>}/></div>
-          </div>
-          <Card padding="none">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                  <th className="text-left px-5 py-3 font-medium">Cotización</th>
-                  <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Modalidad</th>
-                  <th className="text-left px-3 py-3 font-medium hidden sm:table-cell">Fecha</th>
-                  <th className="text-left px-3 py-3 font-medium">Estado</th>
-                  <th className="text-right px-5 py-3 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map(q=>(
-                  <tr key={q.id} className="hover:bg-muted/30 dark:hover:!bg-accent/10 transition-colors">
-                    <td className="px-5 py-3">
-                      <p className="font-medium truncate max-w-[200px]">{q.product}</p>
-                      <p className="text-xs text-muted-foreground">{q.code}</p>
-                    </td>
-                    <td className="px-3 py-3 hidden md:table-cell"><span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium dark:!bg-accent/10 dark:!text-accent",q.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{q.mode}</span></td>
-                    <td className="px-3 py-3 text-xs text-muted-foreground hidden sm:table-cell">{q.date}</td>
-                    <td className="px-3 py-3"><Badge variant={q.status}/></td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
-                        <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
-                        <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
-                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
-                        <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No hay cotizaciones para este filtro.</div>}
-            <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
-          </Card>
-          {mensaje&&<div className="p-3 rounded-lg border border-border bg-muted/40 text-sm">{mensaje}</div>}
-        </main>
-      </div>
-      <AdvisorQuoteDetailModal
-        quote={detalle}
-        open={Boolean(detalle)}
-        onClose={()=>setDetalle(null)}
-        proposal={detalle ? proposalsByQuoteId[detalle.id] : undefined}
-        negotiationChat={detalle ? chatDe(detalle.id) : undefined}
-        onConfirmProposal={onConfirmProposal}
-        onOpenChat={onOpenChat}
-      />
-      <Modal open={Boolean(asignando)} onClose={()=>setAsignando(null)} title="Asignar asesor">
-        <p className="text-sm text-muted-foreground mb-4">
-          Elige quien de tu equipo se hace cargo de esta cotizacion. Devolverla al pool permite que
-          cualquier asesor la reclame.
-        </p>
-        <div className="space-y-2">
-          {advisors.filter((a)=>a.status==="activo").map((a)=>(
-            <button key={a.id} type="button" onClick={()=>{if(asignando) void asignar(asignando,a.id);}}
-              className="w-full flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-left hover:border-primary/40 hover:bg-muted/40 transition-colors">
-              <Avatar initials={a.initials} size="sm" color={a.color}/>
-              <div className="min-w-0"><p className="text-sm font-medium truncate">{a.name}</p><p className="text-xs text-muted-foreground truncate">{a.email}</p></div>
-            </button>
-          ))}
-          {advisors.filter((a)=>a.status==="activo").length===0&&(
-            <p className="text-sm text-muted-foreground">No hay asesores activos en tu empresa.</p>
-          )}
-        </div>
-        <div className="mt-4 pt-3 border-t border-border">
-          <Button variant="secondary" size="sm" fullWidth onClick={()=>{if(asignando) void asignar(asignando,null);}}>
-            Devolver al pool de la empresa
-          </Button>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting,proposal,negotiationChat,onConfirmProposal,onOpenChat}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean;proposal?:BackendPropuesta;negotiationChat?:ChatConv;onConfirmProposal?:(propuestaId:string)=>Promise<void>;onOpenChat?:(conversationId:string)=>void}) {
-  const [confirmingProposal, setConfirmingProposal] = useState(false);
-  const [confirmationError, setConfirmationError] = useState("");
-  if (!quote) {
-    return null;
-  }
-
-  // Mismos campos, en el mismo orden, que el formulario que llena el
-  // comprador (y que su propio detalle). Antes este modal mostraba una «ficha
-  // técnica» con peso, volumen, dimensiones y destino —que el formulario no
-  // pide, así que siempre decían «No especificado»— y se saltaba línea,
-  // calidad, cantidad, precio objetivo y el link de referencia.
-  const custom = quote.customFields;
-  const peso = findCustomFieldValue(custom, ["peso", "weight"]);
-  const volumen = findCustomFieldValue(custom, ["volumen", "volume", "cbm", "m3"]);
-  const dimensiones = findCustomFieldValue(custom, ["dimension", "medida", "tamano", "size"]);
-  const destino = findCustomFieldValue(custom, ["destino", "destination", "puerto_destino"]);
-  const extras = [["Peso", peso], ["Volumen", volumen], ["Dimensiones", dimensiones], ["Destino", destino]].filter(([, v]) => v);
-  const linkReferencia = safeHttpUrl(quote.referenceLink);
-  const adjuntos = getQuoteAttachmentLinks(quote).filter((link) => link !== quote.referenceLink);
-  const conMayuscula = (texto?: string | null) => (texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "");
-  const proposito = quote.importMode === "corporativo" ? "Corporativo" : quote.importMode === "ecommerce" ? "Ecommerce" : conMayuscula(quote.importMode);
-  const dato = (etiqueta: string, valor: React.ReactNode, clase = "") => (
-    <div key={etiqueta} className={clase}>
-      <p className="text-xs text-muted-foreground">{etiqueta}</p>
-      <div className="text-sm font-medium mt-0.5 whitespace-pre-line break-words">{valor || "—"}</div>
-    </div>
-  );
-
-  return (
-    <Modal open={open} onClose={onClose} title={`Detalle completo · ${quote.code}`} width="max-w-3xl">
-      <div className="space-y-5">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Card padding="sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Producto</p>
-                <p className="mt-1 truncate text-sm font-semibold">{quote.product}</p>
-              </div>
-              <TierBadge tier={quote.solicitanteTier} />
-            </div>
-          </Card>
-          <Card padding="sm">
-            <p className="text-xs text-muted-foreground">Modalidad</p>
-            <p className="text-sm font-semibold mt-1">{quote.mode}</p>
-          </Card>
-        </div>
-
-        <Card padding="md">
-          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-primary dark:text-accent"/>Información del producto</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-            {dato("Nombre", quote.product)}
-            {dato("Línea", quote.productLine)}
-            {dato("País de importación", quote.country)}
-            {dato("Calidad", conMayuscula(quote.quality))}
-            {dato("Personalización", quote.personalizationLevel)}
-            {dato("Descripción", quote.description, "col-span-2 sm:col-span-3")}
-            {linkReferencia && dato(
-              "Link de referencia",
-              <a href={linkReferencia} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-primary dark:text-accent hover:underline break-all">
-                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0"/>{quote.referenceLink}
-              </a>,
-              "col-span-2 sm:col-span-3",
-            )}
-          </div>
-          {(quote.productPhotoUrls??[]).length>0&&(
-            <div className="mt-4 pt-4 border-t border-border"><GaleriaFotosProducto fotos={quote.productPhotoUrls??[]}/></div>
-          )}
-        </Card>
-
-        <Card padding="md">
-          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><Receipt className="w-4 h-4 text-primary dark:text-accent"/>Información comercial</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-            {dato("Propósito", proposito)}
-            {dato("Cantidad", cantidadConUnidad(quote.minQuantity, quote.unit))}
-            {dato("Ciudad de entrega", quote.deliveryCity)}
-            {dato("Precio objetivo", quote.targetPrice && quote.targetPrice !== "N/A" ? quote.targetPrice : "Sin precio objetivo")}
-            {dato("Incoterm", quote.incoterm)}
-            {dato("Shipping mark", <span className="font-mono">{quote.shippingMark || quote.shippingMarkSufijo || "Sin marca"}</span>)}
-            {extras.map(([k, v]) => dato(k, v))}
-            {dato("Notas", quote.notes, "col-span-2 sm:col-span-3")}
-          </div>
-        </Card>
-
-        <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
-
-        {proposal?.estado==="pendiente" && proposal.preaceptada_por_solicitante && !proposal.preaceptada_por_empresa && onConfirmProposal && (
-          <Card padding="md" className="border-amber-300 bg-amber-50 dark:border-accent/40 dark:!bg-accent/10">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-amber-700 dark:text-accent flex-shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-amber-900 dark:!text-accent">El comprador ya aceptó la propuesta</p>
-                <p className="text-xs text-amber-800 dark:!text-accent mt-0.5">Revisa la negociación y confirma para crear la operación.</p>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {negotiationChat && onOpenChat && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<MessageCircle className="w-3.5 h-3.5" />}
-                      onClick={() => onOpenChat(negotiationChat.id)}
-                      className=" dark:!border-accent/40"
-                    >
-                      Ver negociación
-                    </Button>
-                  )}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-                    loading={confirmingProposal}
-                    onClick={() => {
-                      setConfirmationError("");
-                      setConfirmingProposal(true);
-                      void onConfirmProposal(proposal.id)
-                        .catch((error) => {
-                          setConfirmationError(error instanceof Error ? error.message : "No se pudo confirmar la propuesta.");
-                        })
-                        .finally(() => setConfirmingProposal(false));
-                    }}
-                    className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
-                  >
-                    Confirmar y crear operación
-                  </Button>
-                </div>
-                {confirmationError && <p role="alert" className="text-xs text-destructive mt-2">{confirmationError}</p>}
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {onAccept && (
-          <div className="flex justify-end border-t border-border pt-4">
-            <Button
-              variant="primary"
-              loading={accepting}
-              icon={<CheckCircle2 className="w-4 h-4" />}
-              onClick={() => { void onAccept(); }}
-              className="dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/90"
-            >
-              Aceptar y abrir chat
-            </Button>
-          </div>
-        )}
-
-        {adjuntos.length>0&&(
-          <Card padding="md">
-            <h3 className="text-sm font-semibold mb-3">Archivos adjuntos</h3>
-            <div className="space-y-2">
-              {adjuntos.map((link)=> (
-                <a key={link} href={link} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all inline-flex items-center gap-1.5">
-                  <Paperclip className="w-3.5 h-3.5"/>{link}
-                </a>
-              ))}
-            </div>
-          </Card>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADVISOR PORTAL — DASHBOARD
-// ─────────────────────────────────────────────────────────────────────────────
-function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSentCount,activeChatsCount,onOpenInternalChat}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string};responsesSentCount:number;activeChatsCount:number;onOpenInternalChat:()=>Promise<void>}) {
-  const [errorCanal,setErrorCanal]=useState("");
-  const myQuotesCount = quotes.length;
-  const activeOrdersCount = quotes.filter(q=>q.status==="active-order").length;
-  const recentQuotes = quotes.slice(0,3);
-  const metrics=[
-    {label:"Cotizaciones disponibles",value:availableCount.toString(),icon:<Zap className="w-5 h-5"/>,color:"text-amber-600",bg:"bg-amber-50"},
-    {label:"Mis cotizaciones",value:myQuotesCount.toString(),icon:<ClipboardList className="w-5 h-5"/>,color:"text-blue-600",bg:"bg-blue-50"},
-    {label:"Respuestas enviadas",value:responsesSentCount.toString(),icon:<Send className="w-5 h-5"/>,color:"text-emerald-600",bg:"bg-emerald-50"},
-    {label:"Chats activos",value:activeChatsCount.toString(),icon:<MessageSquare className="w-5 h-5"/>,color:"text-purple-600",bg:"bg-purple-50"},
-    {label:"Operaciones en seguimiento",value:activeOrdersCount.toString(),icon:<ShoppingCart className="w-5 h-5"/>,color:"text-cyan-600",bg:"bg-cyan-50"},
-  ];
-  const activity:{text:string;time:string}[]=[];
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="adv-dashboard"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Mi dashboard"}]}/>
-            <div className="flex items-start justify-between gap-4 flex-wrap mt-3">
-              <div>
-                <h1 className="text-xl font-semibold">Panel del asesor</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">{headerUser.company}</p>
-              </div>
-              {/* Canal privado con la empresa: por aquí llegan las instrucciones
-                  de cuándo mover el estado de cada orden. */}
-              <Button variant="secondary" size="sm" icon={<MessageSquare className="w-3.5 h-3.5"/>}
-                onClick={()=>{void onOpenInternalChat().catch((err)=>setErrorCanal(err instanceof Error?err.message:"No se pudo abrir el canal."));}}>
-                Canal con mi empresa
-              </Button>
-            </div>
-            {errorCanal&&<p className="text-xs text-destructive mt-2">{errorCanal}</p>}
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {metrics.map((m,i)=>(
-              <Card key={i} padding="md" className="metric-card flex items-start gap-3">
-                <div className={clsx("metric-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 dark:!bg-accent/24",m.bg,m.color)}>{m.icon}</div>
-                <div className="min-w-0">
-                  <p className="text-xl font-bold text-foreground leading-none">{m.value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-          <div className="grid lg:grid-cols-2 gap-6">
-            <Card padding="none">
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-semibold text-sm">Mis cotizaciones recientes</h2>
-                <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("adv-my-quotes")}>Ver todas</Button>
-              </div>
-              {recentQuotes.map(q=>(
-                <div key={q.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{q.product}</p>
-                    <p className="text-xs text-muted-foreground">{q.code} · {q.date}</p>
-                  </div>
-                  <Badge variant={q.status as BadgeVariant}/>
-                </div>
-              ))}
-              {recentQuotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin cotizaciones asignadas.</div>}
-            </Card>
-            <Card padding="none">
-              <div className="px-5 py-4 border-b border-border"><h2 className="font-semibold text-sm">Actividad reciente</h2></div>
-              <div className="px-5 py-4 space-y-3">
-                {activity.map((a,i)=>(
-                  <div key={i} className="flex items-start gap-2.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 flex-shrink-0"/>
-                    <div><p className="text-sm">{a.text}</p><p className="text-xs text-muted-foreground">{a.time}</p></div>
-                  </div>
-                ))}
-                {activity.length===0&&<p className="text-xs text-muted-foreground">Sin actividad reciente disponible en API.</p>}
-              </div>
-            </Card>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
-// ─────────────────────────────────────────────────────────────────────────────
-/** La empresa todavía puede rechazar la cotización: no hay orden ni rechazo previo. */
-function puedeRechazarse(q: Quote): boolean {
-  return q.status === "created" || q.status === "directed" || q.status === "open";
-}
-
-function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
-  const [claimingId,setClaimingId]=useState<string|null>(null);
-  const [discardingId,setDiscardingId]=useState<string|null>(null);
-  const [claimError,setClaimError]=useState("");
-  const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
-  const [rechazando,setRechazando]=useState<Quote|null>(null);
-
-  async function handleClaim(quoteId: string){
-    try{
-      setClaimingId(quoteId);
-      setClaimError("");
-      await onClaim(quoteId);
-    }catch(error){
-      const message = error instanceof Error ? error.message : "No se pudo tomar la cotización.";
-      setClaimError(message);
-    }finally{
-      setClaimingId(null);
-    }
-  }
-
-  async function handleDiscard(quote: Quote){
-    try{
-      setDiscardingId(quote.id);
-      setClaimError("");
-      await onDiscard(quote);
-    }catch(error){
-      const message = error instanceof Error ? error.message : "No se pudo descartar la cotización.";
-      setClaimError(message);
-    }finally{
-      setDiscardingId(null);
-    }
-  }
-
-  async function handleAcceptFromDetail() {
-    if (!selectedQuote) return;
-    await handleClaim(selectedQuote.id);
-    setSelectedQuote(null);
-  }
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="adv-available"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Cotizaciones disponibles"}]}/>
-            <h1 className="text-xl font-semibold mt-3">Cotizaciones disponibles</h1>
-            <p className="text-sm text-muted-foreground">{available.length} esperando asignación</p>
-          </div>
-          {claimError&&<Card padding="sm" className="border-destructive/30 bg-red-50"><p className="text-xs text-destructive">{claimError}</p></Card>}
-          {available.length===0&&(
-            <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-              <CheckCircle2 className="w-12 h-12 text-emerald-400"/>
-              <p className="font-semibold text-lg">¡Todo al día!</p>
-              <p className="text-sm text-muted-foreground">No hay cotizaciones disponibles para asignar en este momento</p>
-            </div>
-          )}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {available.map(q=>(
-              <div key={q.id} className="border border-border rounded-xl p-5 flex flex-col gap-4 transition-all duration-300 bg-white">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-sm leading-tight">{q.product}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{q.code}</p>
-                  </div>
-                  <span className={clsx("px-2 py-0.5 text-xs rounded-md font-medium flex-shrink-0",q.mode==="Dirigida"?"bg-blue-50 text-blue-700":"bg-orange-50 text-orange-700")}>{q.mode}</span>
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Tag className="w-3 h-3"/>{q.productLine}</span>
-                  <span className="flex items-center gap-1"><Globe className="w-3 h-3"/>{q.country}</span>
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{q.updatedAt}</span>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Revisar y aceptar</Button>
-                  <div className="grid grid-cols-1 gap-2">
-                    <Button variant="secondary" size="sm" icon={<X className="w-3.5 h-3.5"/>} loading={discardingId===q.id} onClick={()=>setRechazando(q)}>Rechazar</Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </main>
-      </div>
-      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)} onAccept={handleAcceptFromDetail} accepting={Boolean(selectedQuote && claimingId===selectedQuote.id)}/>
-      <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={()=>rechazando?handleDiscard(rechazando):undefined}/>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADVISOR PORTAL — MY QUOTES
-// ─────────────────────────────────────────────────────────────────────────────
-function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat,onRechazada}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onRechazada:()=>Promise<void>}) {
-  const myQuotes=quotes.slice(0,20);
-  const [rechazando,setRechazando]=useState<Quote|null>(null);
-  // Al crearse la orden el hilo pasa a tipo "orden" y `refId` apunta a ella,
-  // pero sigue siendo la misma conversacion con el cliente: sin buscar tambien
-  // por `quoteId`, el asesor perdia el acceso al chat justo al cerrar el trato.
-  const chatDe=(quoteId:string)=>chats.find((c)=>(c.type==="cotizacion"||c.type==="orden")&&(c.refId===quoteId||c.quoteId===quoteId));
-  const [selectedQuote,setSelectedQuote]=useState<Quote|null>(null);
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="adv-my-quotes"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          <div>
-            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("adv-dashboard")},{label:"Mis cotizaciones"}]}/>
-            <h1 className="text-xl font-semibold mt-3">Mis cotizaciones</h1>
-          </div>
-          <Card padding="none">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                  <th className="text-left px-5 py-3 font-medium">Producto</th>
-                  <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Código</th>
-                  <th className="text-left px-3 py-3 font-medium hidden md:table-cell">Estado cot.</th>
-                  <th className="text-left px-3 py-3 font-medium hidden lg:table-cell">Últ. act.</th>
-                  <th className="text-right px-5 py-3 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {myQuotes.map(q=>(
-                  <tr key={q.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-5 py-3">
-                      <p className="font-medium">{q.product}</p>
-                      <p className="text-xs text-muted-foreground">{q.importer}</p>
-                    </td>
-                    <td className="px-3 py-3 hidden md:table-cell text-xs font-mono">{q.code}</td>
-                    <td className="px-3 py-3 hidden md:table-cell"><Badge variant={q.status as BadgeVariant}/></td>
-                    <td className="px-3 py-3 text-xs hidden lg:table-cell text-muted-foreground">{q.updatedAt}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
-                        <Button variant="secondary" size="sm" icon={<Eye className="w-3.5 h-3.5"/>} onClick={()=>setSelectedQuote(q)}>Ver Detalle Completo</Button>
-                        {existingProposalByQuoteId[q.id] ? (
-                          <Button variant="secondary" size="sm" icon={<Edit2 className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Ver/Editar Propuesta</Button>
-                        ) : (
-                          <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Crear Respuesta</Button>
-                        )}
-                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {myQuotes.length===0&&<div className="py-12 text-center text-sm text-muted-foreground">No tienes cotizaciones asignadas.</div>}
-          </Card>
-          <ModalRechazoCotizacion cotizacion={rechazando} onCerrar={()=>setRechazando(null)} onRechazada={onRechazada}/>
-        </main>
-      </div>
-      <AdvisorQuoteDetailModal quote={selectedQuote} open={Boolean(selectedQuote)} onClose={()=>setSelectedQuote(null)}/>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CREATE RESPONSE SCREEN — 3-step wizard
-// ─────────────────────────────────────────────────────────────────────────────
 function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,companyName,clientName,chatConversationId,onOpenChat,onEditConditions}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};companyName:string;clientName?:string;chatConversationId?:string;onOpenChat?:(conversationId:string)=>void;onEditConditions?:()=>void}) {
-  const quote=quotes.find(q=>q.id===quoteId)??null;
+  const quote=quotes.find(q=>q.id===quoteId) ?? null;
 
   // Abrir la solicitud es el "vista" de la bitácora; el backend solo cuenta la primera.
   useEffect(()=>{
@@ -9951,7 +5337,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
   // No es lo mismo responder por primera vez que reescribir algo que el
   // comprador ya tiene delante: la pantalla se llamaba "Responder cotización"
   // en los dos casos, y parecía que se podía responder varias veces.
-  const esPropuestaYaVista = existingProposal?.estado==="pendiente";
+  const esPropuestaYaVista = existingProposal?.estado === "pendiente";
   const revisionesPrevias = existingProposal?.revisiones ?? 0;
   const tituloPantalla = esPropuestaYaVista ? "Editar mi propuesta" : "Nueva propuesta";
   // La propuesta guardada en el formato nuevo se edita tal cual; una del formato
@@ -10126,7 +5512,7 @@ function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,exi
 // LANDING PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 // Textos: zarpi-home-copy-v1.md (raíz del repositorio). Los precios, lo que
-// incluye cada plan y los cupos NO están aquí: salen de Admin › Planes.
+// incluye cada plan y los cupos NO están aquí: salen de Admin â€º Planes.
 type LandingTabKey=Exclude<LandingSection,"stats"|"dare">|"tendencias"|"reto";
 const LANDING_TABS:{key:LandingTabKey;label:string}[]=[
   {key:"home",label:"Inicio"},
@@ -10216,7 +5602,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
   };
   // El tab Planes lleva a la sección de precios del inicio (/#planes).
   const irAPlanes=()=>irA("home","planes");
-  // El CTA de acceso respeta el interruptor Admin › Módulos: registro público
+  // El CTA de acceso respeta el interruptor Admin â€º Módulos: registro público
   // o formulario de solicitud para la lista privada.
   const abrirAcceso=()=>onRegister();
   const textoAcceso=registroAbierto()?"Crear cuenta":"Solicitar acceso";
@@ -10369,7 +5755,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
         </div>
       </section>
 
-      {/* PLANES (id `planes`): valores y cupos desde Admin › Planes */}
+      {/* PLANES (id `planes`): valores y cupos desde Admin ó Planes */}
       <SeccionPlanes onInscribirme={plan=>onInscribirse(plan.clave)} onCondiciones={()=>onPolicy("planes")} onAvisame={onListaEspera}/>
 
       {/* PARA EMPRESAS IMPORTADORAS */}
@@ -10441,7 +5827,7 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
             <span className="font-semibold text-white/70">Aviso legal: </span>
             Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
           </p>
-          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
+          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">? 2026 Zarpi. Todos los derechos reservados.</p>
           <div className="flex justify-center border-t border-white/10 pt-5">
             <PublicSicLogo />
           </div>
@@ -10451,9 +5837,9 @@ function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscri
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LANDING — Perfil de empresa (QuickView) y subpáginas públicas
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// LANDING ? Perfil de empresa (QuickView) y subpáginas públicas
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function LandingBackground() {
   const particles = Array.from({ length: 15 }, (_, i) => {
     const random = (min: number, max: number) =>
@@ -10866,12 +6252,12 @@ function LandingContactSection({perfilInicial="comprador",onLogin,onRegister}:{p
     </section>
   );
 }
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type RegUserType="solicitante"|"importadora";
 type RegPersonType="natural"|"juridica";
 
 /**
- * Con el registro público cerrado (Admin › Módulos) nadie crea cuenta por su
+ * Con el registro público cerrado (Admin â€º Módulos) nadie crea cuenta por su
  * lado: la cuenta se crea al activar la inscripción a un plan. Aquí va la línea
  * de la lista cerrada y el botón a la lista de espera.
  */
@@ -10924,7 +6310,7 @@ function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLogin:()=
       </main>
 
       <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>© 2026 Zarpi</span>
+        <span>? 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>
@@ -11013,33 +6399,32 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
 
     const codigoReferido = leerCodigoReferidoDeLaUrl();
 
-    const payload: RegisterRequest = personType === "natural"
-      ? {
-          email,
-          password,
-          rol: "solicitante",
-          tipo_persona: "natural",
-          tipo_documento: String(form.docType ?? "").trim(),
-          numero_documento: String(form.docNum ?? "").trim(),
-          nombre: String(form.name ?? "").trim(),
-          apellido: String(form.lastName ?? "").trim(),
-          indicativo_pais_telefono: indicativo,
-          telefono,
-          acepto_politica_datos: accepted,
-          ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
-        }
-      : {
-          email,
-          password,
-          rol: "solicitante",
-          tipo_persona: "juridica",
-          nit: String(form.nit ?? "").trim(),
-          razon_social: String(form.razonSocial ?? "").trim(),
-          indicativo_pais_telefono: indicativo,
-          telefono,
-          acepto_politica_datos: accepted,
-          ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
-        };
+    const payload: RegisterRequest = personType === "natural" ? {
+        email,
+        password,
+        rol: "solicitante",
+        tipo_persona: "natural",
+        tipo_documento: String(form.docType ?? "").trim(),
+        numero_documento: String(form.docNum ?? "").trim(),
+        nombre: String(form.name ?? "").trim(),
+        apellido: String(form.lastName ?? "").trim(),
+        indicativo_pais_telefono: indicativo,
+        telefono,
+        acepto_politica_datos: accepted,
+        ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
+      }
+    : {
+        email,
+        password,
+        rol: "solicitante",
+        tipo_persona: "juridica",
+        nit: String(form.nit ?? "").trim(),
+        razon_social: String(form.razonSocial ?? "").trim(),
+        indicativo_pais_telefono: indicativo,
+        telefono,
+        acepto_politica_datos: accepted,
+        ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
+      };
 
     try{
       setLoading(true);
@@ -11075,7 +6460,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
     e.preventDefault();
     if(otpLoading)return;
 
-    const normalizedOtp=String(otpCode??"").trim();
+    const normalizedOtp=String(otpCode ?? "").trim();
     if(normalizedOtp.length!==6){
       setOtpError("Ingresa un codigo OTP valido de 6 digitos.");
       return;
@@ -11137,7 +6522,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
               disabled={reenviando||esperaReenvio>0}
               className="mt-3 text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline dark:text-accent"
             >
-              {reenviando?"Enviando…":esperaReenvio>0?`Reenviar código en ${esperaReenvio} s`:"Reenviar código"}
+              {reenviando?"Enviandoâ€¦":esperaReenvio>0?`Reenviar código en ${esperaReenvio} s`:"Reenviar código"}
             </button>
 
             <button type="button" onClick={onBack} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
@@ -11338,7 +6723,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
                       className="mt-1 h-10 uppercase tracking-wide text-[13px] dark:bg-accent dark:hover:bg-accent dark:text-black">
                         {!loading&&"Crear cuenta"}
                     </Button>
-                    <p className="text-center text-xs text-muted-foreground">¿Ya tienes cuenta? <button type="button" onClick={onBack} className="text-purple-600 dark:text-green-500 hover:underline font-medium">Iniciar sesión</button></p>
+                    <p className="text-center text-xs text-muted-foreground">¿Ya tienes cuenta <button type="button" onClick={onBack} className="text-purple-600 dark:text-green-500 hover:underline font-medium">Iniciar sesión</button></p>
                   </div>
                 </form>
               )}
@@ -11348,7 +6733,7 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
       </main>
 
       <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>© 2026 Zarpi</span>
+        <span>? 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>
@@ -11364,9 +6749,9 @@ function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LOGIN
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:LegalPage)=>void;initialEmail?:string}) {
   return (
     <AuthScreen
@@ -11411,6 +6796,8 @@ const ADMIN_SECTION_BY_SCREEN = {
   "admin-asignacion": "asignacion",
   "admin-landing": "landing",
   "admin-correos": "correos",
+  "admin-tendencias": "tendencias",
+  "admin-tendencias-aprobacion": "tendencias-aprobacion",
 } as const;
 
 type AdminScreen = keyof typeof ADMIN_SECTION_BY_SCREEN;
@@ -11525,7 +6912,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
               <Input
                 value={faqSearch}
                 onChange={(event)=>setFaqSearch(event.target.value)}
-                placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»…"
+                placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»â€¦"
                 prefix={<Search className="w-4 h-4"/>}
               />
               <div className="flex flex-wrap gap-2">
@@ -11560,7 +6947,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                   <h2 className="text-sm font-semibold">Documentación</h2>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {cargandoAyuda?"Cargando…":`${articulos.length} artículos`}
+                  {cargandoAyuda?"Cargandoâ€¦":`${articulos.length} artículos`}
                 </span>
               </div>
               <div className="space-y-2.5">
@@ -11632,7 +7019,7 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
                 ))}
               </div>
               <div className="mt-4 rounded-lg border border-border p-3 text-xs text-muted-foreground">
-                Al abrir un ticket, incluye el código de cotización (COT-…) o de operación (ORD-…) y el mensaje de error
+                Al abrir un ticket, incluye el código de cotización (COT-â€¦) o de operación (ORD-â€¦) y el mensaje de error
                 completo. Con eso el equipo reproduce el caso sin tener que preguntarte.
               </div>
             </Card>
@@ -11643,9 +7030,9 @@ function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRol
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ROOT
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // `Screen` y la correspondencia con las URL viven en `@/app/rutas`.
 
 export default function App() {
@@ -11669,9 +7056,9 @@ export default function App() {
   const [resetToken,setResetToken]=useState<string>(() =>
     new URLSearchParams(window.location.search).get("token") ?? "",
   );
-  const [userRole,setUserRole]=useState<UserRole|"admin">(storedRole ?? "solicitante");
+  const [userRole, setUserRole] = useState<UserRole | "admin">(storedRole ?? "solicitante");
   /** Identificador que traía la dirección de entrada, si era de ese tipo. */
-  const idInicialDe=(param:ParamRuta)=>destinoInicial?.param===param?(destinoInicial.id ?? ""):"";
+  const idInicialDe = (param: ParamRuta) => destinoInicial?.param === param ? (destinoInicial.id ?? "") : "";
   const [selectedQuoteId,setSelectedQuoteId]=useState(()=>idInicialDe("quote"));
   const [selectedResponseId,setSelectedResponseId]=useState(()=>idInicialDe("response"));
   const [responseFrom,setResponseFrom]=useState<ResponseFrom>("responses");
@@ -11680,13 +7067,13 @@ export default function App() {
   const [selectedOrderDetail,setSelectedOrderDetail]=useState<Order|null>(null);
   const [selectedTendenciaId,setSelectedTendenciaId]=useState(()=>idInicialDe("tendencia"));
   // Plan elegido en el inicio («Inscribirme»): viaja en la URL como ?plan=.
-  const [planElegido,setPlanElegido]=useState(()=>new URLSearchParams(window.location.search).get("plan")??"");
+  const [planElegido,setPlanElegido]=useState(()=>new URLSearchParams(window.location.search).get("plan") ?? "");
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   // Qué orden está en pantalla: si se vuelve a pedir la misma, se refresca sin
-  // pasar por «Cargando…» (eso desmontaba el detalle y se perdía lo que el
+  // pasar por «Cargandoâ€¦» (eso desmontaba el detalle y se perdía lo que el
   // usuario estaba haciendo, p. ej. el comprobante de pago recién elegido).
   const orderDetailIdRef=useRef<string|null>(null);
-  orderDetailIdRef.current=selectedOrderDetail?.id??null;
+  orderDetailIdRef.current=selectedOrderDetail?.id ?? null;
   const [selectedImporterId,setSelectedImporterId]=useState(()=>idInicialDe("importer"));
   const [preselectedImporterId,setPreselectedImporterId]=useState<string|undefined>();
   const [quotePrefill,setQuotePrefill]=useState<Partial<QuoteFormState>|undefined>();
@@ -11740,16 +7127,21 @@ export default function App() {
     window.location.pathname === RESET_PASSWORD_PATH ? "login" : "dashboard",
   );
 
-  // ── Dirección del navegador ────────────────────────────────────────────────
+  // â”€â”€ Dirección del navegador â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Identificador que la pantalla actual pone en su URL. Solo las de detalle
   // tienen uno; el resto se dirigen con la ruta a secas.
-  const idEnLaRuta =
-    screen === "quote-detail" || screen === "create-response" ? selectedQuoteId
-    : screen === "response-detail" ? selectedResponseId
-    : screen === "order-detail" ? selectedOrderId
-    : screen === "importer-profile" ? selectedImporterId
-    : screen === "tendencia-detalle" ? selectedTendenciaId
-    : screen === "chats" ? (activeChatId || initialChatConvId || "")
+  const idEnLaRuta = screen === "quote-detail" || screen === "create-response"
+    ? selectedQuoteId
+    : screen === "response-detail"
+    ? selectedResponseId
+    : screen === "order-detail"
+    ? selectedOrderId
+    : screen === "importer-profile"
+    ? selectedImporterId
+    : screen === "tendencia-detalle"
+    ? selectedTendenciaId
+    : screen === "chats"
+    ? activeChatId || initialChatConvId || ""
     : "";
 
   const rutaActual = rutaDe(screen, idEnLaRuta || undefined);
@@ -11768,9 +7160,14 @@ export default function App() {
     // El token de restablecimiento y el código de referido viajan en la query;
     // se conservan mientras se esté en las pantallas que los usan.
     const conservaQuery = screen === "reset-password" || screen === "landing" || screen === "register";
-    const query = screen === "planes-inscripcion"
-      ? (planElegido ? `?plan=${encodeURIComponent(planElegido)}` : "")
-      : conservaQuery ? window.location.search : "";
+    const query =
+      screen === "planes-inscripcion"
+        ? planElegido
+          ? `?plan=${encodeURIComponent(planElegido)}`
+          : ""
+        : conservaQuery
+        ? window.location.search
+        : "";
     const url = `${rutaActual}${query}`;
 
     // Moverse dentro de la misma pantalla (abrir otra conversación del chat) no
@@ -11957,16 +7354,24 @@ export default function App() {
       const importer = importerById.get(importerId);
       return {
         id: row.id,
-        type: esEquipo ? "equipo" : esSoporte ? "soporte" : esInterno ? "interno" : row.orden_id ? "orden" : "cotizacion",
+        type: esEquipo
+          ? "equipo"
+          : esSoporte
+          ? "soporte"
+          : esInterno
+          ? "interno"
+          : row.orden_id
+          ? "orden"
+          : "cotizacion",
         refCode: esEquipo
           ? "Plataforma"
           : esSoporte
           ? "Soporte"
           : esInterno
-            ? "Equipo"
-            : row.orden_id
-              ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}`
-              : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
+          ? "Equipo"
+          : row.orden_id
+          ? `ORD-${row.orden_id.slice(0, 8).toUpperCase()}`
+          : `COT-${(row.cotizacion_id || "").slice(0, 8).toUpperCase()}`,
         refId: row.orden_id ?? row.cotizacion_id ?? "",
         quoteId: row.cotizacion_id ?? "",
         cotizanteTier: row.cotizacion_id ? cotizanteTierByQuoteId.get(row.cotizacion_id) : undefined,
@@ -12001,7 +7406,9 @@ export default function App() {
         // estaba escrito a cero y el filtro de no leídas no filtraba nada.
         unread: row.no_leidos ?? 0,
         lastMsg: row.ultimo_mensaje?.contenido || "Sin mensajes",
-        lastDate: row.ultimo_mensaje?.fecha_envio ? formatShortDate(row.ultimo_mensaje.fecha_envio) : formatShortDate(row.fecha_creacion),
+        lastDate: row.ultimo_mensaje?.fecha_envio
+          ? formatShortDate(row.ultimo_mensaje.fecha_envio)
+          : formatShortDate(row.fecha_creacion),
       };
     });
     setChatConversations(mappedConversations);
@@ -12159,7 +7566,7 @@ export default function App() {
   }, [marketplaceImporters, quoteStatusOverrides, currentUserProfile?.importador_id]);
 
   /**
-   * Índice "cotización → propuesta de mi empresa" (incluye borradores).
+   * Índice "cotización â†’ propuesta de mi empresa" (incluye borradores).
    *
    * Lo usa tanto el asesor como la cuenta dueña: sin él, la empresa no sabía
    * que un asesor ya había redactado un borrador, pulsaba "Responder" y el
@@ -12288,6 +7695,13 @@ export default function App() {
     void reloadChatData();
     void reloadDocumentExplorer();
   }, [isAuthenticated, token, isInitializing, reloadCurrentUserProfile, reloadChatData, reloadDocumentExplorer]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token || isInitializing || screen !== "chats") {
+      return;
+    }
+    void reloadChatData();
+  }, [isAuthenticated, token, isInitializing, screen, reloadChatData]);
 
   // El plan o el saldo pueden cambiar sin que el comprador haga nada (el admin le
   // da un plan, aprueba un comprobante): se releen al abrir una solicitud nueva o Pagos.
@@ -12468,10 +7882,9 @@ export default function App() {
   });
 
   const unreadCount=notifications.filter(n=>!n.read).length;
-  const chatUnreadCount=Math.max(
-    notifications.filter((n)=>!n.read&&n.type==="message").length,
-    chatConversations.reduce((acc,conversation)=>acc+(conversation.unread||0),0),
-  );
+  const chatUnreadCount=chatConversations
+    .filter((conversation)=>conversation.type!=="equipo"&&!conversation.closed)
+    .reduce((acc,conversation)=>acc+(conversation.unread||0),0);
   const activeChatCount = chatConversations.filter((conversation)=>conversation.status==="activa").length;
   const headerSubtitle = resolveHeaderSubtitle({
     role: userRole,
@@ -12742,7 +8155,7 @@ export default function App() {
 
   /**
    * Duplicar una cotización: se abre el formulario con sus datos copiados.
-   * No hay endpoint de duplicado en el backend ni hace falta — lo que se
+   * No hay endpoint de duplicado en el backend ni hace falta ? lo que se
    * envía después es una cotización nueva y corriente.
    */
   function duplicateQuote(quote:Quote){
@@ -13077,6 +8490,7 @@ export default function App() {
     "help-support": ["solicitante", "importadora", "asesor"],
     "admin-reto": ["admin"],
     "admin-tendencias": ["admin"],
+    "admin-tendencias-aprobacion": ["admin"],
     "admin-modulos": ["admin"],
     "admin-pagos": ["admin"],
     "admin-cursos-accesos": ["admin"],
@@ -13094,7 +8508,7 @@ export default function App() {
     "admin-empresas": ["admin"],
     "admin-usuarios": ["admin"],
     "admin-cotizantes": ["admin"],
-    // Única área del panel que comparte el equipo de atención al cliente.
+    // ?nica área del panel que comparte el equipo de atención al cliente.
     "admin-soporte": ["admin", "soporte"],
     "admin-certificaciones": ["admin"],
     "admin-respaldos": ["admin"],
@@ -13207,20 +8621,20 @@ export default function App() {
   if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
-    // ── Importer portal ───────────────────────────────────────────────────────
+    // â”€â”€ Importer portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
     if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
     if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
     if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany} onRechazada={refreshQuoteLists}/>;
 
-    // ── Advisor portal ────────────────────────────────────────────────────────
-    if(screen==="adv-dashboard")return <AdvisorDashboardScreen sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
+    // â”€â”€ Advisor portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if(screen==="adv-dashboard")return <ImpAdvisorDashboard sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
     if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={async()=>{await refreshQuoteLists();}} headerUser={advisorHeaderUser}/>;
     if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>;
 
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
-    // ── Shared ────────────────────────────────────────────────────────────────
+    // â”€â”€ Shared â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if(screen==="create-response")return <CreateResponseScreen quoteId={selectedQuoteId} onBack={()=>goTo(prevScreen)} sb={sb} userRole={userRole} quotes={userRole==="importadora"?importerQuotes:advisorAssignedQuotes} onSubmitted={async()=>{await refreshQuoteLists();await reloadChatData().catch(()=>undefined);}} existingProposal={advisorProposalsByQuoteId[selectedQuoteId] ?? null} headerUser={userRole==="asesor"?advisorHeaderUser:importerHeaderUser} companyName={companyProfile?.nombre_empresa || "Tu empresa"} clientName={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.counterpartName} chatConversationId={chatConversations.find((conversation)=>conversation.type==="cotizacion"&&conversation.refId===selectedQuoteId)?.id} onOpenChat={openChat} onEditConditions={()=>{goTo("imp-profile");window.setTimeout(()=>document.getElementById("condiciones-propuesta")?.scrollIntoView({behavior:"smooth"}),300);}}/>;
     if(screen==="notifications")return <NotificationsScreen notifications={notifications} onMark={markNotif} onOpen={openNotification} onBack={()=>goTo(prevScreen)} sb={sb}/>;
     if(screen==="help-support")return <HelpSupportScreen sb={sb} role={userRole as UserRole} onPedirSoporte={()=>setSoporteAbierto(true)}/>;
@@ -13235,9 +8649,9 @@ export default function App() {
       />
     );
 
-    // ── Solicitante portal ────────────────────────────────────────────────────
-    if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)}/>;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
+    // â”€â”€ Solicitante portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)} />;
+    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
     if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
     if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} solicitudesPlan={Number(currentUserProfile?.solicitudes_plan_vigentes ?? 0)} sinPlan={platformConfig.solo_con_plan&&userRole==="solicitante"&&currentUserProfile!==null&&!currentUserProfile.plan_vigente} permiteAbierta={platformConfig.cotizaciones_abiertas} onIrAPagos={()=>goTo("pagos")} onVerPlanes={irAPlanesDelInicio}/>;
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
@@ -13248,7 +8662,6 @@ export default function App() {
     if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
     if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
-    if(screen==="admin-tendencias")return <PantallaPortal sb={sb} active="admin-tendencias" titulo="Tendencias"><AdminTendencias/></PantallaPortal>;
     if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
     // Cursos propios de Zarpi: el mismo tablero y editor que usan las importadoras.
     if(screen==="admin-cursos")return <CoursesPortalScreen sb={sb} active="admin-cursos" role="importadora" headerUser={USER} companyName="Zarpi" cursosDeZarpi onGoDashboard={()=>goTo("admin-dashboard")}/>;

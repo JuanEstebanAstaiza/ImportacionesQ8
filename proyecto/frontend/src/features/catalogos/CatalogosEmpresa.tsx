@@ -23,10 +23,10 @@ import {
   X,
 } from "lucide-react";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
 import { toApiPath } from "@/services/api-client";
 import {
   CRITERIOS,
@@ -41,7 +41,7 @@ import {
   type ProductoCatalogoDatos,
   type TierCotizante,
 } from "@/services/catalogos.service";
-import { Autocompletar, Resaltar } from "@/app/components/busqueda/Autocompletar";
+import { Autocompletar, Resaltar } from "@/components/busqueda/Autocompletar";
 
 import {
   CLASE_BOTON_PRIMARIO,

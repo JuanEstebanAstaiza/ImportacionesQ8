@@ -68,12 +68,47 @@ export type Screen =
   | "reto"
   | "admin-reto"
   | "admin-tendencias"
+  | "admin-tendencias-aprobacion"
   | "admin-modulos"
   | "admin-pagos"
   | "admin-cursos-accesos"
   | "admin-presentaciones"
   | "admin-cursos"
   | "admin-tipografia";
+
+export type AdminTab =
+  | "metricas"
+  | "empresas"
+  | "asignacion"
+  | "usuarios"
+  | "cotizantes"
+  | "soporte"
+  | "certificaciones"
+  | "respaldos"
+  | "landing"
+  | "correos"
+  | "tendencias"
+  | "tendencias-aprobacion";
+
+export const ADMIN_TAB_BY_PATH: Record<string, AdminTab> = {
+  "/admin": "metricas",
+  "/admin/empresas": "empresas",
+  "/admin/asignacion": "asignacion",
+  "/admin/usuarios": "usuarios",
+  "/admin/cotizantes": "cotizantes",
+  "/admin/soporte": "soporte",
+  "/admin/certificaciones": "certificaciones",
+  "/admin/respaldos": "respaldos",
+  "/admin/landing": "landing",
+  "/admin/correos": "correos",
+  "/admin/tendencias": "tendencias",
+  "/admin/tendencias/aprobacion": "tendencias-aprobacion",
+};
+
+export function adminTabFromPath(pathname: string): AdminTab | null {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  return ADMIN_TAB_BY_PATH[normalized] ?? null;
+}
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
 export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia";
@@ -124,6 +159,7 @@ export const RUTAS: Ruta[] = [
   { screen: "diseno", path: "/diseno" },
   // Admin: catálogo del equipo, muro de pago y precio de Tendencias; y los módulos.
   { screen: "admin-tendencias", path: "/admin/tendencias" },
+  { screen: "admin-tendencias-aprobacion", path: "/admin/tendencias/aprobacion" },
   { screen: "admin-modulos", path: "/admin/modulos" },
   // Revisión de comprobantes de pago (tokens y suscripción) mientras llega la pasarela.
   { screen: "admin-pagos", path: "/admin/pagos" },

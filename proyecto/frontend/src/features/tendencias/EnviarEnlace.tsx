@@ -16,9 +16,9 @@ import {
   X,
 } from "lucide-react";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
 import { toApiPath } from "@/services/api-client";
 import {
   ETIQUETA_PLATAFORMA,

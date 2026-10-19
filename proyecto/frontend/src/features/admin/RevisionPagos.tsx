@@ -17,8 +17,8 @@ import {
   X,
 } from "lucide-react";
 
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import {
   comprobantesService,
   type Comprobante,

@@ -9,7 +9,7 @@ import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/au
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
 import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
-import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
+import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import type { LegalPage } from "@/features/legal/types";
 
 type AuthView = "login" | "forgot" | "otp";

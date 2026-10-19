@@ -23,8 +23,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import {
   CLASE_BOTON_PRIMARIO,
   CLASE_BOTON_SECUNDARIO,
@@ -32,7 +32,7 @@ import {
   fechaCorta,
   mensajeError,
 } from "@/features/tendencias/AprobacionComun";
-import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
 import type { BackendArchivoItem } from "@/services/business.service";
 import {
   ACEPTA_COMPROBANTE,
@@ -295,7 +295,7 @@ function Saldos({ resumen }: { resumen: ResumenPagos }) {
           valor={plan.vigente ? `${plan.solicitudes} ${plan.solicitudes === 1 ? "solicitud" : "solicitudes"}` : "Sin solicitudes"}
           icono={BadgeCheck}
           clase={plan.vigente
-            ? "bg-lime-100 text-lime-800 dark:bg-accent/15 dark:text-accent"
+            ? "bg-lime-100 text-lime-800 dark:!bg-accent/15 dark:text-accent"
             : "bg-muted text-muted-foreground"}
         />
       )}
@@ -303,14 +303,14 @@ function Saldos({ resumen }: { resumen: ResumenPagos }) {
         etiqueta="Tokens de cotización"
         valor={String(resumen.tokens)}
         icono={Coins}
-        clase="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+        clase="bg-amber-100 text-amber-700 dark:!bg-accent/15 dark:text-accent"
       />
       {conGratis && (
         <TarjetaSaldo
           etiqueta="Cotizaciones gratis"
           valor={String(resumen.cotizaciones_gratis)}
           icono={Gift}
-          clase="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+          clase="bg-emerald-100 text-emerald-700 dark:!bg-accent/15 dark:text-accent"
         />
       )}
       <TarjetaSaldo
@@ -318,7 +318,7 @@ function Saldos({ resumen }: { resumen: ResumenPagos }) {
         valor={vigente ? `Activa hasta ${fechaCorta(resumen.suscripcion.vigente_hasta)}` : "Sin suscripción"}
         icono={TrendingUp}
         clase={vigente
-          ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+          ? "bg-violet-100 text-violet-700 dark:bg-accent/15 dark:text-accent"
           : "bg-muted text-muted-foreground"}
       />
     </div>
