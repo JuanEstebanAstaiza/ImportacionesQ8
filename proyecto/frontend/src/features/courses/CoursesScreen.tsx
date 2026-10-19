@@ -25,12 +25,12 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/app/components/ui/accordion";
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
-import { Badge } from "@/app/components/ui/badge";
-import { Button } from "@/app/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/app/components/ui/card";
-import { Checkbox } from "@/app/components/ui/checkbox";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -38,15 +38,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/app/components/ui/dialog";
-import { Input } from "@/app/components/ui/input";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/app/components/ui/select";
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -54,9 +54,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/app/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { Textarea } from "@/app/components/ui/textarea";
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 import { useCourses } from "./useCourses";
 import type {
@@ -74,15 +74,15 @@ import {
   VIDEO_EXTENSIONS,
   VIDEO_FORMATS_LABEL,
   VIDEO_UPLOAD_ACCEPT,
-} from "@/app/components/media/ReproductorVideo";
+} from "@/components/media/ReproductorVideo";
 import { coursesService } from "@/services/courses.service";
 import {
   businessService,
   type BackendArchivoItem,
   type BackendExplorerResponse,
 } from "@/services/business.service";
-import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { formatearTamano, obtenerLimiteSubida } from "@/utils/limite-subida";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 
 type CoursesScreenProps = {
   role: "solicitante" | "importadora";

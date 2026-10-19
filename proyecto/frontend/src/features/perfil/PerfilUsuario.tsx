@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
 import { resolveApiUrl } from "@/services/api-client";
 import { perfilService, type CambiosPerfil, type MiPerfil } from "@/services/perfil.service";
 import { CLASE_BOTON_PRIMARIO, CLASE_BOTON_SECUNDARIO, CLASE_INPUT, CLASE_TARJETA, fechaBogota, mensajeError } from "@/features/reto/comun";

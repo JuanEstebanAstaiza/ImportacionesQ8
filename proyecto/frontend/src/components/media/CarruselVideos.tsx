@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 import { resolveApiUrl } from "@/services/api-client";
-import { encuadreParaPantalla, useEncuadrePreferido } from "@/app/components/media/VideoAdaptable";
+import { encuadreParaPantalla, useEncuadrePreferido } from "@/components/media/VideoAdaptable";
 
 /**
  * Varios videos que se van turnando solos, cada uno en la versión que le

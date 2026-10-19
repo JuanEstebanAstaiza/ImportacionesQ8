@@ -26,10 +26,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
-import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
+import { formatearTamano, obtenerLimiteSubida } from "@/utils/limite-subida";
 import { ApiError } from "@/services/api-client";
 import { businessService } from "@/services/business.service";
 import {

@@ -6,12 +6,12 @@ import { Quote } from "@/types/quote";
 
 import { SidebarCtrl } from "@/types/portal";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
 
-import { Button, Card } from "@/app/components/design-system";
+import { Button, Card } from "@/components/design-system";
 import { puedeRechazarse } from "@/utils/quotes";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive

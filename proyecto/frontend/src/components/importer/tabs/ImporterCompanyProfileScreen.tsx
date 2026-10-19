@@ -4,11 +4,11 @@ import { clsx } from "clsx";
 
 import { SidebarCtrl } from "@/types/portal";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import type { LegalPage } from "@/features/legal/types";
 
-import { Button, Card, Input, Logo } from "@/app/components/design-system";
+import { Button, Card, Input, Logo } from "@/components/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -19,12 +19,12 @@ import { CondicionesEmpresa } from "@/features/propuestas/CondicionesEmpresa";
 
 import { resolveApiUrl, toApiPath } from "@/services/api-client";
 
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 
 import { EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
 
-import { componerShippingMark, LONGITUD_MAX_PREFIJO_SHIPPING_MARK } from "@/lib/shipping-mark";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
+import { componerShippingMark, LONGITUD_MAX_PREFIJO_SHIPPING_MARK } from "@/utils/shipping-mark";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
 
 import { RUTA_RESTABLECER, type Screen } from "@/app/rutas";
 

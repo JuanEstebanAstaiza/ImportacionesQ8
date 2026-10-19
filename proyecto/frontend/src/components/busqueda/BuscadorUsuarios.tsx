@@ -1,5 +1,5 @@
 import { adminService, type UsuarioEncontrado } from "@/services/admin.service";
-import { Autocompletar, Resaltar } from "@/app/components/busqueda/Autocompletar";
+import { Autocompletar, Resaltar } from "@/components/busqueda/Autocompletar";
 
 /**
  * Autocompletado de cuentas para el panel de administración: basta con

@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Award, BadgeCheck, Building2, Plus, RotateCcw, Search, Shield, Zap } from "lucide-react";
 import { clsx } from "clsx";
 import { Sidebar, AppHeader, ImporterCard, USER } from "@/app/App";
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
-import { Button, Card, Input, Select } from "@/app/components/design-system";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
+import { Button, Card, Input, Select } from "@/components/design-system";
 import type { SidebarCtrl } from "@/types/portal";
 import type { Importer } from "@/types/importer";
 

@@ -5,7 +5,7 @@ import { DOCUMENTOS_LEGALES, ORDEN_DOCUMENTOS } from "@/features/legal/documento
 import { EMPRESA } from "@/features/legal/empresa";
 import type { LegalPage } from "@/features/legal/types";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
-import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
+import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 
 type LegalPolicyScreenProps = {
   page: LegalPage;

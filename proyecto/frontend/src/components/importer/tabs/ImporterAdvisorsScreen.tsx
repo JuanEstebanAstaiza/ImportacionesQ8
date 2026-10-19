@@ -4,13 +4,13 @@ import { clsx } from "clsx";
 
 import { SidebarCtrl } from "@/types/portal";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import type { LegalPage } from "@/features/legal/types";
 
 import { authService } from "@/services/auth.service";
 
-import { Avatar, Button, Card, Input, Select } from "@/app/components/design-system";
+import { Avatar, Button, Card, Input, Select } from "@/components/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.

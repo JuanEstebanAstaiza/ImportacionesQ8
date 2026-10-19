@@ -6,9 +6,9 @@ import { Quote } from "@/types/quote";
 
 import { SidebarCtrl } from "@/types/portal";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { Badge, Button, Card, Input, Select } from "@/app/components/design-system";
+import { Badge, Button, Card, Input, Select } from "@/components/design-system";
 import { Modal } from "@/app/App";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Check, CheckCircle2, FileUp, Loader2 } from "lucide-react";
 
-import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
+import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { CampoSector, EncabezadoPlanes, FormularioListaEspera } from "@/features/planes/ListaEspera";
 import { ApiError } from "@/services/api-client";
 import { planesService, pesos, type DatosInscripcion, type Plan } from "@/services/planes.service";

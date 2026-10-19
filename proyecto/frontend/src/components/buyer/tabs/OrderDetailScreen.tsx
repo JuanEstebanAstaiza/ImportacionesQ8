@@ -2,16 +2,16 @@ import { useState, useRef } from "react";
 import { Eye, CheckCircle2, Loader2, FileText, FolderOpen, Clock, BadgeCheck, Truck, Anchor, Warehouse, Receipt, FileCheck, Download, Boxes, Ship, Factory, PackageCheck, Navigation2, MessageSquare } from "lucide-react";
 import { clsx } from "clsx";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import { PagoOrden } from "@/features/ordenes/PagoOrden";
 
-import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@/app/components/design-system";
+import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@/components/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 
-import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
 
 import { RUTA_RESTABLECER } from "@/app/rutas";
 

@@ -5,7 +5,7 @@ import { Quote } from "@/types/quote";
 
 import type { LegalPage } from "@/features/legal/types";
 
-import { Button, Card } from "@/app/components/design-system";
+import { Button, Card } from "@/components/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.

@@ -1,9 +1,9 @@
 
 import { ShoppingCart, ExternalLink } from "lucide-react";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { Avatar, Badge, Button, Card } from "@/app/components/design-system";
+import { Avatar, Badge, Button, Card } from "@/components/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.

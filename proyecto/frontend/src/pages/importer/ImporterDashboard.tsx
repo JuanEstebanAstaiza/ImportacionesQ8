@@ -1,7 +1,7 @@
 import { Building2, ChevronRight, FileText, Users } from "lucide-react";
 import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
-import { Badge, Button, Card } from "@/app/components/design-system";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
+import { Badge, Button, Card } from "@/components/design-system";
 import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
 import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";

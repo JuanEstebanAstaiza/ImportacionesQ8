@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { BellRing, Check, Loader2, LockKeyhole, Monitor, Smartphone } from "lucide-react";
 
-import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
-import { encuadreParaPantalla, useEncuadrePreferido, type Encuadre } from "@/app/components/media/VideoAdaptable";
+import { ProtectedVideoPlayer } from "@/components/media/ReproductorVideo";
+import { encuadreParaPantalla, useEncuadrePreferido, type Encuadre } from "@/components/media/VideoAdaptable";
 import { planesService, pesos, type Plan, type VideoPlan } from "@/services/planes.service";
 
 /**

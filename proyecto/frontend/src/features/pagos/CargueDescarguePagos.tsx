@@ -23,8 +23,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import {
   CLASE_BOTON_PRIMARIO,
   CLASE_BOTON_SECUNDARIO,
@@ -32,7 +32,7 @@ import {
   fechaCorta,
   mensajeError,
 } from "@/features/tendencias/AprobacionComun";
-import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
 import type { BackendArchivoItem } from "@/services/business.service";
 import {
   ACEPTA_COMPROBANTE,

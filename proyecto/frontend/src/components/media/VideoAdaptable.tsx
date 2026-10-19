@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Monitor, Smartphone } from "lucide-react";
 
-import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
+import { ProtectedVideoPlayer } from "@/components/media/ReproductorVideo";
 
 /**
  * Video grabado en dos encuadres: horizontal (16:9, para computador) y vertical

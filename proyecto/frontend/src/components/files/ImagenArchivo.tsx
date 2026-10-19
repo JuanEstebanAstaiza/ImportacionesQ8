@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ImageOff, Loader2 } from "lucide-react";
 
-import { obtenerUrlLocalArchivo } from "@/lib/abrir-archivo";
+import { obtenerUrlLocalArchivo } from "@/utils/abrir-archivo";
 
 type ImagenArchivoProps = {
   src: string;

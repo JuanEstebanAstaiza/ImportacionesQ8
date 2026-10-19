@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { formatearTamano, obtenerLimiteSubida } from "@/utils/limite-subida";
 import { businessService } from "@/services/business.service";
 import {
   tendenciasService,

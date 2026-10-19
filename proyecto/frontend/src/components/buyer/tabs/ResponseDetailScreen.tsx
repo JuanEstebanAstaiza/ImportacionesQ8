@@ -6,11 +6,11 @@ import type { ResponseFrom } from "@/types/quote";
 import { Importer } from "@/types/importer";
 import { SidebarCtrl } from "@/types/portal";
 
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import type { LegalPage } from "@/features/legal/types";
 
-import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@/app/components/design-system";
+import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@/components/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.

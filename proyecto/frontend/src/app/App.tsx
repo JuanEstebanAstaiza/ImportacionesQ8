@@ -28,10 +28,10 @@ import type { QuoteResponse, ResponseFrom, ResponseStatus } from "../types/respo
 import { Importer } from "../types/importer";
 import type { CompanyAdvisor, SidebarCtrl } from "../types/portal";
 import type { TimelineStage } from "../types/design-system";
-import { ProtectedRoute } from "@/app/components/guards/ProtectedRoute";
-import { Breadcrumb } from "@/app/components/navigation/Breadcrumb";
+import { ProtectedRoute } from "@/components/guards/ProtectedRoute";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
-import { PublicSicLogo } from "@/app/components/navigation/PublicSicLogo";
+import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
 import type { LegalPage } from "@/features/legal/types";
@@ -56,8 +56,8 @@ import { AdvisorAvailableScreen } from "@/components/advisor/tabs/AdvisorAvailab
 import { AdvisorMyQuotesScreen } from "@/components/advisor/tabs/AdvisorMyQuotesScreen";
 import { ImpAdvisorDashboard } from "@/pages/advisor/AdvisorDashboard";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import { TendenciasFeed } from "@/features/tendencias/Feed";
 import { TendenciaFicha } from "@/features/tendencias/Ficha";
 import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
@@ -94,8 +94,8 @@ import { useBrandTheme } from "@/app/hooks/useBrandTheme";
 import {
   Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Logo, NotifIcon,
   openSmartContact, Select, Textarea, Timeline,
-} from "@/app/components/design-system";
-import { formatChatTime, parseBackendDate } from "@/lib/date";
+} from "@/components/design-system";
+import { formatChatTime, parseBackendDate } from "@/utils/date";
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 import { HELP_SUPPORT_CONTENT, normalizeHelpRole } from "@/features/help/help-support-content";
@@ -126,10 +126,10 @@ import { CondicionesEmpresa } from "@/features/propuestas/CondicionesEmpresa";
 import { leerPropuesta, pesos as pesosCop, type FormularioPropuesta as FormularioPropuestaDatos } from "@/features/propuestas/calculo";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { landingService, leerVideosQuienesSomos, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
-import { CarruselVideos } from "@/app/components/media/CarruselVideos";
+import { CarruselVideos } from "@/components/media/CarruselVideos";
 import { safeHttpUrl } from "@/utils/safe-url";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
-import { abrirArchivoEnPestana, descargarArchivo } from "@/lib/abrir-archivo";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
+import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
 import { ResenasImportador } from "@/features/resenas/ResenasImportador";
 import { PendientesDeResena } from "@/features/resenas/PendientesDeResena";
 import { PresentacionPublica, EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
@@ -141,7 +141,7 @@ import {
   componerShippingMark,
   LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
   LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
-} from "@/lib/shipping-mark";
+} from "@/utils/shipping-mark";
 import type { RegisterRequest } from "@/types/auth";
 import { destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 import type { UrgenciaSoporte } from "@/services/business.service";
@@ -465,7 +465,7 @@ const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","
 // Una sola lista para la línea de producto que pide el cliente y para las
 // categorías que declara la empresa: eran dos listas distintas y el backend
 // compara ambas para decidir si la empresa puede responder. Ver
-// `src/lib/categorias.ts`.
+// `src/utils/categorias.ts`.
 const LINES=CATEGORIAS_PRODUCTO;
 const ALL_CATEGORIES=CATEGORIAS_PRODUCTO;
 const SYSTEM_ROOT_FOLDER_NAMES=["?rdenes","Cotizaciones","Respuestas","Cursos","Chats","Certificados"];

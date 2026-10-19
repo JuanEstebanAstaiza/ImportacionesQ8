@@ -22,7 +22,7 @@ import {
 
 import { businessService, type BackendArchivoItem, type BackendExplorerResponse } from "@/services/business.service";
 import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import {
   landingService,
   type LandingAlly,

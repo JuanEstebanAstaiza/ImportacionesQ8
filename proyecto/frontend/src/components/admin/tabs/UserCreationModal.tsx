@@ -1,4 +1,4 @@
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
 import { textoCategoria } from "@/features/admin/CategoriasCotizante";
 import type { CategoriaCotizante } from "@/services/admin.service";
 import {

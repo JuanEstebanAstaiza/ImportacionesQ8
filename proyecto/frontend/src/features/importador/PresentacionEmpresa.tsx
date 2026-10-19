@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Clock, Film, ImageIcon, Trash2 } from "lucide-react";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { ProtectedVideoPlayer } from "@/components/media/ReproductorVideo";
 import {
   businessService,
   type BackendEvidenciaImportador,

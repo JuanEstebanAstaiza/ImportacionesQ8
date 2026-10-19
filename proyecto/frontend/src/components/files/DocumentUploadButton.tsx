@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 
 import { businessService, type BackendArchivoItem } from "@/services/business.service";
-import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
+import { formatearTamano, obtenerLimiteSubida } from "@/utils/limite-subida";
 
 type DocumentUploadButtonProps = {
   label: string;
