@@ -51,10 +51,10 @@ import { ImporterCompanyProfileScreen } from "@/components/importer/tabs/Importe
 import { ImporterAdvisorsScreen } from "@/components/importer/tabs/ImporterAdvisorsScreen";
 import { ImporterQuotesScreen } from "@/components/importer/tabs/ImporterQuotesScreen";
 import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
-import { AdvisorDashboardScreen } from "@/components/advisor/tabs/AdvisorDashboardScreen";
+import { ImpAdvisorDashboard } from "@/pages/advisor/AdvisorDashboard";
 import { AdvisorAvailableScreen } from "@/components/advisor/tabs/AdvisorAvailableScreen";
 import { AdvisorMyQuotesScreen } from "@/components/advisor/tabs/AdvisorMyQuotesScreen";
-import { ImpAdvisorDashboard } from "@/pages/advisor/AdvisorDashboard";
+import { AdvisorDashboardScreen } from "@/components/advisor/tabs/AdvisorDashboardScreen";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
 import { ImagenArchivo } from "@/components/files/ImagenArchivo";

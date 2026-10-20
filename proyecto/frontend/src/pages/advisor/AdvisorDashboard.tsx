@@ -19,17 +19,21 @@ export function ImpAdvisorDashboard({
   activeChatsCount: number;
   onOpenInternalChat: () => Promise<void>;
 }) {
-  return (
-    <AdvisorDashboardScreen
-      sb={sb}
-      availableCount={availableCount}
-      quotes={quotes}
-      headerUser={headerUser}
-      responsesSentCount={responsesSentCount}
-      activeChatsCount={activeChatsCount}
-      onOpenInternalChat={onOpenInternalChat}
-    />
-  );
+  switch (sb.active) {
+    case "adv-dashboard":
+    default:
+      return (
+        <AdvisorDashboardScreen
+          sb={sb}
+          availableCount={availableCount}
+          quotes={quotes}
+          headerUser={headerUser}
+          responsesSentCount={responsesSentCount}
+          activeChatsCount={activeChatsCount}
+          onOpenInternalChat={onOpenInternalChat}
+        />
+      );
+  }
 }
 
 export const AdvisorDashboard = ImpAdvisorDashboard;
