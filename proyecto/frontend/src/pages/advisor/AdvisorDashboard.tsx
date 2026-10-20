@@ -1,6 +1,10 @@
+import type { ReactNode } from "react";
 import { AdvisorDashboardScreen } from "@/components/advisor/tabs/AdvisorDashboardScreen";
 import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";
+import type { Screen } from "@/app/rutas";
+
+export type AdvisorRoute = "adv-dashboard" | "adv-available" | "adv-my-quotes";
 
 export function ImpAdvisorDashboard({
   sb,
@@ -10,6 +14,8 @@ export function ImpAdvisorDashboard({
   responsesSentCount,
   activeChatsCount,
   onOpenInternalChat,
+  screen,
+  views,
 }: {
   sb: SidebarCtrl;
   availableCount: number;
@@ -18,10 +24,12 @@ export function ImpAdvisorDashboard({
   responsesSentCount: number;
   activeChatsCount: number;
   onOpenInternalChat: () => Promise<void>;
+  screen?: Screen;
+  views?: Partial<Record<AdvisorRoute, ReactNode>>;
 }) {
-  switch (sb.active) {
+  const route = (screen ?? sb.active) as AdvisorRoute;
+  switch (route) {
     case "adv-dashboard":
-    default:
       return (
         <AdvisorDashboardScreen
           sb={sb}
@@ -33,6 +41,11 @@ export function ImpAdvisorDashboard({
           onOpenInternalChat={onOpenInternalChat}
         />
       );
+    case "adv-available":
+    case "adv-my-quotes":
+      return views?.[route] ?? null;
+    default:
+      return null;
   }
 }
 

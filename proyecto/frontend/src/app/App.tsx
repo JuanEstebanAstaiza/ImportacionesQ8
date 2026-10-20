@@ -33,12 +33,13 @@ import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { CoursesScreen } from "@/features/courses/CoursesScreen";
+import { CoursesPortalScreen } from "@/features/courses/CoursesPortalScreen";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
 import type { LegalPage } from "@/features/legal/types";
 import { EMPRESA } from "@/features/legal/empresa";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { DashboardScreen } from "@/pages/buyer/BuyerDashboard";
-import { ImporterDashboardScreen } from "@/pages/importer/ImporterDashboard";
+import { ImporterDashboard } from "@/pages/importer/ImporterDashboard";
 import { QuotesScreen } from "@/components/buyer/tabs/QuotesScreen";
 import { QuoteDetailScreen } from "@/components/buyer/tabs/QuoteDetailScreen";
 import { ResponseDetailScreen } from "@/components/buyer/tabs/ResponseDetailScreen";
@@ -1679,36 +1680,6 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
 export const USER={name:"Ana García",company:"Importaciones del Norte S.A.",initials:"AG"};
 export const USER_IMPORTADORA={name:"María López",company:"Grupo Nexus S.A.",initials:"ML"};
 const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. ? Asesor",initials:"CM"};
-
-function CoursesPortalScreen({
-  sb,
-  role,
-  headerUser,
-  companyName,
-  onGoDashboard,
-  onComprarAcceso,
-  active = "courses",
-  cursosDeZarpi = false,
-}:{
-  sb: SidebarCtrl;
-  role: "solicitante" | "importadora";
-  headerUser: { name: string; company: string; initials: string };
-  companyName: string;
-  onGoDashboard: () => void;
-  onComprarAcceso?: (courseId: string) => void;
-  active?: string;
-  cursosDeZarpi?: boolean;
-}) {
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active={active}/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser} sb={sb}/>
-        <CoursesScreen role={role} companyName={companyName} onGoDashboard={onGoDashboard} onComprarAcceso={onComprarAcceso} cursosDeZarpi={cursosDeZarpi}/>
-      </div>
-    </div>
-  );
-}
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // IMPORTER CARD ? used in Dashboard and profile screens
@@ -6801,6 +6772,9 @@ const ADMIN_SECTION_BY_SCREEN = {
 } as const;
 
 type AdminScreen = keyof typeof ADMIN_SECTION_BY_SCREEN;
+const IMPORTER_ROUTES: Screen[] = ["imp-dashboard", "imp-profile", "imp-advisors", "imp-quotes", "imp-catalogos"];
+const ADVISOR_ROUTES: Screen[] = ["adv-dashboard", "adv-available", "adv-my-quotes"];
+const BUYER_ROUTES: Screen[] = ["dashboard", "importer-profile", "quotes", "new-quote", "quote-detail", "responses", "response-detail", "orders", "order-detail", "catalogos"];
 
 function AdminDashboardScreen({sb,onRefreshGlobal,screen}:{sb:SidebarCtrl;onRefreshGlobal?:()=>Promise<void>;screen:AdminScreen}) {
   const mainRef = useRef<HTMLElement | null>(null);
@@ -8620,17 +8594,40 @@ export default function App() {
   if(legalPage)return <LegalPolicyScreen page={legalPage} onBack={()=>goTo(prevScreen)} onOpen={page=>setScreen(PANTALLA_LEGAL[page])}/>;
   if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
 
+  const importerViews = {
+    "imp-profile": <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>,
+    "imp-advisors": <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>,
+    "imp-quotes": <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany} onRechazada={refreshQuoteLists}/>,
+    "imp-catalogos": <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>,
+  };
+
+  const advisorViews = {
+    "adv-available": <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={async()=>{await refreshQuoteLists();}} headerUser={advisorHeaderUser}/>,
+    "adv-my-quotes": <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>,
+  };
+
+  const buyerViews = {
+    "importer-profile": <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>,
+    "quotes": <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>,
+    "new-quote": <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} solicitudesPlan={Number(currentUserProfile?.solicitudes_plan_vigentes ?? 0)} sinPlan={platformConfig.solo_con_plan&&userRole==="solicitante"&&currentUserProfile!==null&&!currentUserProfile.plan_vigente} permiteAbierta={platformConfig.cotizaciones_abiertas} onIrAPagos={()=>goTo("pagos")} onVerPlanes={irAPlanesDelInicio}/>,
+    "quote-detail": <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote} userRole={userRole}/>,
+    "responses": <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>,
+    "response-detail": <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={requesterOrders} onRefreshData={refreshQuoteLists}/>,
+    "orders": <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={requesterOrders} importers={marketplaceImporters}/>,
+    "order-detail": <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={false} esCliente onUpdateOrderStatus={handleUpdateOrderStatus}/>,
+    "catalogos": <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>,
+  };
+
   const renderPrivateScreen = () => {
     // â”€â”€ Importer portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if(screen==="imp-dashboard")return <ImporterDashboardScreen sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""}/>;
-    if(screen==="imp-profile")return <ImporterCompanyProfileScreen sb={sb} company={companyProfile} onSave={handleSaveCompanyProfile}/>;
-    if(screen==="imp-advisors")return <ImporterAdvisorsScreen sb={sb} initialAdvisors={companyAdvisors} onCreateAdvisor={handleCreateAdvisor} onSetAdvisorActive={handleSetAdvisorActive} onOpenInternalChat={openInternalChat}/>;
-    if(screen==="imp-quotes")return <ImporterQuotesScreen sb={sb} quotes={importerQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} advisors={companyAdvisors} chats={chatConversations} onOpenChat={openChat} onAssignAdvisor={handleAssignAdvisorToQuote} proposalsByQuoteId={companyProposalsByQuoteId} onConfirmProposal={handleConfirmProposalAsCompany} onRechazada={refreshQuoteLists}/>;
+    if(IMPORTER_ROUTES.includes(screen)) {
+      return <ImporterDashboard screen={screen} sb={sb} quotes={importerQuotes} advisors={companyAdvisors} chats={chatConversations} companyName={companyProfile?.nombre_empresa||""} views={importerViews}/>;
+    }
 
     // â”€â”€ Advisor portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if(screen==="adv-dashboard")return <ImpAdvisorDashboard sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()}/>;
-    if(screen==="adv-available")return <AdvisorAvailableScreen sb={sb} available={visibleAvailableQuotes} onClaim={claimQuote} onDiscard={async()=>{await refreshQuoteLists();}} headerUser={advisorHeaderUser}/>;
-    if(screen==="adv-my-quotes")return <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>;
+    if(ADVISOR_ROUTES.includes(screen)) {
+      return <ImpAdvisorDashboard screen={screen} sb={sb} availableCount={visibleAvailableQuotes.length} quotes={advisorAssignedQuotes} headerUser={advisorHeaderUser} responsesSentCount={Object.keys(advisorProposalsByQuoteId).length} activeChatsCount={activeChatCount} onOpenInternalChat={()=>openInternalChat()} views={advisorViews}/>;
+    }
 
     if(screen in ADMIN_SECTION_BY_SCREEN)return <AdminDashboardScreen sb={sb} onRefreshGlobal={refreshQuoteLists} screen={screen as AdminScreen}/>;
 
@@ -8646,25 +8643,24 @@ export default function App() {
         companyName={userRole === "importadora" ? (companyProfile?.nombre_empresa || importerHeaderUser.company) : ""}
         onGoDashboard={() => goTo(userRole === "importadora" ? "imp-dashboard" : "dashboard")}
         onComprarAcceso={(courseId) => { setCursoAPagar(courseId); goTo("pagos"); }}
+        SidebarComponent={Sidebar}
+        HeaderComponent={AppHeader}
       />
     );
 
     // â”€â”€ Solicitante portal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if(screen==="dashboard")return <DashboardScreen sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)} />;
-    if(screen==="importer-profile")return <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>;
-    if(screen==="quotes")return <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>;
-    if(screen==="new-quote")return <NewQuoteScreen key={origenSolicitud?.tendenciaItemId||origenSolicitud?.catalogoProductoId||(quotePrefill?"duplicada":"nueva")} onBack={()=>goTo(origenSolicitud?(origenSolicitud.origen==="tendencias"?"tendencias":"catalogos"):"quotes")} sb={sb} preselectedImporterId={preselectedImporterId} importers={marketplaceImporters} cotizanteTier={currentUserProfile?.tier || "Bronze"} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onSubmitQuote={handleCreateQuote} prefill={quotePrefill} origen={origenSolicitud} cobroTokens={platformConfig.cobro_cotizaciones&&userRole==="solicitante"} cotizacionesGratis={Number(currentUserProfile?.cotizaciones_gratis ?? 0)} solicitudesPlan={Number(currentUserProfile?.solicitudes_plan_vigentes ?? 0)} sinPlan={platformConfig.solo_con_plan&&userRole==="solicitante"&&currentUserProfile!==null&&!currentUserProfile.plan_vigente} permiteAbierta={platformConfig.cotizaciones_abiertas} onIrAPagos={()=>goTo("pagos")} onVerPlanes={irAPlanesDelInicio}/>;
+    if(BUYER_ROUTES.includes(screen)) {
+      return <DashboardScreen screen={screen} sb={sb} importers={marketplaceImporters} onViewProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} onCreateQuote={id=>openNewQuote(id)} views={buyerViews}/>;
+    }
     if(screen==="tendencias")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciasFeed rol={rolPortal} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("tendencias-enviar")} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
     if(screen==="tendencia-detalle")return <PantallaPortal sb={sb} active="tendencias" titulo="Tendencias"><TendenciaFicha id={selectedTendenciaId} rol={rolPortal} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onIrAPagos={pagarSuscripcionTendencias}/></PantallaPortal>;
     if(screen==="tendencias-enviar")return <PantallaPortal sb={sb} active="tendencias" titulo="Subir un producto viral"><EnviarEnlace rol={rolPortal ?? "solicitante"}/></PantallaPortal>;
     if(screen==="reto")return <PantallaPortal sb={sb} active="reto" titulo="Reto"><RetoPagina autenticado onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("tendencias-enviar")}/></PantallaPortal>;
     if(screen==="admin-reto")return <PantallaPortal sb={sb} active="admin-reto" titulo="Reto · Rondas y pagos"><RetoAdmin/></PantallaPortal>;
-    if(screen==="catalogos")return <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>;
-    if(screen==="imp-catalogos")return <PantallaPortal sb={sb} active="imp-catalogos" titulo="Catálogos"><CatalogosEmpresa esDueno={userRole==="importadora"}/></PantallaPortal>;
     if(screen==="admin-tipografia")return <PantallaPortal sb={sb} active="admin-tipografia" titulo="Tipografía"><TipografiaPlataforma/></PantallaPortal>;
     if(screen==="admin-pagos")return <PantallaPortal sb={sb} active="admin-pagos" titulo="Pagos"><RevisionPagos/></PantallaPortal>;
     // Cursos propios de Zarpi: el mismo tablero y editor que usan las importadoras.
-    if(screen==="admin-cursos")return <CoursesPortalScreen sb={sb} active="admin-cursos" role="importadora" headerUser={USER} companyName="Zarpi" cursosDeZarpi onGoDashboard={()=>goTo("admin-dashboard")}/>;
+    if(screen==="admin-cursos")return <CoursesPortalScreen sb={sb} active="admin-cursos" role="importadora" headerUser={USER} companyName="Zarpi" cursosDeZarpi onGoDashboard={()=>goTo("admin-dashboard")} SidebarComponent={Sidebar} HeaderComponent={AppHeader}/>;
     if(screen==="admin-planes")return <PantallaPortal sb={sb} active="admin-planes" titulo="Planes"><PlanesAdmin/></PantallaPortal>;
     if(screen==="admin-presentaciones")return <PantallaPortal sb={sb} active="admin-presentaciones" titulo="Presentaciones de empresas"><RevisionPresentaciones/></PantallaPortal>;
     if(screen==="admin-cursos-accesos")return <PantallaPortal sb={sb} active="admin-cursos-accesos" titulo="Accesos a cursos"><AccesosCursos/></PantallaPortal>;
@@ -8674,13 +8670,8 @@ export default function App() {
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
       return <PantallaPortal sb={sb} active="tendencias-aprobacion" titulo="Tendencias · Aprobación"><PanelAprobacion esAdmin={userRole==="admin"}/></PantallaPortal>;
     }
-    if(screen==="quote-detail")return <QuoteDetailScreen quoteId={selectedQuoteId} quotes={userRole==="solicitante"?requesterQuotes:userRole==="importadora"?importerQuotes:advisorAssignedQuotes} chats={chatConversations} orders={userRole==="importadora"?importerOrders:requesterOrders} onBack={()=>goTo(userRole==="solicitante"?"quotes":getHomeScreenForRole(userRole))} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote} userRole={userRole} onConfirmProposal={userRole==="importadora"?handleConfirmProposalAsCompany:undefined}/>;
-    if(screen==="responses")return <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>;
-    if(screen==="response-detail")return <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={userRole==="importadora"?importerOrders:requesterOrders} onRefreshData={refreshQuoteLists}/>;
     if(screen==="chats")return <ChatsScreen onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
     if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters}/>;
-    if(screen==="orders")return <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={userRole==="importadora"?importerOrders:requesterOrders} importers={marketplaceImporters}/>;
-    if(screen==="order-detail")return <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={userRole==="importadora"||userRole==="asesor"} esCliente={userRole==="solicitante"} onUpdateOrderStatus={handleUpdateOrderStatus}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)} carpetaInicial={carpetaPagos}/></PantallaPortal>;
     if(screen==="user-profile")return (

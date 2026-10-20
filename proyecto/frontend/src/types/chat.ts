@@ -1,4 +1,4 @@
-export type ChatType = "orden" | "cotizacion";
+export type ChatType = "orden" | "cotizacion" | "interno" | "soporte" | "equipo";
 
 export type MsgFileType = "pdf" | "excel" | "word" | "image";
 
@@ -16,6 +16,8 @@ export interface ChatMsg {
   time: string;
   read: boolean;
   dateGroup?: string;
+  proposal?: unknown;
+  authorName?: string;
 }
 
 export interface ChatConv {
@@ -28,10 +30,36 @@ export interface ChatConv {
    * cuanto existe, así que se guarda aparte para poder reasignar el responsable
    * de la cotización desde el chat.
    */
-  quoteId?: string;
+  quoteId: string;
   importerId: string;
   status: "activa" | "archivada";
   unread: number;
   lastMsg: string;
   lastDate: string;
+  cotizanteTier?: string;
+  counterpartName?: string;
+  counterpartId?: string;
+  counterpartRole?: string;
+  counterpartCompany?: string;
+  counterpartPhotoUrl?: string;
+  subject?: string;
+  urgency?: string;
+  requesterRole?: string;
+  closed?: boolean;
+  resolution?: string;
+  closedBy?: string;
+  level?: number;
+  agentId?: string;
+  agentName?: string;
+  agentLevel?: number;
+  rating?: number;
+  ratingComment?: string;
+  importerName?: string;
+  advisorName?: string;
+  advisorRole?: string;
+  advisorEmail?: string;
+  advisorPhone?: string;
+  advisorInitials?: string;
+  advisorColor?: string;
+  atiendeNombre?: string;
 }
