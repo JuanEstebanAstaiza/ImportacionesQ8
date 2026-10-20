@@ -18,11 +18,12 @@ import {
 import type { CompanyAdvisor } from "@/types/portal";
 import type { Importer } from "@/types/importer";
 import type { BackendArchivoItem, BackendChatAttachmentItem, BackendExplorerResponse, BackendMiembroEquipo, BackendOrder } from "@/services/business.service";
-import { resolveApiUrl, toApiPath } from "@/services/api-client";
+import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { formatChatTime } from "@/utils/date";
 import { TarjetaPropuestaChat, type PropuestaEnMensaje } from "@/features/propuestas/TarjetaPropuestaChat";
 import { leerPropuesta } from "@/features/propuestas/calculo";
+import { TierBadge } from "@/features/cotizante/TierBadge";
 import { URGENCIA_SOPORTE } from "@/features/help/SoporteModal";
 function FileAttachmentBubble({file}:{file:MsgFile}) {
   const icons:Record<MsgFileType,{icon:React.ReactNode;bg:string;label:string}> = {
@@ -387,12 +388,38 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     return !/^(adjunto:|recurso compartido:)/i.test(message.text.trim());
   }
 
+  function attachmentResourceUrl(attachment: BackendChatAttachmentItem): string {
+    const storageUrl = String(attachment.storage_url || "").trim();
+    return storageUrl || `/documentos/archivos/${encodeURIComponent(attachment.archivo_id)}/descargar`;
+  }
+
+  async function fetchAttachmentBlob(attachment: BackendChatAttachmentItem): Promise<Blob | null> {
+    const fallbackUrl = `/documentos/archivos/${encodeURIComponent(attachment.archivo_id)}/descargar`;
+    const urls = [attachment.storage_url, fallbackUrl]
+      .map((url) => String(url || "").trim())
+      .filter((url, index, all) => Boolean(url) && all.indexOf(url) === index);
+    let lastError: unknown = null;
+
+    for (const url of urls) {
+      try {
+        return await fetchProtectedBlob(url);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (lastError instanceof Error) {
+      throw lastError;
+    }
+    return null;
+  }
+
   async function handleAttachmentCardClick(attachment: BackendChatAttachmentItem) {
     if (previewType(attachment) === "image" || previewType(attachment) === "pdf" || previewType(attachment) === "video") {
       setPreviewAttachment(attachment);
       return;
     }
-    await handleDownloadResource(attachment.storage_url, attachment.nombre);
+    await handleDownloadAttachment(attachment);
   }
 
   async function handleAttachFileChange(event:React.ChangeEvent<HTMLInputElement>){
@@ -613,14 +640,14 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     setPreviewObjectUrl("");
     setPreviewLoadFailed(false);
 
-    const source=previewAttachment?.storage_url;
+    const source=previewAttachment ? attachmentResourceUrl(previewAttachment) : "";
     if(!source){
       return;
     }
 
     void (async()=>{
       try{
-        const blob=await fetchProtectedBlob(source);
+        const blob=previewAttachment ? await fetchAttachmentBlob(previewAttachment) : null;
         if(!blob){
           if(!cancelled) setPreviewLoadFailed(true);
           return;
@@ -663,6 +690,27 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     }
   }
 
+  async function handleDownloadAttachment(attachment: BackendChatAttachmentItem) {
+    try {
+      const blob = await fetchAttachmentBlob(attachment);
+      if (!blob) {
+        toast.error("No hay recurso disponible para descargar");
+        return;
+      }
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = attachment.nombre;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error("Error descargando adjunto desde chat:", error);
+      toast.error(`No se pudo descargar ${attachment.nombre}`);
+    }
+  }
+
   // Delega en el helper compartido: abrirlo aqui con
   // `popup.location.replace(blobUrl)` dejaba la pestana en `about:blank`,
   // porque el navegador no permite navegar de primer nivel a una `blob:` URL.
@@ -671,6 +719,21 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     if (!resultado.ok) {
       toast.error(resultado.motivo || `No se pudo abrir ${fileName}`);
     }
+  }
+
+  async function handleOpenAttachment(attachment: BackendChatAttachmentItem) {
+    const urls = [attachment.storage_url, attachmentResourceUrl(attachment)]
+      .map((url) => String(url || "").trim())
+      .filter((url, index, all) => Boolean(url) && all.indexOf(url) === index);
+
+    for (const url of urls) {
+      const resultado = await abrirArchivoEnPestana(url, attachment.nombre);
+      if (resultado.ok) {
+        return;
+      }
+    }
+
+    toast.error(`No se pudo abrir ${attachment.nombre}`);
   }
 
   async function loadResourceFolder(parentId: string | null) {
@@ -792,13 +855,13 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
       ]
     : [
         {k:"all",label:"Todas"},
+        {k:"no-leidas",label:"No leídas"},
         {k:"ordenes",label:"Operaciones"},
         {k:"cotizaciones",label:"Cotizaciones"},
         // La pestaña de equipo solo aparece si hay algún hilo interno: al
         // solicitante no le sirve de nada y nunca va a tener ninguno.
         ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"}]:[]),
         ...(conversations.some(c=>c.type==="soporte")?[{k:"soporte",label:"Soporte"}]:[]),
-        {k:"no-leidas",label:"No leídas"},
         ...(conversations.some(c=>c.atiendeNombre)?[{k:"asesores",label:"De mis asesores"}]:[]),
       ];
   const pickerVisibleFiles = resourceSearchResults?.files ?? resourceExplorer.archivos;
@@ -871,7 +934,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     });
 
     convAttachments.forEach((attachment) => {
-      if (previewType(attachment) !== "image" || !attachment.storage_url) {
+      if (previewType(attachment) !== "image") {
         return;
       }
       if (attachmentThumbRegistryRef.current[attachment.archivo_id] || attachmentThumbLoadingRef.current[attachment.archivo_id]) {
@@ -879,7 +942,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
       }
 
       attachmentThumbLoadingRef.current[attachment.archivo_id] = true;
-      void fetchProtectedBlob(attachment.storage_url)
+      void fetchAttachmentBlob(attachment)
         .then((blob) => {
           if (!blob) return;
           const objectUrl = window.URL.createObjectURL(blob);
@@ -1024,21 +1087,21 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                   )}
                   <button onClick={()=>setSelectedId(c.id)}
                     className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
-                      isSelected?"bg-primary/5 border-l-2 border-l-primary":"hover:bg-muted/50")}>
+                      isSelected?"bg-primary/8 dark:bg-accent/8 border-l-2 border-l-primary dark:border-l-accent":"hover:bg-muted/50")}>
                     {/* El avatar es de la PERSONA y el distintivo pequeño dice de
                         qué hilo se trata: antes solo había un icono por tipo,
                         igual para todas las conversaciones de esa clase. */}
                     <div className="relative flex-shrink-0 mt-0.5">
                       <Avatar initials={suContraparte.iniciales} size="lg" color={suContraparte.color} src={suContraparte.fotoUrl||undefined}/>
                       <span className={clsx("absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-background",
-                        c.type==="orden"?"bg-purple-100 text-purple-600":c.type==="interno"?"bg-amber-100 text-amber-600":c.type==="soporte"?"bg-rose-100 text-rose-600":"bg-blue-100 text-blue-600")}>
+                        c.type==="orden"?"bg-purple-100 text-primary":c.type==="interno"?"bg-amber-100 text-amber-600":c.type==="soporte"?"bg-rose-100 text-rose-600":"bg-blue-100 text-blue-600")}>
                         {c.type==="orden"?<ShoppingCart className="w-2.5 h-2.5"/>:c.type==="interno"?<Users className="w-2.5 h-2.5"/>:c.type==="soporte"?<LifeBuoy className="w-2.5 h-2.5"/>:<FileText className="w-2.5 h-2.5"/>}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
-                          <p className={clsx("text-xs font-semibold truncate",isSelected?"text-primary":"text-foreground")}>
+                          <p className={clsx("text-xs font-semibold truncate",isSelected?"text-primary dark:text-accent":"text-foreground")}>
                             {c.type==="soporte"?(c.subject||"Solicitud de soporte"):c.refCode}
                           </p>
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -1211,7 +1274,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                                         size="sm"
                                         variant="secondary"
                                         icon={<Download className="w-3.5 h-3.5"/>}
-                                        onClick={()=>{void handleDownloadResource(attachment.storage_url, attachment.nombre);}}
+                                        onClick={()=>{void handleDownloadAttachment(attachment);}}
                                       >
                                         Descargar
                                       </Button>
@@ -1241,7 +1304,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                           <div className={clsx("flex items-center gap-1",isClient?"flex-row-reverse":"flex-row")}>
                             <span className="text-[10px] text-muted-foreground">{msg.time}</span>
                             {isClient&&(
-                              <span className={clsx("text-[10px]", msg.read ? "text-primary" : "text-muted-foreground")}>
+                              <span className={clsx("text-[10px]", msg.read ? "text-primary dark:text-accent" : "text-muted-foreground")}>
                                 {msg.read ? "✓✓" : "✓"}
                               </span>
                             )}
@@ -1726,17 +1789,17 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                   <p className="text-xs text-muted-foreground">{previewAttachment.extension.toUpperCase()} · {new Date(previewAttachment.created_at).toLocaleString("es-CO")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {previewAttachment.storage_url && <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadResource(previewAttachment.storage_url, previewAttachment.nombre);}}>Descargar</Button>}
-                  {previewAttachment.storage_url && <Button variant="secondary" size="sm" onClick={()=>{void handleOpenResource(previewAttachment.storage_url, previewAttachment.nombre);}}>Abrir</Button>}
+                  <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5"/>} onClick={()=>{void handleDownloadAttachment(previewAttachment);}}>Descargar</Button>
+                  <Button variant="secondary" size="sm" onClick={()=>{void handleOpenAttachment(previewAttachment);}}>Abrir</Button>
                   <button onClick={()=>setPreviewAttachment(null)} className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center"><X className="w-4 h-4"/></button>
                 </div>
               </div>
               <div className="p-4 overflow-auto bg-slate-50/60 flex-1">
-                {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && !previewObjectUrl && !previewLoadFailed && (
+                {previewType(previewAttachment)!=="other" && !previewObjectUrl && !previewLoadFailed && (
                   <div className="h-[40vh] flex items-center justify-center text-sm text-muted-foreground">Cargando vista previa...</div>
                 )}
 
-                {previewAttachment.storage_url && previewType(previewAttachment)!=="other" && previewLoadFailed && (
+                {previewType(previewAttachment)!=="other" && previewLoadFailed && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
                     <p className="text-sm text-muted-foreground">No se pudo cargar el recurso desde el backend. Verifica permisos o disponibilidad del archivo.</p>
                   </div>
@@ -1750,11 +1813,11 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                 {previewObjectUrl && previewType(previewAttachment)==="video" && (
                   <video src={previewObjectUrl} controls className="w-full max-h-[70vh] rounded-lg border border-border bg-black"/>
                 )}
-                {(!previewAttachment.storage_url || previewType(previewAttachment)==="other") && (
+                {previewType(previewAttachment)==="other" && (
                   <div className="h-[40vh] rounded-lg border border-dashed border-border flex flex-col items-center justify-center gap-3 text-center px-6">
                     <Video className="w-8 h-8 text-muted-foreground/40"/>
                     <p className="text-sm text-muted-foreground">Vista previa no disponible para este tipo de archivo.</p>
-                    {previewAttachment.storage_url && <Button variant="secondary" size="sm" onClick={()=>{void handleOpenResource(previewAttachment.storage_url, previewAttachment.nombre);}}>Abrir en nueva pestaña</Button>}
+                    <Button variant="secondary" size="sm" onClick={()=>{void handleOpenAttachment(previewAttachment);}}>Abrir en nueva pestaña</Button>
                   </div>
                 )}
               </div>
