@@ -39,7 +39,7 @@ import {
   DisputeResolutionModal,
   CompanyCreationModal,
   UserCreationModal,
-} from "@/components/admin";
+} from "@/features/admin/components";
 
 type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte" | "designer";
 

@@ -4,7 +4,7 @@ import { Button, Logo } from "@/components/design-system";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import type { LegalPage } from "@/features/legal/types";
 import { LISTA_CERRADA } from "@/features/planes/SeccionPlanes";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 
 export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void}) {
   const { dark, toggleTheme } = useBrandTheme();

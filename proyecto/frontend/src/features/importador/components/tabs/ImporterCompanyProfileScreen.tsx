@@ -40,7 +40,7 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 };
 
 import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
-import { IndicadorAutoguardado } from "@/components/importer/IndicadorAutoguardado";
+import { IndicadorAutoguardado } from "@/features/importador/components/IndicadorAutoguardado";
 
 const COUNTRIES = ["China", "Estados Unidos", "Alemania", "Japón", "India", "Italia", "Francia", "España", "Brasil", "Corea del Sur", "Turquía", "México", "Colombia"];
 const BANNER_EXTENSIONS = ["png", "jpg", "jpeg", "webp"];

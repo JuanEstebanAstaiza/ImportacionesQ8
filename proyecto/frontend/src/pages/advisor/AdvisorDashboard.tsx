@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AdvisorDashboardScreen } from "@/components/advisor/tabs/AdvisorDashboardScreen";
+import { AdvisorDashboardScreen } from "@/features/advisor/components/tabs/AdvisorDashboardScreen";
 import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";
 import type { Screen } from "@/app/rutas";

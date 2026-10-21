@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ImporterDashboardScreen as ImporterDashboardTab } from "@/components/importer/tabs/ImporterDashboardScreen";
+import { ImporterDashboardScreen as ImporterDashboardTab } from "@/features/importador/components/tabs/ImporterDashboardScreen";
 import type { ChatConv } from "@/types/chat";
 import type { CompanyAdvisor, SidebarCtrl } from "@/types/portal";
 import type { Quote } from "@/types/quote";

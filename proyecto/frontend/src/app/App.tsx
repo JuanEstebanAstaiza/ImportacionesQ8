@@ -26,20 +26,20 @@ import type { LegalPage } from "@/features/legal/types";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { DashboardScreen } from "@/pages/buyer/BuyerDashboard";
 import { ImporterDashboard } from "@/pages/importer/ImporterDashboard";
-import { QuotesScreen } from "@/components/buyer/tabs/QuotesScreen";
-import { QuoteDetailScreen } from "@/components/buyer/tabs/QuoteDetailScreen";
-import { ResponseDetailScreen } from "@/components/buyer/tabs/ResponseDetailScreen";
-import { ResponsesScreen } from "@/components/buyer/tabs/ResponsesScreen";
-import { OrdersScreen } from "@/components/buyer/tabs/OrdersScreen";
-import { OrderDetailScreen } from "@/components/buyer/tabs/OrderDetailScreen";
-import { NewQuoteScreen } from "@/components/buyer/tabs/NewQuoteScreen";
-import type { QuoteFormState, OrigenSolicitud } from "@/components/buyer/tabs/NewQuoteScreen";
-import { ImporterCompanyProfileScreen } from "@/components/importer/tabs/ImporterCompanyProfileScreen";
-import { ImporterAdvisorsScreen } from "@/components/importer/tabs/ImporterAdvisorsScreen";
-import { ImporterQuotesScreen } from "@/components/importer/tabs/ImporterQuotesScreen";
+import { QuotesScreen } from "@/features/buyer/components/tabs/QuotesScreen";
+import { QuoteDetailScreen } from "@/features/buyer/components/tabs/QuoteDetailScreen";
+import { ResponseDetailScreen } from "@/features/buyer/components/tabs/ResponseDetailScreen";
+import { ResponsesScreen } from "@/features/buyer/components/tabs/ResponsesScreen";
+import { OrdersScreen } from "@/features/buyer/components/tabs/OrdersScreen";
+import { OrderDetailScreen } from "@/features/buyer/components/tabs/OrderDetailScreen";
+import { NewQuoteScreen } from "@/features/buyer/components/tabs/NewQuoteScreen";
+import type { QuoteFormState, OrigenSolicitud } from "@/features/buyer/components/tabs/NewQuoteScreen";
+import { ImporterCompanyProfileScreen } from "@/features/importador/components/tabs/ImporterCompanyProfileScreen";
+import { ImporterAdvisorsScreen } from "@/features/importador/components/tabs/ImporterAdvisorsScreen";
+import { ImporterQuotesScreen } from "@/features/importador/components/tabs/ImporterQuotesScreen";
 import { ImpAdvisorDashboard } from "@/pages/advisor/AdvisorDashboard";
-import { AdvisorAvailableScreen } from "@/components/advisor/tabs/AdvisorAvailableScreen";
-import { AdvisorMyQuotesScreen } from "@/components/advisor/tabs/AdvisorMyQuotesScreen";
+import { AdvisorAvailableScreen } from "@/features/advisor/components/tabs/AdvisorAvailableScreen";
+import { AdvisorMyQuotesScreen } from "@/features/advisor/components/tabs/AdvisorMyQuotesScreen";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import { TendenciasFeed } from "@/features/tendencias/Feed";
@@ -68,8 +68,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { usePlatformConfig } from "@/hooks/usePlatformConfig";
-import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { resolveHeaderSubtitle } from "@/utils/header-profile-subtitle";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { mapBackendChatMessage } from "@/features/chat/mappers";
 import { mapBackendImporterToUi } from "@/features/importador/mappers";
 import { mapBackendQuoteToUi } from "@/features/quotes/mappers";
@@ -2700,6 +2700,10 @@ export default function App() {
     "adv-my-quotes": <AdvisorMyQuotesScreen sb={sb} quotes={advisorAssignedQuotes} onRespond={id=>{setSelectedQuoteId(id);goTo("create-response");}} headerUser={advisorHeaderUser} existingProposalByQuoteId={advisorProposalsByQuoteId} chats={chatConversations} onOpenChat={openChat} onRechazada={refreshQuoteLists}/>,
   };
 
+  const ordersForCurrentRole = userRole === "importadora" || userRole === "asesor"
+    ? importerOrders
+    : requesterOrders;
+
   const buyerViews = {
     "importer-profile": <ImporterProfileScreen importerId={selectedImporterId} importers={marketplaceImporters} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("dashboard")} onCreateQuote={id=>openNewQuote(id)} onOpenChat={openChat} sb={sb} onAbrirTendencia={abrirTendencia}/>,
     "quotes": <QuotesScreen quotes={requesterQuotes} responses={requesterResponses} creditos={Number(currentUserProfile?.puntos_cotizacion ?? 0)} onNewQuote={()=>openNewQuote()} onViewDetail={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onRefreshQuotes={async()=>{await refreshQuoteLists();await refrescarSaldoYTier();}} sb={sb}/>,
@@ -2707,7 +2711,7 @@ export default function App() {
     "quote-detail": <QuoteDetailScreen quoteId={selectedQuoteId} quotes={requesterQuotes} chats={chatConversations} orders={requesterOrders} onBack={()=>goTo("quotes")} onOpenChat={openChat} sb={sb} onRefreshQuotes={refreshQuoteLists} onDuplicate={duplicateQuote} userRole={userRole}/>,
     "responses": <ResponsesScreen onViewDetail={(id,from)=>openResponse(id,from)} sb={sb} responses={requesterResponses} importers={marketplaceImporters} quotes={requesterQuotes} onViewQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}}/>,
     "response-detail": <ResponseDetailScreen responseId={selectedResponseId} from={responseFrom} fromQuoteId={responseFromQuoteId} onBack={()=>goTo("responses")} onBackToQuote={id=>{setSelectedQuoteId(id);goTo("quote-detail");}} onOpenChat={openChat} sb={sb} responses={requesterResponses} quotes={requesterQuotes} chats={chatConversations} importers={marketplaceImporters} orders={requesterOrders} onRefreshData={refreshQuoteLists}/>,
-    "orders": <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={requesterOrders} importers={marketplaceImporters}/>,
+    "orders": <OrdersScreen onViewOrder={id=>{setSelectedOrderDetail(null);setSelectedOrderId(id);goTo("order-detail");}} sb={sb} orders={ordersForCurrentRole} importers={marketplaceImporters}/>,
     "order-detail": <OrderDetailScreen order={selectedOrderDetail} isLoading={isOrderDetailLoading} onBack={()=>goTo("orders")} onOpenChat={openChat} sb={sb} importers={marketplaceImporters} advisorName={selectedOrderDetail ? chatConversations.find((conversation)=>conversation.refId===selectedOrderDetail.id)?.counterpartName : undefined} onViewImporterProfile={id=>{setSelectedImporterId(id);goTo("importer-profile");}} canManageOrder={false} esCliente onUpdateOrderStatus={handleUpdateOrderStatus}/>,
     "catalogos": <PantallaPortal sb={sb} active="catalogos" titulo="Catálogos"><CatalogosComprador onPedirPropuesta={pedirPropuestasDesde}/></PantallaPortal>,
   };

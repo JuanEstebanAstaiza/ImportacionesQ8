@@ -5,7 +5,7 @@ import { Badge, Button, Card, Input, Select, Textarea } from "@/components/desig
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { Modal } from "@/components/ui/Modal";
 import type { LegalPage } from "@/features/legal/types";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { authService } from "@/services/auth.service";
 import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
 import type { RegisterRequest } from "@/types/auth";

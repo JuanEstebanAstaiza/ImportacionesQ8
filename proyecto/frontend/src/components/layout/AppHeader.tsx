@@ -5,7 +5,7 @@ import { Avatar, NotifIcon } from "@/components/design-system";
 import { useAuth } from "@/hooks/useAuth";
 import type { SidebarCtrl } from "@/types/portal";
 import { resolveApiUrl } from "@/services/api-client";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 
 function initialsFromName(name: string): string {
   const words = (name || "")

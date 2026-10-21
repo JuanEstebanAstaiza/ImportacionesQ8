@@ -35,7 +35,7 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 };
 
 import { Modal, Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
-import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
+import { AdvisorQuoteDetailModal } from "@/features/advisor/components/tabs/AdvisorQuoteDetailModal";
 import type { CompanyAdvisor } from "@/types/portal";
 import type { ChatConv } from "@/app/App";
 

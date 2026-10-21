@@ -11,6 +11,7 @@ import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import type { LegalPage } from "@/features/legal/types";
 
 import { Avatar, Badge, Button, Card, ContactBtn, Input, openSmartContact, Select } from "@/components/design-system";
+import { resolveApiUrl } from "@/services/api-client";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -63,7 +64,13 @@ export function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onVi
                 <Card key={r.id} padding="md" className="hover:shadow-md transition-all">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <Avatar initials={imp?.initials || "IM"} size="xl" color={imp?.color || "bg-slate-600"}/>
+                      <Avatar
+                        initials={imp?.initials || "IM"}
+                        size="xl"
+                        color={imp?.color || "bg-slate-600"}
+                        src={imp?.logoUrl ? resolveApiUrl(imp.logoUrl) : undefined}
+                        variant="logo"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap"><p className="font-semibold">{imp?.name || "Empresa importadora"}</p><Badge variant={r.status}/>{imp?.verified&&<span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium"><BadgeCheck className="w-2.5 h-2.5"/>Verificada</span>}</div>
                         <p className="text-xs text-muted-foreground mt-0.5">{imp?.specialty || "Especialidad no disponible"} · {imp?.advisor.name || "Asesor"}</p>

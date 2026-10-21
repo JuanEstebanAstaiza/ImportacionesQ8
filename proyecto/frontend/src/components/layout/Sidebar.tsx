@@ -3,7 +3,7 @@ import { Building2, ChevronDown, ChevronLeft, Layers, LifeBuoy, LogIn, MessageSq
 import { clsx } from "clsx";
 
 import type { SidebarCtrl } from "@/types/portal";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 
 export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();

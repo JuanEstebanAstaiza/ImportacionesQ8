@@ -15,7 +15,7 @@ import { landingService, leerVideosQuienesSomos, type LandingBlock, type Landing
 import { registroAbierto } from "@/app/registro";
 import { resolveApiUrl } from "@/services/api-client";
 import { safeHttpUrl } from "@/utils/safe-url";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { BloqueLanding } from "@/features/landing/BloqueLanding";
 /** Armazón de las pantallas públicas (Tendencias y el reto) para quien no tiene sesión. */
 type FooterPublicoProps = {
