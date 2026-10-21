@@ -4,7 +4,7 @@ import { Moon, Sun, ChevronLeft } from "lucide-react";
 import { DOCUMENTOS_LEGALES, ORDEN_DOCUMENTOS } from "@/features/legal/documentos";
 import { EMPRESA } from "@/features/legal/empresa";
 import type { LegalPage } from "@/features/legal/types";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 
 type LegalPolicyScreenProps = {

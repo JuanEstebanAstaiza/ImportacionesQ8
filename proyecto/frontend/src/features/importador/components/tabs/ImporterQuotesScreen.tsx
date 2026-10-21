@@ -35,13 +35,9 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 };
 
 import { Modal, Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
-import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
+import { AdvisorQuoteDetailModal } from "@/features/advisor/components/tabs/AdvisorQuoteDetailModal";
 import type { CompanyAdvisor } from "@/types/portal";
 import type { ChatConv } from "@/app/App";
-
-function puedeRechazarse(q: Quote): boolean {
-  return q.status === "created" || q.status === "directed" || q.status === "open";
-}
 
 export function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
@@ -186,7 +182,7 @@ export function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenC
                         <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<Eye className="w-3.5 h-3.5"/>} title="Ver detalle" onClick={()=>setDetalle(q)}/>
                         <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<Users className="w-3.5 h-3.5"/>} title="Asignar asesor" onClick={()=>setAsignando(q)}/>
                         <Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<MessageCircle className="w-3.5 h-3.5"/>} title={chatDe(q.id)?"Abrir chat":"Todavia no hay chat: se abre al iniciar la negociacion"} disabled={!chatDe(q.id)} onClick={()=>{const c=chatDe(q.id); if(c) onOpenChat(c.id);}}/>
-                        {puedeRechazarse(q)&&<Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
+                        {(q.status === "created" || q.status === "directed" || q.status === "open")&&<Button variant="ghost" size="sm" className="dark:border dark:border-accent/80 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20" icon={<X className="w-3.5 h-3.5"/>} title="Rechazar cotización" onClick={()=>setRechazando(q)}/>}
                         <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5"/>} onClick={()=>onRespond(q.id)}>Responder</Button>
                       </div>
                     </td>

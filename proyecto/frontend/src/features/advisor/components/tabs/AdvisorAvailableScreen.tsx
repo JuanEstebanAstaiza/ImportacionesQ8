@@ -9,7 +9,7 @@ import { SidebarCtrl } from "@/types/portal";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
-import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
+import { AdvisorQuoteDetailModal } from "@/features/advisor/components/tabs/AdvisorQuoteDetailModal";
 
 import { Button, Card } from "@/components/design-system";
 import { puedeRechazarse } from "@/utils/quotes";

@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { CheckCircle2, ChevronLeft, Loader2, Moon, Sun } from "lucide-react";
 
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
 import { planesService, type DatosListaEspera, type Plan } from "@/services/planes.service";
 

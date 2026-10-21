@@ -8,7 +8,7 @@ import { mapBackendRoleToAppRole } from "@/utils/auth-roles";
 import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@/features/auth/components/ForgotPasswordForm";
 import { LoginForm, type LoginFormValues } from "@/features/auth/components/LoginForm";
 import { LoginOtpForm } from "@/features/auth/components/LoginOtpForm";
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import type { LegalPage } from "@/features/legal/types";
 

@@ -4,6 +4,7 @@ import { ShoppingCart, ExternalLink } from "lucide-react";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import { Avatar, Badge, Button, Card } from "@/components/design-system";
+import { resolveApiUrl } from "@/services/api-client";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -41,7 +42,13 @@ export function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:
             <Card key={ord.id} padding="md" className="hover:shadow-md transition-all">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex items-start gap-3 flex-1">
-                  <Avatar initials={imp?.initials || "NA"} size="xl" color={imp?.color || "bg-slate-500"}/>
+                  <Avatar
+                    initials={imp?.initials || "NA"}
+                    size="xl"
+                    color={imp?.color || "bg-slate-500"}
+                    src={imp?.logoUrl ? resolveApiUrl(imp.logoUrl) : undefined}
+                    variant="logo"
+                  />
                   <div>
                     <div className="flex items-center gap-2 flex-wrap"><span className="font-mono font-semibold">{ord.code}</span><Badge variant="active-order"/></div>
                     <p className="text-sm font-medium mt-0.5">{ord.product}</p>

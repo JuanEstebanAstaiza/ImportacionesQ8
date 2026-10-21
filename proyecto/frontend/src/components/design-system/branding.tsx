@@ -1,4 +1,4 @@
-import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
 
 export function Logo() {
   const { dark } = useBrandTheme();
