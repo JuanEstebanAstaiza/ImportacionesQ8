@@ -90,7 +90,7 @@ export function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:
               <Input
                 value={faqSearch}
                 onChange={(event)=>setFaqSearch(event.target.value)}
-                placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»â€¦"
+                placeholder="Describe tu problema: «no me llegan propuestas», «rol insuficiente»..."
                 prefix={<Search className="w-4 h-4"/>}
               />
               <div className="flex flex-wrap gap-2">
@@ -125,7 +125,7 @@ export function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:
                   <h2 className="text-sm font-semibold">Documentación</h2>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {cargandoAyuda?"Cargandoâ€¦":`${articulos.length} artículos`}
+                  {cargandoAyuda?"Cargando...":`${articulos.length} artículos`}
                 </span>
               </div>
               <div className="space-y-2.5">

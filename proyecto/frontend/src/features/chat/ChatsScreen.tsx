@@ -286,7 +286,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
             {unread>0&&<span className="w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">{unread}</span>}
           </div>
           <p className="text-[11px] text-muted-foreground truncate">{detalle}</p>
-          <p className="text-[11px] text-muted-foreground/80 truncate">{cargando?"Abriendoâ€¦":ultimo||"Escribirle en privado"}</p>
+          <p className="text-[11px] text-muted-foreground/80 truncate">{cargando?"Abriendo...":ultimo||"Escribirle en privado"}</p>
         </div>
       </button>
     );
@@ -1521,7 +1521,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                           value={resolucionTicket}
                           onChange={(e)=>setResolucionTicket(e.target.value)}
                           rows={3}
-                          placeholder="Qué se hizo para resolverloâ€¦"
+                          placeholder="Qué se hizo para resolverlo..."
                           className="w-full resize-none rounded-md border border-rose-200 dark:border-border px-2 py-1.5 text-[11px] bg-white dark:bg-background text-foreground"
                         />
                         <Button 

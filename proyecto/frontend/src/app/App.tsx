@@ -1,38 +1,21 @@
-﻿import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Film,
-  Star,
-  Eye, EyeOff, Mail, Lock, UserRound, Building2, LogIn,
-  Moon, Sun, Info, AlertCircle, CheckCircle2, Loader2, Package2,
-  FileText, ShoppingCart, FolderOpen, CreditCard, ChevronRight,
-  Plus, Search, MessageCircle, Phone, ExternalLink, ArrowUpDown,
-  ChevronDown, Globe, Check, Clock, X, Upload, ChevronLeft,
-  Save, Send, Users, MapPin, Tag, Layers, Building, RotateCcw,
-  BadgeCheck, GitCompare, Mail as MailIcon, ClipboardList,
-  Truck, Package, Anchor, Warehouse, CheckCircle, Edit2, Copy, Ban,
-  TrendingUp, TrendingDown, Minus, Receipt, FileCheck, Bell,
-  Scale, HelpCircle, Download, Boxes, Ship, Factory,
-  PackageCheck, Navigation2, MessageSquare, Paperclip, Smile,
-  Image as ImageIcon, PanelRightClose, PanelRightOpen,
-  FileSpreadsheet, File as FileIcon, LayoutGrid, Award, Shield, BookOpen,
-  Zap, Filter, AtSign, ChevronDown as ChevDown, FolderTree,
-  MoveRight, MoreHorizontal, Video, CalendarDays as CalendarIcon,
-  LockKeyhole, BellRing, LifeBuoy, WalletCards, DatabaseBackup, Gauge, FileSignature,
-  Sparkles, LibraryBig, Type, Trophy, Palette, ToggleRight, Flame, GraduationCap,
+  Film, Mail, Building2, CheckCircle2, Loader2, Package2, FileText,
+  ShoppingCart, FolderOpen, CreditCard, Plus, Clock, Users, MapPin, Layers,
+  BadgeCheck, GitCompare, ClipboardList, MessageSquare, LayoutGrid, Award,
+  Shield, BookOpen, Zap, LifeBuoy, WalletCards, DatabaseBackup, Sparkles,
+  LibraryBig, Type, Trophy, Palette, ToggleRight, Flame, GraduationCap,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
 
 import { Quote } from "../types/quote";
-import type { QuoteResponse, ResponseFrom, ResponseStatus } from "../types/response";
+import type { QuoteResponse, ResponseFrom } from "../types/response";
 import { Importer } from "../types/importer";
 import type { CompanyAdvisor, SidebarCtrl } from "../types/portal";
-import type { TimelineStage } from "../types/design-system";
 import { ProtectedRoute } from "@/components/guards/ProtectedRoute";
-import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AuthScreen } from "@/features/auth/components/AuthScreen";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
-import { CoursesScreen } from "@/features/courses/CoursesScreen";
 import { CoursesPortalScreen } from "@/features/courses/CoursesPortalScreen";
 import { ChatsScreen } from "@/features/chat/ChatsScreen";
 import { DocumentosScreen } from "@/features/documents/DocumentosScreen";
@@ -40,7 +23,6 @@ import { HelpSupportScreen } from "@/features/help/HelpSupportScreen";
 import { SoporteModal } from "@/features/help/SoporteModal";
 import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
 import type { LegalPage } from "@/features/legal/types";
-import { EMPRESA } from "@/features/legal/empresa";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { DashboardScreen } from "@/pages/buyer/BuyerDashboard";
 import { ImporterDashboard } from "@/pages/importer/ImporterDashboard";
@@ -55,18 +37,14 @@ import type { QuoteFormState, OrigenSolicitud } from "@/components/buyer/tabs/Ne
 import { ImporterCompanyProfileScreen } from "@/components/importer/tabs/ImporterCompanyProfileScreen";
 import { ImporterAdvisorsScreen } from "@/components/importer/tabs/ImporterAdvisorsScreen";
 import { ImporterQuotesScreen } from "@/components/importer/tabs/ImporterQuotesScreen";
-import { AdvisorQuoteDetailModal } from "@/components/advisor/tabs/AdvisorQuoteDetailModal";
 import { ImpAdvisorDashboard } from "@/pages/advisor/AdvisorDashboard";
 import { AdvisorAvailableScreen } from "@/components/advisor/tabs/AdvisorAvailableScreen";
 import { AdvisorMyQuotesScreen } from "@/components/advisor/tabs/AdvisorMyQuotesScreen";
-import { AdvisorDashboardScreen } from "@/components/advisor/tabs/AdvisorDashboardScreen";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
-import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
 import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import { TendenciasFeed } from "@/features/tendencias/Feed";
 import { TendenciaFicha } from "@/features/tendencias/Ficha";
 import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
-import { RecomendadosEmpresa } from "@/features/tendencias/Recomendados";
 import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
 import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
 import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
@@ -74,16 +52,12 @@ import { RevisionPagos } from "@/features/admin/RevisionPagos";
 import { AccesosCursos } from "@/features/admin/AccesosCursos";
 import { RevisionPresentaciones } from "@/features/admin/RevisionPresentaciones";
 import { PlanesAdmin } from "@/features/admin/PlanesAdmin";
-import { LISTA_CERRADA, SeccionPlanes } from "@/features/planes/SeccionPlanes";
 import { ListaEsperaApertura } from "@/features/planes/ListaEspera";
 import { InscripcionPlan } from "@/features/planes/InscripcionPlan";
-import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
-import { PagoOrden } from "@/features/ordenes/PagoOrden";
 import { fijarRegistro, registroAbierto } from "@/app/registro";
 import { RetoPagina } from "@/features/reto/RetoPagina";
 import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
-import { BloqueLanding } from "@/features/landing/BloqueLanding";
 import { RetoAdmin } from "@/features/reto/RetoAdmin";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
 import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
@@ -94,29 +68,44 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAutoRefresh, type AutoRefreshReason } from "@/hooks/useAutoRefresh";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { usePlatformConfig } from "@/hooks/usePlatformConfig";
-import { authService } from "@/services/auth.service";
 import { resolveHeaderSubtitle } from "@/app/utils/header-profile-subtitle";
 import { useBrandTheme } from "@/app/hooks/useBrandTheme";
+import { mapBackendChatMessage } from "@/features/chat/mappers";
+import { mapBackendImporterToUi } from "@/features/importador/mappers";
+import { mapBackendQuoteToUi } from "@/features/quotes/mappers";
+import { mapBackendAdvisorToUi } from "@/features/advisors/mappers";
+import { mapBackendProposalToUiResponse } from "@/features/propuestas/mappers";
+import { mapBackendOrderToUiOrder } from "@/features/ordenes/mappers";
+import type { PropuestaEnMensaje } from "@/features/propuestas/TarjetaPropuestaChat";
+export type { Order, OrderHistoryItem, OrderDocumentItem, LifecycleDocItem } from "@/features/ordenes/types";
+export { orderDocumentTypeLabel, orderStateLabel, nextOrderState, inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
+
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@/components/layout/AppHeader";
+import { PantallaPortal } from "@/components/layout/PantallaPortal";
+import { Modal } from "@/components/ui/Modal";
+import { ImporterProfileScreen } from "@/features/importador/components/ImporterProfileScreen";
+import { NotificationsScreen } from "@/features/notifications/components/NotificationsScreen";
+import { RegisterScreen } from "@/features/auth/components/RegisterScreen";
+import { RegistroCerrado } from "@/features/auth/components/RegistroCerrado";
+import { CreateResponseScreen } from "@/features/propuestas/components/CreateResponseScreen";
+import type { AppNotification } from "@/features/notifications/types";
+import { INIT_NOTIFICATIONS } from "@/features/notifications/constants.tsx";
+import { mapBackendNotificationToUi } from "@/features/notifications/mappers";
 import {
-  Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Logo, NotifIcon,
-  openSmartContact, Select, Textarea, Timeline,
+  Avatar, Button, Card, Logo,
 } from "@/components/design-system";
-import { formatChatTime, parseBackendDate } from "@/utils/date";
+import { parseBackendDate } from "@/utils/date";
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
-import { ayudaService, type ArticuloAyuda } from "@/services/ayuda.service";
 import {
   businessService,
-  type BackendArchivoItem,
-  type BackendAsesor,
   type BackendChatAttachmentItem,
   type BackendChatConversation,
   type BackendMiembroEquipo,
   type BackendCotizacion,
-  type BackendCupoDiario,
   type BackendExplorerResponse,
   type BackendImporter,
-  type BackendOrder,
   type BackendPropuesta,
   type MotivoEleccion,
   type UnidadCantidad,
@@ -125,31 +114,19 @@ import {
   type CreateCotizacionPayload,
   type CreatePropuestaPayload,
 } from "@/services/business.service";
-import { FormularioPropuesta } from "@/features/propuestas/FormularioPropuesta";
-import { TarjetaPropuestaChat, leerPropuestaDeMensaje, type PropuestaEnMensaje } from "@/features/propuestas/TarjetaPropuestaChat";
-import { CondicionesEmpresa } from "@/features/propuestas/CondicionesEmpresa";
-import { leerPropuesta, pesos as pesosCop, type FormularioPropuesta as FormularioPropuestaDatos } from "@/features/propuestas/calculo";
+import { leerPropuesta, pesos as pesosCop } from "@/features/propuestas/calculo";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { safeHttpUrl } from "@/utils/safe-url";
 import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
-import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
-import { ResenasImportador } from "@/features/resenas/ResenasImportador";
-import { PendientesDeResena } from "@/features/resenas/PendientesDeResena";
-import { PresentacionPublica, EditorPresentacion } from "@/features/importador/PresentacionEmpresa";
-import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
-import { TierBadge } from "@/features/cotizante/TierBadge";
-import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@/features/referidos/TarjetaReferidos";
-import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
-import {
-  componerShippingMark,
-  LONGITUD_MAX_PREFIJO_SHIPPING_MARK,
-  LONGITUD_MAX_SUFIJO_SHIPPING_MARK,
-} from "@/utils/shipping-mark";
-import type { RegisterRequest } from "@/types/auth";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
+import { TarjetaReferidos } from "@/features/referidos/TarjetaReferidos";
 import { destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 import type { UrgenciaSoporte } from "@/services/business.service";
-import { cantidadConUnidad } from "@/utils/formatos";
 import { CLAVE_PREFILL_PENDIENTE, RESET_PASSWORD_PATH } from "@/utils/paths";
+
+// Compatibilidad para las vistas de dominio que todavía consumen los contratos
+// públicos históricos de App.tsx; la implementación vive en sus módulos.
+export { Sidebar, AppHeader, PantallaPortal, Modal, USER, USER_IMPORTADORA, USER_ASESOR };
 
 /** Pantalla (y por tanto URL) de cada documento legal. */
 const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
@@ -161,113 +138,9 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 
 const MAX_FOTOS_PRODUCTO = 10;
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 // DATA
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export interface OrderHistoryItem {estado:string;fecha:string;nota:string|null;}
-export interface OrderDocumentItem {name:string;date:string;status:string;url:string;type:string;}
-export interface LifecycleDocItem {label:string;name:string;status:string;url:string|null;source:string;}
-export interface Order {
-  id:string;
-  code:string;
-  quoteCode:string;
-  product:string;
-  importerId:string;
-  advisorName?:string;
-  created:string;
-  estimated:string;
-  quantity:string;
-  unitPrice:string;
-  totalValue:string;
-  incoterm:string;
-  originPort:string;
-  destPort:string;
-  /** Marca de embarque congelada al crear la orden: lo que va rotulado en las cajas. */
-  shippingMark?:string|null;
-  status:string;
-  history:OrderHistoryItem[];
-  documents:OrderDocumentItem[];
-  conversationId?:string;
-}
-const ORDER_LIFECYCLE_STEPS=[
-  {key:"solicitud_enviada",label:"Solicitud enviada",icon:<Send className="w-3.5 h-3.5"/>},
-  {key:"proveedor_respondio",label:"Proveedor respondió",icon:<ClipboardList className="w-3.5 h-3.5"/>},
-  {key:"negociacion_en_curso",label:"Negociación en curso",icon:<Scale className="w-3.5 h-3.5"/>},
-  {key:"orden_confirmada_produccion",label:"Operación confirmada / Producción",icon:<Factory className="w-3.5 h-3.5"/>},
-  {key:"en_transito",label:"En tránsito",icon:<Ship className="w-3.5 h-3.5"/>},
-  {key:"en_aduana",label:"En aduana",icon:<Anchor className="w-3.5 h-3.5"/>},
-  {key:"en_bodega",label:"En bodega",icon:<Warehouse className="w-3.5 h-3.5"/>},
-  {key:"en_ruta",label:"En ruta",icon:<Navigation2 className="w-3.5 h-3.5"/>},
-  {key:"entregado",label:"Entregado",icon:<CheckCircle className="w-3.5 h-3.5"/>},
-];
-
-// Los estados REALES de una orden en el backend (`EstadoOrden`), en el orden en
-// que ocurren. La línea de tiempo de arriba es una vista comercial más detallada
-// del ciclo completo (incluye pasos previos a la orden y un "en ruta" que el
-// backend no distingue); usar sus claves para escribir era el motivo de que
-// actualizar el estado no hiciera nada: el backend las rechazaba por inválidas.
-// La orden nace esperando el pago del cliente; pasa a producción cuando la
-// empresa confirma el comprobante (ver features/ordenes/PagoOrden.tsx).
-const ORDER_STATES=[
-  {key:"cotizacion_aceptada",     label:"Orden generada · pago pendiente"},
-  {key:"en_produccion",           label:"Orden en producción"},
-  {key:"transito_internacional",  label:"Tránsito internacional"},
-  {key:"aduana_nacionalizacion",  label:"Aduana / nacionalización"},
-  {key:"bodega_local",            label:"Bodega local"},
-  {key:"entregado",               label:"Entregado"},
-] as const;
-
-const ORDER_DOCUMENT_LABELS:Record<string,string>={
-  factura_proforma:"Factura proforma",
-  factura_comercial:"Factura comercial",
-  packing_list:"Packing list",
-  comprobante_pago:"Comprobante de pago",
-};
-
-export function orderDocumentTypeLabel(tipo:string|undefined|null):string{
-  return ORDER_DOCUMENT_LABELS[String(tipo||"")]||"Documento";
-}
-
-export function orderStateLabel(key:string|undefined|null):string{
-  const found=ORDER_STATES.find((s)=>s.key===String(key||""));
-  return found?found.label:(key?String(key):"Sin estado");
-}
-
-/** ?nico estado al que el backend deja avanzar desde el actual (cadena lineal). */
-export function nextOrderState(current:string|undefined|null):{key:string;label:string}|null{
-  const index=ORDER_STATES.findIndex((s)=>s.key===String(current||""));
-  if(index<0||index>=ORDER_STATES.length-1)return null;
-  const next=ORDER_STATES[index+1];
-  return {key:next.key,label:next.label};
-}
-
-export function inferLifecycleStageIndex(rawState:string|undefined|null):number{
-  const normalized=String(rawState||"").trim().toLowerCase();
-  if(!normalized)return 0;
-  if(normalized.includes("entreg"))return 8;
-  if(normalized.includes("ruta"))return 7;
-  if(normalized.includes("bodega"))return 6;
-  if(normalized.includes("aduan"))return 5;
-  if(normalized.includes("transit")||normalized.includes("enviad"))return 4;
-  if(normalized.includes("produ")||normalized.includes("orden")||normalized.includes("proceso")||normalized.includes("cotizacion_aceptada")||normalized.includes("cotización aceptada"))return 3;
-  if(normalized.includes("negoci"))return 2;
-  if(normalized.includes("respond")||normalized.includes("propuesta")||normalized.includes("respuesta"))return 1;
-  return 0;
-}
-
-export function buildLifecycleTimeline(currentStageIndex:number):TimelineStage[]{
-  const bounded=Math.max(0,Math.min(ORDER_LIFECYCLE_STEPS.length-1,currentStageIndex));
-  return ORDER_LIFECYCLE_STEPS.map((step,index)=>({
-    label:step.label,
-    icon:step.icon,
-    status:index<bounded?"done":index===bounded?"current":"pending",
-  }));
-}
-
-// â”€â”€â”€ Chat data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// "interno" es el canal de la empresa con su asesor (coordinación del equipo);
-// "soporte" es un ticket con el equipo de la plataforma. Ninguno de los dos
-// cuelga de una cotización o una orden.
+// ----------------------------------------------------------------------------------------------------
 type ChatType="orden"|"cotizacion"|"interno"|"soporte"|"equipo";
 
 export const INCOTERM_INCLUYE: Record<string,string> = {
@@ -431,28 +304,6 @@ export interface ChatMsg {
   authorName?:string;
 }
 
-/**
- * `sender: "client"` es el lado de quien mira la pantalla: lo suyo y, en una
- * negociación, lo de su empresa (la dueña que abre el chat de su asesor ve al
- * asesor a la derecha y al cliente a la izquierda). Lo decide el backend con
- * `de_mi_lado`; sin él, solo lo propio.
- */
-function mapBackendChatMessage(
-  message:{id:string;remitente_id:string;contenido:string;tipo:string;fecha_envio:string;metadata:Record<string,unknown>|null;remitente_nombre?:string|null;de_mi_lado?:boolean|null},
-  currentUserId:string|undefined,
-):ChatMsg{
-  const proposal=message.tipo==="propuesta" ? leerPropuestaDeMensaje(message.metadata) : undefined;
-  return {
-    id:message.id,
-    sender:message.de_mi_lado && message.remitente_id===currentUserId ? "client" : "provider",
-    authorName:message.remitente_id!==currentUserId?(message.remitente_nombre||undefined):undefined,
-    text:message.contenido,
-    time:formatChatTime(message.fecha_envio),
-    read:true,
-    proposal,
-  };
-}
-
 const INCOTERMS=["EXW","FCA","FAS","FOB","CFR","CIF","CPT","CIP","DAP","DPU","DDP"];
 const COUNTRIES=["China","Estados Unidos","Alemania","Japón","India","Italia","Francia","España","Brasil","Corea del Sur","Turquía","México","Colombia"];
 // Una sola lista para la línea de producto que pide el cliente y para las
@@ -518,9 +369,9 @@ export function FormatFileIcon({ extension, mimeType, compact = false }: { exten
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 // SIDEBAR ? pinned / floating / toggle tab
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 const NAV_ITEMS=[
   {icon:LayoutGrid,   label:"Dashboard",    key:"dashboard"},
   {icon:FileText,     label:"Cotizaciones", key:"quotes"},
@@ -703,25 +554,9 @@ export function importerColorFromId(id: string): string {
 }
 
 /** Lee una clave de `perfil_publico` sin asumir su forma (es JSON libre). */
-function readPerfilPublicoString(perfil: Record<string, unknown> | null | undefined, ...claves: string[]): string {
-  for (const clave of claves) {
-    const valor = perfil?.[clave];
-    if (typeof valor === "string" && valor.trim()) {
-      return valor.trim();
-    }
-  }
-  return "";
-}
 
-function readPerfilPublicoStringArray(perfil: Record<string, unknown> | null | undefined, ...claves: string[]): string[] {
-  for (const clave of claves) {
-    const valor = perfil?.[clave];
-    if (Array.isArray(valor)) {
-      return valor.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-    }
-  }
-  return [];
-}
+
+
 
 /**
  * Convierte lo que la empresa escribió en «Sitio web» en un href navegable.
@@ -758,157 +593,15 @@ const PRICE_CURRENCIES = ["USD", "EUR", "COP", "MXN", "CLP", "PEN", "GBP"];
  * aparecía el texto de relleno «Asesor asignado»), y si no hay nadie, la propia
  * empresa.
  */
-function resolveImporterAdvisorProfile(
-  perfil: Record<string, unknown> | null | undefined,
-  companyName: string,
-  asesores: BackendImporter["asesores"] = [],
-) {
-  const principal = asesores?.[0];
-  const advisorName =
-    readPerfilPublicoString(perfil, "advisor_name", "asesor_nombre", "contact_name", "nombre_contacto") ||
-    principal?.nombre ||
-    companyName;
-  const advisorRole =
-    readPerfilPublicoString(perfil, "advisor_role", "asesor_rol", "cargo_contacto", "contact_role") ||
-    (principal ? ROL_ASESOR_PUBLICO[principal.rol] || "Asesor" : "Equipo comercial");
-  const advisorEmail = readPerfilPublicoString(perfil, "advisor_email", "asesor_email", "email", "correo");
-  const advisorPhone = readPerfilPublicoString(perfil, "advisor_phone", "asesor_telefono", "phone", "telefono");
 
-  return {
-    advisorName,
-    advisorRole,
-    advisorEmail,
-    advisorPhone,
-    advisorInitials: initialsFromName(advisorName || companyName),
-  };
-}
 
-function mapBackendImporterToUi(imp: BackendImporter): Importer {
-  const primaryCategory = imp.especialidad_producto[0] ?? "General";
-  const primaryCountry = imp.paises_origen[0] ?? "N/A";
-  const name = imp.nombre_empresa;
-  const perfil = imp.perfil_publico ?? null;
-  const tierMinimoRequerido = readPerfilPublicoString(perfil, "tier_minimo_requerido") || imp.tier_minimo_requerido || "Bronze";
-  const advisorProfile = resolveImporterAdvisorProfile(perfil, name, imp.asesores);
-  return {
-    description: readPerfilPublicoString(perfil, "descripcion", "description", "about"),
-    certs: readPerfilPublicoStringArray(perfil, "certs", "certificaciones"),
-    bannerUrl: readPerfilPublicoString(perfil, "banner_url", "banner"),
-    logoUrl: imp.logo_url ?? "",
-    // Ficha corporativa: la empresa ya rellenaba estos campos en su perfil,
-    // pero nadie los leía, así que no aparecían en ninguna pantalla pública.
-    website: readPerfilPublicoString(perfil, "website", "sitio_web", "web"),
-    email: readPerfilPublicoString(perfil, "email", "correo", "email_contacto"),
-    phone: readPerfilPublicoString(perfil, "phone", "telefono"),
-    address: readPerfilPublicoString(perfil, "address", "direccion"),
-    foundedYear: readPerfilPublicoString(perfil, "year", "anio_fundacion", "fundacion"),
-    industries: readPerfilPublicoStringArray(perfil, "industries", "industrias", "sectores"),
-    platformCerts: (imp.certificaciones ?? []).map((cert) => ({
-      id: cert.certificacion_id,
-      nombre: cert.nombre,
-      descripcion: cert.descripcion || "",
-      logoUrl: cert.logo_url || "",
-      peso: Number(cert.peso_publicidad || 0),
-    })),
-    adScore: Number(imp.puntaje_publicidad || 0),
-    id: imp.id,
-    name,
-    specialty: `${primaryCategory} internacional`,
-    rating: Number(imp.calificacion_promedio || 0),
-    responseTime: imp.tiempo_respuesta_promedio || "~48h",
-    initials: initialsFromName(name),
-    color: importerColorFromId(imp.id),
-    memberSince: formatShortDate(imp.fecha_registro),
-    // ?rdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
-    // empresas se presentaban como si no hubieran cerrado ni un proyecto.
-    projects: Number(imp.proyectos_completados ?? 0),
-    verified: Boolean(imp.verificado),
-    country: primaryCountry,
-    categories: imp.especialidad_producto.length > 0 ? imp.especialidad_producto : ["General"],
-    tierMinimoRequerido: ["Bronze", "Silver", "Gold", "Élite"].includes(tierMinimoRequerido) ? tierMinimoRequerido as Importer["tierMinimoRequerido"] : "Bronze",
-    shippingMarkPrefix: imp.shipping_mark_prefijo ?? undefined,
-    advisors: (imp.asesores ?? []).map((asesor) => ({
-      id: asesor.id,
-      name: asesor.nombre,
-      role: ROL_ASESOR_PUBLICO[asesor.rol] || "Asesor",
-      initials: initialsFromName(asesor.nombre),
-      color: "bg-slate-600",
-    })),
-    advisor: {
-      name: advisorProfile.advisorName,
-      role: advisorProfile.advisorRole,
-      initials: advisorProfile.advisorInitials,
-      color: "bg-slate-600",
-      email: advisorProfile.advisorEmail,
-      phone: advisorProfile.advisorPhone,
-    },
-  };
-}
 
-function backendEstadoToUi(estado: string): Quote["status"] {
-  switch (estado) {
-    case "creada":
-      return "created";
-    case "dirigida":
-      return "directed";
-    case "abierta":
-      return "open";
-    case "aceptada":
-      return "accepted";
-    case "orden_activa":
-      return "active-order";
-    case "rechazada":
-      return "rejected-importer";
-    default:
-      return "created";
-  }
-}
 
-function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
 
-function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quote {
-  const importerName = cot.importador_id
-    ? importers.find((imp) => imp.id === cot.importador_id)?.name ?? "Importadora"
-    : "Red abierta";
-  const currency = parseTargetPriceCurrency(cot.precio_objetivo_moneda ?? cot.moneda_precio_objetivo ?? "USD");
-  const targetPriceValue = Number.isFinite(cot.precio_objetivo_usd as number) ? Number(cot.precio_objetivo_usd) : null;
 
-  return {
-    id: cot.id,
-    code: `COT-${cot.id.slice(0, 8).toUpperCase()}`,
-    date: formatShortDate(cot.fecha_creacion),
-    product: cot.nombre_producto,
-    importer: importerName,
-    importadorId: cot.importador_id,
-    mode: cot.modalidad === "dirigida" ? "Dirigida" : "Abierta",
-    status: backendEstadoToUi(cot.estado),
-    motivoRechazo: cot.motivo_rechazo ?? null,
-    updatedAt: formatShortDate(cot.fecha_actualizacion),
-    country: cot.pais_importacion,
-    productLine: cot.linea_producto,
-    quality: cot.tipo_calidad,
-    minQuantity: String(cot.cantidad_minima),
-    unit: cot.unidad_cantidad === "m3" ? "m3" : "unidades",
-    targetPrice: targetPriceValue !== null ? `${targetPriceValue} ${currency}` : "N/A",
-    targetPriceCurrency: currency,
-    incoterm: cot.incoterm || "DDP",
-    description: cot.descripcion_cliente,
-    notes: cot.notas_adicionales ?? "",
-    referenceLink: cot.link_referencia ?? "",
-    productPhotoUrls: cot.fotos_producto?.length ? cot.fotos_producto : (cot.foto_producto ? [cot.foto_producto] : []),
-    personalizationLevel: cot.nivel_personalizacion ?? "",
-    importMode: cot.modalidad_importacion ?? "",
-    shippingMark: cot.shipping_mark ?? null,
-    shippingMarkSufijo: cot.shipping_mark_sufijo ?? null,
-    deliveryCity: cot.ciudad_entrega ?? null,
-    customFields: cot.campos_personalizados_valores ?? null,
-    requesterId: cot.solicitante_id,
-    tierMinimoRequerido: cot.tier_minimo_requerido ?? "Bronze",
-    solicitanteTier: cot.solicitante_tier ?? "Bronze",
-    solicitantePuntosCotizacion: cot.solicitante_puntos_cotizacion ?? 0,
-    bloqueada: Boolean(cot.bloqueada),
-  };
-}function normalizeText(value: unknown): string {
+
+
+function normalizeText(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
@@ -1069,528 +762,16 @@ function applyQuoteStatusOverride(quote: Quote, overrides: Record<string, Quote[
   };
 }
 
-function mapBackendAdvisorToUi(a: BackendAsesor): CompanyAdvisor {
-  const name = a.nombre || a.email;
-  return {
-    id: a.id,
-    name,
-    role: "Asesor",
-    email: a.email,
-    phone: a.telefono || "",
-    initials: initialsFromName(name),
-    color: "bg-slate-600",
-    status: a.activo ? "activo" : "inactivo",
-    availability: a.activo ? "media" : "baja",
-    activeQuotes: 0,
-    avgResponse: "~24h",
-    joinDate: formatShortDate(a.fecha_creacion),
-  };
-}
 
-function mapProposalEstadoToResponseStatus(estado: string): ResponseStatus {
-  if (estado === "aceptada") return "resp-aceptada";
-  if (estado === "rechazada") return "resp-rechazada";
-  if (estado === "enviada") return "resp-vista";
-  return "resp-nueva";
-}
 
-function mapBackendProposalToUiResponse(p: BackendPropuesta): QuoteResponse {
-  return {
-    id: p.id,
-    importerId: p.importador_id,
-    quoteId: p.cotizacion_id,
-    price: leerPropuesta(p.condiciones_adicionales) ? `${pesosCop(leerPropuesta(p.condiciones_adicionales)!.totales.total_cop)} COP con IVA` : `${p.precio_ofrecido_usd} USD`,
-    deliveryTime: p.tiempo_estimado_entrega,
-    incoterm: p.incoterm,
-    date: formatShortDate(new Date().toISOString()),
-    status: mapProposalEstadoToResponseStatus(p.estado),
-    moq: "N/A",
-    origin: "N/A",
-    production: "N/A",
-    customization: p.condiciones_adicionales || "Sin personalización",
-    observations: p.condiciones_adicionales || "Sin observaciones",
-  };
-}
 
-function mapBackendOrderToUiOrder(order: BackendOrder, quote?: Quote): Order {
-  const code = `ORD-${order.id.slice(0, 8).toUpperCase()}`;
-  // El backend no ordena el historial (la relación sale en orden de clave, que
-  // es un UUID aleatorio), así que llegaba mezclado: se ordena por fecha para
-  // que el seguimiento se lea de arriba abajo y `created` sea la creación real.
-  const history = (order.historial_estados ?? [])
-    .slice()
-    .sort((a, b) => String(a.fecha_cambio).localeCompare(String(b.fecha_cambio)))
-    .map((item) => ({
-      estado: item.estado_nuevo,
-      fecha: item.fecha_cambio,
-      // De dónde venía, para poder leer el salto en el seguimiento.
-      nota: item.estado_anterior ? `Desde ${orderStateLabel(item.estado_anterior)}` : null,
-    }));
-  const documents = (order.documentos_adjuntos ?? []).map((doc) => ({
-    name: doc.nombre,
-    // El backend no fecha los documentos de la orden; mostrar una fecha
-    // inventada sería peor que no mostrar ninguna.
-    date: "",
-    status: doc.url ? "Disponible" : "Pendiente",
-    url: doc.url,
-    type: doc.tipo,
-  }));
 
-  return {
-    id: order.id,
-    code,
-    quoteCode: quote?.code || `COT-${order.cotizacion_id.slice(0, 8).toUpperCase()}`,
-    product: quote?.product || "Producto no disponible",
-    importerId: order.importador_id,
-    advisorName: order.asesor_nombre || undefined,
-    created: formatShortDate(history[0]?.fecha || new Date().toISOString()),
-    estimated: order.tiempo_estimado_entrega || "N/D",
-    quantity: quote?.minQuantity ? cantidadConUnidad(quote.minQuantity, quote.unit, true) : "N/D",
-    unitPrice: `${order.precio_acordado_usd} USD/u`,
-    totalValue: `${order.precio_acordado_usd} USD`,
-    incoterm: quote?.incoterm || "N/D",
-    originPort: "N/D",
-    destPort: "N/D",
-    shippingMark: order.shipping_mark ?? null,
-    status: order.estado,
-    history,
-    documents,
-    conversationId: order.conversacion_id || undefined,
-  };
-}
 
-function extractFirstNumber(value: string | null | undefined): number {
-  const match = String(value ?? "").match(/(\d+(?:[.,]\d+)?)/);
-  if (!match) {
-    return 0;
-  }
 
-  const parsed = Number.parseFloat(match[1].replace(",", "."));
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
 
-  return Math.round(parsed);
-}
-
-interface AppNotification {
-  id:string;type:"response"|"message"|"status"|"order"|"document"|"advisor"|"update";
-  title:string;body:string;date:string;read:boolean;
-  cotizacionId?:string;conversationId?:string;approval?:boolean;
-  /** Pantalla a la que lleva la notificación cuando no es de una cotización ni de un chat. */
-  destino?:"tendencias-enviar"|"catalogos"|"reto"|"diseno"|"pagos"|"admin-pagos";
-}
-
-const INIT_NOTIFICATIONS:AppNotification[]=[];
-
-function mapBackendNotificationTypeToUi(type: string): AppNotification["type"] {
-  if (type === "chat") return "message";
-  if (type === "orden") return "order";
-  if (type === "cotizacion" || type === "propuesta" || type === "negociacion") return "response";
-  if (type === "curso") return "document";
-  if (type === "sistema") return "update";
-  return "status";
-}
-
-function mapBackendNotificationToUi(notification: { id: string; tipo: string; titulo: string; mensaje: string; fecha_creacion: string; leida: boolean; data?: Record<string, unknown> | null; }, companyName?: string): AppNotification {
-  const data = notification.data || {};
-  const cotizacionId = typeof data.cotizacion_id === "string" ? data.cotizacion_id : undefined;
-  const conversationId = typeof data.conversacion_id === "string" ? data.conversacion_id : undefined;
-  const approval = notification.tipo === "negociacion" || /cotizaci[oó]n aprobada/i.test(notification.titulo);
-  const company = companyName || (typeof data.nombre_empresa === "string" ? data.nombre_empresa : "la empresa importadora");
-  const title = approval ? "Cotización Aprobada" : notification.titulo;
-  const body = approval && cotizacionId
-     ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
-    : notification.mensaje;
-  return {
-    id: notification.id,
-    type: mapBackendNotificationTypeToUi(notification.tipo),
-    title,
-    body,
-    date: formatShortDate(notification.fecha_creacion),
-    read: notification.leida,
-    cotizacionId,
-    conversationId,
-    approval,
-    // "Para diseñar" lleva a la cola de diseño; el resto de Tendencias, a mis envíos.
-    destino: notification.tipo === "tendencias" ? (notification.data?.evento === "para_disenar" ? "diseno" : "tendencias-enviar")
-      : notification.tipo === "reto" ? "reto"
-      // Comprobantes: el admin revisa los nuevos; el usuario ve el resultado en Pagos.
-      : notification.tipo === "pagos" ? (notification.data?.evento === "comprobante_nuevo" ? "admin-pagos" : "pagos")
-      : notification.tipo === "catalogo" ? "catalogos" : undefined,
-  };
-}
 
 type NavItem={icon:React.FC<{className?:string}>;label:string;key:string};
 
-export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
-  const { dark } = useBrandTheme();
-  const [hovered,setHovered]=useState(false);
-  const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
-  const timer=useRef<ReturnType<typeof setTimeout>>(null);
-  const floating=!pinned&&hovered;
-  const isExpanded=pinned||hovered;
-  const isAdminNavigation=navItems.some(item=>item.key==="admin-dashboard");
-  const adminGroups=[
-    {key:"gestion",label:"Gestión",icon:Building2,items:["admin-empresas","admin-presentaciones","admin-asignacion","admin-usuarios","admin-cotizantes"]},
-    {key:"comunicacion",label:"Comunicación",icon:MessageSquare,items:["admin-correos","admin-soporte","chats","documentos"]},
-    {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","admin-tendencias-aprobacion","diseno","admin-reto"]},
-    {key:"finanzas",label:"Suscripciones",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
-    {key:"configuracion",label:"Configuración",icon:ToggleRight,items:["admin-certificaciones","admin-respaldos","admin-tipografia","admin-modulos"]},
-  ] as const;
-
-  useEffect(()=>{
-    if(!isAdminNavigation)return;
-    const activeGroup=adminGroups.find(group=>group.items.includes(active));
-    if(activeGroup)setOpenAdminGroup(activeGroup.key);
-  },[active,isAdminNavigation]);
-
-  function onEnter(){timer.current=setTimeout(()=>setHovered(true),60);}
-  function onLeave(){if(timer.current)clearTimeout(timer.current);setHovered(false);}
-
-  return (
-    <div
-      className={clsx("relative flex-shrink-0 transition-all duration-250 ease-in-out h-screen",pinned?"w-52":"w-14")}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-    >
-      <div className={clsx(
-        "flex flex-col bg-white border-r border-border h-full",
-        "transition-all duration-250 ease-in-out overflow-hidden",
-        floating
-          ? "absolute top-0 left-0 z-50 shadow-2xl shadow-black/10 w-52"
-          : pinned ? "w-full" : "w-14"
-      )}>
-        <div className={clsx("flex items-center h-[57px] border-b border-sidebar-border",isExpanded?"px-4":"justify-center px-0")}>
-          <img src={dark ? (isExpanded ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-isotipo-acid.svg") : (isExpanded ? "/brand/zarpi-wordmark.svg" : "/brand/zarpi-isotipo.svg")} alt="Zarpi" className={clsx("object-contain object-left transition-all duration-200",isExpanded?"h-8 w-28":"h-8 w-8")} />
-        </div>
-
-        <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1 overflow-y-auto">
-          {isAdminNavigation ? (
-            <>
-              {navItems.filter(item=>item.key==="admin-dashboard").map(({icon:Icon,label,key})=>{
-                const isActive=active===key;
-                return (
-                  <button
-                    key={key}
-                    onClick={()=>onNav(key)}
-                    className={clsx(
-                      "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
-                      isActive
-                        ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                      isExpanded ? "gap-2.5" : "justify-center gap-0"
-                    )}
-                    title={!isExpanded ? label : undefined}
-                  >
-                    <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary dark:text-accent")}/>
-                    <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
-                      <span className="whitespace-nowrap">{label}</span>
-                    </div>
-                    {isExpanded&&isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0"/>}
-                  </button>
-                );
-              })}
-              {adminGroups.map(group=>{
-                const GroupIcon=group.icon;
-                const groupItems=navItems.filter(item=>group.items.includes(item.key));
-                if(groupItems.length===0)return null;
-                const isOpen=openAdminGroup===group.key;
-                const hasActiveItem=groupItems.some(item=>item.key===active);
-                return (
-                  <div key={group.key} className="mt-1">
-                    <button
-                      type="button"
-                      onClick={()=>isExpanded&&setOpenAdminGroup(current=>current===group.key?null:group.key)}
-                      className={clsx(
-                        "flex items-center rounded-lg px-2.5 py-2 text-sm font-semibold transition-all duration-150 w-full",
-                        hasActiveItem
-                          ? "text-primary dark:text-accent"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                        isExpanded?"gap-2.5":"justify-center gap-0"
-                      )}
-                      title={!isExpanded?group.label:undefined}
-                      aria-expanded={isExpanded?isOpen:undefined}
-                    >
-                      <GroupIcon className="w-4 h-4 flex-shrink-0"/>
-                      <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
-                        <span className="whitespace-nowrap">{group.label}</span>
-                      </div>
-                      {isExpanded&&<ChevronDown className={clsx("ml-auto w-4 h-4 transition-transform duration-200",isOpen&&"rotate-180")}/>}
-                    </button>
-                    {isExpanded&&isOpen&&(
-                      <div className="grid grid-rows-[1fr]">
-                        <div className="min-h-0 overflow-hidden">
-                          <div className="ml-2 border-l border-border pl-2 pt-0.5">
-                            {groupItems.map(({icon:Icon,label,key})=>{
-                              const isActive=active===key;
-                              return (
-                                <button
-                                  key={key}
-                                  onClick={()=>onNav(key)}
-                                  className={clsx(
-                                    "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full gap-2.5",
-                                    isActive
-                                      ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                  )}
-                                >
-                                  <Icon className={clsx("w-4 h-4 flex-shrink-0",isActive&&"text-primary dark:text-accent")}/>
-                                  <span className="whitespace-nowrap">{label}</span>
-                                  {isActive&&<span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0"/>}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          ) : navItems.map(({ icon: Icon, label, key }) => {
-            const isActive = active === key;
-            return (
-              <button
-                key={key}
-                onClick={() => onNav(key)}
-                className={clsx(
-                  "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
-                  isActive
-                    ? "bg-primary/8 text-primary dark:bg-accent/15 dark:text-accent"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                  isExpanded ? "gap-2.5" : "justify-center gap-0"
-                )}
-                title={!isExpanded ? label : undefined}
-              >
-                <Icon className={clsx("w-4 h-4 flex-shrink-0", isActive && "text-primary dark:text-accent")} />
-                <div className={clsx("overflow-hidden transition-all duration-200", isExpanded ? "w-auto opacity-100" : "w-0 opacity-0")}>
-                  <span className="whitespace-nowrap">{label}</span>
-                </div>
-                {isExpanded && isActive && (
-                  <span className="ml-auto w-1 h-4 rounded-full bg-primary dark:bg-accent flex-shrink-0" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="p-2 border-t border-border">
-          {/* Vía directa con el equipo de la plataforma. Va en el pie y no en el
-              menú porque no es una sección de la aplicación, sino una acción. */}
-          {showSoporte&&(
-            <button
-              onClick={onSoporte}
-              className={clsx(
-                "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full mb-1",
-                "text-muted-foreground hover:text-foreground hover:bg-muted",
-                isExpanded ? "gap-2.5" : "justify-center gap-0",
-              )}
-              title={!isExpanded ? "Soporte técnico" : undefined}
-            >
-              <LifeBuoy className="w-4 h-4 flex-shrink-0"/>
-              <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
-                <span className="whitespace-nowrap">Soporte técnico</span>
-              </div>
-            </button>
-          )}
-          {/* El equipo de la plataforma no se abre tickets a sí mismo: su vía
-              es el canal interno con administración y con sus compañeros. */}
-          {showCanalEquipo&&(
-            <button
-              onClick={onCanalEquipo}
-              className={clsx(
-                "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full mb-1",
-                "text-muted-foreground hover:text-foreground hover:bg-muted",
-                isExpanded ? "gap-2.5" : "justify-center gap-0",
-              )}
-              title={!isExpanded ? "Canal del equipo" : undefined}
-            >
-              <Users className="w-4 h-4 flex-shrink-0"/>
-              <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
-                <span className="whitespace-nowrap">Canal del equipo</span>
-              </div>
-            </button>
-          )}
-          <button
-            onClick={onLogout}
-            className={clsx(
-              "flex items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150 w-full",
-              "text-muted-foreground hover:text-foreground hover:bg-muted",
-              isExpanded ? "gap-2.5" : "justify-center gap-0",
-            )}
-            title={!isExpanded ? "Cerrar sesión" : undefined}
-          >
-            <LogIn className="w-4 h-4 flex-shrink-0 rotate-180"/>
-            <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
-              <span className="whitespace-nowrap">Cerrar sesion</span>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <button
-        onClick={onToggle}
-        className={clsx(
-          "absolute top-1/2 -translate-y-1/2 right-0 translate-x-full z-[60]",
-          "w-4 h-10 bg-white border border-l-0 border-border",
-          "rounded-r-md flex items-center justify-center",
-          "shadow-sm hover:bg-slate-50 transition-all duration-150",
-          "focus-visible:outline-none",
-          (!pinned && hovered) ? "opacity-0 pointer-events-none" : "opacity-100"
-        )}
-        title={pinned?"Contraer menú":"Fijar expandido"}
-      >
-        <div className={clsx("transition-transform duration-250",pinned?"":"rotate-180")}>
-          <ChevronLeft className="w-2.5 h-2.5 text-muted-foreground"/>
-        </div>
-      </button>
-    </div>
-  );
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// SOPORTE TÉCNICO ? formulario de apertura de ticket
-export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { user: { name: string; company: string; initials: string; photoUrl?: string }; notifCount?: number; onNotif?: () => void; onProfile?: () => void; sb?: SidebarCtrl }) {
-  const { dark, toggleTheme } = useBrandTheme();
-  const { user: authUser } = useAuth();
-  
-  // Estado para el popover de créditos
-  const [showCreditosModal, setShowCreditosModal] = useState(false);
-  const creditosRef = useRef<HTMLDivElement>(null);
-
-  const count = sb?.notifCount ?? notifCount;
-  const handler = sb?.onNotif ?? onNotif;
-  const profileHandler = sb?.onProfile ?? onProfile;
-  const chatHandler = sb?.onChat;
-  const helpHandler = sb?.onHelp;
-  const chatCount = sb?.chatCount ?? 0;
-  const showHelp = sb?.showHelp ?? true;
-  const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
-  const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
-  const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
-  const displayInitials = initialsFromName(initialsSource);
-  const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
-  const displayPhotoUrl = authUserPhoto || sb?.profilePhotoUrl || user.photoUrl || "";
-  const creditos = Number((authUser as { puntos_cotizacion?: number } | null)?.puntos_cotizacion ?? 0);
-
-  // Cierre automático al hacer clic fuera del badge/popover
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (creditosRef.current && !creditosRef.current.contains(event.target as Node)) {
-        setShowCreditosModal(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0 relative">
-      {/* LADO IZQUIERDO: BADGE Y POPOVER DE CRÉDITOS */}
-      <div className="flex items-center">
-        {authUser?.rol === "solicitante" && (
-          <div className="relative" ref={creditosRef}>
-            <button
-              type="button"
-              onClick={() => setShowCreditosModal((prev) => !prev)}
-              onMouseEnter={() => setShowCreditosModal(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-primary transition-all duration-200 hover:border-primary/40 hover:shadow-sm dark:border-accent/30 dark:text-accent dark:hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            >
-              <WalletCards className="h-3.5 w-3.5 animate-pulse" />
-              <span>{creditos} créditos</span>
-            </button>
-
-            {/* Popover animado */}
-            {showCreditosModal && (
-              <div 
-                className="absolute left-0 top-full mt-2.5 w-72 z-50 rounded-2xl border border-border bg-card p-4 shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-accent/10 dark:text-accent">
-                    <WalletCards className="h-4 w-4" />
-                  </div>
-                  <div className="space-y-1 text-left">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-bold text-foreground">Créditos disponibles</p>
-                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-accent/20 dark:text-accent">
-                        {creditos}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      <strong>1 crédito</strong> te permite enviar una cotización a empresas de categorías superiores (Plata, Oro, etc.).
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Info className="h-3 w-3 text-primary dark:text-accent" /> Se descuentan por solicitud
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreditosModal(false)}
-                    className="font-medium text-primary hover:underline dark:text-accent"
-                  >
-                    Entendido
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* LADO DERECHO */}
-      <div className="flex items-center gap-1">
-        <div className="relative">
-          <button onClick={handler} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-            <Bell className="w-4 h-4"/>
-          </button>
-          {count > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">
-              {count > 9 ? "9+" : count}
-            </span>
-          )}
-        </div>
-
-        <NotifIcon icon={<MessageCircle className="w-4 h-4"/>} count={chatCount} onClick={chatHandler} title="Ir a chats"/>
-
-        {showHelp && <NotifIcon icon={<HelpCircle className="w-4 h-4"/>} count={0} onClick={helpHandler} title="Ayuda y soporte"/>}
-
-        <button
-          onClick={toggleTheme}
-          title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
-        </button>
-
-        <div className="w-px h-5 bg-border mx-2"/>
-
-        <div className="flex items-center gap-2.5">
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium text-foreground leading-tight">{displayName}</p>
-            <p className="text-xs text-muted-foreground leading-tight">{displayCompany}</p>
-          </div>
-          <button onClick={profileHandler} title="Editar perfil">
-            <Avatar initials={displayInitials} size="md" src={displayPhotoUrl ? resolveApiUrl(displayPhotoUrl) : undefined}/>
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-export const USER={name:"Ana García",company:"Importaciones del Norte S.A.",initials:"AG"};
-export const USER_IMPORTADORA={name:"María López",company:"Grupo Nexus S.A.",initials:"ML"};
-export const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. ? Asesor",initials:"CM"};
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// IMPORTER CARD ? used in Dashboard and profile screens
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function ImporterCard({
   imp,
   onViewProfile,
@@ -1804,326 +985,14 @@ export function ImporterCard({
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 // DASHBOARD SCREEN ? importer marketplace catalog
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
 // IMPORTER PROFILE SCREEN ? read-only public profile for the requester
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ImporterProfileScreen({importerId,onBack,onCreateQuote,onOpenChat,sb,importers,chats,orders,quotes,onAbrirTendencia}:{
-  importerId:string;onBack:()=>void;onCreateQuote:(id:string)=>void;onOpenChat:(convId:string)=>void;sb:SidebarCtrl;importers:Importer[];chats:ChatConv[];orders:Order[];quotes:Quote[];onAbrirTendencia:(id:string)=>void;
-}) {
-  const imp=importers.find(i=>i.id===importerId)||importers[0];
-  if (!imp) return null;
-  const desc=imp.description||"Esta empresa aún no ha publicado su descripción.";
-  const certs=imp.certs ?? [];
-  const platformCerts=imp.platformCerts ?? [];
-  const bannerUrl=imp.bannerUrl?resolveApiUrl(imp.bannerUrl):"";
-  const logoUrl=imp.logoUrl?resolveApiUrl(imp.logoUrl):"";
-  const relQuotes=quotes.filter(q=>q.importer===imp.name);
-  const relOrders=orders.filter(o=>o.importerId===imp.id);
-  const relChats=chats.filter(c=>c.importerId===imp.id);
-
-  // Las personas reales que atienden en la empresa. Antes se añadía un
-  // «Suplente / Asesor Jr.» inventado con un correo que no existía. El correo
-  // es el de contacto de la empresa: el de cada asesor no se publica.
-  const correoEmpresa=imp.email||imp.advisor.email||"";
-  const ADVISORS=(imp.advisors&&imp.advisors.length>0?imp.advisors:[imp.advisor]).map(adv=>({...adv,email:correoEmpresa}));
-
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="dashboard"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio",onClick:onBack},{label:"Dashboard",onClick:onBack},{label:imp.name}]}/>
-
-          {/* Banner de portada: primera impresión de la empresa para el solicitante */}
-          {bannerUrl&&(
-            <div className="mt-4 rounded-2xl overflow-hidden border border-border bg-muted/40">
-              <img
-                src={bannerUrl}
-                alt={`Portada de ${imp.name}`}
-                className="w-full h-40 sm:h-56 object-cover"
-                loading="lazy"
-              />
-            </div>
-          )}
-
-          {/* Hero card */}
-          <Card padding="md" className={clsx("mb-5",bannerUrl?"mt-3":"mt-4")}>
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
-              <div className="flex items-start gap-4">
-                <Avatar initials={imp.initials} size="2xl" color={imp.color} src={logoUrl||undefined} variant="logo"/>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-lg font-semibold">{imp.name}</h1>
-                    {imp.verified&&<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-medium"><BadgeCheck className="w-3 h-3"/>Verificada</span>}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{imp.specialty}</p>
-                  <div className="flex items-center gap-4 mt-2 flex-wrap">
-                    {platformCerts.length>0&&<div className="flex items-center gap-1 text-primary"><BadgeCheck className="w-3.5 h-3.5"/><span className="text-xs font-medium">{platformCerts.length} {platformCerts.length===1?"sello":"sellos"} de Zarpi</span></div>}
-                    {certs.length>0&&<div className="flex items-center gap-1 text-muted-foreground"><Award className="w-3.5 h-3.5"/><span className="text-xs">{certs.length} {certs.length===1?"certificación":"certificaciones"}</span></div>}
-                    <div className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3.5 h-3.5"/><span className="text-xs">{imp.responseTime} respuesta</span></div>
-                    <div className="flex items-center gap-1 text-muted-foreground"><MapPin className="w-3.5 h-3.5"/><span className="text-xs">{imp.country}</span></div>
-                    <div className="flex items-center gap-1 text-muted-foreground"><Package2 className="w-3.5 h-3.5"/><span className="text-xs">{imp.projects} proyectos</span></div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <ContactBtn type="chat" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
-                <ContactBtn type="email" onClick={()=>openSmartContact({type:"email",email:imp.advisor.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
-                <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
-              </div>
-            </div>
-          </Card>
-
-          <div className="flex gap-5 items-start">
-            <div className="flex-1 min-w-0 space-y-5">
-              {/* About */}
-              <Card padding="md">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Building2 className="w-4 h-4 text-primary"/>Acerca de la empresa</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {imp.categories.map(c=>(
-                    <span key={c} className="px-2.5 py-1 bg-primary/5 text-primary rounded-lg text-xs font-medium">{c}</span>
-                  ))}
-                </div>
-                {imp.industries&&imp.industries.length>0&&(
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {imp.industries.map(i=>(
-                      <span key={i} className="px-2.5 py-1 bg-muted text-muted-foreground rounded-lg text-xs font-medium">{i}</span>
-                    ))}
-                  </div>
-                )}
-              </Card>
-
-              {/* Ficha de contacto que la empresa rellena en su propio perfil.
-                  Estaba guardándose en `perfil_publico` sin que ninguna pantalla
-                  la leyera, así que rellenarla no cambiaba nada para el cliente. */}
-              <DatosDeContactoEmpresa imp={imp}/>
-
-              {/* Presentacion en video y fotos que sube la propia empresa. El
-                  componente no pinta nada si todavia no hay material aprobado. */}
-              <PresentacionPublica importadorId={imp.id}/>
-              {/* Productos de Tendencias que recomienda la empresa: cotizarlos
-                  le llega solo a ella. No pinta nada si no tiene. */}
-              <RecomendadosEmpresa importadorId={imp.id} onAbrir={onAbrirTendencia}/>
-
-              <Card padding="md">
-                <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Star className="w-4 h-4 text-primary"/>Reseñas de clientes</h3>
-                <p className="text-xs text-muted-foreground mb-4">Solo las escriben clientes que ya recibieron una importación con esta empresa.</p>
-                <ResenasImportador importadorId={imp.id}/>
-              </Card>
-
-              {/* Respaldo de la plataforma: distinto de las certificaciones que
-                  la propia empresa declara, porque este lo otorga Zarpi. */}
-              {platformCerts.length>0&&(
-                <Card padding="md" className="border-primary/20 bg-primary/5">
-                  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><BadgeCheck className="w-4 h-4 text-primary"/>Respaldada por Zarpi</h3>
-                  <p className="text-xs text-muted-foreground mb-3">Sellos que nuestro equipo otorgó tras verificar a esta empresa.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {platformCerts.map(c=>(
-                      <div key={c.id} className="flex items-start gap-3 p-3 bg-white border border-primary/15 rounded-xl">
-                        <div className="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
-                          {c.logoUrl
-                            ? <img src={resolveApiUrl(c.logoUrl)} alt="" className="w-8 h-8 object-contain"/>
-                            : <BadgeCheck className="w-5 h-5 text-primary"/>}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-foreground">{c.nombre}</p>
-                          {c.descripcion&&<p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{c.descripcion}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Certifications */}
-              <Card padding="md">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Shield className="w-4 h-4 text-primary"/>Certificaciones declaradas por la empresa</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {certs.map(c=>(
-                    <div key={c} className="flex items-center gap-2.5 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-                      <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0"><Award className="w-4 h-4 text-emerald-600"/></div>
-                      <div><p className="text-xs font-semibold text-emerald-800">{c}</p><p className="text-[10px] text-emerald-600 mt-0.5">Certificado activo</p></div>
-                    </div>
-                  ))}
-                  {certs.length===0&&<p className="text-sm text-muted-foreground col-span-3">Sin certificaciones registradas.</p>}
-                </div>
-              </Card>
-
-              {/* Advisors */}
-              <Card padding="md">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><UserRound className="w-4 h-4 text-primary"/>{ADVISORS.length===1?"Quién te atiende":"Asesores disponibles"}</h3>
-                <div className="space-y-3">
-                  {ADVISORS.map((adv,i)=>(
-                    <div key={i} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
-                      <Avatar initials={adv.initials} size="lg" color={adv.color}/>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{adv.name}</p>
-                        <p className="text-xs text-muted-foreground">{adv.role}</p>
-                        {adv.email&&<p className="text-xs text-primary mt-0.5">{adv.email}</p>}
-                      </div>
-                      <div className="flex gap-1.5">
-                        <ContactBtn type="chat" size="sm" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
-                        {adv.email&&<ContactBtn type="email" label="Email" size="sm" onClick={()=>openSmartContact({type:"email",email:adv.email,onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* Related activity */}
-              {(relQuotes.length>0||relOrders.length>0)&&(
-                <Card padding="md">
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><FileText className="w-4 h-4 text-primary"/>Historial contigo</h3>
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    {[["Cotizaciones",relQuotes.length,"text-blue-600"],["Operaciones",relOrders.length,"text-purple-600"],["Chats activos",relChats.filter(c=>c.status==="activa").length,"text-emerald-600"]].map(([l,v,c])=>(
-                      <div key={l as string} className="p-3 bg-muted/30 rounded-xl">
-                        <p className={clsx("text-2xl font-semibold",c as string)}>{v as number}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{l as string}</p>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-            </div>
-
-            {/* Right sidebar */}
-            <div className="w-60 flex-shrink-0 hidden lg:block space-y-4">
-              <Card padding="md">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Estadísticas</h3>
-                <div className="space-y-2.5">
-                  {[["Miembro desde",imp.memberSince],["Proyectos totales",imp.projects.toString()],["Tiempo de respuesta",imp.responseTime],["País principal",imp.country]].map(([k,v])=>(
-                    <div key={k} className="flex justify-between items-start gap-2"><span className="text-xs text-muted-foreground">{k}</span><span className="text-xs font-medium text-right">{v}</span></div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card padding="md" className="bg-primary/5 border-primary/20">
-                <h3 className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Acciones rápidas</h3>
-                <div className="flex flex-col gap-2">
-                  <Button variant="primary" size="sm" fullWidth icon={<Plus className="w-3.5 h-3.5"/>} onClick={()=>onCreateQuote(imp.id)}>Crear cotización</Button>
-                  <ContactBtn type="chat" size="sm" label="Contactar por chat" className="w-full justify-center" onClick={()=>openSmartContact({type:"chat",onOpenChat:()=>{if(relChats[0])onOpenChat(relChats[0].id);}})}/>
-                  {relChats.length>0&&<Button variant="secondary" size="sm" fullWidth icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(relChats[0].id)}>Abrir chat</Button>}
-                </div>
-              </Card>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// QUOTES SCREEN
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-/** Armazón común (sidebar, cabecera, migas) para las pantallas que viven en `features/`. */
-function PantallaPortal({sb,active,titulo,children}:{sb:SidebarCtrl;active:string;titulo:string;children:React.ReactNode}) {
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active={active}/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-          <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav(sb.navItems[0]?.key||"dashboard")},{label:titulo}]}/>
-          <div className="mt-3">{children}</div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// NEW QUOTE WIZARD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 const STEPS=["Modalidad","Información del producto","Confirmación"];
-export function Modal({open,onClose,title,children,width="max-w-lg"}:{open:boolean;onClose:()=>void;title:string;children:React.ReactNode;width?:string}) {
-  if(!open)return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{background:"rgba(0,0,0,0.35)"}}>
-      <div className={clsx("bg-white rounded-2xl border border-border shadow-2xl w-full flex flex-col max-h-[90vh]",width)}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
-          <h2 className="text-base font-semibold">{title}</h2>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"><X className="w-4 h-4"/></button>
-        </div>
-        <div className="overflow-y-auto flex-1 px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// NOTIFICATIONS SCREEN
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onOpen:(notification:AppNotification)=>Promise<void>;onBack:()=>void;sb:SidebarCtrl}) {
-  const NOTIF_ICON:Record<AppNotification["type"],React.ReactNode>={
-    response:<ClipboardList className="w-4 h-4 text-blue-600"/>,
-    message: <MessageSquare className="w-4 h-4 text-purple-600"/>,
-    status:  <TrendingUp className="w-4 h-4 text-amber-600"/>,
-    order:   <ShoppingCart className="w-4 h-4 text-emerald-600"/>,
-    document:<FileText className="w-4 h-4 text-slate-600"/>,
-    advisor: <Users className="w-4 h-4 text-cyan-600"/>,
-    update:  <Bell className="w-4 h-4 text-rose-600"/>,
-  };
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active="notifications"/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={USER} sb={sb}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="flex items-center gap-3 mb-6">
-            <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
-            <div>
-              <h1 className="text-xl font-semibold">Notificaciones</h1>
-              <p className="text-sm text-muted-foreground">{notifications.filter(n=>!n.read).length} sin leer</p>
-            </div>
-          </div>
-          <Card padding="none" className="divide-y divide-border">
-            {notifications.length===0&&(
-              <div className="px-5 py-10 text-center">
-                <Bell className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2"/>
-                <p className="text-sm font-medium">No tienes notificaciones pendientes</p>
-                <p className="text-xs text-muted-foreground mt-1">Cuando haya cambios en cotizaciones, propuestas, chats u operaciones aparecerán aquí.</p>
-              </div>
-            )}
-            {notifications.map(n=>(
-              <button key={n.id} type="button" onClick={()=>{onMark(n.id);void onOpen(n);}} className={clsx("w-full text-left flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-primary/5 dark:hover:bg-accent/10 transition-colors",!n.read&&"bg-primary/5 dark:bg-accent/10")}>
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">{NOTIF_ICON[n.type]}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={clsx("text-sm",!n.read?"font-semibold text-primary dark:text-accent":"font-medium text-foreground/80")}>{n.title}</p>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">{n.date}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-                </div>
-                {!n.read&&<span className="w-2 h-2 rounded-full bg-primary dark:bg-accent flex-shrink-0 mt-1.5"/>}
-              </button>
-            ))}
-          </Card>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// IMPORTER PORTAL ? DASHBOARD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// IMPORTER PORTAL ? COMPANY PROFILE
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-/** Formatos que gestión documental acepta como imagen (ver IMAGE_EXTENSIONS del backend). */
-const BANNER_EXTENSIONS=["png","jpg","jpeg","webp"];
-const BANNER_FORMATS_LABEL="PNG, JPG o WebP";
-const BANNER_UPLOAD_ACCEPT=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
-const BANNER_MAX_BYTES=5*1024*1024;
-
+// ----------------------------------------------------------------------------------------------------
 /** Estado del autoguardado del perfil de empresa, en la cabecera. */
 export function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"|"guardando"|"guardado"}) {
   if(estado==="sin-cambios"){
@@ -2133,7 +1002,7 @@ export function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"
     return <span className="text-xs text-amber-700 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/>Cambios sin guardar</span>;
   }
   if(estado==="guardando"){
-    return <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/>Guardandoâ€¦</span>;
+    return <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/>Guardando...</span>;
   }
   return <span className="text-xs text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5"/>Guardado</span>;
 }
@@ -2145,691 +1014,9 @@ export function IndicadorAutoguardado({estado}:{estado:"sin-cambios"|"pendiente"
  */
 const RETARDO_AUTOGUARDADO_MS = 1200;
 
-function CreateResponseScreen({quoteId,onBack,sb,userRole,quotes,onSubmitted,existingProposal,headerUser,companyName,clientName,chatConversationId,onOpenChat,onEditConditions}:{quoteId:string;onBack:()=>void;sb:SidebarCtrl;userRole:UserRole;quotes:Quote[];onSubmitted?:()=>Promise<void>;existingProposal?:BackendPropuesta|null;headerUser:{name:string;company:string;initials:string};companyName:string;clientName?:string;chatConversationId?:string;onOpenChat?:(conversationId:string)=>void;onEditConditions?:()=>void}) {
-  const quote=quotes.find(q=>q.id===quoteId) ?? null;
-
-  // Abrir la solicitud es el "vista" de la bitácora; el backend solo cuenta la primera.
-  useEffect(()=>{
-    if(!quoteId)return;
-    void businessService.markQuoteViewed(quoteId).catch(()=>undefined);
-  },[quoteId]);
-  const [submitted,setSubmitted]=useState(false);
-  const [submittedTitle,setSubmittedTitle]=useState("Propuesta enviada");
-  const [directChatId,setDirectChatId]=useState<string|undefined>(chatConversationId);
-  const [saving,setSaving]=useState(false);
-  const [error,setError]=useState("");
-
-  // Solo la cuenta dueña envía; el asesor guarda y deja el borrador listo.
-  const esBorradorPendienteDeEnvio = userRole==="importadora" && existingProposal?.estado==="borrador";
-
-  // No es lo mismo responder por primera vez que reescribir algo que el
-  // comprador ya tiene delante: la pantalla se llamaba "Responder cotización"
-  // en los dos casos, y parecía que se podía responder varias veces.
-  const esPropuestaYaVista = existingProposal?.estado === "pendiente";
-  const revisionesPrevias = existingProposal?.revisiones ?? 0;
-  const tituloPantalla = esPropuestaYaVista ? "Editar mi propuesta" : "Nueva propuesta";
-  // La propuesta guardada en el formato nuevo se edita tal cual; una del formato
-  // anterior (precio en USD y texto libre) se rehace con el formulario.
-  const inicial = leerPropuesta(existingProposal?.condiciones_adicionales);
-  const esFormatoAnterior = Boolean(existingProposal) && !inicial;
-  const textoEnviar = userRole==="asesor" ? "Guardar borrador" : esPropuestaYaVista ? "Enviar versión nueva" : "Enviar propuesta";
-
-  async function submit(formulario:FormularioPropuestaDatos){
-    if(!quote){
-      setError("No se encontró la cotización seleccionada.");
-      return;
-    }
-    try{
-      setSaving(true);
-      setError("");
-      let directConversationId = directChatId;
-      let propuestaId = existingProposal?.id;
-      const payload:CreatePropuestaPayload = {cotizacion_id: quote.id, formulario};
-
-      // El borrador lo redacta el asesor y lo envía la cuenta dueña
-      // (POST /propuestas/{id}/enviar).
-      if(existingProposal?.id){
-        await businessService.updateProposal(existingProposal.id, payload);
-        if(esBorradorPendienteDeEnvio){
-          await businessService.sendProposal(existingProposal.id);
-          setSubmittedTitle("Propuesta enviada al comprador");
-        }else{
-          setSubmittedTitle(userRole==="asesor"?"Borrador actualizado":"Versión nueva enviada");
-        }
-      }else if(userRole==="asesor"){
-        await businessService.createProposalDraft(payload);
-        setSubmittedTitle("Borrador guardado");
-      }else{
-        propuestaId = (await businessService.createProposal(payload)).id;
-        setSubmittedTitle("Propuesta enviada");
-      }
-
-      // El backend deja la propuesta como tarjeta en el chat (y lo abre si no
-      // existía); aquí solo se averigua cuál es para ofrecer "Ir al chat".
-      if(userRole==="importadora" && !directConversationId && propuestaId){
-        const conversation = await businessService.startNegotiationChat(quote.id, propuestaId).catch(()=>null);
-        if(conversation){
-          directConversationId = conversation.id;
-          setDirectChatId(conversation.id);
-        }
-      }
-
-      if(onSubmitted){
-        await onSubmitted();
-      }
-      setSubmitted(true);
-    }catch(err){
-      setError(err instanceof Error ? err.message : "No se pudo enviar la propuesta.");
-    }finally{
-      setSaving(false);
-    }
-  }
-  const activeNav=userRole==="importadora"?"imp-quotes":"adv-my-quotes";
-  if(!quote){
-    return (
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar {...sb} active={activeNav}/>
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <AppHeader user={headerUser}/>
-          <main className="flex-1 flex items-center justify-center p-6">
-            <Card padding="lg" className="max-w-md w-full text-center border-dashed">
-              <ClipboardList className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3"/>
-              <p className="font-semibold">Cotización no disponible</p>
-              <p className="text-sm text-muted-foreground mt-1">Sin datos reales de API para responder.</p>
-              <Button variant="secondary" className="mt-4" onClick={onBack}>Volver</Button>
-            </Card>
-          </main>
-        </div>
-      </div>
-    );
-  }
-  if(submitted)return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active={activeNav}/>
-      <div className="flex-1 flex flex-col"><AppHeader user={headerUser}/>
-        <div className="flex-1 flex items-center justify-center"><div className="flex flex-col items-center gap-4 text-center max-w-sm">
-          <div className="w-14 h-14 rounded-full bg-emerald-50 dark:!bg-accent/10 border border-emerald-200 flex items-center justify-center"><CheckCircle2 className="w-7 h-7 text-emerald-500 dark:text-accent"/></div>
-          <div>
-            <h2 className="text-lg font-semibold">{submittedTitle}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {userRole==="asesor"
-                ? `Tu borrador para ${quote.product} quedó guardado. La cuenta de la empresa lo revisa y lo envía.`
-                : `El comprador la recibe en el chat de ${quote.product}, con el total en pesos y las condiciones.`}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap justify-center">
-            <Button variant="primary" onClick={onBack}>Volver</Button>
-            {(directChatId || chatConversationId) && onOpenChat && <Button variant="secondary" icon={<MessageSquare className="w-3.5 h-3.5"/>} onClick={()=>onOpenChat(directChatId || chatConversationId!)}>Ir al Chat</Button>}
-          </div>
-        </div></div>
-      </div>
-    </div>
-  );
-  const cantidad = Number(String(quote.minQuantity ?? "").replace(",", ".")) || extractFirstNumber(quote.minQuantity) || 0;
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar {...sb} active={activeNav}/>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader user={headerUser}/>
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="mx-auto max-w-7xl">
-          <div className="flex items-center gap-3 mb-1">
-            <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
-          </div>
-          <Breadcrumb items={[{label:"Cotizaciones",onClick:onBack},{label:tituloPantalla}]}/>
-          <h1 className="text-xl font-semibold mt-3 mb-4">{tituloPantalla}</h1>
-          {esPropuestaYaVista&&(
-            <div className="mb-4 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sm text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 flex items-start gap-2">
-              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
-              <span>
-                No estás respondiendo de nuevo: estás <strong>enviando una versión nueva de tu propuesta</strong>.
-                Al cliente le llega como otra tarjeta en el chat y la anterior queda marcada como reemplazada.
-                {revisionesPrevias>0&&<> Ya la has cambiado {revisionesPrevias===1?"una vez":`${revisionesPrevias} veces`}.</>}
-                {" "}Guardar también anula la aceptación que hubiera de cualquiera de las dos partes.
-              </span>
-            </div>
-          )}
-          {esFormatoAnterior&&(
-            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200 flex items-start gap-2">
-              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
-              <span>Esta propuesta se hizo con el formulario anterior (precio en USD). Llénala de nuevo: al guardarla queda con precio cerrado en pesos.</span>
-            </div>
-          )}
-          {esBorradorPendienteDeEnvio&&(
-            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900 dark:text-accent dark:!bg-accent/15 flex items-start gap-2">
-              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
-              <span>Un asesor de tu empresa ya redactó esta propuesta. Revisa las cifras y pulsa <strong>Enviar propuesta</strong>: hasta entonces el comprador no la ve.</span>
-            </div>
-          )}
-          {userRole==="asesor"&&(
-            <div className="mb-4 p-3 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground flex items-start gap-2">
-              <FileText className="w-4 h-4 mt-0.5 flex-shrink-0"/>
-              <span>Tu respuesta se guarda como borrador. La cuenta de la empresa es quien la revisa y la envía al comprador.</span>
-            </div>
-          )}
-          <FormularioPropuesta
-            cotizacion={{
-              codigo: quote.code,
-              producto: quote.product,
-              cantidad,
-              cantidadTexto: cantidadConUnidad(quote.minQuantity, quote.unit),
-              cliente: clientName,
-              ciudad: quote.deliveryCity,
-            }}
-            empresa={companyName}
-            inicial={inicial}
-            textoEnviar={textoEnviar}
-            esBorrador={userRole==="asesor"}
-            guardando={saving}
-            error={error}
-            onEnviar={(f)=>{void submit(f);}}
-            onCancelar={onBack}
-            onEditarCondiciones={userRole==="importadora"?onEditConditions:undefined}
-          />
-          <div className="mt-6 max-w-xl">
-            <PerfilPublicoCotizanteCard solicitanteId={quote.requesterId} />
-          </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 
-function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void}) {
-  const { dark, toggleTheme } = useBrandTheme();
-
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-3.5 relative z-10">
-        <button type="button" onClick={onLanding} aria-label="Ir al inicio">
-          <Logo/>
-        </button>
-        <div className="flex items-center gap-1.5 w-fit">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground transition-colors"
-          >
-            {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
-          </button>
-          <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onLanding}>Volver</Button>
-        </div>
-      </header>
-
-      <main className="relative flex flex-1 items-center justify-center px-4 py-10 overflow-hidden">
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <img
-            src={dark ? "/brand/fondo-1.png" : "/brand/fondo-4.png"}
-            alt="Fondo de solicitud de acceso"
-            className="auth-background w-full h-full object-cover object-center transition-all duration-300"
-          />
-        </div>
-
-        <div className="relative z-10 w-full max-w-[480px]">
-          <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8">
-            <div className="text-center">
-              <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
-              <h1 className="text-xl font-semibold tracking-tight mb-2">{LISTA_CERRADA.titulo.replace(/\.$/, "")}</h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">{LISTA_CERRADA.texto}</p>
-              <Button variant="primary" icon={<BellRing className="w-4 h-4"/>} className="mt-5 dark:bg-accent dark:text-accent-foreground" onClick={onListaEspera}>Avísame cuando abra</Button>
-            </div>
-            <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-6">
-              <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
-              <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>? 2026 Zarpi</span>
-        <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
-          Tratamiento de Datos
-        </button>
-        <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
-          Términos
-        </button>
-        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
-          Pagos y Reembolsos
-        </button>
-        <PublicSicLogo />
-      </footer>
-    </div>
-  );
-}
-
-function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:LegalPage)=>void}) {
-  const [userType,setUserType]=useState<RegUserType>("solicitante");
-  const [personType,setPersonType]=useState<RegPersonType>("natural");
-  const [accepted,setAccepted]=useState(false);
-  const [loading,setLoading]=useState(false);
-  const [success,setSuccess]=useState(false);
-  const [registeredEmail,setRegisteredEmail]=useState("");
-  // El correo con el código puede no salir (SMTP caído): se avisa y se deja reenviar.
-  const [correoEnviado,setCorreoEnviado]=useState(true);
-  const [reenviando,setReenviando]=useState(false);
-  const [esperaReenvio,setEsperaReenvio]=useState(0);
-  useEffect(()=>{
-    if(esperaReenvio<=0)return;
-    const t=window.setTimeout(()=>setEsperaReenvio(s=>s-1),1000);
-    return ()=>window.clearTimeout(t);
-  },[esperaReenvio]);
-  const [otpCode,setOtpCode]=useState("");
-  const [otpLoading,setOtpLoading]=useState(false);
-  const [otpError,setOtpError]=useState("");
-  const [otpSuccess,setOtpSuccess]=useState(false);
-  const [submitError,setSubmitError]=useState("");
-  const { dark, toggleTheme } = useBrandTheme();
-  const [form,setForm]=useState({
-    email:"",docType:"CC",docNum:"",name:"",lastName:"",phone:"",country:"+57",
-    nit:"",razonSocial:"",repEmail:"",repPhone:"",repCountry:"+57",password:"",confirmPassword:"",
-  });
-
-  function f(k:string,v:string){setForm(p=>({...p,[k]:v}));}
-
-  function getErrorMessage(error: unknown){
-    if(error instanceof Error&&error.message){
-      return error.message;
-    }
-    if(typeof error==="string"&&error){
-      return error;
-    }
-    if(typeof error==="object"&&error!==null){
-      const response="response" in error?error.response:undefined;
-      if(typeof response==="object"&&response!==null&&"data" in response){
-        const data=response.data;
-        if(typeof data==="object"&&data!==null&&"detail" in data){
-          const detail=data.detail;
-          if(typeof detail==="string"&&detail){
-            return detail;
-          }
-        }
-      }
-    }
-    return "No se pudo completar el registro";
-  }
-
-  async function submit(e:React.FormEvent){
-    e.preventDefault();
-    if(!accepted||loading)return;
-
-    setSubmitError("");
-
-    const password=form.password;
-    if(password.length<9){
-      setSubmitError("La contraseña debe tener minimo 9 caracteres.");
-      return;
-    }
-    if(form.password!==form.confirmPassword){
-      setSubmitError("Las contraseñas no coinciden.");
-      return;
-    }
-
-    const email=(personType==="natural"?form.email:form.repEmail).trim();
-    const telefono=(personType==="natural"?form.phone:form.repPhone).trim();
-    const indicativo=(personType==="natural"?form.country:form.repCountry).trim();
-
-    const codigoReferido = leerCodigoReferidoDeLaUrl();
-
-    const payload: RegisterRequest = personType === "natural" ? {
-        email,
-        password,
-        rol: "solicitante",
-        tipo_persona: "natural",
-        tipo_documento: String(form.docType ?? "").trim(),
-        numero_documento: String(form.docNum ?? "").trim(),
-        nombre: String(form.name ?? "").trim(),
-        apellido: String(form.lastName ?? "").trim(),
-        indicativo_pais_telefono: indicativo,
-        telefono,
-        acepto_politica_datos: accepted,
-        ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
-      }
-    : {
-        email,
-        password,
-        rol: "solicitante",
-        tipo_persona: "juridica",
-        nit: String(form.nit ?? "").trim(),
-        razon_social: String(form.razonSocial ?? "").trim(),
-        indicativo_pais_telefono: indicativo,
-        telefono,
-        acepto_politica_datos: accepted,
-        ...(codigoReferido ? { codigo_referido: codigoReferido } : {}),
-      };
-
-    try{
-      setLoading(true);
-      const respuesta=await authService.register(payload);
-      setRegisteredEmail(email);
-      setCorreoEnviado(respuesta.correo_enviado!==false);
-      setEsperaReenvio(respuesta.correo_enviado===false?0:60);
-      setSuccess(true);
-    }catch(error){
-      setSubmitError(getErrorMessage(error));
-    }finally{
-      setLoading(false);
-    }
-  }
-
-  async function reenviarCodigo(){
-    if(!registeredEmail||reenviando||esperaReenvio>0)return;
-    try{
-      setReenviando(true);
-      setOtpError("");
-      await authService.resendOtp({ email: registeredEmail, proposito: "verificacion_email" });
-      setCorreoEnviado(true);
-      setEsperaReenvio(60);
-      toast.success("Te enviamos un código nuevo. Revisa también la carpeta de spam.");
-    }catch(error){
-      setOtpError(getErrorMessage(error));
-    }finally{
-      setReenviando(false);
-    }
-  }
-
-  async function verifyOtp(e:React.FormEvent){
-    e.preventDefault();
-    if(otpLoading)return;
-
-    const normalizedOtp=String(otpCode ?? "").trim();
-    if(normalizedOtp.length!==6){
-      setOtpError("Ingresa un codigo OTP valido de 6 digitos.");
-      return;
-    }
-
-    if(!registeredEmail){
-      setOtpError("No se encontro el correo de registro para verificar la cuenta.");
-      return;
-    }
-
-    try{
-      setOtpLoading(true);
-      setOtpError("");
-      await authService.verifyEmail({ email: registeredEmail, otp: normalizedOtp });
-      setOtpSuccess(true);
-      setTimeout(()=>onSuccess(registeredEmail),1200);
-    }catch(error){
-      setOtpError(getErrorMessage(error));
-    }finally{
-      setOtpLoading(false);
-    }
-  }
-
-  const countryPhones=["+57","+1","+52","+34","+44","+49","+55","+54","+56","+51"];
-  const docTypes=["CC","CE","Pasaporte","NIT","DNI"];
-
-  if(success)return(
-    <div className="min-h-screen flex flex-col bg-background items-center justify-center px-4">
-      <div className="bg-white rounded-2xl border border-border shadow-sm p-8 max-w-sm w-full text-center relative z-10">
-        {!otpSuccess?(
-          <>
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
-            <h2 className="text-lg font-semibold mb-2">¡Registro exitoso!</h2>
-            {correoEnviado?(
-              <p className="text-sm text-muted-foreground mb-4">Te enviamos un código de 6 dígitos a <span className="font-medium text-foreground">{registeredEmail||"tu correo"}</span>. Si no llega en un par de minutos, revisa la carpeta de spam.</p>
-            ):(
-              <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">Creamos tu cuenta, pero no pudimos enviarte el código a <span className="font-medium">{registeredEmail||"tu correo"}</span>. Pide uno nuevo abajo.</p>
-            )}
-
-            <form onSubmit={verifyOtp} className="space-y-3 text-left">
-              <Input
-                label="Codigo OTP"
-                value={otpCode}
-                onChange={e=>setOtpCode(e.target.value)}
-                placeholder="123456"
-                inputMode="numeric"
-                maxLength={6}
-                required
-              />
-              {otpError&&<p className="text-xs text-destructive text-left">{otpError}</p>}
-              <Button type="submit" variant="primary" fullWidth loading={otpLoading}>
-                {!otpLoading&&"Activar cuenta"}
-              </Button>
-            </form>
-
-            <button
-              type="button"
-              onClick={()=>{void reenviarCodigo();}}
-              disabled={reenviando||esperaReenvio>0}
-              className="mt-3 text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline dark:text-accent"
-            >
-              {reenviando?"Enviandoâ€¦":esperaReenvio>0?`Reenviar código en ${esperaReenvio} s`:"Reenviar código"}
-            </button>
-
-            <button type="button" onClick={onBack} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
-          </>
-        ):(
-          <>
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
-            <h2 className="text-lg font-semibold mb-2">¡Cuenta activada con éxito!</h2>
-            <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesion...</p>
-          </>
-        )}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-3.5 relative z-10">
-        <Logo/>
-        <div className="flex items-center gap-1.5 w-fit">
-          <button
-            onClick={toggleTheme}
-            title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground transition-colors"
-          >
-            {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
-          </button>
-          <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onBack}>Volver</Button>
-        </div>
-      </header>
-
-      <main className="relative flex flex-1 items-center justify-center px-4 py-10 overflow-hidden">
-        {/* Fondo con z-0 */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <img
-            src={dark ? "/brand/fondo-1.png" : "/brand/fondo-4.png"}
-            alt="Fondo de registro"
-            className="auth-background w-full h-full object-cover object-center transition-all duration-300"
-          />
-        </div>
-
-        {/* Card principal con z-10 por encima de la imagen */}
-        <div className="relative z-10 w-full max-w-[480px]">
-          <div className="bg-white rounded-2xl border border-border shadow-sm">
-            <div className="px-8 pt-8 pb-2">
-              <h1 className="text-xl font-semibold tracking-tight mb-1">
-                Crear cuenta
-              </h1>
-
-              <p className="text-sm text-muted-foreground mb-6">
-                Elige el tipo de cuenta que deseas registrar
-              </p>
-
-              {/* User type */}
-              <div className="flex gap-2 mb-6">
-                {(["solicitante", "importadora"] as const).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setUserType(t)}
-                    className={clsx(
-                      "flex-1 py-3 flex flex-col items-center gap-1.5 border rounded-xl text-xs font-semibold transition-all capitalize",
-                      userType === t
-                        ? "border-primary bg-primary/5 text-primary dark:border-accent dark:bg-accent/5 dark:text-accent"
-                        : "border-border text-muted-foreground hover:border-primary/40 dark:hover:border-accent/40"
-                    )}
-                  >
-                    {t === "solicitante" ? (
-                      <UserRound className="w-5 h-5" />
-                    ) : (
-                      <Building2 className="w-5 h-5" />
-                    )}
-
-                    {t === "solicitante"
-                      ? "Soy comprador"
-                      : "Soy empresa importadora"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="px-8 pb-8">
-              {userType === "importadora" ? (
-                <div className="flex flex-col items-center text-center gap-5 py-6">
-                  <div className="w-16 h-16 rounded-2xl bg-primary/20 dark:bg-accent/20 flex items-center justify-center">
-                    <Building2 className="w-8 h-8 text-primary dark:text-accent" />
-                  </div>
-
-                  <div>
-                    <h2 className="font-semibold mb-2">Registro de empresa importadora</h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-                      Actualmente las empresas importadoras son registradas directamente por el equipo administrativo. Contáctanos para iniciar el proceso.
-                    </p>
-                  </div>
-
-                  <Button
-                    variant="primary"
-                    className="dark:bg-accent dark:hover:bg-accent/90 dark:text-accent-foreground"
-                    size="md"
-                    icon={<MailIcon className="w-4 h-4" />}
-                    onClick={() => openSmartContact({ type: "email", email: CORREO_ADMINISTRACION })}
-                  >
-                    Contactar al equipo administrativo
-                  </Button>
-
-                  <button
-                    onClick={onBack}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    ← Volver al inicio
-                  </button>
-                </div>
-              ):(
-                <form onSubmit={submit} noValidate>
-                  {/* Person type */}
-                  <div className="flex gap-2 mb-5">
-                    {(["natural", "juridica"] as const).map(t => (
-                      <button
-                        type="button"
-                        key={t}
-                        onClick={() => setPersonType(t)}
-                        className={clsx(
-                          "flex-1 py-2 text-xs font-semibold border rounded-lg transition-all",
-                          personType === t
-                            ? "border-primary bg-primary/5 text-primary dark:border-accent dark:bg-accent/5 dark:text-accent"
-                            : "border-border text-muted-foreground hover:border-primary/40 dark:hover:border-accent/40"
-                        )}
-                      >
-                        {t === "natural" ? "Persona Natural" : "Persona Jurídica"}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-4">
-                    {personType==="natural"?(
-                      <>
-                        <Input label="Correo electrónico" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={e=>f("email",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
-                        <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
-                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contraseña" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
-                        <div className="grid grid-cols-2 gap-3">
-                          <Select label="Tipo de documento" value={form.docType} onChange={e=>f("docType",e.target.value)}>{docTypes.map(d=><option key={d}>{d}</option>)}</Select>
-                          <Input label="Número de documento" placeholder="1234567890" value={form.docNum} onChange={e=>f("docNum",e.target.value)} required/>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <Input label="Nombre(s)" placeholder="Ana" value={form.name} onChange={e=>f("name",e.target.value)} required/>
-                          <Input label="Apellidos" placeholder="García" value={form.lastName} onChange={e=>f("lastName",e.target.value)} required/>
-                        </div>
-                        <div className="flex gap-2">
-                          <Select label="País" value={form.country} onChange={e=>f("country",e.target.value)} className="w-24">{countryPhones.map(c=><option key={c}>{c}</option>)}</Select>
-                          <div className="flex-1"><Input label="Teléfono" placeholder="310 123 4567" value={form.phone} onChange={e=>f("phone",e.target.value)} required/></div>
-                        </div>
-                      </>
-                    ):(
-                      <>
-                        <Input label="Correo del representante" type="email" placeholder="representante@empresa.com" value={form.repEmail} onChange={e=>f("repEmail",e.target.value)} prefix={<Mail className="w-4 h-4"/>} required/>
-                        <Input label="Contrasena" type="password" placeholder="Minimo 9 caracteres" value={form.password} onChange={e=>f("password",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
-                        <Input label="Confirmar contrasena" type="password" placeholder="Repite tu contraseña" value={form.confirmPassword} onChange={e=>f("confirmPassword",e.target.value)} prefix={<Lock className="w-4 h-4"/>} required/>
-                        <Input label="NIT" placeholder="900.123.456-7" value={form.nit} onChange={e=>f("nit",e.target.value)} required/>
-                        <Input label="Razón social" placeholder="Mi Empresa S.A.S." value={form.razonSocial} onChange={e=>f("razonSocial",e.target.value)} required/>
-                        <div className="flex gap-2">
-                          <Select label="País" value={form.repCountry} onChange={e=>f("repCountry",e.target.value)} className="w-24">{countryPhones.map(c=><option key={c}>{c}</option>)}</Select>
-                          <div className="flex-1"><Input label="Teléfono" placeholder="310 123 4567" value={form.repPhone} onChange={e=>f("repPhone",e.target.value)} required/></div>
-                        </div>
-                      </>
-                    )}
-                    {submitError&&<p className="text-xs text-destructive">{submitError}</p>}
-                    <div className="flex items-start gap-2.5 mt-1">
-                      <input 
-                        type="checkbox" 
-                        id="acepta" 
-                        checked={accepted} 
-                        onChange={e => setAccepted(e.target.checked)} 
-                        className="
-                          mt-0.5
-                          h-4 w-4
-                          flex-shrink-0
-                          cursor-pointer
-                          rounded
-                          border
-                          border-primary
-                          bg-white
-                          accent-primary
-                          transition-colors
-                          duration-150
-                          dark:border-accent
-                          dark:bg-accent
-                          dark:accent-accent
-                        "
-                      />
-                      <label htmlFor="acepta" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-                        Acepto la <button type="button" onClick={()=>onPolicy("data")} className="text-xs font-medium text-purple-600 dark:text-green-500 underline">Política de Tratamiento de Datos</button> y los <button type="button" onClick={()=>onPolicy("terms")} className="text-xs font-medium text-purple-600 dark:text-green-500 underline">Términos y Condiciones</button> de la plataforma.
-                      </label>
-                    </div>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      fullWidth loading={loading}
-                      disabled={!accepted}
-                      className="mt-1 h-10 uppercase tracking-wide text-[13px] dark:bg-accent dark:hover:bg-accent dark:text-black">
-                        {!loading&&"Crear cuenta"}
-                    </Button>
-                    <p className="text-center text-xs text-muted-foreground">¿Ya tienes cuenta <button type="button" onClick={onBack} className="text-purple-600 dark:text-green-500 hover:underline font-medium">Iniciar sesión</button></p>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>? 2026 Zarpi</span>
-        <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
-          Tratamiento de Datos
-        </button>
-        <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
-          Términos
-        </button>
-        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
-          Pagos y Reembolsos
-        </button>
-        <PublicSicLogo />
-      </footer>
-    </div>
-  );
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// LOGIN
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 function LoginScreen({onLogin,onRegister,onLanding,onPolicy,initialEmail}:{onLogin:(role:UserRole|"admin")=>void;onRegister:()=>void;onLanding:()=>void;onPolicy:(page:LegalPage)=>void;initialEmail?:string}) {
   return (
     <AuthScreen
@@ -2911,9 +1098,9 @@ function AdminDashboardScreen({sb,onRefreshGlobal,screen}:{sb:SidebarCtrl;onRefr
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 // ROOT
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ----------------------------------------------------------------------------------------------------
 // `Screen` y la correspondencia con las URL viven en `@/app/rutas`.
 
 export default function App() {
@@ -2951,7 +1138,7 @@ export default function App() {
   const [planElegido,setPlanElegido]=useState(()=>new URLSearchParams(window.location.search).get("plan") ?? "");
   const [isOrderDetailLoading,setIsOrderDetailLoading]=useState(false);
   // Qué orden está en pantalla: si se vuelve a pedir la misma, se refresca sin
-  // pasar por «Cargandoâ€¦» (eso desmontaba el detalle y se perdía lo que el
+  // pasar por «Cargando...» (eso desmontaba el detalle y se perdía lo que el
   // usuario estaba haciendo, p. ej. el comprobante de pago recién elegido).
   const orderDetailIdRef=useRef<string|null>(null);
   orderDetailIdRef.current=selectedOrderDetail?.id ?? null;
