@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 import { BuyerDashboardScreen } from "@/features/buyer/components/tabs/BuyerDashboardScreen";
 import type { SidebarCtrl } from "@/types/portal";
-import type { Importer } from "@/types/importer";
 import type { Screen } from "@/app/rutas";
 
 type BuyerDashboardProps = {
   sb: SidebarCtrl;
   onViewProfile: (id: string) => void;
   onCreateQuote: (id: string) => void;
-  importers: Importer[];
   screen?: Screen;
   views?: Partial<Record<BuyerRoute, ReactNode>>;
 };
@@ -30,7 +28,7 @@ export function DashboardScreen(props: BuyerDashboardProps) {
   const route = (props.screen ?? props.sb.active) as BuyerRoute;
   switch (route) {
     case "dashboard":
-      return <BuyerDashboardScreen {...props} />;
+      return <BuyerDashboardScreen sb={props.sb} onViewProfile={props.onViewProfile} onCreateQuote={props.onCreateQuote} />;
     case "quotes":
     case "new-quote":
     case "quote-detail":

@@ -24,7 +24,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
 
 export function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[];importers:Importer[]}) {
   return (
@@ -70,3 +71,4 @@ export function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
+

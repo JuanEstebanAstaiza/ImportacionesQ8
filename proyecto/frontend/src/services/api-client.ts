@@ -342,6 +342,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   // Lee el token justo antes de construir la petición para evitar carreras post-login.
   const activeToken = getStoredToken() ?? providedToken;
   const [pathname] = safePath.split("?");
+  const isPublicEndpoint = !isProtectedPath(pathname);
 
   if (isProtectedPath(pathname) && !activeToken) {
     throw new Error("No hay token de autenticación disponible para esta petición protegida");
@@ -349,15 +350,25 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const isFormDataBody = typeof FormData !== "undefined" && body instanceof FormData;
 
-  const response = await fetch(fullUrl, {
+  const requestHeaders = {
+    ...(!isFormDataBody && body ? { "Content-Type": "application/json" } : {}),
+    ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
+    ...headers,
+  };
+  const requestInit: RequestInit = {
     method,
-    headers: {
-      ...(!isFormDataBody && body ? { "Content-Type": "application/json" } : {}),
-      ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
-      ...headers,
-    },
+    headers: requestHeaders,
     ...(body ? { body: isFormDataBody ? body as FormData : JSON.stringify(body) } : {}),
-  });
+  };
+  let response = await fetch(fullUrl, requestInit);
+
+  // Una sesión revocada no debe bloquear las páginas públicas, que pueden
+  // consultarse aunque el token persistido ya no sea válido.
+  if (response.status === 401 && isPublicEndpoint && activeToken) {
+    const publicHeaders = { ...requestHeaders };
+    delete publicHeaders.Authorization;
+    response = await fetch(fullUrl, { ...requestInit, headers: publicHeaders });
+  }
 
   if (!response.ok) {
     const fallbackMessage = "Ocurrio un error al conectar con el servidor";

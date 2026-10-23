@@ -30,7 +30,9 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Modal, Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import { Modal } from "@/components/ui/Modal";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER_IMPORTADORA } from "@/components/layout/AppHeader";
 import type { CompanyAdvisor } from "@/types/portal";
 
 export function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSetAdvisorActive,onOpenInternalChat}:{sb:SidebarCtrl;initialAdvisors:CompanyAdvisor[];onCreateAdvisor:(payload:CreateAsesorPayload)=>Promise<CompanyAdvisor>;onSetAdvisorActive:(advisorId:string,activo:boolean)=>Promise<string>;onOpenInternalChat:(advisorId:string)=>Promise<void>}) {
@@ -222,3 +224,4 @@ export function ImporterAdvisorsScreen({sb,initialAdvisors,onCreateAdvisor,onSet
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — QUOTES
 // ─────────────────────────────────────────────────────────────────────────────
+

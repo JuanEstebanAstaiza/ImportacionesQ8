@@ -39,7 +39,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER_IMPORTADORA } from "@/components/layout/AppHeader";
 import { IndicadorAutoguardado } from "@/features/importador/components/IndicadorAutoguardado";
 
 const COUNTRIES = ["China", "Estados Unidos", "Alemania", "Japón", "India", "Italia", "Francia", "España", "Brasil", "Corea del Sur", "Turquía", "México", "Colombia"];
@@ -780,3 +781,4 @@ export function ImporterCompanyProfileScreen({sb,company,onSave}:{sb:SidebarCtrl
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTER PORTAL — ADVISORS
 // ─────────────────────────────────────────────────────────────────────────────
+

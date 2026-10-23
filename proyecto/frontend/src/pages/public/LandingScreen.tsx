@@ -5,6 +5,7 @@ import {
   Receipt, Ship, ShoppingCart, Sun, TrendingUp, UserRound, Users,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { DynamicAccentText } from "@/features/landing/components/DynamicAccentText";
 import { Button, Card, Input, Logo, Textarea } from "@/components/design-system";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { CarruselVideos } from "@/components/media/CarruselVideos";
@@ -318,7 +319,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-accent text-accent-foreground rounded-full text-xs font-semibold mb-6"><Ship className="w-3.5 h-3.5"/>Importaciones desde China</span>
           <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mb-5">
             Tú dices qué importar.<br/>
-            <span className="text-accent">Zarpi encuentra quién lo trae.</span>
+            <DynamicAccentText>Zarpi encuentra quién lo trae.</DynamicAccentText>
           </h1>
           <p className="text-lg text-background/75 max-w-4xl mx-auto leading-relaxed mb-8">
             Publica lo que quieres importar y recibe propuestas de empresas importadoras verificadas, con precio final puesto en Colombia. Compara, elige y sigue todo el proceso en un solo lugar.

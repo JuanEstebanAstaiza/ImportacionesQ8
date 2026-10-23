@@ -31,24 +31,17 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import {
-  Sidebar,
-  AppHeader,
-  USER,
-  inferLifecycleStageIndex,
-  buildLifecycleTimeline,
-  initialsFromName,
-  GaleriaFotosProducto,
-  Modal,
-  type ChatConv,
-  type Order,
-  type UserRole,
-  type LifecycleDocItem,
-  INCOTERM_INCLUYE,
-  MOTIVOS_ELECCION,
-  leerCondicionesPropuesta,
-  PrecioPropuesta,
-} from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
+import { Modal } from "@/components/ui/Modal";
+import type { ChatConv } from "@/types/chat";
+import type { Order } from "@/types/order";
+import type { UserRole } from "@/types/roles";
+import { initialsFromName } from "@/utils/profile";
+import { GaleriaFotosProducto } from "@/features/quotes/components/GaleriaFotosProducto";
+import { INCOTERM_INCLUYE, MOTIVOS_ELECCION } from "@/config/business";
+import { leerCondicionesPropuesta, PrecioPropuesta } from "@/features/propuestas/presentacion";
 
 export function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders,onDuplicate,userRole,onConfirmProposal}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[];onDuplicate:(quote:Quote)=>void;userRole:UserRole|"admin";onConfirmProposal?:(propuestaId:string)=>Promise<void>}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;

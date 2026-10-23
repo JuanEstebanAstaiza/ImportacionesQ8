@@ -1,15 +1,25 @@
+import { useEffect } from "react";
 import { Building2, ChevronRight, FileText, Users } from "lucide-react";
-import { Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER_IMPORTADORA } from "@/components/layout/AppHeader";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { Badge, Button, Card } from "@/components/design-system";
 import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
-import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";
-import type { CompanyAdvisor } from "@/types/portal";
-import type { ChatConv } from "@/app/App";
 import type { BadgeVariant } from "@/types/design-system";
+import { useImporterData } from "@/hooks/useImporterData";
+import { useChatManager } from "@/hooks/useChatManager";
 
-export function ImporterDashboardScreen({sb,quotes,advisors,chats,companyName}:{sb:SidebarCtrl;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];companyName:string}) {
+export function ImporterDashboardScreen({sb,companyName}:{sb:SidebarCtrl;companyName:string}) {
+  const { importerQuotes: quotes, companyAdvisors: advisors, reloadImporterQuotes, reloadCompanyAdvisors } = useImporterData();
+  const { chatConversations: chats, reloadChatData } = useChatManager();
+  useEffect(() => {
+    void Promise.all([
+      reloadImporterQuotes(),
+      reloadCompanyAdvisors(),
+      reloadChatData(),
+    ]);
+  }, [reloadChatData, reloadCompanyAdvisors, reloadImporterQuotes]);
   const activeChatsCount = chats.filter(c=>c.status==="activa").length;
   const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
   return (
@@ -66,3 +76,4 @@ export function ImporterDashboardScreen({sb,quotes,advisors,chats,companyName}:{
     </div>
   );
 }
+

@@ -1,6 +1,6 @@
 import { formatChatTime } from "@/utils/date";
 import { leerPropuestaDeMensaje } from "@/features/propuestas/TarjetaPropuestaChat";
-import type { ChatMsg } from "@/app/App";
+import type { ChatMsg } from "@/types/chat";
 
 export function mapBackendChatMessage(
   message: { id: string; remitente_id: string; contenido: string; tipo: string; fecha_envio: string; metadata: Record<string, unknown> | null; remitente_nombre?: string | null; de_mi_lado?: boolean | null },

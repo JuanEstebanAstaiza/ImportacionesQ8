@@ -29,7 +29,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
 import type { QuoteResponse } from "@/types/response";
 
 export function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[];onViewQuote:(quoteId:string)=>void}) {
@@ -93,3 +94,4 @@ export function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onVi
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDERS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
+
