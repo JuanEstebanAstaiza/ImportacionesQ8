@@ -2,7 +2,7 @@
   import { createRoot } from "react-dom/client";
   import App from "./app/App.tsx";
   import { AppProviders } from "./app/providers/AppProviders.tsx";
-  import { Toaster } from "./app/components/ui/sonner.tsx";
+  import { Toaster } from "./components/ui/sonner.tsx";
   import "./styles/index.css";
   import { cargarHojaTipografia } from "./services/tipografia.service";
 

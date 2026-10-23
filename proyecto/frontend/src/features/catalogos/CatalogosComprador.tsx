@@ -15,9 +15,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
 import type { PrefillSolicitud } from "@/features/tendencias/prefill";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { catalogosService, type Catalogo, type ProductoCatalogo } from "@/services/catalogos.service";
 
 import { CLASE_BOTON_PRIMARIO, Modal, cantidadConUnidad, mensajeError } from "./comun";

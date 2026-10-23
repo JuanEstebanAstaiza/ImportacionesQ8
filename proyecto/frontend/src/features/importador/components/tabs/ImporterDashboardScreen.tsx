@@ -1,0 +1,79 @@
+import { useEffect } from "react";
+import { Building2, ChevronRight, FileText, Users } from "lucide-react";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER_IMPORTADORA } from "@/components/layout/AppHeader";
+import { Breadcrumb } from "@/components/navigation/Breadcrumb";
+import { Badge, Button, Card } from "@/components/design-system";
+import { PanelEmpresa } from "@/features/importador/PanelEmpresa";
+import type { SidebarCtrl } from "@/types/portal";
+import type { BadgeVariant } from "@/types/design-system";
+import { useImporterData } from "@/hooks/useImporterData";
+import { useChatManager } from "@/hooks/useChatManager";
+
+export function ImporterDashboardScreen({sb,companyName}:{sb:SidebarCtrl;companyName:string}) {
+  const { importerQuotes: quotes, companyAdvisors: advisors, reloadImporterQuotes, reloadCompanyAdvisors } = useImporterData();
+  const { chatConversations: chats, reloadChatData } = useChatManager();
+  useEffect(() => {
+    void Promise.all([
+      reloadImporterQuotes(),
+      reloadCompanyAdvisors(),
+      reloadChatData(),
+    ]);
+  }, [reloadChatData, reloadCompanyAdvisors, reloadImporterQuotes]);
+  const activeChatsCount = chats.filter(c=>c.status==="activa").length;
+  const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
+  return (
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Sidebar {...sb} active="imp-dashboard"/>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <AppHeader user={USER_IMPORTADORA} sb={sb}/>
+        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          <div>
+            <Breadcrumb items={[{label:"Inicio",onClick:()=>sb.onNav("imp-dashboard")},{label:"Dashboard"}]}/>
+            <h1 className="text-xl font-semibold mt-3">Panel de la empresa</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{companyName ? `${companyName} - Resumen de actividad` : "Resumen de actividad"}</p>
+          </div>
+          <PanelEmpresa
+            asesoresConectados={activeAdvisors}
+            chatsActivos={activeChatsCount}
+            onAbrirSolicitudes={()=>sb.onNav("imp-quotes")}
+            onAbrirPedidos={()=>sb.onNav("orders")}
+          />
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Card padding="none">
+                <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                  <h2 className="font-semibold text-sm">Solicitudes recientes</h2>
+                  <Button variant="ghost" size="sm" iconRight={<ChevronRight className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver todas</Button>
+                </div>
+                <div className="divide-y divide-border">
+                  {quotes.slice(0,5).map(q=>(
+                    <div key={q.id} className="flex items-center gap-4 px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{q.product}</p>
+                        <p className="text-xs text-muted-foreground">{q.code} · {q.date}</p>
+                      </div>
+                      <Badge variant={q.status as BadgeVariant}/>
+                    </div>
+                  ))}
+                  {quotes.length===0&&<div className="px-5 py-8 text-sm text-muted-foreground text-center">Sin solicitudes todavía.</div>}
+                </div>
+              </Card>
+            </div>
+            <div className="space-y-4">
+              <Card padding="md">
+                <p className="text-sm font-semibold mb-3">Accesos rápidos</p>
+                <div className="space-y-2">
+                  <Button variant="secondary" size="sm" fullWidth icon={<Users className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-advisors")}>Gestionar asesores</Button>
+                  <Button variant="secondary" size="sm" fullWidth icon={<FileText className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-quotes")}>Ver solicitudes</Button>
+                  <Button variant="secondary" size="sm" fullWidth icon={<Building2 className="w-3.5 h-3.5"/>} onClick={()=>sb.onNav("imp-profile")}>Editar perfil</Button>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+

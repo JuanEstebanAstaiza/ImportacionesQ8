@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
 import {
   ACEPTA_COMPROBANTE,
   ORIGEN_COMPROBANTE,

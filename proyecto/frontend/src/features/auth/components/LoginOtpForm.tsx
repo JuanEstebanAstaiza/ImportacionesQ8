@@ -1,9 +1,9 @@
 import { ArrowLeft, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/app/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/app/components/ui/input-otp";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 interface LoginOtpFormProps {
   email: string;

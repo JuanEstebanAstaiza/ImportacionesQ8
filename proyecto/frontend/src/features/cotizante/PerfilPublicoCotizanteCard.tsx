@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Boxes, ClipboardList, Container, DollarSign, Package, Scale } from "lucide-react";
 
-import { Card } from "@/app/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   businessService,
   type BackendCotizantePerfilPublico,

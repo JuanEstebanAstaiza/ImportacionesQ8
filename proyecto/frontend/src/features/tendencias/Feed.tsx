@@ -154,7 +154,14 @@ export function TendenciasFeed({ rol, onAbrir, onPedirPropuestas, onEnviarEnlace
         if (!vigente) return;
         setDatos(r);
         // Sin semana elegida, el backend responde con la actual.
-        if (!semana) setSemanaActual((prev) => prev ?? r.semana);
+        if (!semana) {
+          setSemanaActual((prev) => prev ?? r.semana);
+          // Si la semana actual está vacía, muestra la publicación más reciente
+          // disponible en lugar de presentar un estado vacío aunque haya datos.
+          if (r.items.length === 0 && r.semanas.length > 0 && r.semanas[0] !== r.semana) {
+            setSemana(r.semanas[0]);
+          }
+        }
       })
       .catch((e: unknown) => {
         if (vigente) setError(e instanceof Error && e.message ? e.message : "No pudimos cargar las tendencias.");

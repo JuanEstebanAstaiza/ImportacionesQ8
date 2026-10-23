@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ImagePlus, Loader2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { DocumentUploadButton } from "@/app/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { CATEGORIAS_PRODUCTO } from "@/lib/categorias";
-import { formatearTamano, obtenerLimiteSubida } from "@/lib/limite-subida";
+import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
+import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
+import { formatearTamano, obtenerLimiteSubida } from "@/utils/limite-subida";
 import { toApiPath } from "@/services/api-client";
 import { businessService, type BackendArchivoItem } from "@/services/business.service";
 import {

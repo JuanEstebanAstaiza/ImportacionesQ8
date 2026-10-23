@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import { toast } from "sonner";
 import { Check, Clapperboard, Download, ExternalLink, Inbox, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, Upload, UserPlus, Video, X } from "lucide-react";
 
-import { BuscadorUsuarios, UsuarioElegido } from "@/app/components/busqueda/BuscadorUsuarios";
+import { BuscadorUsuarios, UsuarioElegido } from "@/components/busqueda/BuscadorUsuarios";
 import type { UsuarioEncontrado } from "@/services/admin.service";
 
-import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { ProtectedVideoPlayer } from "@/components/media/ReproductorVideo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { toApiPath } from "@/services/api-client";
 import { businessService } from "@/services/business.service";
 import {

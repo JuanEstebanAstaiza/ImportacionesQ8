@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, ShieldCheck, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 
-import { BuscadorUsuarios } from "@/app/components/busqueda/BuscadorUsuarios";
+import { BuscadorUsuarios } from "@/components/busqueda/BuscadorUsuarios";
 import { tendenciasService, type AprobadorItem } from "@/services/tendencias.service";
 
 import { mensajeError } from "./AprobacionComun";
