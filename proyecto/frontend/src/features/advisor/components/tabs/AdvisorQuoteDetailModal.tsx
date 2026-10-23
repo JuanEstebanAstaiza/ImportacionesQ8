@@ -31,8 +31,11 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Modal, GaleriaFotosProducto, findCustomFieldValue, getQuoteAttachmentLinks } from "@/app/App";
-import type { ChatConv } from "@/app/App";
+import { Modal } from "@/components/ui/Modal";
+import { GaleriaFotosProducto } from "@/features/quotes/components/GaleriaFotosProducto";
+import { findCustomFieldValue } from "@/utils/profile";
+import { getQuoteAttachmentLinks } from "@/utils/quote-attachments";
+import type { ChatConv } from "@/types/chat";
 
 export function AdvisorQuoteDetailModal({quote,open,onClose,onAccept,accepting,proposal,negotiationChat,onConfirmProposal,onOpenChat}:{quote:Quote|null;open:boolean;onClose:()=>void;onAccept?:()=>Promise<void>;accepting?:boolean;proposal?:BackendPropuesta;negotiationChat?:ChatConv;onConfirmProposal?:(propuestaId:string)=>Promise<void>;onOpenChat?:(conversationId:string)=>void}) {
   const [confirmingProposal, setConfirmingProposal] = useState(false);

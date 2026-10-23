@@ -13,7 +13,8 @@ import type { Importer } from "@/types/importer";
 import type { SidebarCtrl } from "@/types/portal";
 import type { Quote } from "@/types/quote";
 import { resolveApiUrl } from "@/services/api-client";
-import type { ChatConv, Order } from "@/app/App";
+import type { ChatConv } from "@/types/chat";
+import type { Order } from "@/types/order";
 
 const DEFAULT_HEADER_USER = { name: "Ana García", company: "Importaciones del Norte S.A.", initials: "AG" };
 

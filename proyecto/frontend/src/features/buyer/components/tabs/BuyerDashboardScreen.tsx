@@ -1,19 +1,26 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Award, BadgeCheck, Building2, Plus, RotateCcw, Search, Shield, Zap } from "lucide-react";
 import { clsx } from "clsx";
-import { Sidebar, AppHeader, ImporterCard, USER } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { ImporterCard } from "@/components/importers/ImporterCard";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { Button, Card, Input, Select } from "@/components/design-system";
 import type { SidebarCtrl } from "@/types/portal";
-import type { Importer } from "@/types/importer";
+import { useImporterData } from "@/hooks/useImporterData";
 
-export function BuyerDashboardScreen({sb,onViewProfile,onCreateQuote,importers}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void;importers:Importer[]}) {
+export function BuyerDashboardScreen({sb,onViewProfile,onCreateQuote}:{sb:SidebarCtrl;onViewProfile:(id:string)=>void;onCreateQuote:(id:string)=>void}) {
+  const { marketplaceImporters: importers, reloadImporters } = useImporterData();
   const [search,setSearch]=useState("");
   const [catFilter,setCatFilter]=useState<string>("Todas");
   // Sustituye al viejo filtro por calificación: se filtra por empresas con
   // certificaciones registradas, que es un dato real y no una nota inventada.
   const [certFilter,setCertFilter]=useState("");
   const [countryFilter,setCountryFilter]=useState("");
+
+  useEffect(() => {
+    void reloadImporters();
+  }, [reloadImporters]);
 
   const filtered=importers.filter(imp=>{
     const ms=!search||[imp.name,imp.specialty,...imp.categories].some(v=>v.toLowerCase().includes(search.toLowerCase()));
@@ -191,3 +198,8 @@ export function BuyerDashboardScreen({sb,onViewProfile,onCreateQuote,importers}:
 }
 
 /** Sitio web, correo, teléfono, dirección y año de fundación de la empresa. */
+
+
+
+
+

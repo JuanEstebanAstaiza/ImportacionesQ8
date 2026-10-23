@@ -1,15 +1,10 @@
 import type { ReactNode } from "react";
 import { ImporterDashboardScreen as ImporterDashboardTab } from "@/features/importador/components/tabs/ImporterDashboardScreen";
-import type { ChatConv } from "@/types/chat";
-import type { CompanyAdvisor, SidebarCtrl } from "@/types/portal";
-import type { Quote } from "@/types/quote";
+import type { SidebarCtrl } from "@/types/portal";
 import type { Screen } from "@/app/rutas";
 
 type ImporterDashboardProps = {
   sb: SidebarCtrl;
-  quotes: Quote[];
-  advisors: CompanyAdvisor[];
-  chats: ChatConv[];
   companyName: string;
   screen?: Screen;
   views?: Partial<Record<ImporterRoute, ReactNode>>;
@@ -27,7 +22,7 @@ export function ImporterDashboard(props: ImporterDashboardProps) {
   const route = (props.screen ?? props.sb.active) as ImporterRoute;
   switch (route) {
     case "imp-dashboard":
-      return <ImporterDashboardTab {...props} />;
+      return <ImporterDashboardTab sb={props.sb} companyName={props.companyName} />;
     case "imp-profile":
     case "imp-advisors":
     case "imp-quotes":

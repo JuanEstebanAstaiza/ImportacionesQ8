@@ -1118,7 +1118,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                 <p className="text-lg font-semibold">{formatCurrency(course.precio)}</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { void handleOpenCourseDetail(course.id); }}>
+                <Button variant="outline" className="dark:hover:bg-accent" onClick={() => { void handleOpenCourseDetail(course.id); }}>
                   Ver detalle
                 </Button>
                 {isPurchased ? (

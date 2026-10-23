@@ -16,7 +16,7 @@ export interface ChatMsg {
   time: string;
   read: boolean;
   dateGroup?: string;
-  proposal?: unknown;
+  proposal?: PropuestaEnMensaje;
   authorName?: string;
 }
 
@@ -63,3 +63,4 @@ export interface ChatConv {
   advisorColor?: string;
   atiendeNombre?: string;
 }
+import type { PropuestaEnMensaje } from "@/features/propuestas/TarjetaPropuestaChat";

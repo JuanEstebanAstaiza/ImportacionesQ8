@@ -32,8 +32,9 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader } from "@/app/App";
-import type { ChatConv } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader } from "@/components/layout/AppHeader";
+import type { ChatConv } from "@/types/chat";
 
 export function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat,onRechazada}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onRechazada:()=>Promise<void>}) {
   const myQuotes=quotes.slice(0,20);
@@ -103,3 +104,4 @@ export function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingPr
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATE RESPONSE SCREEN — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
+

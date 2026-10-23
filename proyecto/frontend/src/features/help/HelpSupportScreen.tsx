@@ -1,11 +1,12 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { clsx } from "clsx";
 import { BookOpen, HelpCircle, LifeBuoy, Search } from "lucide-react";
 import { Button, Card, Input } from "@/components/design-system";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
-import { AppHeader, Sidebar, USER, USER_IMPORTADORA, USER_ASESOR } from "@/app/App";
+import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@/components/layout/AppHeader";
+import { Sidebar } from "@/components/layout/Sidebar";
 import type { SidebarCtrl } from "@/types/portal";
-import type { UserRole } from "@/app/App";
+import type { UserRole } from "@/types/roles";
 import { HELP_SUPPORT_CONTENT, normalizeHelpRole } from "@/features/help/help-support-content";
 import { ayudaService, type ArticuloAyuda } from "@/services/ayuda.service";
 export function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:UserRole;onPedirSoporte:()=>void}) {
@@ -201,4 +202,5 @@ export function HelpSupportScreen({sb,role,onPedirSoporte}:{sb:SidebarCtrl;role:
     </div>
   );
 }
+
 

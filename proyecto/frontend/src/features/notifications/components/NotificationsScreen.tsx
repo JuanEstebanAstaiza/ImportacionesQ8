@@ -10,7 +10,7 @@ import type { AppNotification } from "@/features/notifications/types";
 
 const DEFAULT_HEADER_USER = { name: "Ana García", company: "Importaciones del Norte S.A.", initials: "AG" };
 
-export function NotificationsScreen({notifications,onMark,onOpen,onBack,sb}:{notifications:AppNotification[];onMark:(id:string)=>void;onOpen:(notification:AppNotification)=>Promise<void>;onBack:()=>void;sb:SidebarCtrl}) {
+export function NotificationsScreen({onOpen,onBack,sb,notifications,onMark}:{onOpen:(notification:AppNotification)=>Promise<void>;onBack:()=>void;sb:SidebarCtrl;notifications:AppNotification[];onMark:(id:string)=>void}) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar {...sb} active="notifications"/>

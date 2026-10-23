@@ -28,7 +28,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader } from "@/components/layout/AppHeader";
 
 export function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSentCount,activeChatsCount,onOpenInternalChat}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string};responsesSentCount:number;activeChatsCount:number;onOpenInternalChat:()=>Promise<void>}) {
   const [errorCanal,setErrorCanal]=useState("");
@@ -116,3 +117,4 @@ export function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,resp
 // ADVISOR PORTAL — AVAILABLE QUOTES (Uber style)
 // ─────────────────────────────────────────────────────────────────────────────
 /** La empresa todavía puede rechazar la cotización: no hay orden ni rechazo previo. */
+

@@ -133,7 +133,7 @@ export function mapBackendImporterToUi(imp: BackendImporter): Importer {
     initials: initialsFromName(name),
     color: importerColorFromId(imp.id),
     memberSince: formatShortDate(imp.fecha_registro),
-    // ?rdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
+    // Órdenes entregadas que cuenta el backend. Antes era un 0 fijo y todas las
     // empresas se presentaban como si no hubieran cerrado ni un proyecto.
     projects: Number(imp.proyectos_completados ?? 0),
     verified: Boolean(imp.verificado),

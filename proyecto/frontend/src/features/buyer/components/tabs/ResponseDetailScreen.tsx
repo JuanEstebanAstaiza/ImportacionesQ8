@@ -32,8 +32,11 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar, AppHeader, USER, inferLifecycleStageIndex, buildLifecycleTimeline } from "@/app/App";
-import type { Order, ChatConv } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
+import type { Order } from "@/types/order";
+import type { ChatConv } from "@/types/chat";
 import type { QuoteResponse } from "@/types/response";
 import { cantidadConUnidad } from "@/utils/formatos";
 
@@ -198,3 +201,4 @@ export function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackT
 // ─────────────────────────────────────────────────────────────────────────────
 // RESPONSES SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
+

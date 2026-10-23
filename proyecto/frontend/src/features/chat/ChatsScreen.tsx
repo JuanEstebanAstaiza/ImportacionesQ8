@@ -5,16 +5,20 @@ import { toast } from "sonner";
 import { ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
 import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline } from "@/components/design-system";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
-import { AppHeader, FormatFileIcon, Modal, Sidebar, USER, USER_IMPORTADORA, USER_ASESOR } from "@/app/App";
+import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@/components/layout/AppHeader";
+import { FormatFileIcon } from "@/components/files/FormatFileIcon";
+import { Modal } from "@/components/ui/Modal";
+import { Sidebar } from "@/components/layout/Sidebar";
 import type { SidebarCtrl } from "@/types/portal";
-import type { UserRole, ChatConv, ChatMsg, MsgFile, MsgFileType, Order } from "@/app/App";
+import type { UserRole } from "@/types/roles";
+import type { ChatConv, ChatMsg, MsgFile, MsgFileType } from "@/types/chat";
+import type { Order } from "@/types/order";
 import {
   initialsFromName,
   importerColorFromId,
-  normalizeFolderName,
-  nextOrderState,
-  orderStateLabel,
-} from "@/app/App";
+} from "@/utils/profile";
+import { nextOrderState, orderStateLabel } from "@/features/ordenes/constants";
+import { normalizeFolderName } from "@/utils/folders";
 import type { CompanyAdvisor } from "@/types/portal";
 import type { Importer } from "@/types/importer";
 import type { BackendArchivoItem, BackendChatAttachmentItem, BackendExplorerResponse, BackendMiembroEquipo, BackendOrder } from "@/services/business.service";

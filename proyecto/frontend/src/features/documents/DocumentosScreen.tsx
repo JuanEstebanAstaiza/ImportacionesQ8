@@ -5,12 +5,16 @@ import { toast } from "sonner";
 import { ChevronRight, Copy, Download, Edit2, FileText, FolderOpen, FolderTree, LayoutGrid, LockKeyhole, MoreHorizontal, RotateCcw, Search, Trash2, Upload, X } from "lucide-react";
 import { Button, Card, Input } from "@/components/design-system";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
-import { AppHeader, FormatFileIcon, Sidebar, USER } from "@/app/App";
+import { AppHeader } from "@/components/layout/AppHeader";
+import { FormatFileIcon } from "@/components/files/FormatFileIcon";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { USER } from "@/components/layout/AppHeader";
 import type { SidebarCtrl } from "@/types/portal";
 import type { BackendArchivoItem, BackendExplorerResponse } from "@/services/business.service";
 import { resolveApiUrl } from "@/services/api-client";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
-import { normalizeFolderName, SYSTEM_ROOT_FOLDER_NAMES } from "@/app/App";
+import { normalizeFolderName } from "@/utils/folders";
+import { SYSTEM_ROOT_FOLDER_NAMES } from "@/config/business";
 export function DocumentosScreen({
   sb,
   explorer,

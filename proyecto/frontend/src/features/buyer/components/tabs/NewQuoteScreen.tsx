@@ -25,7 +25,8 @@ import type { SidebarCtrl } from "@/types/portal";
 import type { Importer } from "@/types/importer";
 import type { BackendArchivoItem, CreateCotizacionPayload } from "@/services/business.service";
 
-import { Sidebar, AppHeader, USER } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
 import { cantidadConUnidad } from "@/utils/formatos";
 
 const STEPS = ["Modalidad", "Información del producto", "Confirmación"];
@@ -1293,3 +1294,4 @@ export function NewQuoteScreen({onBack,sb,preselectedImporterId,importers,onSubm
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL HELPER
 // ─────────────────────────────────────────────────────────────────────────────
+

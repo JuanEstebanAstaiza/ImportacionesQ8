@@ -1,7 +1,7 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { clsx } from "clsx";
 import { Button, Input } from "@/components/design-system";
-import { Modal } from "@/app/App";
+import { Modal } from "@/components/ui/Modal";
 export type UrgenciaSoporte = "baja" | "media" | "alta" | "critica";
 export const URGENCIA_SOPORTE: Record<UrgenciaSoporte, { label: string; clase: string; peso: number }> = {
   critica: { label: "Crítica", clase: "bg-red-100 text-red-800 border-red-200", peso: 4 },
@@ -93,4 +93,5 @@ export function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>v
 // ----------------------------------------------------------------------------------------------------
 // APP HEADER
 // ----------------------------------------------------------------------------------------------------
+
 

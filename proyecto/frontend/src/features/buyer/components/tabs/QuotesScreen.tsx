@@ -9,7 +9,7 @@ import { SidebarCtrl } from "@/types/portal";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import { Badge, Button, Card, Input, Select } from "@/components/design-system";
-import { Modal } from "@/app/App";
+import { Modal } from "@/components/ui/Modal";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -20,7 +20,8 @@ import { leerPropuesta, pesos as pesosCop } from "@/features/propuestas/calculo"
 
 import { TierBadge } from "@/features/cotizante/TierBadge";
 
-import { Sidebar, AppHeader, USER } from "@/app/App";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER } from "@/components/layout/AppHeader";
 import type { QuoteResponse } from "@/types/response";
 import { cantidadConUnidad } from "@/utils/formatos";
 
@@ -435,3 +436,5 @@ const MOTIVOS_ELECCION: { clave: MotivoEleccion; etiqueta: string; ayuda: string
 function formatoPesos(valor: number): string {
   return `$${Math.round(valor).toLocaleString("es-CO")} COP`;
 }
+
+

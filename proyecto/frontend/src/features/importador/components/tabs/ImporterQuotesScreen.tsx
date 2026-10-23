@@ -34,10 +34,12 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Modal, Sidebar, AppHeader, USER_IMPORTADORA } from "@/app/App";
+import { Modal } from "@/components/ui/Modal";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { AppHeader, USER_IMPORTADORA } from "@/components/layout/AppHeader";
 import { AdvisorQuoteDetailModal } from "@/features/advisor/components/tabs/AdvisorQuoteDetailModal";
 import type { CompanyAdvisor } from "@/types/portal";
-import type { ChatConv } from "@/app/App";
+import type { ChatConv } from "@/types/chat";
 
 export function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenChat,onAssignAdvisor,proposalsByQuoteId,onConfirmProposal,onRechazada}:{sb:SidebarCtrl;onRespond:(id:string)=>void;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onAssignAdvisor:(quoteId:string,advisorId:string|null)=>Promise<void>;proposalsByQuoteId:Record<string,BackendPropuesta>;onConfirmProposal:(propuestaId:string)=>Promise<void>;onRechazada:()=>Promise<void>}) {
   const [filter,setFilter]=useState("todas");
@@ -231,3 +233,4 @@ export function ImporterQuotesScreen({sb,onRespond,quotes,advisors,chats,onOpenC
     </div>
   );
 }
+

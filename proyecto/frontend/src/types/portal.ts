@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef } from "react";
 
-export type UserRole = "solicitante" | "importadora" | "asesor";
+export type { UserRole } from "@/types/roles";
 
 export interface PortalUser {
   name: string;

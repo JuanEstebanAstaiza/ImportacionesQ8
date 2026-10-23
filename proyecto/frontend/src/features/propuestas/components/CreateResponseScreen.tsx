@@ -12,7 +12,7 @@ import { FormularioPropuesta } from "@/features/propuestas/FormularioPropuesta";
 import { leerPropuesta, type FormularioPropuesta as FormularioPropuestaDatos } from "@/features/propuestas/calculo";
 import { cantidadConUnidad } from "@/utils/formatos";
 import { PerfilPublicoCotizanteCard } from "@/features/cotizante/PerfilPublicoCotizanteCard";
-import type { UserRole } from "@/app/App";
+import type { UserRole } from "@/types/roles";
 
 function extractFirstNumber(value: string | null | undefined): number {
   const text = String(value || "");
