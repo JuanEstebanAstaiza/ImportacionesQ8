@@ -1657,7 +1657,7 @@ export default function App() {
     onCrearCuenta={()=>{volverALiquidaciones.current=true;goTo("register");}}
     onEntrar={()=>navegarModulo(inicioLiquidaciones(userRole))}
     onPolicy={page=>goTo(PANTALLA_LEGAL[page])}
-    onIrAZarpi={()=>goTo("landing")}
+    onIrAImportaciones={()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing")}
   />;
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
   // Â«AvÃ­same cuando abraÂ» (secciÃ³n Planes): lista de espera de la apertura al pÃºblico.

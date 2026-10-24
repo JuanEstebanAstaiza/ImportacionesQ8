@@ -24,7 +24,7 @@ type Props = {
   onCrearCuenta: (intencion: "comprar" | "publicar") => void;
   onEntrar: () => void;
   onPolicy: (page: LegalPage) => void;
-  onIrAZarpi: () => void;
+  onIrAImportaciones: () => void;
 };
 
 const SECCIONES = [
@@ -121,6 +121,27 @@ function VistaPreviaLotes() {
   );
 }
 
+/**
+ * Cambio entre las plataformas de la suite. Hace también de nombre del producto
+ * junto al logo, por eso «Liquidaciones» va marcado y no es un botón.
+ */
+function SelectorPlataforma({ onImportaciones, className }: { onImportaciones: () => void; className?: string }) {
+  return (
+    <div role="group" aria-label="Plataformas Zarpi" className={clsx("items-center gap-0.5 rounded-full border border-border bg-muted/40 p-0.5 text-xs font-semibold", className)}>
+      <button
+        type="button"
+        onClick={onImportaciones}
+        className="rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+      >
+        Importaciones
+      </button>
+      <span aria-current="page" className="rounded-full bg-primary px-3 py-1 text-primary-foreground dark:bg-accent dark:text-accent-foreground">
+        Liquidaciones
+      </span>
+    </div>
+  );
+}
+
 function ListaConIcono({ items, icono }: { items: string[]; icono: ReactNode }) {
   return (
     <ul className="space-y-2.5">
@@ -134,7 +155,7 @@ function ListaConIcono({ items, icono }: { items: string[]; icono: ReactNode }) 
   );
 }
 
-export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuenta, onEntrar, onPolicy, onIrAZarpi }: Props) {
+export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuenta, onEntrar, onPolicy, onIrAImportaciones }: Props) {
   const { dark, toggleTheme } = useBrandTheme();
   const [menuAbierto, setMenuAbierto] = useState(false);
 
@@ -164,12 +185,20 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
       {/* ENCABEZADO */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-[1100px] items-center justify-between gap-4 px-4 sm:px-6">
-          <button type="button" onClick={onIrAZarpi} aria-label="Ir a Zarpi" className="flex flex-shrink-0 items-center gap-2.5">
-            <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-7 w-24 object-contain object-left" />
-            <span className="border-l border-border pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Liquidaciones</span>
-          </button>
+          <div className="flex flex-shrink-0 items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              aria-label="Zarpi Liquidaciones: volver arriba"
+              className="flex items-center gap-2.5"
+            >
+              <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-7 w-24 object-contain object-left" />
+              <span className="border-l border-border pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground md:hidden">Liquidaciones</span>
+            </button>
+            <SelectorPlataforma onImportaciones={onIrAImportaciones} className="hidden md:flex" />
+          </div>
 
-          <nav aria-label="Secciones" className="hidden items-center gap-1 md:flex">
+          <nav aria-label="Secciones" className="hidden items-center gap-1 lg:flex">
             {SECCIONES.map((s) => (
               <button
                 key={s.id}
@@ -199,7 +228,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
               onClick={() => setMenuAbierto((v) => !v)}
               aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={menuAbierto}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
             >
               {menuAbierto ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
@@ -207,7 +236,8 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
         </div>
 
         {menuAbierto && (
-          <div className="border-t border-border bg-background px-4 pb-4 pt-2 md:hidden">
+          <div className="border-t border-border bg-background px-4 pb-4 pt-2 lg:hidden">
+            <SelectorPlataforma onImportaciones={onIrAImportaciones} className="mb-2 mt-1 flex w-fit md:hidden" />
             <nav aria-label="Secciones" className="flex flex-col">
               {SECCIONES.map((s) => (
                 <button
