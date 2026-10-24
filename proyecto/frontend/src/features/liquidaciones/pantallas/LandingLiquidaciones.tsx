@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/design-system";
+import { SelectorPlataforma } from "@/components/navigation/SelectorPlataforma";
 import { useBrandTheme } from "@/hooks/useBrandTheme";
 import type { LegalPage } from "@/features/legal/types";
 import { FotoVacia } from "@/features/liquidaciones/componentes/MediosLote";
@@ -121,27 +122,6 @@ function VistaPreviaLotes() {
   );
 }
 
-/**
- * Cambio entre las plataformas de la suite. Hace también de nombre del producto
- * junto al logo, por eso «Liquidaciones» va marcado y no es un botón.
- */
-function SelectorPlataforma({ onImportaciones, className }: { onImportaciones: () => void; className?: string }) {
-  return (
-    <div role="group" aria-label="Plataformas Zarpi" className={clsx("items-center gap-0.5 rounded-full border border-border bg-muted/40 p-0.5 text-xs font-semibold", className)}>
-      <button
-        type="button"
-        onClick={onImportaciones}
-        className="rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-      >
-        Importaciones
-      </button>
-      <span aria-current="page" className="rounded-full bg-primary px-3 py-1 text-primary-foreground dark:bg-accent dark:text-accent-foreground">
-        Liquidaciones
-      </span>
-    </div>
-  );
-}
-
 function ListaConIcono({ items, icono }: { items: string[]; icono: ReactNode }) {
   return (
     <ul className="space-y-2.5">
@@ -195,7 +175,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
               <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-7 w-24 object-contain object-left" />
               <span className="border-l border-border pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground md:hidden">Liquidaciones</span>
             </button>
-            <SelectorPlataforma onImportaciones={onIrAImportaciones} className="hidden md:flex" />
+            <SelectorPlataforma actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="hidden md:flex" />
           </div>
 
           <nav aria-label="Secciones" className="hidden items-center gap-1 lg:flex">
@@ -237,7 +217,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
 
         {menuAbierto && (
           <div className="border-t border-border bg-background px-4 pb-4 pt-2 lg:hidden">
-            <SelectorPlataforma onImportaciones={onIrAImportaciones} className="mb-2 mt-1 flex w-fit md:hidden" />
+            <SelectorPlataforma actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="mb-2 mt-1 flex w-fit md:hidden" />
             <nav aria-label="Secciones" className="flex flex-col">
               {SECCIONES.map((s) => (
                 <button

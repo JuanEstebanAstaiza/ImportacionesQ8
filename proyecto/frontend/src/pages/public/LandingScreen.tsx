@@ -8,6 +8,7 @@ import { clsx } from "clsx";
 import { DynamicAccentText } from "@/features/landing/components/DynamicAccentText";
 import { Button, Card, Input, Logo, Textarea } from "@/components/design-system";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
+import { SelectorPlataforma } from "@/components/navigation/SelectorPlataforma";
 import { CarruselVideos } from "@/components/media/CarruselVideos";
 import { EMPRESA } from "@/features/legal/empresa";
 import type { LegalPage } from "@/features/legal/types";
@@ -62,7 +63,7 @@ function FooterPublico({ onLanding, onPlanes, onPolicy, onTendencias }: FooterPu
   );
 }
 
-export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,onPolicy,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;onPolicy:(page:LegalPage)=>void;children:React.ReactNode}) {
+export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,onPolicy,onLiquidaciones,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;onPolicy:(page:LegalPage)=>void;onLiquidaciones?:()=>void;children:React.ReactNode}) {
   const { dark, toggleTheme } = useBrandTheme();
   const claseMenuPublico=(activo:boolean)=>clsx(
     "px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap",
@@ -76,8 +77,11 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
       <LandingBackground />
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
         <div className="flex w-full min-h-16 items-center justify-between gap-3 px-4 sm:px-6">
-          <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
-          <nav className="hidden xl:flex items-center gap-1">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
+            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:flex"/>
+          </div>
+          <nav className="hidden 2xl:flex items-center gap-1">
             {LANDING_TABS.map(section=>{
               const action=section.key==="planes"
                 ?onPlanes
@@ -103,7 +107,8 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
             <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
           </div>
         </div>
-        <nav className="xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2">
+        <nav className="2xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2">
+          <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="flex md:hidden mr-1"/>
           {LANDING_TABS.map(section=>{
             const action=section.key==="planes"
               ?onPlanes
@@ -192,7 +197,7 @@ function PreguntasLanding({items}:{items:PreguntaLanding[]}) {
   );
 }
 
-export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse,onListaEspera}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void;onListaEspera:()=>void}) {
+export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse,onListaEspera,onLiquidaciones}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void;onListaEspera:()=>void;onLiquidaciones?:()=>void}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [activeTab,setActiveTab]=useState<LandingTabKey>("home");
   // Sección a la que hay que bajar después de cambiar de pestaña (`planes`, `preguntas`).
@@ -281,8 +286,12 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-9xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <Logo/>
-          <div className="hidden xl:flex items-center gap-1">{menu}</div>
+          <div className="flex items-center gap-3">
+            <Logo/>
+            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:flex"/>
+          </div>
+          {/* Con el selector de plataforma, las pestañas caben en línea solo en pantallas muy anchas. */}
+          <div className="hidden 2xl:flex items-center gap-1">{menu}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleTheme}
@@ -301,7 +310,8 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
           </div>
         </div>
         {/* En pantallas angostas el menú va en una fila que se desliza. */}
-        <div className="xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2 -mt-1">
+        <div className="2xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2 -mt-1">
+          <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="flex md:hidden mr-1"/>
           {menu}
           <button onClick={onLogin} className={clsx(claseMenu(false),"sm:hidden")}>Iniciar sesión</button>
         </div>
@@ -310,7 +320,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
       {activeTab==="home" && (
       <>
       {/* HERO */}
-      <section className="pt-40 xl:pt-32 pb-20 px-6 bg-foreground text-background relative overflow-hidden">
+      <section className="pt-40 2xl:pt-32 pb-20 px-6 bg-foreground text-background relative overflow-hidden">
         <div className="absolute inset-0 bg-primary/25 pointer-events-none z-0"/>
         <div className="zarpi-blob zarpi-blob-violet absolute -top-24 -left-24 z-0 pointer-events-none"/>
         <div className="zarpi-blob zarpi-blob-acid absolute top-20 -right-20 z-0 pointer-events-none"/>
@@ -511,7 +521,7 @@ function LandingAboutSection({content,onSolicitarAcceso}:{content:LandingDynamic
     {title:"Tú decides.",desc:"Zarpi te muestra quién es quién; la elección es tuya."},
   ];
   return (
-    <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
+    <section className="pt-40 2xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
 
       <div className="max-w-7xl mx-auto relative z-10 space-y-12">
@@ -573,7 +583,7 @@ function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlane
     "Todo el proceso queda registrado.",
   ];
   return (
-    <section className="pt-40 xl:pt-32 pb-20 px-6 relative overflow-hidden">
+    <section className="pt-40 2xl:pt-32 pb-20 px-6 relative overflow-hidden">
       <LandingBackground />
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-12">
