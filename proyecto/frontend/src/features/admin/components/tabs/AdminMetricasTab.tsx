@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Building2, Shield, Users } from "lucide-react";
 import { adminService, type AdminCotizacionAbierta, type AdminMetricas } from "@/services/admin.service";
+import { irARuta } from "@/app/rutas";
+import { TarjetasMetricasLiquidaciones } from "@/features/liquidaciones/admin/ResumenLiquidaciones";
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -140,6 +142,8 @@ export function AdminMetricasTab() {
           </table>
         </div>
       </div>
+      {/* Los módulos de la suite suman su resumen aquí; si el módulo está apagado no pinta nada. */}
+      <TarjetasMetricasLiquidaciones onAbrir={() => irARuta("/admin/liquidaciones")} />
     </section>
   );
 }

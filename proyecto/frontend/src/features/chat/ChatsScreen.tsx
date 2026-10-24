@@ -1,4 +1,5 @@
 ﻿import * as React from "react";
+import { MODULOS_SUITE, moduloDe, type Producto } from "@/config/suite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -242,6 +243,8 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     if(filter==="interno"&&c.type!=="interno")return false;
     if(filter==="soporte"&&c.type!=="soporte")return false;
     if(filter.startsWith("urg-")&&c.urgency!==filter.slice(4))return false;
+    // Mesa compartida por la suite: el equipo filtra los tickets por producto.
+    if(filter.startsWith("mod-")&&(c.type!=="soporte"||(c.modulo||"importaciones")!==filter.slice(4)))return false;
     if(filter==="no-leidas"&&c.unread===0)return false;
     // Un ticket cerrado solo aparece si se pide expresamente: si no, la bandeja
     // de pendientes se llenaría de casos ya atendidos.
@@ -855,6 +858,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
         {k:"urg-alta",label:"Altas"},
         {k:"urg-media",label:"Medias"},
         {k:"urg-baja",label:"Bajas"},
+        ...MODULOS_SUITE.map(m=>({k:`mod-${m.clave}`,label:m.nombre})),
         {k:"cerrados",label:"Cerrados"},
       ]
     : [
@@ -1112,6 +1116,11 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                             {urgencia&&(
                               <span className={clsx("inline-flex flex-shrink-0 items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold",urgencia.clase)}>
                                 {urgencia.label}
+                              </span>
+                            )}
+                            {c.type==="soporte"&&c.modulo&&c.modulo!=="importaciones"&&(
+                              <span className="inline-flex flex-shrink-0 items-center px-1.5 py-0.5 rounded border border-accent/50 bg-accent/15 text-[10px] font-semibold text-foreground">
+                                {moduloDe(c.modulo as Producto).nombre}
                               </span>
                             )}
                             <p className="text-xs text-muted-foreground truncate">

@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 import config
 from services import configuracion
 
+# Productos de la suite. Un ticket de la mesa de ayuda dice de cuál viene; los que
+# no lo dicen (anteriores a la suite) son de Importaciones.
+MODULOS_SUITE = ("importaciones", "liquidaciones")
+MODULO_POR_DEFECTO = "importaciones"
+
 # clave pública → (clave en configuracion_plataforma, nombre, descripción)
 MODULOS = {
     "academico": (
@@ -49,6 +54,12 @@ MODULOS = {
         "Cada curso con precio se desbloquea por persona cuando el equipo aprueba el comprobante de pago "
         "(o da el acceso a mano en Accesos a cursos). Apágalo cuando haya pasarela: la compra vuelve a ser directa.",
     ),
+    "liquidaciones": (
+        "modulos.liquidaciones",
+        "Zarpi Liquidaciones",
+        "Marketplace de lotes a precio fijo entre empresas. Apagado, desaparece del selector de producto "
+        "y del panel, y su API responde 404; los datos se conservan en su base aparte.",
+    ),
 }
 
 
@@ -65,6 +76,8 @@ def _por_defecto(nombre: str) -> bool:
         return bool(config.COBRO_COTIZACIONES_TOKENS)
     if nombre == "pago_manual_cursos":
         return bool(config.PAGO_MANUAL_CURSOS)
+    if nombre == "liquidaciones":
+        return bool(config.MODULO_LIQUIDACIONES_HABILITADO)
     return True
 
 

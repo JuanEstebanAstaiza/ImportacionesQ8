@@ -1,5 +1,15 @@
 import type { AppNotification } from "@/features/notifications/types";
 
+/** A qué pantalla lleva un aviso de Zarpi Liquidaciones (tipos `liquidacion_*`). */
+function destinoLiquidaciones(tipo: string, data: Record<string, unknown>): Pick<AppNotification, "destino" | "destinoId"> {
+  const operacionId = typeof data.operacion_id === "string" ? data.operacion_id : undefined;
+  const loteId = typeof data.lote_id === "string" ? data.lote_id : undefined;
+  if (tipo === "liquidacion_por_revisar") return { destino: "liq-revision" };
+  if (operacionId) return { destino: data.lado === "vendedor" ? "liq-operaciones" : "liq-reservas", destinoId: operacionId };
+  if (tipo === "liquidacion_cuenta") return { destino: "liq-catalogo" };
+  return { destino: loteId ? "liq-mis-lotes" : "liq-catalogo" };
+}
+
 function formatShortDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
@@ -25,6 +35,17 @@ export function mapBackendNotificationToUi(notification: { id: string; tipo: str
   const body = approval && cotizacionId
      ? `Tu cotizaci?n con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrar?s las instrucciones y siguientes pasos para continuar.`
     : notification.mensaje;
+  if (notification.tipo.startsWith("liquidacion_")) {
+    return {
+      id: notification.id,
+      type: "status",
+      title: notification.titulo,
+      body: notification.mensaje,
+      date: formatShortDate(notification.fecha_creacion),
+      read: notification.leida,
+      ...destinoLiquidaciones(notification.tipo, data),
+    };
+  }
   return {
     id: notification.id,
     type: mapBackendNotificationTypeToUi(notification.tipo),

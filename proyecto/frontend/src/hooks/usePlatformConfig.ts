@@ -19,6 +19,8 @@ export interface PlatformConfig {
   solo_con_plan: boolean;
   /** Apagadas, el formulario de cotización solo ofrece la dirigida. */
   cotizaciones_abiertas: boolean;
+  /** Zarpi Liquidaciones: apagado, desaparece del selector de producto y del panel. */
+  modulo_liquidaciones_habilitado: boolean;
   correo_contacto: string;
   notificaciones_email: boolean;
   /** Tamaño máximo por archivo subido, en bytes. Ver `lib/limite-subida.ts`. */
@@ -33,6 +35,7 @@ const DEFAULT_CONFIG: PlatformConfig = {
   cobro_cotizaciones: false,
   solo_con_plan: false,
   cotizaciones_abiertas: true,
+  modulo_liquidaciones_habilitado: true,
   correo_contacto: "contacto@zarpi.co",
   notificaciones_email: false,
   max_subida_bytes: 300 * 1024 * 1024,

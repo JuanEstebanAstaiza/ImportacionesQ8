@@ -9,7 +9,12 @@ export const URGENCIA_SOPORTE: Record<UrgenciaSoporte, { label: string; clase: s
   media: { label: "Media", clase: "bg-amber-100 text-amber-800 border-amber-200", peso: 2 },
   baja: { label: "Baja", clase: "bg-slate-100 text-slate-700 border-slate-200", peso: 1 },
 };
-export function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>void;onSubmit:(datos:{asunto:string;urgencia:UrgenciaSoporte;mensaje:string})=>Promise<void>}) {
+/**
+ * La mesa de ayuda es una sola para toda la suite: el ticket lleva el producto
+ * desde el que se pide (`modulo`) y, si se abrió desde algo concreto, sobre qué
+ * (`referencia`, p. ej. «operacion:<id>»), para que el agente lo ubique sin preguntar.
+ */
+export function SoporteModal({open,onClose,onSubmit,modulo="importaciones",nombreModulo,referencia}:{open:boolean;onClose:()=>void;onSubmit:(datos:{asunto:string;urgencia:UrgenciaSoporte;mensaje:string;modulo?:string;referencia?:string})=>Promise<void>;modulo?:string;nombreModulo?:string;referencia?:string}) {
   const [asunto,setAsunto]=useState("");
   const [urgencia,setUrgencia]=useState<UrgenciaSoporte>("media");
   const [mensaje,setMensaje]=useState("");
@@ -30,7 +35,7 @@ export function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>v
     setError("");
     setEnviando(true);
     try{
-      await onSubmit({asunto:asunto.trim(),urgencia,mensaje:mensaje.trim()});
+      await onSubmit({asunto:asunto.trim(),urgencia,mensaje:mensaje.trim(),modulo,referencia});
     }catch(err){
       setError(err instanceof Error?err.message:"No se pudo abrir la solicitud.");
     }finally{
@@ -45,6 +50,12 @@ export function SoporteModal({open,onClose,onSubmit}:{open:boolean;onClose:()=>v
           Abre una conversación con el equipo de Zarpi. Se atiende por urgencia, así que
           marca la que corresponda de verdad.
         </p>
+        {modulo!=="importaciones"&&(
+          <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+            Sobre <span className="font-medium text-foreground">{nombreModulo||modulo}</span>
+            {referencia?` · ${referencia.startsWith("operacion:")?"esta operación":referencia.startsWith("lote:")?"esta publicación":referencia}`:""}
+          </p>
+        )}
         <Input
           label="Asunto"
           placeholder="Ej. No puedo subir el packing list de mi operación"

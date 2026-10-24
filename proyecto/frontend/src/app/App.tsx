@@ -126,6 +126,11 @@ import {
   PANTALLAS_DESIGNER,
 } from "@/config/navigation";
 import type { NavItem } from "@/types/navigation";
+import {
+  LIQUIDACIONES, PANTALLAS_COMUNES, moduloDe, modulosActivos, navAdminDeModulos, productoDe, type Producto,
+} from "@/config/suite";
+import { LiquidacionesRouter } from "@/pages/liquidaciones/LiquidacionesRouter";
+import { LandingLiquidaciones } from "@/features/liquidaciones/pantallas/LandingLiquidaciones";
 
 // Compatibilidad para las vistas de dominio que todavÃ­a consumen los contratos
 // pÃºblicos histÃ³ricos de App.tsx; la implementaciÃ³n vive en sus mÃ³dulos.
@@ -330,6 +335,18 @@ export default function App() {
     }
     return hasStoredSession ? getHomeScreenForRole(storedRole!) : "landing";
   });
+  // Identificador que llevan en la URL las pantallas de los módulos de la suite
+  // (lote, operación...). Uno solo para todos: cada módulo lo interpreta en su router.
+  const [idModulo,setIdModulo]=useState<string>(() =>
+    destinoInicial?.screen.startsWith("liq-") ? destinoInicial.id ?? "" : "");
+  // Producto de la suite en uso (config/suite.ts). Lo marca la última pantalla de
+  // un producto: abrir el perfil o las notificaciones no cambia el menú.
+  const [productoActivo,setProductoActivo]=useState<Producto>(() => productoDe(destinoInicial?.screen ?? "landing"));
+  useEffect(() => {
+    if (!PANTALLAS_COMUNES.includes(screen)) setProductoActivo(productoDe(screen));
+  }, [screen]);
+  // Quien inicia sesión (o se registra) desde la landing de Liquidaciones vuelve a Liquidaciones.
+  const volverALiquidaciones = useRef(false);
   const [loginPrefillEmail,setLoginPrefillEmail]=useState("");
   const [resetToken,setResetToken]=useState<string>(() =>
     new URLSearchParams(window.location.search).get("token") ?? "",
@@ -367,6 +384,9 @@ export default function App() {
   );
   const [sidebarPinned,setSidebarPinned]=useState(true);
   const [soporteAbierto,setSoporteAbierto]=useState(false);
+  // La mesa de ayuda es una sola para la suite: el ticket dice de qué producto
+  // viene y, si se pidió desde algo concreto, sobre qué.
+  const [soporteContexto,setSoporteContexto]=useState<{modulo:string;referencia?:string}>({modulo:"importaciones"});
   const [notifications,setNotifications]=useState<AppNotification[]>(INIT_NOTIFICATIONS);
   const [hiddenOpenQuotesByCompany,setHiddenOpenQuotesByCompany]=useState<Record<string, string[]>>(() => loadHiddenOpenQuotesByCompany());
   const [quoteStatusOverrides,setQuoteStatusOverrides]=useState<Record<string, Quote["status"]>>(() => loadQuoteStatusOverrides());
@@ -418,6 +438,8 @@ export default function App() {
     ? selectedImporterId
     : screen === "tendencia-detalle"
     ? selectedTendenciaId
+    : screen.startsWith("liq-")
+    ? idModulo
     : screen === "chats"
     ? activeChatId || initialChatConvId || ""
     : "";
@@ -476,6 +498,7 @@ export default function App() {
       if (destino.param === "importer") setSelectedImporterId(id);
       if (destino.param === "tendencia") setSelectedTendenciaId(id);
       if (destino.param === "conversation") setInitialChatConvId(id || undefined);
+      if (destino.screen.startsWith("liq-")) setIdModulo(id);
     }
 
     window.addEventListener("popstate", alNavegarAtrasOAdelante);
@@ -660,6 +683,8 @@ export default function App() {
         counterpartPhotoUrl: row.contraparte_foto_url ?? undefined,
         subject: row.asunto ?? undefined,
         urgency: row.urgencia ?? undefined,
+        modulo: row.modulo ?? undefined,
+        referencia: row.referencia ?? undefined,
         requesterRole: row.solicitante_rol ?? undefined,
         closed: row.cerrada ?? false,
         resolution: row.resolucion ?? undefined,
@@ -920,9 +945,10 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing"];
     if (!publicScreens.includes(screen)) {
-      setScreen("landing");
+      // Un enlace de Liquidaciones sin sesión lleva a la landing de Liquidaciones.
+      setScreen(screen.startsWith("liq-") ? "liq-landing" : "landing");
     }
   }, [isAuthenticated, isInitializing, screen]);
 
@@ -1172,6 +1198,16 @@ export default function App() {
   });
 
   function goTo(s:Screen){setPrevScreen(screen);setScreen(s);}
+  /** Navegación de los módulos de la suite: pantalla más el identificador de su URL. */
+  function navegarModulo(s:Screen,id?:string){setIdModulo(id??"");goTo(s);}
+  /** Inicio de Liquidaciones según quién entra: el equipo va a su panel. */
+  function inicioLiquidaciones(rol:UserRole|"admin"):Screen{
+    return rol==="admin"?"liq-admin-resumen":rol==="soporte"?"liq-revision":LIQUIDACIONES.inicio(rol as UserRole);
+  }
+  function abrirSoporte(referencia?:string,modulo:string=productoActivo){
+    setSoporteContexto({modulo,referencia});
+    setSoporteAbierto(true);
+  }
   /** Â«Solicitar accesoÂ» fuera de la landing: lleva a la secciÃ³n Planes del inicio (/#planes). */
   function irAPlanesDelInicio(){goTo("landing");window.setTimeout(()=>{window.location.hash="planes";},0);}
 
@@ -1187,13 +1223,18 @@ export default function App() {
     // escrita a mano y cualquier entrada nueva del sidebar nacÃ­a muerta: el
     // botÃ³n existÃ­a pero no navegaba a ninguna parte.
     if(key==="courses"&&!moduloEducativoHabilitado)return;
-    if(esPantalla(key))goTo(key);
+    if(esPantalla(key))navegarModulo(key);
   }
 
   function getNavItems():NavItem[]{
-    const base = userRole==="admin" ? NAV_ADMIN
-      : userRole==="soporte" ? NAV_SOPORTE
+    // Los módulos de la suite aportan su grupo al panel admin y sus entradas a la
+    // bandeja de soporte; para los clientes, el menú es el del producto en uso.
+    const productoUsado = modulosActivos(platformConfig).some(m=>m.clave===productoActivo) ? productoActivo : "importaciones";
+    const menuProducto = productoUsado!=="importaciones" ? moduloDe(productoUsado).nav[userRole as UserRole] : undefined;
+    const base = userRole==="admin" ? [...NAV_ADMIN, ...navAdminDeModulos(platformConfig,"admin")]
+      : userRole==="soporte" ? [...NAV_SOPORTE, ...navAdminDeModulos(platformConfig,"soporte")]
       : userRole==="designer" ? NAV_DISENO
+      : menuProducto ? menuProducto
       : userRole==="importadora" ? NAV_IMPORTADORA
       : userRole==="asesor" ? NAV_ASESOR
       : NAV_ITEMS;
@@ -1285,7 +1326,7 @@ export default function App() {
     // El equipo de la plataforma no se pide soporte a sÃ­ mismo: el ticket es el
     // canal de los usuarios con la plataforma. Antes el botÃ³n seguÃ­a saliendo
     // para soporte, y al pulsarlo el backend respondÃ­a 403.
-    onSoporte:()=>setSoporteAbierto(true),
+    onSoporte:()=>abrirSoporte(),
     showSoporte:userRole!=="admin"&&userRole!=="soporte"&&userRole!=="designer",
     onCanalEquipo:()=>{void abrirCanalEquipo();},
     showCanalEquipo:userRole==="admin"||userRole==="soporte"||userRole==="designer",
@@ -1293,6 +1334,10 @@ export default function App() {
     profilePhotoUrl:currentUserProfile?.foto_url || null,
     onLogout:()=>{void handleLogout();},
     onProfile:handleProfileClick,
+    // Selector de producto de la suite: una sola cuenta entra a todos.
+    productos:modulosActivos(platformConfig).filter(m=>m.roles.includes(userRole as UserRole)).map(({clave,nombre,descripcion})=>({clave,nombre,descripcion})),
+    producto:productoActivo,
+    onProducto:(clave)=>navegarModulo(moduloDe(clave as Producto).inicio(userRole as UserRole)),
   };
 
   function openResponse(id:string,from:ResponseFrom,fromQuoteId?:string){
@@ -1404,6 +1449,7 @@ export default function App() {
   }
   async function openNotification(notification: AppNotification){
     if (notification.destino) {
+      if (notification.destino.startsWith("liq-")) setIdModulo(notification.destinoId ?? "");
       goTo(notification.destino);
       return;
     }
@@ -1420,6 +1466,11 @@ export default function App() {
   }
   function handleLogin(role:UserRole|"admin"){
     setUserRole(role);
+    if(volverALiquidaciones.current&&platformConfig.modulo_liquidaciones_habilitado){
+      volverALiquidaciones.current=false;
+      navegarModulo(inicioLiquidaciones(role));
+      return;
+    }
     // Si hay un producto de Tendencias por retomar, el efecto de arriba lleva al
     // formulario: no se pisa esa navegaciÃ³n con la pantalla de inicio. SegÃºn el
     // orden de los renders, el efecto corre antes (marca prefillRetomado hace un
@@ -1458,7 +1509,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -1500,6 +1551,21 @@ export default function App() {
     "admin-landing": ["admin"],
     "admin-correos": ["admin"],
     "admin-tipografia": ["admin"],
+    // Zarpi Liquidaciones: la misma cuenta de cotizante o empresa entra al módulo.
+    // Cada pantalla va explícita: sin entrada, una pantalla quedaría abierta a todos.
+    "liq-catalogo": ["solicitante", "importadora", "asesor", "admin", "soporte"],
+    "liq-lote": ["solicitante", "importadora", "asesor", "admin", "soporte"],
+    "liq-activar": ["solicitante", "importadora", "asesor"],
+    "liq-reservas": ["solicitante", "importadora", "asesor"],
+    "liq-mis-lotes": ["importadora", "asesor"],
+    "liq-publicar": ["importadora", "asesor"],
+    "liq-operaciones": ["importadora", "asesor"],
+    "liq-revision": ["admin", "soporte"],
+    "liq-admin-lotes": ["admin", "soporte"],
+    "liq-admin-operaciones": ["admin", "soporte"],
+    "liq-admin-resumen": ["admin"],
+    "liq-admin-cuentas": ["admin"],
+    "liq-admin-config": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -1511,6 +1577,13 @@ export default function App() {
       setScreen(getHomeScreenForRole(userRole));
     }
   }, [platformConfigLoading, moduloEducativoHabilitado, screen, userRole]);
+
+  // Con Liquidaciones apagado, sus enlaces llevan al inicio de siempre.
+  useEffect(() => {
+    if (!platformConfigLoading && !platformConfig.modulo_liquidaciones_habilitado && screen.startsWith("liq-")) {
+      setScreen(isAuthenticated ? getHomeScreenForRole(userRole) : "landing");
+    }
+  }, [platformConfigLoading, platformConfig.modulo_liquidaciones_habilitado, screen, isAuthenticated, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated || isInitializing || !appRole) {
@@ -1578,6 +1651,14 @@ export default function App() {
     </div>
   );
 
+  if(screen==="liq-landing")return <LandingLiquidaciones
+    autenticado={isAuthenticated}
+    onIniciarSesion={()=>{volverALiquidaciones.current=true;goTo("login");}}
+    onCrearCuenta={()=>{volverALiquidaciones.current=true;goTo("register");}}
+    onEntrar={()=>navegarModulo(inicioLiquidaciones(userRole))}
+    onPolicy={page=>goTo(PANTALLA_LEGAL[page])}
+    onIrAZarpi={()=>goTo("landing")}
+  />;
   if(screen==="landing")return <LandingScreen onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
   // Â«AvÃ­same cuando abraÂ» (secciÃ³n Planes): lista de espera de la apertura al pÃºblico.
   if(screen==="lista-espera")return <ListaEsperaApertura
@@ -1605,11 +1686,13 @@ export default function App() {
   if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
+    // Zarpi Liquidaciones resuelve sus pantallas (las del producto y las de su panel admin) en su propio router.
+    if (screen.startsWith("liq-")) return <LiquidacionesRouter screen={screen} sb={sb} idRuta={idModulo} navegar={navegarModulo} rol={userRole as UserRole} empresa={companyProfile?.nombre_empresa || ""} onSoporte={(referencia) => abrirSoporte(referencia, "liquidaciones")} />;
     if (IMPORTER_ROUTES.includes(screen)) return <ImporterPortalProvider value={{ quotes: importerQuotes, advisors: companyAdvisors, chats: chatConversations, companyProfile, companyName: companyProfile?.nombre_empresa || "", userRole, onSave: handleSaveCompanyProfile, onCreateAdvisor: handleCreateAdvisor, onSetAdvisorActive: handleSetAdvisorActive, openInternalChat, onRespond: id => { setSelectedQuoteId(id); goTo("create-response"); }, openChat, onAssignAdvisor: handleAssignAdvisorToQuote, proposalsByQuoteId: companyProposalsByQuoteId, onConfirmProposal: handleConfirmProposalAsCompany, onRechazada: refreshQuoteLists }}><ImporterRouter screen={screen} sb={sb} /></ImporterPortalProvider>;
     if (ADVISOR_ROUTES.includes(screen)) return <AdvisorPortalProvider value={{ available: visibleAvailableQuotes, quotes: advisorAssignedQuotes, headerUser: advisorHeaderUser, proposals: advisorProposalsByQuoteId, chats: chatConversations, availableCount: visibleAvailableQuotes.length, activeChatsCount: activeChatCount, onClaim: claimQuote, refresh: refreshQuoteLists, onRespond: id => { setSelectedQuoteId(id); goTo("create-response"); }, openChat, onOpenInternalChat: () => openInternalChat(), onRechazada: refreshQuoteLists }}><AdvisorRouter screen={screen} sb={sb} /></AdvisorPortalProvider>;
     if (isAdminScreen(screen)) return <AdminRouter screen={screen} sb={sb} onRefreshGlobal={refreshQuoteLists} />;
     if (screen === "help-support" && (userRole === "solicitante" || userRole === "importadora" || userRole === "asesor")) {
-      return <HelpSupportScreen sb={sb} role={userRole} onPedirSoporte={() => setSoporteAbierto(true)} />;
+      return <HelpSupportScreen sb={sb} role={userRole} onPedirSoporte={() => abrirSoporte()} />;
     }
     if (screen === "notifications") {
       return <NotificationsScreen notifications={notifications} onMark={markNotif} onOpen={openNotification} onBack={() => goTo(getHomeScreenForRole(userRole))} sb={sb} />;
@@ -1694,6 +1777,9 @@ export default function App() {
         open={soporteAbierto}
         onClose={()=>setSoporteAbierto(false)}
         onSubmit={handleOpenSupportTicket}
+        modulo={soporteContexto.modulo}
+        nombreModulo={moduloDe(soporteContexto.modulo as Producto).nombre}
+        referencia={soporteContexto.referencia}
       />
     </ProtectedRoute>
   );

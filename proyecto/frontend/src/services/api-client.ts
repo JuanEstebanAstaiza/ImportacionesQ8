@@ -261,10 +261,16 @@ function isProtectedPath(pathname: string): boolean {
     "/tendencias",
     "/catalogos",
     "/reto",
+    "/liquidaciones",
   ];
   // Excepciones públicas dentro de prefijos protegidos: el feed y la ficha de
   // Tendencias y la página del reto se ven sin sesión.
-  const publicPrefixes = ["/tendencias/feed", "/tendencias/items/", "/reto/rondas/abierta", "/reto/lista-espera"];
+  // También la vista previa de Liquidaciones en su landing y sus archivos, que
+  // el backend sirve sin sesión cuando el lote está publicado.
+  const publicPrefixes = [
+    "/tendencias/feed", "/tendencias/items/", "/reto/rondas/abierta", "/reto/lista-espera",
+    "/liquidaciones/publico/", "/liquidaciones/archivos/",
+  ];
   if (publicPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix))) {
     return false;
   }

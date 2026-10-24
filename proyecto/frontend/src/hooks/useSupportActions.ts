@@ -49,8 +49,11 @@ export function useSupportActions({ userRole, setMiembrosEquipo, reloadChatData,
     await businessService.rateSupportTicket(id, rating, comment);
     await reloadChatData();
   }, [reloadChatData]);
-  const handleOpenSupportTicket = useCallback(async (data: { asunto: string; urgencia: UrgenciaSoporte; mensaje: string }) => {
-    const ticket = await businessService.openSupportTicket({ asunto: data.asunto, urgencia: data.urgencia, mensaje: data.mensaje || undefined });
+  const handleOpenSupportTicket = useCallback(async (data: { asunto: string; urgencia: UrgenciaSoporte; mensaje: string; modulo?: string; referencia?: string }) => {
+    const ticket = await businessService.openSupportTicket({
+      asunto: data.asunto, urgencia: data.urgencia, mensaje: data.mensaje || undefined,
+      modulo: data.modulo, referencia: data.referencia,
+    });
     setSoporteAbierto(false);
     await reloadChatData();
     openChat(ticket.id);

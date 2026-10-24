@@ -565,6 +565,7 @@ class CambioModulos(BaseModel):
     cotizaciones_abiertas: Optional[bool] = None
     cobro_cotizaciones: Optional[bool] = None
     pago_manual_cursos: Optional[bool] = None
+    liquidaciones: Optional[bool] = None
 
 
 @router.get("/modulos")
@@ -1900,6 +1901,7 @@ async def listar_conversaciones_admin(
     db: Session = Depends(get_db),
     buscar: Optional[str] = Query(None, max_length=120, description="Filtra por nombre o email de solicitante/empresa"),
     importador_id: Optional[str] = Query(None, description="Solo conversaciones de esta empresa"),
+    modulo: Optional[str] = Query(None, description="Producto de la suite (importaciones, liquidaciones...)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(require_equipo),
@@ -1923,6 +1925,20 @@ async def listar_conversaciones_admin(
 
     if importador_id:
         query = query.filter(contraparte.importador_id == importador_id)
+
+    if modulo:
+        from services.modulos import MODULO_POR_DEFECTO
+        es_ticket = ConversacionChat.tipo == "soporte"
+        if modulo == MODULO_POR_DEFECTO:
+            # Negociación e internas son de Importaciones, y también los tickets
+            # anteriores a la suite (sin módulo).
+            query = query.filter(or_(
+                ~es_ticket,
+                ConversacionChat.modulo.is_(None),
+                ConversacionChat.modulo == MODULO_POR_DEFECTO,
+            ))
+        else:
+            query = query.filter(es_ticket, ConversacionChat.modulo == modulo)
 
     if buscar:
         patron = f"%{buscar.strip()}%"
@@ -1964,7 +1980,7 @@ async def listar_conversaciones_admin(
             solicitante_id=str(conversacion.solicitante_id) if conversacion.solicitante_id else None,
             solicitante_nombre=usuario_solicitante.nombre if usuario_solicitante else None,
             solicitante_email=usuario_solicitante.email if usuario_solicitante else None,
-            importador_usuario_id=str(conversacion.importador_usuario_id),
+            importador_usuario_id=str(conversacion.importador_usuario_id or ""),
             importador_usuario_nombre=usuario_empresa.nombre if usuario_empresa else None,
             importador_usuario_email=usuario_empresa.email if usuario_empresa else None,
             importador_id=str(empresa.id) if empresa else None,
@@ -1972,6 +1988,9 @@ async def listar_conversaciones_admin(
             total_mensajes=int(total_mensajes),
             ultimo_mensaje_texto=(ultimo.contenido[:280] if ultimo else None),
             ultimo_mensaje_fecha=(ultimo.fecha_envio if ultimo else None),
+            modulo=(conversacion.modulo or "importaciones") if conversacion.tipo == "soporte" else "importaciones",
+            asunto=conversacion.asunto,
+            referencia=conversacion.referencia,
         ))
 
     return ConversacionesAdminResponse(items=items, total=int(total), limit=limit, offset=offset)

@@ -6,7 +6,7 @@ export type BadgeVariant =
   | "resp-nueva" | "resp-vista" | "resp-aceptada" | "resp-rechazada" 
   | "info" | "warning" | "success";
 
-export type BtnVariant = "primary" | "secondary" | "danger" | "ghost";
+export type BtnVariant = "primary" | "secondary" | "danger" | "ghost" | "acento";
 
 export type BtnSize = "sm" | "md" | "lg";
 

@@ -19,7 +19,7 @@ MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", str(2 * 1024 * 1024)))
 # de ruta para no relajar el resto de la API.
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(300 * 1024 * 1024)))
 
-PREFIJOS_DE_SUBIDA = ("/documentos/archivos/upload",)
+PREFIJOS_DE_SUBIDA = ("/documentos/archivos/upload", "/liquidaciones/archivos/")
 
 # Restaurar una copia desde el panel sube el ZIP entero (base de datos +
 # archivos), que puede superar con creces el tope de un vídeo.

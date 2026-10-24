@@ -135,6 +135,9 @@ export function Button({
       "bg-muted text-foreground border border-border hover:bg-accent hover:text-accent-foreground hover:border-accent active:bg-accent active:text-accent-foreground shadow-sm",
     danger: "bg-destructive text-white hover:bg-red-700 shadow-sm",
     ghost: "text-muted-foreground hover:text-foreground hover:bg-muted",
+    // Acción principal en verde ácido (Zarpi Liquidaciones). Va como variante y no
+    // como `className` porque `clsx` no resuelve el choque con el fondo de otra variante.
+    acento: "bg-accent text-black hover:brightness-95 active:brightness-90 shadow-sm",
   };
 
   const sizes = {

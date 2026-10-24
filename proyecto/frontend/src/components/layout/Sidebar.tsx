@@ -4,8 +4,10 @@ import { clsx } from "clsx";
 
 import type { SidebarCtrl } from "@/types/portal";
 import { useBrandTheme } from "@/hooks/useBrandTheme";
+import { gruposAdminDeModulos } from "@/config/suite";
+import { SelectorProducto } from "@/components/layout/SelectorProducto";
 
-export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
+export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo,productos,producto,onProducto}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
@@ -19,7 +21,10 @@ export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoport
     {key:"contenido",label:"Contenido",icon:Layers,items:["admin-landing","admin-tendencias","admin-tendencias-aprobacion","diseno","admin-reto"]},
     {key:"finanzas",label:"Suscripciones",icon:WalletCards,items:["admin-pagos","admin-planes","admin-cursos","admin-cursos-accesos"]},
     {key:"configuracion",label:"Configuración",icon:ToggleRight,items:["admin-certificaciones","admin-respaldos","admin-tipografia","admin-modulos"]},
-  ] as const;
+    // Un grupo por cada módulo de la suite (config/suite.ts): el panel admin es
+    // uno solo para todos. Un módulo apagado no aporta entradas y su grupo no se pinta.
+    ...gruposAdminDeModulos(),
+  ] as {key:string;label:string;icon:typeof Building2;items:readonly string[]}[];
 
   useEffect(()=>{
     if(!isAdminNavigation)return;
@@ -43,8 +48,8 @@ export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoport
           ? "absolute top-0 left-0 z-50 shadow-2xl shadow-black/10 w-52"
           : pinned ? "w-full" : "w-14"
       )}>
-        <div className={clsx("flex items-center h-[57px] border-b border-sidebar-border",isExpanded?"px-4":"justify-center px-0")}>
-          <img src={dark ? (isExpanded ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-isotipo-acid.svg") : (isExpanded ? "/brand/zarpi-wordmark.svg" : "/brand/zarpi-isotipo.svg")} alt="Zarpi" className={clsx("object-contain object-left transition-all duration-200",isExpanded?"h-8 w-28":"h-8 w-8")} />
+        <div className={clsx("flex items-center h-[57px] border-b border-sidebar-border",isExpanded?"px-2.5":"justify-center px-0")}>
+          <SelectorProducto dark={dark} expandido={isExpanded} productos={productos??[]} producto={producto} onProducto={onProducto}/>
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1 overflow-y-auto">

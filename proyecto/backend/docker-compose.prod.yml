@@ -5,7 +5,7 @@
 # Cambios respecto a desarrollo:
 # - El frontend deja de ser el servidor de Vite: se compila y lo sirve Caddy,
 #   que es también el único servicio con puertos públicos (80/443, HTTPS).
-# - Backend, MySQL y Redis no publican puertos: solo se alcanzan por la red
+# - Backend, MySQL, Redis y Mongo no publican puertos: solo se alcanzan por la red
 #   interna de Docker (Docker se salta ufw en los puertos que publica).
 # - APP_ENV=production y uvicorn confía en X-Forwarded-For de Caddy.
 # `!reset` necesita Docker Compose >= 2.24 (el que instala get.docker.com lo es).
@@ -16,6 +16,10 @@ services:
     ports: !reset []
 
   redis:
+    restart: always
+    ports: !reset []
+
+  mongo:
     restart: always
     ports: !reset []
 

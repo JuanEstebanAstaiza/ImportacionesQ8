@@ -44,6 +44,10 @@ export interface ChatConv {
   counterpartPhotoUrl?: string;
   subject?: string;
   urgency?: string;
+  /** Producto de la suite del que viene un ticket de soporte (importaciones, liquidaciones...). */
+  modulo?: string;
+  /** Sobre qué se pidió ayuda, si se abrió desde algo concreto («operacion:<id>»). */
+  referencia?: string;
   requesterRole?: string;
   closed?: boolean;
   resolution?: string;

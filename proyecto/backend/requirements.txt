@@ -10,6 +10,8 @@ PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 redis==5.0.1
+# Base del módulo Liquidaciones (MongoDB + GridFS)
+pymongo==4.8.0
 slowapi==0.1.9
 bcrypt==4.0.1
 

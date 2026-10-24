@@ -33,7 +33,7 @@ export function useChatManager(importers: Importer[] = [], userId?: string) {
         counterpartName: row.contraparte_nombre ?? undefined, counterpartId: row.contraparte_id ?? undefined,
         counterpartRole: row.contraparte_rol ?? undefined, counterpartCompany: row.contraparte_empresa ?? undefined,
         counterpartPhotoUrl: row.contraparte_foto_url ?? undefined, subject: row.asunto ?? undefined,
-        urgency: row.urgencia ?? undefined, requesterRole: row.solicitante_rol ?? undefined, closed: row.cerrada ?? false,
+        urgency: row.urgencia ?? undefined, modulo: row.modulo ?? undefined, referencia: row.referencia ?? undefined, requesterRole: row.solicitante_rol ?? undefined, closed: row.cerrada ?? false,
         resolution: row.resolucion ?? undefined, closedBy: row.cerrada_por_nombre ?? undefined, level: row.nivel ?? undefined,
         agentId: row.agente_asignado_id ?? undefined, agentName: row.agente_nombre ?? undefined, agentLevel: row.agente_nivel ?? undefined,
         rating: row.calificacion ?? undefined, ratingComment: row.comentario_calificacion ?? undefined, importerId,

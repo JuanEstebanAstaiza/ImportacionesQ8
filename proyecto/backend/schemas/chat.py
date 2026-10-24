@@ -78,6 +78,8 @@ class ConversacionChatResponse(BaseModel):
     # Solo en los tickets de soporte.
     asunto: Optional[str] = None
     urgencia: Optional[str] = None
+    modulo: Optional[str] = None
+    referencia: Optional[str] = None
     # Rol de quien abrió el ticket, para que soporte sepa a quién atiende.
     solicitante_rol: Optional[str] = None
     # Mensajes posteriores a la última lectura de quien consulta.
@@ -127,6 +129,9 @@ class AbrirSoporteRequest(BaseModel):
     asunto: str = Field(..., min_length=5, max_length=160)
     urgencia: Literal["critica", "alta", "media", "baja"] = "media"
     mensaje: Optional[str] = Field(None, max_length=2000)
+    # Producto de la suite desde el que se pide ayuda y, opcionalmente, sobre qué.
+    modulo: Literal["importaciones", "liquidaciones"] = "importaciones"
+    referencia: Optional[str] = Field(None, max_length=80, pattern=r"^[a-z_]+:[A-Za-z0-9-]+$")
 
 
 class IniciarChatInternoRequest(BaseModel):

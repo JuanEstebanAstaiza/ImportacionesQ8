@@ -74,7 +74,22 @@ export type Screen =
   | "admin-cursos-accesos"
   | "admin-presentaciones"
   | "admin-cursos"
-  | "admin-tipografia";
+  | "admin-tipografia"
+  // Zarpi Liquidaciones (pantallas del módulo y de su panel en el admin)
+  | "liq-landing"
+  | "liq-catalogo"
+  | "liq-lote"
+  | "liq-activar"
+  | "liq-reservas"
+  | "liq-mis-lotes"
+  | "liq-publicar"
+  | "liq-operaciones"
+  | "liq-revision"
+  | "liq-admin-resumen"
+  | "liq-admin-lotes"
+  | "liq-admin-operaciones"
+  | "liq-admin-cuentas"
+  | "liq-admin-config";
 
 export type AdminTab =
   | "metricas"
@@ -111,7 +126,7 @@ export function adminTabFromPath(pathname: string): AdminTab | null {
 }
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
-export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia";
+export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia" | "lote" | "operacion";
 
 export interface Ruta {
   screen: Screen;
@@ -212,9 +227,40 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-correos", path: "/admin/correos" },
   { screen: "admin-tipografia", path: "/admin/tipografia" },
   { screen: "admin-reto", path: "/admin/reto" },
+
+  // Zarpi Liquidaciones. La landing es pública; el resto usa la misma sesión de Zarpi.
+  { screen: "liq-landing", path: "/liquidaciones" },
+  { screen: "liq-catalogo", path: "/liquidaciones/lotes" },
+  { screen: "liq-lote", path: "/liquidaciones/lotes", param: "lote" },
+  { screen: "liq-activar", path: "/liquidaciones/activar" },
+  { screen: "liq-reservas", path: "/liquidaciones/reservas" },
+  { screen: "liq-reservas", path: "/liquidaciones/reservas", param: "operacion" },
+  { screen: "liq-mis-lotes", path: "/liquidaciones/mis-lotes" },
+  { screen: "liq-publicar", path: "/liquidaciones/publicar" },
+  { screen: "liq-publicar", path: "/liquidaciones/publicar", param: "lote" },
+  { screen: "liq-operaciones", path: "/liquidaciones/operaciones" },
+  { screen: "liq-operaciones", path: "/liquidaciones/operaciones", param: "operacion" },
+  // Su administración vive en el panel admin de siempre.
+  { screen: "liq-admin-resumen", path: "/admin/liquidaciones" },
+  { screen: "liq-revision", path: "/admin/liquidaciones/revision" },
+  { screen: "liq-admin-lotes", path: "/admin/liquidaciones/lotes" },
+  { screen: "liq-admin-operaciones", path: "/admin/liquidaciones/operaciones" },
+  { screen: "liq-admin-operaciones", path: "/admin/liquidaciones/operaciones", param: "operacion" },
+  { screen: "liq-admin-cuentas", path: "/admin/liquidaciones/cuentas" },
+  { screen: "liq-admin-config", path: "/admin/liquidaciones/configuracion" },
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";
+
+/**
+ * Lleva a una dirección de la app desde un componente que no recibe `goTo`
+ * (p. ej. una tarjeta del panel admin que enlaza al panel de un módulo). App.tsx
+ * escucha `popstate` y pinta la pantalla de esa dirección.
+ */
+export function irARuta(pathname: string): void {
+  window.history.pushState({}, "", pathname);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 const PANTALLAS = new Set<string>(RUTAS.map((r) => r.screen));
 

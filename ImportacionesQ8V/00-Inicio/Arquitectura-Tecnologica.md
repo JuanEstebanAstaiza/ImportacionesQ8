@@ -9,7 +9,7 @@ Resumen del stack de Zarpi y dónde está documentada cada pieza.
 | Capa | Tecnología |
 |------|------------|
 | API | FastAPI (Python 3.11), Uvicorn |
-| Datos | MySQL 8 + SQLAlchemy 2 + Alembic |
+| Datos | MySQL 8 + SQLAlchemy 2 + Alembic (plataforma: usuarios, Importaciones). Cada módulo nuevo de la suite tiene base aparte: **MongoDB 7** + GridFS para Zarpi Liquidaciones (ver [[31-Liquidaciones]]) |
 | Cache / realtime | Redis 7 (matching y cupo de abiertas, pub/sub de chat y notificaciones, rate limits, modo mantenimiento) |
 | Auth | JWT (PyJWT) + OTP email + blacklist `jti` |
 | Pagos | Wompi (simulado mientras no haya llaves reales; el solicitante no paga por cotizar) |
@@ -17,7 +17,7 @@ Resumen del stack de Zarpi y dónde está documentada cada pieza.
 | Tiempo real | WebSocket para el chat (ticket de un solo uso) y SSE para notificaciones (ticket) |
 | Frontend | Vite + React + Tailwind (`proyecto/frontend/`), marca Zarpi, modo claro/oscuro |
 | Producción | Docker Compose + **Caddy** (HTTPS automático con Let's Encrypt, `/api` hacia el backend) en un droplet de DigitalOcean |
-| Operación | `/health` y `/health/ready`, scripts de diagnóstico, backups (ZIP portable, `mysqldump`, Redis) y restauración desde el panel |
+| Operación | `/health` y `/health/ready`, scripts de diagnóstico, backups (ZIP portable, `mysqldump`, Redis, `mongodump`) y restauración desde el panel |
 
 ## Dónde profundizar
 
@@ -43,6 +43,7 @@ flowchart LR
   C -->|/api REST JWT · WS · SSE| API[FastAPI]
   API --> DB[(MySQL)]
   API --> R[(Redis)]
+  API --> M[(MongoDB · módulos de la suite)]
   API -->|webhook| W[Wompi]
   API -->|SMTP| M[Email OTP]
 ```

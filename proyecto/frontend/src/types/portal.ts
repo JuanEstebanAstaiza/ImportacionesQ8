@@ -73,6 +73,13 @@ export interface SidebarCtrl {
   showCanalEquipo?: boolean;
   profileSubtitle?: string;
   profilePhotoUrl?: string | null;
+  /**
+   * Productos de la suite a los que entra esta cuenta (ver config/suite.ts) y el
+   * que se está usando. Con más de uno, el logo del sidebar es el selector.
+   */
+  productos?: { clave: string; nombre: string; descripcion: string }[];
+  producto?: string;
+  onProducto?: (clave: string) => void;
   onLogout?: () => void;
   onProfile?: () => void;
 }

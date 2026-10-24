@@ -3,6 +3,9 @@ import type { RefObject } from "react";
 import { MessageSquare, Search, Shield, Users } from "lucide-react";
 import type { AdminAgenteSoporte, AdminConversacion, AdminDisputa, AdminMensaje } from "@/services/admin.service";
 import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
+import { OperacionesAdmin } from "@/features/liquidaciones/admin/OperacionesAdmin";
+import { usePlatformConfig } from "@/hooks/usePlatformConfig";
+import { modulosActivos, type Producto } from "@/config/suite";
 
 const CONVERSACIONES_POR_PAGINA = 25;
 function formatDate(value: string): string {
@@ -36,6 +39,12 @@ export interface AdminSoporteTabProps {
 export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversationsTotal, conversationSearch, onSearchChange, conversationPage, supportTeam, disputes, openConversation, conversationMessages, isLoadingMessages, isSendingReply, onOpenConversation, onChangeAgentLevel, onResolveDispute, onCloseConversation, onSendReply, onPreviousPage, onNextPage }: AdminSoporteTabProps) {
   const [supportReply, setSupportReply] = useState("");
   const [disputeResolution, setDisputeResolution] = useState("");
+  // Supervisión de chats de toda la suite: cada producto guarda sus chats en su
+  // propia base, así que el selector cambia de fuente sin cambiar la vista.
+  const { config } = usePlatformConfig();
+  const productos = modulosActivos(config);
+  const [producto, setProducto] = useState<Producto>("importaciones");
+  const [operacionLiquidaciones, setOperacionLiquidaciones] = useState<string | null>(null);
   return (
     <section ref={sectionRef} className="space-y-4 scroll-mt-6">      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-4 shadow-sm">
         <div>
@@ -188,6 +197,28 @@ export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversati
         )}
       </div>
 
+      {productos.length > 1 && (
+        <div className="inline-flex rounded-lg border border-border bg-white p-0.5 shadow-sm" role="tablist" aria-label="Producto">
+          {productos.map((m) => (
+            <button
+              key={m.clave}
+              type="button"
+              role="tab"
+              aria-selected={producto === m.clave}
+              onClick={() => setProducto(m.clave)}
+              className={producto === m.clave
+                ? "rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white dark:bg-accent dark:text-black"
+                : "rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"}
+            >
+              Chats de {m.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {producto === "liquidaciones" ? (
+        <OperacionesAdmin operacionId={operacionLiquidaciones ?? undefined} onAbrir={setOperacionLiquidaciones} />
+      ) : (
       <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
         <div className="mb-4 flex items-center gap-2">
           <div className="relative flex-1">
@@ -305,7 +336,9 @@ export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversati
             </div>
           </div>
         ) : null}
-      </div>    </section>
+      </div>
+      )}
+    </section>
   );
 }
 
