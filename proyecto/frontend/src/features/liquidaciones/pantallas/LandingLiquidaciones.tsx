@@ -163,22 +163,22 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ENCABEZADO */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-[1100px] items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex flex-shrink-0 items-center gap-2.5">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/70 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-9xl items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex flex-shrink-0 items-center gap-3">
             <button
               type="button"
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               aria-label="Zarpi Liquidaciones: volver arriba"
               className="flex items-center gap-2.5"
             >
-              <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-7 w-24 object-contain object-left" />
+              <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-8 w-28 object-contain object-left" />
               <span className="border-l border-border pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground md:hidden">Liquidaciones</span>
             </button>
             <SelectorPlataforma actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="hidden md:flex" />
           </div>
 
-          <nav aria-label="Secciones" className="hidden items-center gap-1 lg:flex">
+          <nav aria-label="Secciones" className="hidden items-center gap-1 min-[1400px]:flex">
             {SECCIONES.map((s) => (
               <button
                 key={s.id}
@@ -208,7 +208,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
               onClick={() => setMenuAbierto((v) => !v)}
               aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={menuAbierto}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary dark:hover:text-accent min-[1400px]:hidden"
             >
               {menuAbierto ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
@@ -216,7 +216,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
         </div>
 
         {menuAbierto && (
-          <div className="border-t border-border bg-background px-4 pb-4 pt-2 lg:hidden">
+          <div className="border-t border-border/50 px-4 pb-4 pt-2 backdrop-blur-md min-[1400px]:hidden">
             <SelectorPlataforma actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="mb-2 mt-1 flex w-fit md:hidden" />
             <nav aria-label="Secciones" className="flex flex-col">
               {SECCIONES.map((s) => (
@@ -224,7 +224,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
                   key={s.id}
                   type="button"
                   onClick={() => irASeccion(s.id)}
-                  className="rounded-lg px-2 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                  className="rounded-lg px-2 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-accent/10 dark:hover:text-accent"
                 >
                   {s.label}
                 </button>
