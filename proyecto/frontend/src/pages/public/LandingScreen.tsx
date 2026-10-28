@@ -8,7 +8,7 @@ import { clsx } from "clsx";
 import { DynamicAccentText } from "@/features/landing/components/DynamicAccentText";
 import { Button, Card, Input, Logo, Textarea } from "@/components/design-system";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
-import { SelectorPlataforma } from "@/components/navigation/SelectorPlataforma";
+import { SuiteWheelSwitcher } from "@/components/navigation/SuiteWheelSwitcher";
 import { CarruselVideos } from "@/components/media/CarruselVideos";
 import { EMPRESA } from "@/features/legal/empresa";
 import type { LegalPage } from "@/features/legal/types";
@@ -80,7 +80,7 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
         <div className="mx-auto flex h-16 w-full max-w-9xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
-            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:flex"/>
+                        <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:inline-flex"/>
           </div>
           <nav className="hidden min-[1400px]:flex items-center gap-1">
             {LANDING_TABS.map(section=>{
@@ -119,7 +119,7 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
         </div>
         {menuAbierto && (
           <div className="border-t border-border/50 bg-white/10 px-4 pb-4 pt-2 backdrop-blur-md dark:bg-black/10 min-[1400px]:hidden">
-            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="mb-2 mt-1 flex w-fit md:hidden" />
+                      <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="mb-2 mt-1 inline-flex md:hidden" />
             <nav aria-label="Secciones" className="flex flex-col">
               {LANDING_TABS.map((section) => {
                 const action=section.key==="planes"
@@ -320,7 +320,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
         <div className="max-w-9xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Logo/>
-            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:flex"/>
+            <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:inline-flex"/>
           </div>
           {/* Con el selector de plataforma, las pestañas caben en línea solo en pantallas muy anchas. */}
           <div className="hidden min-[1400px]:flex items-center gap-1">{menu}</div>
@@ -352,7 +352,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
         </div>
         {menuAbierto && (
           <div className="border-t border-border/50 px-4 pb-4 pt-2 backdrop-blur-md min-[1400px]:hidden">
-            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="mb-2 mt-1 flex w-fit md:hidden" />
+                      <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="mb-2 mt-1 inline-flex md:hidden" />
             <nav aria-label="Secciones" className="flex flex-col">
               {LANDING_TABS.map((section) => (
                 <button

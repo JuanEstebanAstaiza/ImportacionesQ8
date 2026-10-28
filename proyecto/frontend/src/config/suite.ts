@@ -96,6 +96,49 @@ export const LIQUIDACIONES: ModuloSuite = {
 
 export const MODULOS_SUITE: ModuloSuite[] = [IMPORTACIONES, LIQUIDACIONES];
 
+/** Iconos disponibles para las apps del selector radial (mapa en SuiteWheelSwitcher). */
+export type IconoApp = "package" | "tag" | "shopping-bag" | "factory";
+
+/**
+ * App de la suite tal como aparece en el selector radial (wheel). Es la vitrina:
+ * incluye las apps reales (`active`, con `producto` y `screen`) y las previstas
+ * ("Próximamente"), que se ven en la rueda pero no se pueden abrir. Para añadir
+ * una app: una entrada aquí (y su icono en IconoApp si es nuevo).
+ */
+export interface AppSuite {
+  id: string;
+  name: string;
+  shortName: string;
+  icon: IconoApp;
+  badge: string;
+  /** Hex para el acento del nodo y el color de la onda de transición. */
+  accentColor: string;
+  active: boolean;
+  /** Producto del registro MODULOS_SUITE al que entra; solo en apps activas. */
+  producto?: Producto;
+  /** Pantalla de aterrizaje (src/app/rutas.ts); solo en apps activas. */
+  screen?: Screen;
+}
+
+export const APPS_SUITE: AppSuite[] = [
+  {
+    id: "importaciones", name: "Zarpi Importaciones", shortName: "Importaciones", icon: "package",
+    badge: "Core", accentColor: "#4F06EB", active: true, producto: "importaciones", screen: "landing",
+  },
+  {
+    id: "liquidaciones", name: "Zarpi Liquidaciones", shortName: "Liquidaciones", icon: "tag",
+    badge: "Lotes a precio fijo", accentColor: "#EDF953", active: true, producto: "liquidaciones", screen: "liq-landing",
+  },
+  {
+    id: "marketplace", name: "Zarpi Marketplace", shortName: "Marketplace", icon: "shopping-bag",
+    badge: "Próximamente", accentColor: "#3A86FF", active: false,
+  },
+  {
+    id: "maquilas", name: "Zarpi Maquilas", shortName: "Maquilas", icon: "factory",
+    badge: "Próximamente", accentColor: "#10B981", active: false,
+  },
+];
+
 export function moduloActivo(modulo: ModuloSuite, config: PlatformConfig): boolean {
   return modulo.flag === null || Boolean(config[modulo.flag]);
 }

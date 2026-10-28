@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/design-system";
-import { SelectorPlataforma } from "@/components/navigation/SelectorPlataforma";
+import { SuiteWheelSwitcher } from "@/components/navigation/SuiteWheelSwitcher";
 import { useBrandTheme } from "@/hooks/useBrandTheme";
 import type { LegalPage } from "@/features/legal/types";
 import { FotoVacia } from "@/features/liquidaciones/componentes/MediosLote";
@@ -175,7 +175,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
               <img src={dark ? "/brand/zarpi-wordmark-acid.svg" : "/brand/zarpi-wordmark.svg"} alt="Zarpi" className="h-8 w-28 object-contain object-left" />
               <span className="border-l border-border pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground md:hidden">Liquidaciones</span>
             </button>
-            <SelectorPlataforma actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="hidden md:flex" />
+            <SuiteWheelSwitcher actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="hidden md:inline-flex" />
           </div>
 
           <nav aria-label="Secciones" className="hidden items-center gap-1 min-[1400px]:flex">
@@ -217,7 +217,7 @@ export function LandingLiquidaciones({ autenticado, onIniciarSesion, onCrearCuen
 
         {menuAbierto && (
           <div className="border-t border-border/50 px-4 pb-4 pt-2 backdrop-blur-md min-[1400px]:hidden">
-            <SelectorPlataforma actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="mb-2 mt-1 flex w-fit md:hidden" />
+            <SuiteWheelSwitcher actual="liquidaciones" destinos={{ importaciones: onIrAImportaciones }} className="mb-2 mt-1 inline-flex md:hidden" />
             <nav aria-label="Secciones" className="flex flex-col">
               {SECCIONES.map((s) => (
                 <button

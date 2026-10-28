@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, HelpCircle, Info, MessageCircle, Moon, Sun, WalletCards } from "lucide-react";
 
 import { Avatar, NotifIcon } from "@/components/design-system";
+import { SuiteWheelSwitcher } from "@/components/navigation/SuiteWheelSwitcher";
 import { useAuth } from "@/hooks/useAuth";
 import type { SidebarCtrl } from "@/types/portal";
 import { resolveApiUrl } from "@/services/api-client";
@@ -55,7 +56,13 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
   return (
     <header className="h-[57px] flex items-center justify-between px-5 bg-white border-b border-border flex-shrink-0 relative">
       {/* LADO IZQUIERDO: BADGE Y POPOVER DE CRÉDITOS */}
-      <div className="flex items-center">
+      <div className="flex items-center gap-3">
+        {sb?.onProducto && sb.productos && sb.productos.length > 1 && sb.producto && (
+          <SuiteWheelSwitcher
+            actual={sb.producto}
+            destinos={Object.fromEntries(sb.productos.map(({ clave }) => [clave, () => sb.onProducto?.(clave)]))}
+          />
+        )}
         {authUser?.rol === "solicitante" && (
           <div className="relative" ref={creditosRef}>
             <button
