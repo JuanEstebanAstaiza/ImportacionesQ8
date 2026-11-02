@@ -8,20 +8,20 @@ import { SidebarCtrl } from "@/types/portal";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { Badge, Button, Card, Input, Select } from "@/components/design-system";
-import { Modal } from "@/components/ui/Modal";
+import { Badge, Button, Card, Input, Select } from "@shared/ui/design-system";
+import { Modal } from "@shared/ui/kit/Modal";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 
 import { businessService, type BackendPropuesta, type MotivoEleccion } from "@/services/business.service";
 
-import { leerPropuesta, pesos as pesosCop } from "@/features/propuestas/calculo";
+import { leerPropuesta, pesos as pesosCop } from "@apps/importaciones/features/propuestas/calculo";
 
-import { TierBadge } from "@/features/cotizante/TierBadge";
+import { TierBadge } from "@apps/importaciones/features/cotizante/TierBadge";
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
 import type { QuoteResponse } from "@/types/response";
 import { cantidadConUnidad } from "@/utils/formatos";
 

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Archive, ArchiveRestore, Loader2, Pencil, Plus, Save, Tags, X } from "lucide-react";
 
-import { TierBadge } from "@/features/cotizante/TierBadge";
+import { TierBadge } from "@apps/importaciones/features/cotizante/TierBadge";
 import { adminService, type CategoriaCotizante } from "@/services/admin.service";
 
 /**

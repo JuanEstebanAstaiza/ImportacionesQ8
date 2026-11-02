@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import type { Screen } from "@/app/rutas";
 import type { SidebarCtrl } from "@/types/portal";
 import { ImporterDashboard } from "./ImporterDashboard";
-import { ImporterCompanyProfileScreen } from "@/features/importador/components/tabs/ImporterCompanyProfileScreen";
-import { ImporterAdvisorsScreen } from "@/features/importador/components/tabs/ImporterAdvisorsScreen";
-import { ImporterQuotesScreen } from "@/features/importador/components/tabs/ImporterQuotesScreen";
-import { PantallaPortal } from "@/components/layout/PantallaPortal";
-import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
+import { ImporterCompanyProfileScreen } from "@apps/importaciones/features/importador/components/tabs/ImporterCompanyProfileScreen";
+import { ImporterAdvisorsScreen } from "@apps/importaciones/features/importador/components/tabs/ImporterAdvisorsScreen";
+import { ImporterQuotesScreen } from "@apps/importaciones/features/importador/components/tabs/ImporterQuotesScreen";
+import { PantallaPortal } from "@shared/layout/PantallaPortal";
+import { CatalogosEmpresa } from "@apps/importaciones/features/catalogos/CatalogosEmpresa";
 import { useImporterPortal } from "@/app/contexts/ImporterPortalContext";
 
 export type ImporterRouterProps = { screen: Screen; sb: SidebarCtrl; quotes: any[]; advisors: any[]; chats: any[]; companyProfile: any; companyName: string; userRole: any; onSave: any; onCreateAdvisor: any; onSetAdvisorActive: any; openInternalChat: any; onRespond: any; openChat: any; onAssignAdvisor: any; proposalsByQuoteId: any; onConfirmProposal: any; onRechazada: any };

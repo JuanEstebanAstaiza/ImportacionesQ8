@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { SidebarCtrl } from "@/types/portal";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 
 export const ADMIN_SECTION_BY_SCREEN = {

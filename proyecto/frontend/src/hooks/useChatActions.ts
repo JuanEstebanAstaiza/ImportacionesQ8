@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { businessService } from "@/services/business.service";
-import { mapBackendChatMessage } from "@/features/chat/mappers";
+import { mapBackendChatMessage } from "@shared/chat/mappers";
 import type { DomainActionOptions } from "./useDomainActionTypes";
 
 type ChatOptions = Pick<DomainActionOptions, "currentUserProfile" | "setActiveChatId" | "markConversationRead" | "setChatMessagesByConversation" | "reloadChatData" | "reloadDocumentExplorer" | "documentCurrentFolderRef" | "openChat">;

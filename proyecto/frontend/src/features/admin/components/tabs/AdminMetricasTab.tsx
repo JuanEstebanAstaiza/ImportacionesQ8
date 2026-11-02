@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Building2, Shield, Users } from "lucide-react";
 import { adminService, type AdminCotizacionAbierta, type AdminMetricas } from "@/services/admin.service";
 import { irARuta } from "@/app/rutas";
-import { TarjetasMetricasLiquidaciones } from "@/features/liquidaciones/admin/ResumenLiquidaciones";
+import { TarjetasMetricasLiquidaciones } from "@apps/liquidaciones";
 
 function formatDate(value: string): string {
   const date = new Date(value);

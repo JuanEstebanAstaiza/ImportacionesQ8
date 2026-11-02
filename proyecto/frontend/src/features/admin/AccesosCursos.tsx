@@ -15,7 +15,7 @@ import {
   CLASE_INPUT,
   fechaCorta,
   mensajeError,
-} from "../tendencias/AprobacionComun";
+} from "@apps/importaciones/features/tendencias/AprobacionComun";
 
 /**
  * Accesos a cursos: mientras no hay pasarela, el equipo da (o quita) el acceso

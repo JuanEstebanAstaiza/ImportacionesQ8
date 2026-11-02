@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { Screen } from "@/app/rutas";
 import type { SidebarCtrl } from "@/types/portal";
 import { DashboardScreen } from "./BuyerDashboard";
-import { ImporterProfileScreen } from "@/features/importador/components/ImporterProfileScreen";
+import { ImporterProfileScreen } from "@apps/importaciones/features/importador/components/ImporterProfileScreen";
 import { QuotesScreen } from "@/features/buyer/components/tabs/QuotesScreen";
 import { QuoteDetailScreen } from "@/features/buyer/components/tabs/QuoteDetailScreen";
 import { ResponseDetailScreen } from "@/features/buyer/components/tabs/ResponseDetailScreen";
@@ -10,8 +10,8 @@ import { ResponsesScreen } from "@/features/buyer/components/tabs/ResponsesScree
 import { OrdersScreen } from "@/features/buyer/components/tabs/OrdersScreen";
 import { OrderDetailScreen } from "@/features/buyer/components/tabs/OrderDetailScreen";
 import { NewQuoteScreen, type QuoteFormState, type OrigenSolicitud } from "@/features/buyer/components/tabs/NewQuoteScreen";
-import { PantallaPortal } from "@/components/layout/PantallaPortal";
-import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
+import { PantallaPortal } from "@shared/layout/PantallaPortal";
+import { CatalogosComprador } from "@apps/importaciones/features/catalogos/CatalogosComprador";
 import { useBuyerPortal } from "@/app/contexts/BuyerPortalContext";
 
 export type BuyerRouterProps = {

@@ -67,4 +67,4 @@ export interface ChatConv {
   advisorColor?: string;
   atiendeNombre?: string;
 }
-import type { PropuestaEnMensaje } from "@/features/propuestas/TarjetaPropuestaChat";
+import type { PropuestaEnMensaje } from "@apps/importaciones/features/propuestas/TarjetaPropuestaChat";

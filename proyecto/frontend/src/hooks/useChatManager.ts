@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import type { BackendChatAttachmentItem, BackendMiembroEquipo } from "@/services/business.service";
 import type { ChatConv, ChatMsg } from "@/types/chat";
 import { businessService, type BackendCotizacion } from "@/services/business.service";
-import { mapBackendChatMessage } from "@/features/chat/mappers";
+import { mapBackendChatMessage } from "@shared/chat/mappers";
 import { formatShortDate } from "@/utils/format";
 import type { Importer } from "@/types/importer";
 

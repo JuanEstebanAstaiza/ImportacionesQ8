@@ -2,7 +2,7 @@ import { Award, BadgeCheck, Clock, MapPin, Package2, Plus, Shield } from "lucide
 import { clsx } from "clsx";
 import type { Importer } from "@/types/importer";
 import { resolveApiUrl } from "@/services/api-client";
-import { Avatar, Button } from "@/components/design-system";
+import { Avatar, Button } from "@shared/ui/design-system";
 
 export function ImporterCard({
   imp,
@@ -17,7 +17,7 @@ export function ImporterCard({
 }) {
   const desc =
     imp.description ||
-    "Esta empresa aún no ha publicado su descripción.";
+    "Esta empresa aï¿½n no ha publicado su descripciï¿½n.";
 
   const certs =
     imp.certs && imp.certs.length > 0
@@ -58,8 +58,8 @@ export function ImporterCard({
             )}
           </div>
 
-          {/* El logo se apoya sobre el banner y es la única marca visual de la
-              empresa en el catálogo: a 40 px no se distinguía una de otra. */}
+          {/* El logo se apoya sobre el banner y es la ï¿½nica marca visual de la
+              empresa en el catï¿½logo: a 40 px no se distinguï¿½a una de otra. */}
           <div className="absolute -bottom-7 left-3 w-16 h-16 rounded-xl ring-2 ring-white overflow-hidden bg-white border border-border flex items-center justify-center">
             {logoUrl ? (
               <img

@@ -3,7 +3,7 @@ import { ShoppingCart, ExternalLink } from "lucide-react";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { Avatar, Badge, Button, Card } from "@/components/design-system";
+import { Avatar, Badge, Button, Card } from "@shared/ui/design-system";
 import { resolveApiUrl } from "@/services/api-client";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
@@ -24,8 +24,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
 
 export function OrdersScreen({onViewOrder,sb,orders,importers}:{onViewOrder:(id:string)=>void;sb:SidebarCtrl;orders:Order[];importers:Importer[]}) {
   return (

@@ -1,6 +1,6 @@
 import { BadgeCheck, Globe2, Handshake, Store, Truck } from "lucide-react";
 
-import { LandingApp, type ContenidoLandingApp, type PropsLandingApp } from "@/components/landing/LandingApp";
+import { LandingApp, type ContenidoLandingApp, type PropsLandingApp } from "@shared/landing/LandingApp";
 
 const CONTENIDO: ContenidoLandingApp = {
   appId: "marketplace",

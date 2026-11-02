@@ -8,17 +8,17 @@ import { SidebarCtrl } from "@/types/portal";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
+import { ModalRechazoCotizacion } from "@apps/importaciones/features/importador/RechazarCotizacion";
 import { AdvisorQuoteDetailModal } from "@/features/advisor/components/tabs/AdvisorQuoteDetailModal";
 
-import { Button, Card } from "@/components/design-system";
+import { Button, Card } from "@shared/ui/design-system";
 import { puedeRechazarse } from "@/utils/quotes";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader } from "@shared/layout/AppHeader";
 
 export function AdvisorAvailableScreen({sb,available,onClaim,onDiscard,headerUser}:{sb:SidebarCtrl;available:Quote[];onClaim:(id:string)=>Promise<void>;onDiscard:(quote:Quote)=>Promise<void>;headerUser:{name:string;company:string;initials:string}}) {
   const [claimingId,setClaimingId]=useState<string|null>(null);

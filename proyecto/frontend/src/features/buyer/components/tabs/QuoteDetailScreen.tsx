@@ -4,7 +4,7 @@ import { clsx } from "clsx";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Textarea, Timeline } from "@/components/design-system";
+import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Textarea, Timeline } from "@shared/ui/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -14,7 +14,7 @@ import { businessService, type BackendPropuesta, type MotivoEleccion } from "@/s
 import { abrirArchivoEnPestana, descargarArchivo } from "@/utils/abrir-archivo";
 
 import { RUTA_RESTABLECER } from "@/app/rutas";
-import type { LegalPage } from "@/features/legal/types";
+import type { LegalPage } from "@shared/legal/types";
 import type { Screen } from "@/app/rutas";
 import type { Quote } from "@/types/quote";
 import type { SidebarCtrl } from "@/types/portal";
@@ -31,17 +31,17 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
-import { inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
-import { Modal } from "@/components/ui/Modal";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
+import { inferLifecycleStageIndex, buildLifecycleTimeline } from "@apps/importaciones/features/ordenes/constants";
+import { Modal } from "@shared/ui/kit/Modal";
 import type { ChatConv } from "@/types/chat";
 import type { Order } from "@/types/order";
 import type { UserRole } from "@/types/roles";
 import { initialsFromName } from "@/utils/profile";
-import { GaleriaFotosProducto } from "@/features/quotes/components/GaleriaFotosProducto";
+import { GaleriaFotosProducto } from "@apps/importaciones/features/quotes/components/GaleriaFotosProducto";
 import { INCOTERM_INCLUYE, MOTIVOS_ELECCION } from "@/config/business";
-import { leerCondicionesPropuesta, PrecioPropuesta } from "@/features/propuestas/presentacion";
+import { leerCondicionesPropuesta, PrecioPropuesta } from "@apps/importaciones/features/propuestas/presentacion";
 
 export function QuoteDetailScreen({quoteId,quotes,onBack,onOpenChat,sb,onRefreshQuotes,chats,orders,onDuplicate,userRole,onConfirmProposal}:{quoteId:string;quotes:Quote[];onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;onRefreshQuotes?:()=>Promise<void>;chats:ChatConv[];orders:Order[];onDuplicate:(quote:Quote)=>void;userRole:UserRole|"admin";onConfirmProposal?:(propuestaId:string)=>Promise<void>}) {
   const quote=quotes.find(q=>q.id===quoteId)??null;

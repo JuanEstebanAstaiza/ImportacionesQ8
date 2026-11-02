@@ -7,11 +7,11 @@ import { SidebarCtrl } from "@/types/portal";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import type { LegalPage } from "@/features/legal/types";
+import type { LegalPage } from "@shared/legal/types";
 
-import { ModalRechazoCotizacion } from "@/features/importador/RechazarCotizacion";
+import { ModalRechazoCotizacion } from "@apps/importaciones/features/importador/RechazarCotizacion";
 
-import { Badge, Button, Card } from "@/components/design-system";
+import { Badge, Button, Card } from "@shared/ui/design-system";
 import { puedeRechazarse } from "@/utils/quotes";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
@@ -32,8 +32,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader } from "@shared/layout/AppHeader";
 import type { ChatConv } from "@/types/chat";
 
 export function AdvisorMyQuotesScreen({sb,quotes,onRespond,headerUser,existingProposalByQuoteId,chats,onOpenChat,onRechazada}:{sb:SidebarCtrl;quotes:Quote[];onRespond:(id:string)=>void;headerUser:{name:string;company:string;initials:string};existingProposalByQuoteId:Record<string, BackendPropuesta>;chats:ChatConv[];onOpenChat:(conversationId:string)=>void;onRechazada:()=>Promise<void>}) {

@@ -74,7 +74,7 @@ export interface SidebarCtrl {
   profileSubtitle?: string;
   profilePhotoUrl?: string | null;
   /**
-   * Productos de la suite a los que entra esta cuenta (ver config/suite.ts) y el
+   * Productos de la suite a los que entra esta cuenta (ver shared/suite/suite.ts) y el
    * que se está usando. Con más de uno, el logo del sidebar es el selector.
    */
   productos?: { clave: string; nombre: string; descripcion: string }[];

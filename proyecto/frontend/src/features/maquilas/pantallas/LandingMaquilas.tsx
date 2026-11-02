@@ -1,6 +1,6 @@
 import { BadgeCheck, ClipboardList, Factory, Scissors, Workflow } from "lucide-react";
 
-import { LandingApp, type ContenidoLandingApp, type PropsLandingApp } from "@/components/landing/LandingApp";
+import { LandingApp, type ContenidoLandingApp, type PropsLandingApp } from "@shared/landing/LandingApp";
 
 const CONTENIDO: ContenidoLandingApp = {
   appId: "maquilas",

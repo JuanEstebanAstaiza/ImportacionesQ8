@@ -8,9 +8,9 @@ import { SidebarCtrl } from "@/types/portal";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import type { LegalPage } from "@/features/legal/types";
+import type { LegalPage } from "@shared/legal/types";
 
-import { Badge, Button, Card } from "@/components/design-system";
+import { Badge, Button, Card } from "@shared/ui/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -28,8 +28,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader } from "@shared/layout/AppHeader";
 
 export function AdvisorDashboardScreen({sb,availableCount,quotes,headerUser,responsesSentCount,activeChatsCount,onOpenInternalChat}:{sb:SidebarCtrl;availableCount:number;quotes:Quote[];headerUser:{name:string;company:string;initials:string};responsesSentCount:number;activeChatsCount:number;onOpenInternalChat:()=>Promise<void>}) {
   const [errorCanal,setErrorCanal]=useState("");

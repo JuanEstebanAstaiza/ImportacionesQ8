@@ -3,9 +3,9 @@ import type { Quote } from "@/types/quote";
 import type { QuoteResponse } from "@/types/response";
 import type { Order } from "@/types/order";
 import { businessService, type BackendCotizacion, type BackendImporter } from "@/services/business.service";
-import { mapBackendQuoteToUi } from "@/features/quotes/mappers";
-import { mapBackendOrderToUiOrder } from "@/features/ordenes/mappers";
-import { mapBackendProposalToUiResponse } from "@/features/propuestas/mappers";
+import { mapBackendQuoteToUi } from "@apps/importaciones/features/quotes/mappers";
+import { mapBackendOrderToUiOrder } from "@apps/importaciones/features/ordenes/mappers";
+import { mapBackendProposalToUiResponse } from "@apps/importaciones/features/propuestas/mappers";
 import type { Importer } from "@/types/importer";
 import type { BackendUserProfile } from "@/services/business.service";
 

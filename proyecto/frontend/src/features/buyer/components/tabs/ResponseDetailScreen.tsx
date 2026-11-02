@@ -8,9 +8,9 @@ import { SidebarCtrl } from "@/types/portal";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import type { LegalPage } from "@/features/legal/types";
+import type { LegalPage } from "@shared/legal/types";
 
-import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@/components/design-system";
+import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@shared/ui/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -32,9 +32,9 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
-import { inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
+import { inferLifecycleStageIndex, buildLifecycleTimeline } from "@apps/importaciones/features/ordenes/constants";
 import type { Order } from "@/types/order";
 import type { ChatConv } from "@/types/chat";
 import type { QuoteResponse } from "@/types/response";

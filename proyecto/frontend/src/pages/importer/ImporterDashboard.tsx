@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ImporterDashboardScreen as ImporterDashboardTab } from "@/features/importador/components/tabs/ImporterDashboardScreen";
+import { ImporterDashboardScreen as ImporterDashboardTab } from "@apps/importaciones/features/importador/components/tabs/ImporterDashboardScreen";
 import type { SidebarCtrl } from "@/types/portal";
 import type { Screen } from "@/app/rutas";
 
