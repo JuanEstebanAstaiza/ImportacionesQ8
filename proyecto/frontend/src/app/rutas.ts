@@ -75,6 +75,9 @@ export type Screen =
   | "admin-presentaciones"
   | "admin-cursos"
   | "admin-tipografia"
+  // Landings prototipo de Marketplace y Maquilas
+  | "mkt-landing"
+  | "maq-landing"
   // Zarpi Liquidaciones (pantallas del módulo y de su panel en el admin)
   | "liq-landing"
   | "liq-catalogo"
@@ -152,6 +155,8 @@ export const RUTAS: Ruta[] = [
   { screen: "planes-inscripcion", path: "/planes/inscripcion" },
   // «Avísame cuando abra»: lista de espera de la apertura al público (pública).
   { screen: "lista-espera", path: "/lista-espera" },
+  { screen: "mkt-landing", path: "/marketplace" },
+  { screen: "maq-landing", path: "/maquilas" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },

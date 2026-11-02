@@ -131,6 +131,8 @@ import {
 } from "@/config/suite";
 import { LiquidacionesRouter } from "@/pages/liquidaciones/LiquidacionesRouter";
 import { LandingLiquidaciones } from "@/features/liquidaciones/pantallas/LandingLiquidaciones";
+import { LandingMarketplace } from "@/features/marketplace/pantallas/LandingMarketplace";
+import { LandingMaquilas } from "@/features/maquilas/pantallas/LandingMaquilas";
 
 // Compatibilidad para las vistas de dominio que todavÃ­a consumen los contratos
 // pÃºblicos histÃ³ricos de App.tsx; la implementaciÃ³n vive en sus mÃ³dulos.
@@ -945,7 +947,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing"];
     if (!publicScreens.includes(screen)) {
       // Un enlace de Liquidaciones sin sesión lleva a la landing de Liquidaciones.
       setScreen(screen.startsWith("liq-") ? "liq-landing" : "landing");
@@ -1509,7 +1511,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -1651,7 +1653,25 @@ export default function App() {
     </div>
   );
 
+  // Destinos del selector radial hacia las apps de la suite que estén abiertas.
+  const destinosSuite:Record<string,(()=>void)|undefined>={
+    importaciones:()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing"),
+    liquidaciones:platformConfig.modulo_liquidaciones_habilitado?()=>goTo("liq-landing"):undefined,
+    marketplace:()=>goTo("mkt-landing"),
+    maquilas:()=>goTo("maq-landing"),
+  };
+  const propsLandingSuite={
+    autenticado:isAuthenticated,
+    destinos:destinosSuite,
+    onIniciarSesion:()=>goTo("login"),
+    onCrearCuenta:()=>goTo("register"),
+    onEntrar:()=>goTo(getHomeScreenForRole(userRole)),
+    onPolicy:(page:LegalPage)=>goTo(PANTALLA_LEGAL[page]),
+  };
+  if(screen==="mkt-landing")return <LandingMarketplace {...propsLandingSuite}/>;
+  if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite}/>;
   if(screen==="liq-landing")return <LandingLiquidaciones
+    destinosSuite={destinosSuite}
     autenticado={isAuthenticated}
     onIniciarSesion={()=>{volverALiquidaciones.current=true;goTo("login");}}
     onCrearCuenta={()=>{volverALiquidaciones.current=true;goTo("register");}}
@@ -1661,7 +1681,7 @@ export default function App() {
   />;
   // Las landings públicas enlazan las plataformas de la suite que estén encendidas.
   const irALiquidaciones=platformConfig.modulo_liquidaciones_habilitado?()=>goTo("liq-landing"):undefined;
-  if(screen==="landing")return <LandingScreen onLiquidaciones={irALiquidaciones} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
+  if(screen==="landing")return <LandingScreen destinosSuite={destinosSuite} onLiquidaciones={irALiquidaciones} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
   // Â«AvÃ­same cuando abraÂ» (secciÃ³n Planes): lista de espera de la apertura al pÃºblico.
   if(screen==="lista-espera")return <ListaEsperaApertura
     onVolver={()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing")}
@@ -1754,7 +1774,7 @@ export default function App() {
 
   if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
     return (
-      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLiquidaciones={irALiquidaciones} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}>
+      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} destinosSuite={destinosSuite} onLiquidaciones={irALiquidaciones} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}>
         {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}

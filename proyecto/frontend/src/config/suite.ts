@@ -131,11 +131,11 @@ export const APPS_SUITE: AppSuite[] = [
   },
   {
     id: "marketplace", name: "Zarpi Marketplace", shortName: "Marketplace", icon: "shopping-bag",
-    badge: "Próximamente", accentColor: "#3A86FF", active: false,
+    badge: "Prototipo", accentColor: "#3A86FF", active: true, screen: "mkt-landing",
   },
   {
     id: "maquilas", name: "Zarpi Maquilas", shortName: "Maquilas", icon: "factory",
-    badge: "Próximamente", accentColor: "#10B981", active: false,
+    badge: "Prototipo", accentColor: "#FF007A", active: true, screen: "maq-landing",
   },
 ];
 
@@ -151,7 +151,7 @@ export function modulosActivos(config: PlatformConfig): ModuloSuite[] {
  * Pantallas de la cuenta, no de un producto: abrirlas no cambia el producto en
  * uso (el menú sigue siendo el de Liquidaciones si se venía de ahí).
  */
-export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "login", "register", "landing"];
+export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "login", "register", "landing", "mkt-landing", "maq-landing"];
 
 /** Producto al que pertenece una pantalla. */
 export function productoDe(screen: Screen): Producto {
