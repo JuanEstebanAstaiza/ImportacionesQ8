@@ -17,7 +17,7 @@ export function ImporterCard({
 }) {
   const desc =
     imp.description ||
-    "Esta empresa a�n no ha publicado su descripci�n.";
+    "Esta empresa aún no ha publicado su descripción.";
 
   const certs =
     imp.certs && imp.certs.length > 0
