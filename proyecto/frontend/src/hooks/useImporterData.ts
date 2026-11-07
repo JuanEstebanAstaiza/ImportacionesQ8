@@ -5,9 +5,9 @@ import type { Quote } from "@/types/quote";
 import type { Order } from "@/types/order";
 import type { BackendImporter, BackendPropuesta } from "@/services/business.service";
 import { businessService } from "@/services/business.service";
-import { mapBackendImporterToUi } from "@/features/importador/mappers";
-import { mapBackendQuoteToUi } from "@/features/quotes/mappers";
-import { mapBackendOrderToUiOrder } from "@/features/ordenes/mappers";
+import { mapBackendImporterToUi } from "@apps/importaciones/features/importador/mappers";
+import { mapBackendQuoteToUi } from "@apps/importaciones/features/quotes/mappers";
+import { mapBackendOrderToUiOrder } from "@apps/importaciones/features/ordenes/mappers";
 import { mapBackendAdvisorToUi } from "@/features/advisors/mappers";
 
 const HIDDEN_QUOTES_KEY = "advisor_hidden_open_quotes_by_company";

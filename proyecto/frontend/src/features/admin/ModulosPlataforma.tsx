@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Blocks, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-import { CLASE_BOTON_SECUNDARIO, mensajeError } from "@/features/tendencias/AprobacionComun";
+import { CLASE_BOTON_SECUNDARIO, mensajeError } from "@apps/importaciones/features/tendencias/AprobacionComun";
 import { modulosService, type ModulosPlataforma as Modulos } from "@/services/modulos.service";
 
 /**

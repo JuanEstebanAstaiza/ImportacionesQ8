@@ -5,7 +5,7 @@ import { Check, Clapperboard, Download, ExternalLink, Inbox, Loader2, Pencil, Pl
 import { BuscadorUsuarios, UsuarioElegido } from "@/components/busqueda/BuscadorUsuarios";
 import type { UsuarioEncontrado } from "@/services/admin.service";
 
-import { ProtectedVideoPlayer } from "@/components/media/ReproductorVideo";
+import { ProtectedVideoPlayer } from "@shared/ui/media/ReproductorVideo";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { toApiPath } from "@/services/api-client";
 import { businessService } from "@/services/business.service";
@@ -25,7 +25,7 @@ import {
   CLASE_INPUT,
   fechaCorta,
   mensajeError,
-} from "../tendencias/AprobacionComun";
+} from "@apps/importaciones/features/tendencias/AprobacionComun";
 
 /**
  * Admin › Planes. Arriba, las inscripciones: se abre el comprobante, se confirma

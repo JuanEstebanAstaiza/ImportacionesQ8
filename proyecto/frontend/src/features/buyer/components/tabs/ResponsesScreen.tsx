@@ -8,9 +8,9 @@ import { SidebarCtrl } from "@/types/portal";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import type { LegalPage } from "@/features/legal/types";
+import type { LegalPage } from "@shared/legal/types";
 
-import { Avatar, Badge, Button, Card, ContactBtn, Input, openSmartContact, Select } from "@/components/design-system";
+import { Avatar, Badge, Button, Card, ContactBtn, Input, openSmartContact, Select } from "@shared/ui/design-system";
 import { resolveApiUrl } from "@/services/api-client";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
@@ -29,8 +29,8 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
 import type { QuoteResponse } from "@/types/response";
 
 export function ResponsesScreen({onViewDetail,sb,responses,importers,quotes,onViewQuote}:{onViewDetail:(id:string,from:ResponseFrom)=>void;sb:SidebarCtrl;responses:QuoteResponse[];importers:Importer[];quotes:Quote[];onViewQuote:(quoteId:string)=>void}) {

@@ -2,10 +2,10 @@ import { useState } from "react";
 import type { RefObject } from "react";
 import { MessageSquare, Search, Shield, Users } from "lucide-react";
 import type { AdminAgenteSoporte, AdminConversacion, AdminDisputa, AdminMensaje } from "@/services/admin.service";
-import { EditorDocumentacion } from "@/features/help/EditorDocumentacion";
-import { OperacionesAdmin } from "@/features/liquidaciones/admin/OperacionesAdmin";
+import { EditorDocumentacion } from "@shared/help/EditorDocumentacion";
+import { OperacionesAdmin } from "@apps/liquidaciones";
 import { usePlatformConfig } from "@/hooks/usePlatformConfig";
-import { modulosActivos, type Producto } from "@/config/suite";
+import { modulosActivos, type Producto } from "@shared/suite/suite";
 
 const CONVERSACIONES_POR_PAGINA = 25;
 function formatDate(value: string): string {

@@ -8,15 +8,15 @@ import type { ChatConv, ChatMsg } from "@/types/chat";
 import type { StoredRole, UserRole } from "@/types/roles";
 import type { CompanyAdvisor, SidebarCtrl } from "../types/portal";
 import { ProtectedRoute } from "@/components/guards/ProtectedRoute";
-import { LoginScreen } from "@/features/auth/LoginScreen";
+import { LoginScreen } from "@shared/auth/LoginScreen";
 
 import { CoursesPortalScreen } from "@/features/courses/CoursesPortalScreen";
-import { ChatsScreen } from "@/features/chat/ChatsScreen";
-import { DocumentosScreen } from "@/features/documents/DocumentosScreen";
-import { HelpSupportScreen } from "@/features/help/HelpSupportScreen";
-import { SoporteModal } from "@/features/help/SoporteModal";
-import { LegalPolicyScreen } from "@/features/legal/components/LegalPolicyScreen";
-import type { LegalPage } from "@/features/legal/types";
+import { ChatsScreen } from "@shared/chat/ChatsScreen";
+import { DocumentosScreen } from "@shared/documents/DocumentosScreen";
+import { HelpSupportScreen } from "@shared/help/HelpSupportScreen";
+import { SoporteModal } from "@shared/help/SoporteModal";
+import { LegalPolicyScreen } from "@shared/legal/components/LegalPolicyScreen";
+import type { LegalPage } from "@shared/legal/types";
 import { BuyerRouter } from "@/pages/buyer/BuyerRouter";
 import { ImporterRouter } from "@/pages/importer/ImporterRouter";
 import { AdvisorRouter } from "@/pages/advisor/AdvisorRouter";
@@ -25,27 +25,27 @@ import { ImporterPortalProvider } from "@/app/contexts/ImporterPortalContext";
 import { AdvisorPortalProvider } from "@/app/contexts/AdvisorPortalContext";
 import { AdminRouter, isAdminScreen } from "@/pages/admin/AdminRouter";
 import type { QuoteFormState, OrigenSolicitud } from "@/features/buyer/components/tabs/NewQuoteScreen";
-import { ResetPasswordScreen } from "@/features/auth/ResetPasswordScreen";
-import { TendenciasFeed } from "@/features/tendencias/Feed";
-import { TendenciaFicha } from "@/features/tendencias/Ficha";
-import { EnviarEnlace } from "@/features/tendencias/EnviarEnlace";
-import { PanelAprobacion } from "@/features/tendencias/PanelAprobacion";
-import { PanelDiseno } from "@/features/tendencias/PanelDiseno";
+import { ResetPasswordScreen } from "@shared/auth/ResetPasswordScreen";
+import { TendenciasFeed } from "@apps/importaciones/features/tendencias/Feed";
+import { TendenciaFicha } from "@apps/importaciones/features/tendencias/Ficha";
+import { EnviarEnlace } from "@apps/importaciones/features/tendencias/EnviarEnlace";
+import { PanelAprobacion } from "@apps/importaciones/features/tendencias/PanelAprobacion";
+import { PanelDiseno } from "@apps/importaciones/features/tendencias/PanelDiseno";
 import { ModulosPlataforma } from "@/features/admin/ModulosPlataforma";
 import { RevisionPagos } from "@/features/admin/RevisionPagos";
 import { AccesosCursos } from "@/features/admin/AccesosCursos";
 import { RevisionPresentaciones } from "@/features/admin/RevisionPresentaciones";
 import { PlanesAdmin } from "@/features/admin/PlanesAdmin";
-import { ListaEsperaApertura } from "@/features/planes/ListaEspera";
-import { InscripcionPlan } from "@/features/planes/InscripcionPlan";
+import { ListaEsperaApertura } from "@shared/planes/ListaEspera";
+import { InscripcionPlan } from "@shared/planes/InscripcionPlan";
 import { CargueDescarguePagos } from "@/features/pagos/CargueDescarguePagos";
 import { fijarRegistro, registroAbierto } from "@/app/registro";
-import { RetoPagina } from "@/features/reto/RetoPagina";
-import { PerfilUsuario } from "@/features/perfil/PerfilUsuario";
-import { RetoAdmin } from "@/features/reto/RetoAdmin";
-import type { PrefillSolicitud } from "@/features/tendencias/prefill";
-import { CatalogosEmpresa } from "@/features/catalogos/CatalogosEmpresa";
-import { CatalogosComprador } from "@/features/catalogos/CatalogosComprador";
+import { RetoPagina } from "@apps/importaciones/features/reto/RetoPagina";
+import { PerfilUsuario } from "@shared/perfil/PerfilUsuario";
+import { RetoAdmin } from "@apps/importaciones/features/reto/RetoAdmin";
+import type { PrefillSolicitud } from "@apps/importaciones/features/tendencias/prefill";
+import { CatalogosEmpresa } from "@apps/importaciones/features/catalogos/CatalogosEmpresa";
+import { CatalogosComprador } from "@apps/importaciones/features/catalogos/CatalogosComprador";
 import { TipografiaPlataforma } from "@/features/admin/TipografiaPlataforma";
 import { LandingScreen, PantallaPublica } from "@/pages/public/LandingScreen";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,30 +61,30 @@ import { useQuoteActions } from "@/hooks/useQuoteActions";
 import { useAdvisorActions } from "@/hooks/useAdvisorActions";
 import { useOrderActions } from "@/hooks/useOrderActions";
 import { useDocumentActions } from "@/hooks/useDocumentActions";
-import { mapBackendChatMessage } from "@/features/chat/mappers";
-import { mapBackendImporterToUi } from "@/features/importador/mappers";
-import { mapBackendQuoteToUi } from "@/features/quotes/mappers";
+import { mapBackendChatMessage } from "@shared/chat/mappers";
+import { mapBackendImporterToUi } from "@apps/importaciones/features/importador/mappers";
+import { mapBackendQuoteToUi } from "@apps/importaciones/features/quotes/mappers";
 import { mapBackendAdvisorToUi } from "@/features/advisors/mappers";
-import { mapBackendProposalToUiResponse } from "@/features/propuestas/mappers";
-import { mapBackendOrderToUiOrder } from "@/features/ordenes/mappers";
-export type { Order, OrderHistoryItem, OrderDocumentItem, LifecycleDocItem } from "@/features/ordenes/types";
-export { orderDocumentTypeLabel, orderStateLabel, nextOrderState, inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
+import { mapBackendProposalToUiResponse } from "@apps/importaciones/features/propuestas/mappers";
+import { mapBackendOrderToUiOrder } from "@apps/importaciones/features/ordenes/mappers";
+export type { Order, OrderHistoryItem, OrderDocumentItem, LifecycleDocItem } from "@apps/importaciones/features/ordenes/types";
+export { orderDocumentTypeLabel, orderStateLabel, nextOrderState, inferLifecycleStageIndex, buildLifecycleTimeline } from "@apps/importaciones/features/ordenes/constants";
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@/components/layout/AppHeader";
-import { PantallaPortal } from "@/components/layout/PantallaPortal";
-import { Modal } from "@/components/ui/Modal";
-import { ImporterProfileScreen } from "@/features/importador/components/ImporterProfileScreen";
-import { NotificationsScreen } from "@/features/notifications/components/NotificationsScreen";
-import { RegisterScreen } from "@/features/auth/components/RegisterScreen";
-import { RegistroCerrado } from "@/features/auth/components/RegistroCerrado";
-import { CreateResponseScreen } from "@/features/propuestas/components/CreateResponseScreen";
-import type { AppNotification } from "@/features/notifications/types";
-import { INIT_NOTIFICATIONS } from "@/features/notifications/constants.tsx";
-import { mapBackendNotificationToUi } from "@/features/notifications/mappers";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@shared/layout/AppHeader";
+import { PantallaPortal } from "@shared/layout/PantallaPortal";
+import { Modal } from "@shared/ui/kit/Modal";
+import { ImporterProfileScreen } from "@apps/importaciones/features/importador/components/ImporterProfileScreen";
+import { NotificationsScreen } from "@shared/notifications/components/NotificationsScreen";
+import { RegisterScreen } from "@shared/auth/components/RegisterScreen";
+import { RegistroCerrado } from "@shared/auth/components/RegistroCerrado";
+import { CreateResponseScreen } from "@apps/importaciones/features/propuestas/components/CreateResponseScreen";
+import type { AppNotification } from "@shared/notifications/types";
+import { INIT_NOTIFICATIONS } from "@shared/notifications/constants.tsx";
+import { mapBackendNotificationToUi } from "@shared/notifications/mappers";
 import {
   Avatar, Button, Card, Logo,
-} from "@/components/design-system";
+} from "@shared/ui/design-system";
 // De este archivo ya solo se usan las buenas prÃ¡cticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
 import type {
@@ -103,7 +103,7 @@ import type {
 } from "@/services/business.service";
 import { getStoredRole, getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { safeHttpUrl } from "@/utils/safe-url";
-import { TarjetaReferidos } from "@/features/referidos/TarjetaReferidos";
+import { TarjetaReferidos } from "@shared/referidos/TarjetaReferidos";
 import { destinoDe, esPantalla, rutaDe, type ParamRuta, type Screen } from "@/app/rutas";
 import type { UrgenciaSoporte } from "@/services/business.service";
 import { CLAVE_PREFILL_PENDIENTE, RESET_PASSWORD_PATH } from "@/utils/paths";
@@ -114,7 +114,7 @@ import {
   applyQuoteStatusOverride,
   loadHiddenOpenQuotesByCompany,
   loadQuoteStatusOverrides,
-} from "@/features/quotes/storage";
+} from "@apps/importaciones/features/quotes/storage";
 import { MAX_FOTOS_PRODUCTO, SYSTEM_ROOT_FOLDER_NAMES } from "@/config/business";
 import {
   NAV_ITEMS,
@@ -128,9 +128,11 @@ import {
 import type { NavItem } from "@/types/navigation";
 import {
   LIQUIDACIONES, PANTALLAS_COMUNES, moduloDe, modulosActivos, navAdminDeModulos, productoDe, type Producto,
-} from "@/config/suite";
-import { LiquidacionesRouter } from "@/pages/liquidaciones/LiquidacionesRouter";
-import { LandingLiquidaciones } from "@/features/liquidaciones/pantallas/LandingLiquidaciones";
+} from "@shared/suite/suite";
+import { LiquidacionesRouter, LandingLiquidaciones } from "@apps/liquidaciones";
+import { crearDestinosSuite } from "@shared/suite/destinos";
+import { LandingMarketplace } from "@/features/marketplace/pantallas/LandingMarketplace";
+import { LandingMaquilas } from "@/features/maquilas/pantallas/LandingMaquilas";
 
 // Compatibilidad para las vistas de dominio que todavÃ­a consumen los contratos
 // pÃºblicos histÃ³ricos de App.tsx; la implementaciÃ³n vive en sus mÃ³dulos.
@@ -339,7 +341,7 @@ export default function App() {
   // (lote, operación...). Uno solo para todos: cada módulo lo interpreta en su router.
   const [idModulo,setIdModulo]=useState<string>(() =>
     destinoInicial?.screen.startsWith("liq-") ? destinoInicial.id ?? "" : "");
-  // Producto de la suite en uso (config/suite.ts). Lo marca la última pantalla de
+  // Producto de la suite en uso (shared/suite/suite.ts). Lo marca la última pantalla de
   // un producto: abrir el perfil o las notificaciones no cambia el menú.
   const [productoActivo,setProductoActivo]=useState<Producto>(() => productoDe(destinoInicial?.screen ?? "landing"));
   useEffect(() => {
@@ -945,7 +947,7 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing"];
     if (!publicScreens.includes(screen)) {
       // Un enlace de Liquidaciones sin sesión lleva a la landing de Liquidaciones.
       setScreen(screen.startsWith("liq-") ? "liq-landing" : "landing");
@@ -1509,7 +1511,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -1651,7 +1653,24 @@ export default function App() {
     </div>
   );
 
+  // Destinos del selector radial hacia las apps de la suite que estén abiertas.
+  const destinosSuite=crearDestinosSuite({
+    goTo,
+    inicioImportaciones:isAuthenticated?getHomeScreenForRole(userRole):"landing",
+    liquidacionesActiva:Boolean(platformConfig.modulo_liquidaciones_habilitado),
+  });
+  const propsLandingSuite={
+    autenticado:isAuthenticated,
+    destinos:destinosSuite,
+    onIniciarSesion:()=>goTo("login"),
+    onCrearCuenta:()=>goTo("register"),
+    onEntrar:()=>goTo(getHomeScreenForRole(userRole)),
+    onPolicy:(page:LegalPage)=>goTo(PANTALLA_LEGAL[page]),
+  };
+  if(screen==="mkt-landing")return <LandingMarketplace {...propsLandingSuite}/>;
+  if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite}/>;
   if(screen==="liq-landing")return <LandingLiquidaciones
+    destinosSuite={destinosSuite}
     autenticado={isAuthenticated}
     onIniciarSesion={()=>{volverALiquidaciones.current=true;goTo("login");}}
     onCrearCuenta={()=>{volverALiquidaciones.current=true;goTo("register");}}
@@ -1661,7 +1680,7 @@ export default function App() {
   />;
   // Las landings públicas enlazan las plataformas de la suite que estén encendidas.
   const irALiquidaciones=platformConfig.modulo_liquidaciones_habilitado?()=>goTo("liq-landing"):undefined;
-  if(screen==="landing")return <LandingScreen onLiquidaciones={irALiquidaciones} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
+  if(screen==="landing")return <LandingScreen destinosSuite={destinosSuite} onLiquidaciones={irALiquidaciones} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onInscribirse={clave=>{setPlanElegido(clave);goTo("planes-inscripcion");}} onListaEspera={()=>goTo("lista-espera")}/>;
   // Â«AvÃ­same cuando abraÂ» (secciÃ³n Planes): lista de espera de la apertura al pÃºblico.
   if(screen==="lista-espera")return <ListaEsperaApertura
     onVolver={()=>goTo(isAuthenticated?getHomeScreenForRole(userRole):"landing")}
@@ -1754,7 +1773,7 @@ export default function App() {
 
   if(!isAuthenticated&&!isInitializing&&(screen==="tendencias"||screen==="tendencia-detalle"||screen==="reto")){
     return (
-      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} onLiquidaciones={irALiquidaciones} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}>
+      <PantallaPublica activa={screen==="reto"?"reto":"tendencias"} destinosSuite={destinosSuite} onLiquidaciones={irALiquidaciones} onLanding={()=>goTo("landing")} onPlanes={irAPlanesDelInicio} onLogin={()=>goTo("login")} onRegister={()=>goTo("register")} onTendencias={()=>goTo("tendencias")} onReto={()=>goTo("reto")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}>
         {screen==="tendencias"&&<TendenciasFeed rol={null} onAbrir={abrirTendencia} onPedirPropuestas={pedirPropuestasDesde} onEnviarEnlace={()=>goTo("register")} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="tendencia-detalle"&&<TendenciaFicha id={selectedTendenciaId} rol={null} onVolver={()=>goTo("tendencias")} onPedirPropuestas={pedirPropuestasDesde} onRegistrarse={()=>goTo("register")} onIniciarSesion={()=>goTo("login")}/>}
         {screen==="reto"&&<RetoPagina autenticado={false} onIrARegistro={()=>goTo("register")} onEnviarEnlace={()=>goTo("register")}/>}

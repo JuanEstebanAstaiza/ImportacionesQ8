@@ -3,7 +3,7 @@ import type {
   Activacion, ArchivoSubido, BucketLiquidaciones, CatalogoLotes, CuentaAdmin, DocumentoRef, EstadoActivacion,
   FiltrosCatalogo, Lote, LoteEntrada, MensajeOperacion, MetricasLiquidaciones, MisLotes, Operacion,
   OperacionResumen, ParametrosLiquidaciones, ParametrosPublicos, TipoArchivo,
-} from "@/features/liquidaciones/tipos";
+} from "@apps/liquidaciones/features/tipos";
 
 /**
  * API de Zarpi Liquidaciones (`/liquidaciones/*`). El módulo guarda sus datos en

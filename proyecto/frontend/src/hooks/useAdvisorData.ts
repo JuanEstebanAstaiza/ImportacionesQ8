@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { Quote } from "@/types/quote";
 import { businessService, type BackendCotizacion, type BackendPropuesta } from "@/services/business.service";
-import { mapBackendQuoteToUi } from "@/features/quotes/mappers";
+import { mapBackendQuoteToUi } from "@apps/importaciones/features/quotes/mappers";
 
 /** State owned by advisor queues and proposal indexes. */
 export function useAdvisorData(

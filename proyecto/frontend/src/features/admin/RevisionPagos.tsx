@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 
-import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { ImagenArchivo } from "@shared/ui/files/ImagenArchivo";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import {
   comprobantesService,
@@ -35,7 +35,7 @@ import {
   fechaCorta,
   haceCuanto,
   mensajeError,
-} from "../tendencias/AprobacionComun";
+} from "@apps/importaciones/features/tendencias/AprobacionComun";
 
 /**
  * Revisión de comprobantes de transferencia mientras se habilita la pasarela.

@@ -1,18 +1,18 @@
 ﻿import React, { useEffect, useState } from "react";
 import {
   BadgeCheck, Bell, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft,
-  ClipboardList, Clock, FileText, Loader2, MessageSquare, Moon, MoveRight,
-  Receipt, Ship, ShoppingCart, Sun, TrendingUp, UserRound, Users,
+  ClipboardList, Clock, FileText, Loader2, Menu, MessageSquare, Moon, MoveRight,
+  Receipt, Ship, ShoppingCart, Sun, TrendingUp, UserRound, Users, X,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { DynamicAccentText } from "@/features/landing/components/DynamicAccentText";
-import { Button, Card, Input, Logo, Textarea } from "@/components/design-system";
+import { Button, Card, Input, Logo, Textarea } from "@shared/ui/design-system";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
-import { SelectorPlataforma } from "@/components/navigation/SelectorPlataforma";
-import { CarruselVideos } from "@/components/media/CarruselVideos";
-import { EMPRESA } from "@/features/legal/empresa";
-import type { LegalPage } from "@/features/legal/types";
-import { SeccionPlanes } from "@/features/planes/SeccionPlanes";
+import { SuiteWheelSwitcher } from "@shared/suite/SuiteWheelSwitcher";
+import { CarruselVideos } from "@shared/ui/media/CarruselVideos";
+import { EMPRESA } from "@shared/legal/empresa";
+import type { LegalPage } from "@shared/legal/types";
+import { SeccionPlanes } from "@shared/planes/SeccionPlanes";
 import { landingService, leerVideosQuienesSomos, type LandingBlock, type LandingDynamicContent, type LandingSection } from "@/services/landing.service";
 import { registroAbierto } from "@/app/registro";
 import { resolveApiUrl } from "@/services/api-client";
@@ -63,8 +63,9 @@ function FooterPublico({ onLanding, onPlanes, onPolicy, onTendencias }: FooterPu
   );
 }
 
-export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,onPolicy,onLiquidaciones,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;onPolicy:(page:LegalPage)=>void;onLiquidaciones?:()=>void;children:React.ReactNode}) {
+export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,onTendencias,onReto,onPolicy,onLiquidaciones,destinosSuite,children}:{activa:"tendencias"|"reto";onLanding:()=>void;onPlanes:()=>void;onLogin:()=>void;onRegister:()=>void;onTendencias:()=>void;onReto:()=>void;onPolicy:(page:LegalPage)=>void;onLiquidaciones?:()=>void;destinosSuite?:Record<string,(()=>void)|undefined>;children:React.ReactNode}) {
   const { dark, toggleTheme } = useBrandTheme();
+  const [menuAbierto,setMenuAbierto]=useState(false);
   const claseMenuPublico=(activo:boolean)=>clsx(
     "px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap",
     activo
@@ -75,13 +76,13 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <LandingBackground />
-      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-        <div className="flex w-full min-h-16 items-center justify-between gap-3 px-4 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/70 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-9xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button type="button" onClick={onLanding} aria-label="Ir al inicio" className="flex-shrink-0"><Logo/></button>
-            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:flex"/>
+                        <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones,...destinosSuite}} className="hidden md:inline-flex"/>
           </div>
-          <nav className="hidden 2xl:flex items-center gap-1">
+          <nav className="hidden min-[1400px]:flex items-center gap-1">
             {LANDING_TABS.map(section=>{
               const action=section.key==="planes"
                 ?onPlanes
@@ -105,21 +106,50 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
             </button>
             <Button variant="secondary" size="sm" onClick={onLogin}>Iniciar sesión</Button>
             <Button size="sm" className="hidden sm:inline-flex" onClick={onRegister}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
+            <button
+              type="button"
+              onClick={() => setMenuAbierto((v) => !v)}
+              aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={menuAbierto}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground min-[1400px]:hidden"
+            >
+              {menuAbierto ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-        <nav className="2xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2">
-          <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="flex md:hidden mr-1"/>
-          {LANDING_TABS.map(section=>{
-            const action=section.key==="planes"
-              ?onPlanes
-              :section.key==="tendencias"
-                ?onTendencias
-                :section.key==="reto"
-                  ?onReto
-                  :irALanding;
-            return <button key={section.key} type="button" onClick={action} className={claseMenuPublico(activa===section.key)}>{section.label}</button>;
-          })}
-        </nav>
+        {menuAbierto && (
+          <div className="border-t border-border/50 bg-white/10 px-4 pb-4 pt-2 backdrop-blur-md dark:bg-black/10 min-[1400px]:hidden">
+                      <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones,...destinosSuite}} className="mb-2 mt-1 inline-flex md:hidden" />
+            <nav aria-label="Secciones" className="flex flex-col">
+              {LANDING_TABS.map((section) => {
+                const action=section.key==="planes"
+                  ?onPlanes
+                  :section.key==="tendencias"
+                    ?onTendencias
+                    :section.key==="reto"
+                      ?onReto
+                      :irALanding;
+                return (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => {
+                      action();
+                      setMenuAbierto(false);
+                    }}
+                    className="rounded-lg px-2 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/10 dark:hover:bg-accent/10"
+                  >
+                    {section.label}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:hidden">
+              <Button variant="secondary" size="lg" fullWidth onClick={onLogin}>Iniciar sesión</Button>
+              <Button size="lg" fullWidth onClick={onRegister}>{registroAbierto()?"Crear cuenta":"Solicitar acceso"}</Button>
+            </div>
+          </div>
+        )}
       </header>
       <main className="relative z-10 mx-auto max-w-6xl px-4 py-6">{children}</main>
       <div className="relative z-10">
@@ -197,12 +227,14 @@ function PreguntasLanding({items}:{items:PreguntaLanding[]}) {
   );
 }
 
-export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse,onListaEspera,onLiquidaciones}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void;onListaEspera:()=>void;onLiquidaciones?:()=>void}) {
+export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,onInscribirse,onListaEspera,onLiquidaciones,destinosSuite}:{onLogin:()=>void;onRegister:()=>void;onPolicy:(page:LegalPage)=>void;onTendencias:()=>void;onReto:()=>void;onInscribirse:(clave:string)=>void;onListaEspera:()=>void;onLiquidaciones?:()=>void;destinosSuite?:Record<string,(()=>void)|undefined>}) {
   const { dark, toggleTheme } = useBrandTheme();
   const [activeTab,setActiveTab]=useState<LandingTabKey>("home");
+  const [menuAbierto,setMenuAbierto]=useState(false);
   // Sección a la que hay que bajar después de cambiar de pestaña (`planes`, `preguntas`).
   const [ancla,setAncla]=useState<string|null>(null);
   const irA=(pestana:LandingTabKey,destino?:string)=>{
+    setMenuAbierto(false);
     if (pestana === "tendencias") {
       onTendencias();
       return;
@@ -284,14 +316,14 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-md border-b border-border">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border">
         <div className="max-w-9xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Logo/>
-            <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="hidden md:flex"/>
+            <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones,...destinosSuite}} className="hidden md:inline-flex"/>
           </div>
           {/* Con el selector de plataforma, las pestañas caben en línea solo en pantallas muy anchas. */}
-          <div className="hidden 2xl:flex items-center gap-1">{menu}</div>
+          <div className="hidden min-[1400px]:flex items-center gap-1">{menu}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleTheme}
@@ -304,17 +336,47 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
             <Button variant="secondary" size="sm" className="hidden sm:inline-flex hover:bg-primary hover:text-white hover:border-primary dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:border-accent" onClick={onLogin}>
               Iniciar sesión
             </Button>
-            <Button variant="primary" size="sm" className="hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={abrirAcceso}>
+            <Button variant="primary" size="sm" className="hidden sm:inline-flex hover:bg-primary/80 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" onClick={abrirAcceso}>
               {textoAcceso}
             </Button>
+            <button
+              type="button"
+              onClick={() => setMenuAbierto((v) => !v)}
+              aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={menuAbierto}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary dark:hover:text-accent min-[1400px]:hidden"
+            >
+              {menuAbierto ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-        {/* En pantallas angostas el menú va en una fila que se desliza. */}
-        <div className="2xl:hidden flex items-center gap-1 overflow-x-auto px-4 pb-2 -mt-1">
-          <SelectorPlataforma actual="importaciones" destinos={{liquidaciones:onLiquidaciones}} className="flex md:hidden mr-1"/>
-          {menu}
-          <button onClick={onLogin} className={clsx(claseMenu(false),"sm:hidden")}>Iniciar sesión</button>
-        </div>
+        {menuAbierto && (
+          <div className="border-t border-border/50 px-4 pb-4 pt-2 backdrop-blur-md min-[1400px]:hidden">
+                      <SuiteWheelSwitcher actual="importaciones" destinos={{liquidaciones:onLiquidaciones,...destinosSuite}} className="mb-2 mt-1 inline-flex md:hidden" />
+            <nav aria-label="Secciones" className="flex flex-col">
+              {LANDING_TABS.map((section) => (
+                <button
+                  key={section.key}
+                  type="button"
+                  onClick={() => {
+                    setMenuAbierto(false);
+                    if (section.key === "planes") onPlanes();
+                    else if (section.key === "tendencias") onTendencias();
+                    else if (section.key === "reto") onReto();
+                    else irA(section.key);
+                  }}
+                  className="rounded-lg px-2 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-accent/10 dark:hover:text-accent"
+                >
+                  {section.label}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:hidden">
+              <Button variant="secondary" size="lg" fullWidth onClick={onLogin}>Iniciar sesión</Button>
+              <Button variant="primary" size="lg" fullWidth onClick={abrirAcceso}>{textoAcceso}</Button>
+            </div>
+          </div>
+        )}
       </nav>
 
       {activeTab==="home" && (

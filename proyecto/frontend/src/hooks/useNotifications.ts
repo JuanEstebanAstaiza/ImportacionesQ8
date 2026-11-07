@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import type { AppNotification } from "@/features/notifications/types";
-import { INIT_NOTIFICATIONS } from "@/features/notifications/constants";
+import type { AppNotification } from "@shared/notifications/types";
+import { INIT_NOTIFICATIONS } from "@shared/notifications/constants";
 import { businessService } from "@/services/business.service";
-import { mapBackendNotificationToUi } from "@/features/notifications/mappers";
+import { mapBackendNotificationToUi } from "@shared/notifications/mappers";
 import type { Importer } from "@/types/importer";
 
 /** Notification state and read-state mutation. */

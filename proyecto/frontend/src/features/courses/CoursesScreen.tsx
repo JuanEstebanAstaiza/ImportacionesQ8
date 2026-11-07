@@ -25,12 +25,12 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@shared/ui/kit/accordion";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@shared/ui/kit/badge";
+import { Button } from "@shared/ui/kit/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@shared/ui/kit/card";
+import { Checkbox } from "@shared/ui/kit/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -38,15 +38,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+} from "@shared/ui/kit/dialog";
+import { Input } from "@shared/ui/kit/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@shared/ui/kit/select";
 import {
   Table,
   TableBody,
@@ -54,9 +54,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+} from "@shared/ui/kit/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/ui/kit/tabs";
+import { Textarea } from "@shared/ui/kit/textarea";
 
 import { useCourses } from "./useCourses";
 import type {
@@ -74,7 +74,7 @@ import {
   VIDEO_EXTENSIONS,
   VIDEO_FORMATS_LABEL,
   VIDEO_UPLOAD_ACCEPT,
-} from "@/components/media/ReproductorVideo";
+} from "@shared/ui/media/ReproductorVideo";
 import { coursesService } from "@/services/courses.service";
 import {
   businessService,

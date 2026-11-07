@@ -5,12 +5,12 @@ import { toast } from "sonner";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { DocumentUploadButton } from "@/components/files/DocumentUploadButton";
-import { ImagenArchivo } from "@/components/files/ImagenArchivo";
+import { DocumentUploadButton } from "@shared/ui/files/DocumentUploadButton";
+import { ImagenArchivo } from "@shared/ui/files/ImagenArchivo";
 
-import { LISTA_CERRADA } from "@/features/planes/SeccionPlanes";
+import { LISTA_CERRADA } from "@shared/planes/SeccionPlanes";
 
-import { Avatar, Button, Card, ContactBtn, Input, Select, Textarea } from "@/components/design-system";
+import { Avatar, Button, Card, ContactBtn, Input, Select, Textarea } from "@shared/ui/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -25,8 +25,8 @@ import type { SidebarCtrl } from "@/types/portal";
 import type { Importer } from "@/types/importer";
 import type { BackendArchivoItem, CreateCotizacionPayload } from "@/services/business.service";
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
 import { cantidadConUnidad } from "@/utils/formatos";
 
 const STEPS = ["Modalidad", "Información del producto", "Confirmación"];

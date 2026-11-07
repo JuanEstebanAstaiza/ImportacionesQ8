@@ -11,6 +11,9 @@
  * (`/cotizaciones/<id>`), que es lo que permite abrirlas directamente.
  */
 
+// Import directo del archivo de rutas (no del index) para no arrastrar componentes ni ciclos.
+import { RUTAS_LIQUIDACIONES, type ScreenLiquidaciones } from "@apps/liquidaciones/rutas";
+
 export type Screen =
   | "landing"
   | "login"
@@ -75,21 +78,11 @@ export type Screen =
   | "admin-presentaciones"
   | "admin-cursos"
   | "admin-tipografia"
-  // Zarpi Liquidaciones (pantallas del módulo y de su panel en el admin)
-  | "liq-landing"
-  | "liq-catalogo"
-  | "liq-lote"
-  | "liq-activar"
-  | "liq-reservas"
-  | "liq-mis-lotes"
-  | "liq-publicar"
-  | "liq-operaciones"
-  | "liq-revision"
-  | "liq-admin-resumen"
-  | "liq-admin-lotes"
-  | "liq-admin-operaciones"
-  | "liq-admin-cuentas"
-  | "liq-admin-config";
+  // Landings prototipo de Marketplace y Maquilas
+  | "mkt-landing"
+  | "maq-landing"
+  // Zarpi Liquidaciones: sus pantallas se declaran en apps/liquidaciones/rutas.ts
+  | ScreenLiquidaciones;
 
 export type AdminTab =
   | "metricas"
@@ -152,6 +145,8 @@ export const RUTAS: Ruta[] = [
   { screen: "planes-inscripcion", path: "/planes/inscripcion" },
   // «Avísame cuando abra»: lista de espera de la apertura al público (pública).
   { screen: "lista-espera", path: "/lista-espera" },
+  { screen: "mkt-landing", path: "/marketplace" },
+  { screen: "maq-landing", path: "/maquilas" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },
@@ -228,26 +223,8 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-tipografia", path: "/admin/tipografia" },
   { screen: "admin-reto", path: "/admin/reto" },
 
-  // Zarpi Liquidaciones. La landing es pública; el resto usa la misma sesión de Zarpi.
-  { screen: "liq-landing", path: "/liquidaciones" },
-  { screen: "liq-catalogo", path: "/liquidaciones/lotes" },
-  { screen: "liq-lote", path: "/liquidaciones/lotes", param: "lote" },
-  { screen: "liq-activar", path: "/liquidaciones/activar" },
-  { screen: "liq-reservas", path: "/liquidaciones/reservas" },
-  { screen: "liq-reservas", path: "/liquidaciones/reservas", param: "operacion" },
-  { screen: "liq-mis-lotes", path: "/liquidaciones/mis-lotes" },
-  { screen: "liq-publicar", path: "/liquidaciones/publicar" },
-  { screen: "liq-publicar", path: "/liquidaciones/publicar", param: "lote" },
-  { screen: "liq-operaciones", path: "/liquidaciones/operaciones" },
-  { screen: "liq-operaciones", path: "/liquidaciones/operaciones", param: "operacion" },
-  // Su administración vive en el panel admin de siempre.
-  { screen: "liq-admin-resumen", path: "/admin/liquidaciones" },
-  { screen: "liq-revision", path: "/admin/liquidaciones/revision" },
-  { screen: "liq-admin-lotes", path: "/admin/liquidaciones/lotes" },
-  { screen: "liq-admin-operaciones", path: "/admin/liquidaciones/operaciones" },
-  { screen: "liq-admin-operaciones", path: "/admin/liquidaciones/operaciones", param: "operacion" },
-  { screen: "liq-admin-cuentas", path: "/admin/liquidaciones/cuentas" },
-  { screen: "liq-admin-config", path: "/admin/liquidaciones/configuracion" },
+  // Zarpi Liquidaciones
+  ...RUTAS_LIQUIDACIONES,
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";

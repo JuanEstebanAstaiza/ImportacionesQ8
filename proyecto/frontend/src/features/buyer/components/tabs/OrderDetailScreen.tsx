@@ -4,9 +4,9 @@ import { clsx } from "clsx";
 
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
-import { PagoOrden } from "@/features/ordenes/PagoOrden";
+import { PagoOrden } from "@apps/importaciones/features/ordenes/PagoOrden";
 
-import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@/components/design-system";
+import { Avatar, Badge, Button, Card, ContactBtn, openSmartContact, Timeline } from "@shared/ui/design-system";
 
 // De este archivo ya solo se usan las buenas prácticas por rol: la FAQ vive
 // ahora en la base de datos, mantenida por el equipo de soporte.
@@ -26,11 +26,11 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
   planes: "policy-planes",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AppHeader, USER } from "@/components/layout/AppHeader";
+import { Sidebar } from "@shared/layout/Sidebar";
+import { AppHeader, USER } from "@shared/layout/AppHeader";
 import { formatShortDate } from "@/utils/format";
 import { initialsFromName } from "@/utils/profile";
-import { orderDocumentTypeLabel, orderStateLabel, nextOrderState, inferLifecycleStageIndex, buildLifecycleTimeline } from "@/features/ordenes/constants";
+import { orderDocumentTypeLabel, orderStateLabel, nextOrderState, inferLifecycleStageIndex, buildLifecycleTimeline } from "@apps/importaciones/features/ordenes/constants";
 
 export function OrderDetailScreen({order,onBack,onOpenChat,sb,isLoading,importers,advisorName,onViewImporterProfile,canManageOrder,esCliente=false,onUpdateOrderStatus}:{order:Order|null;onBack:()=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;isLoading:boolean;importers:Importer[];advisorName?:string;onViewImporterProfile:(id:string)=>void;canManageOrder:boolean;esCliente?:boolean;onUpdateOrderStatus:(orderId:string,estado:string)=>Promise<void>}) {
   const [isAdvancing,setIsAdvancing]=useState(false);

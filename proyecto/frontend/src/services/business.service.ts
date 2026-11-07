@@ -1,5 +1,5 @@
 import { apiRequest } from "@/services/api-client";
-import type { CondicionesPropuesta, FormularioPropuesta } from "@/features/propuestas/calculo";
+import type { CondicionesPropuesta, FormularioPropuesta } from "@apps/importaciones/features/propuestas/calculo";
 
 /** Sello otorgado por la plataforma, tal como llega en el catálogo. */
 export interface BackendCertificacionOtorgada {
