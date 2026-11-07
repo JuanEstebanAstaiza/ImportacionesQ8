@@ -54,7 +54,7 @@ function FooterPublico({ onLanding, onPlanes, onPolicy, onTendencias }: FooterPu
           <span className="font-semibold text-white/70">Aviso legal: </span>
           Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
         </p>
-        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">? 2026 Zarpi. Todos los derechos reservados.</p>
+        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">® 2026 Zarpi. Todos los derechos reservados.</p>
         <div className="flex justify-center border-t border-white/10 pt-5">
           <PublicSicLogo />
         </div>
@@ -514,7 +514,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
             <span className="font-semibold text-white/70">Aviso legal: </span>
             Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
           </p>
-          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">? 2026 Zarpi. Todos los derechos reservados.</p>
+          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">® 2026 Zarpi. Todos los derechos reservados.</p>
           <div className="flex justify-center border-t border-white/10 pt-5">
             <PublicSicLogo />
           </div>
