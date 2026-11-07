@@ -66,7 +66,7 @@ export function ForgotPasswordForm({
       <CardContent className="space-y-4">
         <form className="space-y-4" noValidate onSubmit={form.handleSubmit(onSubmit)}>
           <div className="space-y-2">
-            <Label htmlFor="forgot-email">Correo electronico</Label>
+            <Label htmlFor="forgot-email">Correo electrónico</Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input

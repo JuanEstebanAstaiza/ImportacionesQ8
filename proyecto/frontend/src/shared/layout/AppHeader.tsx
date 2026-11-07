@@ -35,7 +35,8 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
   const chatCount = sb?.chatCount ?? 0;
   const showHelp = sb?.showHelp ?? true;
   const displayName = authUser?.nombre?.trim() || authUser?.email || user.name;
-  const displayCompany = sb?.profileSubtitle || user.company || authUser?.email || "";
+  // Con sesión, el `user` de relleno no se muestra: mientras llega la empresa real va vacío.
+  const displayCompany = sb?.profileSubtitle || (authUser ? "" : user.company);
   const initialsSource = authUser?.nombre?.trim() || authUser?.email || user.name;
   const displayInitials = initialsFromName(initialsSource);
   const authUserPhoto = (authUser as { foto_url?: string | null } | null)?.foto_url || "";
@@ -63,7 +64,8 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
             destinos={Object.fromEntries(sb.productos.map(({ clave }) => [clave, () => sb.onProducto?.(clave)]))}
           />
         )}
-        {authUser?.rol === "solicitante" && (
+        {/* Los créditos son de Importaciones: en otro producto de la suite no aplican. */}
+        {authUser?.rol === "solicitante" && (sb?.producto ?? "importaciones") === "importaciones" && (
           <div className="relative" ref={creditosRef}>
             <button
               type="button"
@@ -118,7 +120,7 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
       {/* LADO DERECHO */}
       <div className="flex items-center gap-1">
         <div className="relative">
-          <button onClick={handler} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+          <button onClick={handler} title="Notificaciones" aria-label={count > 0 ? `Notificaciones, ${count} sin leer` : "Notificaciones"} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <Bell className="w-4 h-4"/>
           </button>
           {count > 0 && (
@@ -135,7 +137,7 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
         <button
           onClick={toggleTheme}
           title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+          aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
@@ -159,8 +161,8 @@ export function AppHeader({ user, notifCount = 0, onNotif, onProfile, sb }: { us
 
 export const USER={name:"Ana García",company:"Importaciones del Norte S.A.",initials:"AG"};
 export const USER_IMPORTADORA={name:"María López",company:"Grupo Nexus S.A.",initials:"ML"};
-export const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. ? Asesor",initials:"CM"};
+export const USER_ASESOR={name:"Carlos Mendoza",company:"Grupo Nexus S.A. · Asesor",initials:"CM"};
 
 // ----------------------------------------------------------------------------------------------------
-// IMPORTER CARD ? used in Dashboard and profile screens
+// IMPORTER CARD · used in Dashboard and profile screens
 // ----------------------------------------------------------------------------------------------------

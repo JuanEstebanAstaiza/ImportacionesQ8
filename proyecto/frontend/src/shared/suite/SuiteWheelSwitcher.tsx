@@ -54,6 +54,8 @@ export function SuiteWheelSwitcher({ actual, destinos, className }: Props) {
     setEnfocada(null);
 
     const r = trigger.getBoundingClientRect();
+    // Mientras se encoge ya no recibe clics: si no, tapa el botón y lo que hay debajo.
+    gsap.set(overlay, { pointerEvents: "none" });
     gsap.to(overlay.querySelectorAll("[data-nodo]"), { scale: 0, opacity: 0, duration: 0.2, stagger: 0.03, ease: "power2.in" });
     gsap.to(overlay, {
       top: r.top, left: r.left, width: r.width, height: r.height, borderRadius: 9999, autoAlpha: 0,
@@ -84,7 +86,7 @@ export function SuiteWheelSwitcher({ actual, destinos, className }: Props) {
     overlay.style.setProperty("--radio", `${lado * 0.34}px`);
     rotacion.current = 0;
     gsap.set(nodos, { rotation: 0 });
-    gsap.set(overlay, { top: r.top, left: r.left, width: r.width, height: r.height, borderRadius: 9999, autoAlpha: 1 });
+    gsap.set(overlay, { top: r.top, left: r.left, width: r.width, height: r.height, borderRadius: 9999, autoAlpha: 1, pointerEvents: "auto" });
     gsap.to(overlay, {
       top, left, width: lado, height: lado, borderRadius: "50%", duration: 0.5, ease: "back.out(1.4)",
       onComplete: () => {

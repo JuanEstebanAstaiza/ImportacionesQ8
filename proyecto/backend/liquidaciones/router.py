@@ -18,8 +18,8 @@ from liquidaciones.esquemas import (
     ActivacionEntrada, AdjuntoEntrada, DespublicarEntrada, DestacarEntrada, LoteEntrada, MensajeEntrada,
     MotivoEntrada, ParametrosEntrada, RechazoEntrada, SuspensionEntrada,
 )
-from liquidaciones.identidad import ROLES_CLIENTE, ROLES_EMPRESA, ROLES_EQUIPO, cuenta_de
-from utils.dependencies import get_current_user, get_db, get_optional_current_user, require_rol, require_rol_in
+from liquidaciones.identidad import ROLES_CLIENTE, ROLES_EMPRESA, ROLES_EQUIPO, ROLES_MODULO, cuenta_de
+from utils.dependencies import get_db, get_optional_current_user, require_rol, require_rol_in
 from utils.limiter import RATE_LIMIT_PUBLIC_READ, limiter
 
 
@@ -34,6 +34,8 @@ def _modulo_activo(db: Session = Depends(get_db)) -> None:
 
 router = APIRouter(prefix="/liquidaciones", tags=["Liquidaciones"], dependencies=[Depends(_modulo_activo)])
 
+# Cualquier sesión de un rol que usa el módulo (no basta con tener sesión).
+require_modulo = require_rol_in(*ROLES_MODULO)
 require_cliente = require_rol_in(*ROLES_CLIENTE)
 require_empresa = require_rol_in(*ROLES_EMPRESA)
 require_equipo = require_rol_in(*ROLES_EQUIPO)
@@ -87,7 +89,7 @@ def descargar(
 # ==================== Cuenta del módulo ====================
 
 @router.get("/parametros")
-def ver_parametros(mongo: Database = Depends(get_mongo), usuario: dict = Depends(get_current_user)):
+def ver_parametros(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
     """Lo que el formulario de publicación necesita saber (mínimos, categorías...)."""
     p = parametros.leer(mongo)
     return {k: p[k] for k in ("dias_max_cierre", "horas_para_confirmar", "fotos_min", "fotos_max", "videos_max",
@@ -98,7 +100,7 @@ def ver_parametros(mongo: Database = Depends(get_mongo), usuario: dict = Depends
 def ver_activacion(
     mongo: Database = Depends(get_mongo),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user),
+    usuario: dict = Depends(require_modulo),
 ):
     doc = servicio.obtener_activacion(mongo, cuenta_de(usuario))
     return {
@@ -151,7 +153,7 @@ def catalogo(
     entrega: Optional[str] = None,
     mongo: Database = Depends(get_mongo),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user),
+    usuario: dict = Depends(require_modulo),
 ):
     return servicio.catalogo(mongo, db, usuario, q=q, categoria=categoria, ciudad=ciudad, condicion=condicion,
                              entrega=entrega)
@@ -162,7 +164,7 @@ def detalle_lote(
     lote_id: str,
     mongo: Database = Depends(get_mongo),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user),
+    usuario: dict = Depends(require_modulo),
 ):
     return servicio.detalle_lote(mongo, db, usuario, lote_id)
 
@@ -194,7 +196,7 @@ def detalle_operacion(
     operacion_id: str,
     mongo: Database = Depends(get_mongo),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user),
+    usuario: dict = Depends(require_modulo),
 ):
     return servicio.detalle_operacion(mongo, db, usuario, operacion_id)
 
@@ -226,7 +228,7 @@ def cancelar(
     datos: MotivoEntrada,
     mongo: Database = Depends(get_mongo),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user),
+    usuario: dict = Depends(require_modulo),
 ):
     return servicio.cancelar(mongo, db, usuario, operacion_id, datos.motivo)
 

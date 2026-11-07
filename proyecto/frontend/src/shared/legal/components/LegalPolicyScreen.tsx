@@ -46,7 +46,7 @@ export function LegalPolicyScreen({ page, onBack, onOpen }: LegalPolicyScreenPro
             <button
               onClick={toggleTheme}
               title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}

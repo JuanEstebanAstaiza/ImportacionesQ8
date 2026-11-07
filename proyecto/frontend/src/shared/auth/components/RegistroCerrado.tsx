@@ -6,8 +6,16 @@ import type { LegalPage } from "@shared/legal/types";
 import { LISTA_CERRADA } from "@shared/planes/SeccionPlanes";
 import { useBrandTheme } from "@/hooks/useBrandTheme";
 
-export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void}) {
+// Quien llega desde la landing de Liquidaciones no viene por planes de importación:
+// se le explica el acceso en términos de su producto (la cuenta es la misma).
+const TEXTO_LIQUIDACIONES = {
+  titulo: "Zarpi Liquidaciones abre pronto",
+  texto: "Por ahora el acceso a Zarpi es por invitación. Si ya tienes cuenta de Zarpi, como comprador o como empresa, entra con ella: es la misma para Liquidaciones.",
+};
+
+export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,producto}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void;producto?:"liquidaciones"}) {
   const { dark, toggleTheme } = useBrandTheme();
+  const textos = producto === "liquidaciones" ? TEXTO_LIQUIDACIONES : { titulo: LISTA_CERRADA.titulo.replace(/\.$/, ""), texto: LISTA_CERRADA.texto };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -42,8 +50,8 @@ export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLo
           <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8">
             <div className="text-center">
               <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
-              <h1 className="text-xl font-semibold tracking-tight mb-2">{LISTA_CERRADA.titulo.replace(/\.$/, "")}</h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">{LISTA_CERRADA.texto}</p>
+              <h1 className="text-xl font-semibold tracking-tight mb-2">{textos.titulo}</h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">{textos.texto}</p>
               <Button variant="primary" icon={<BellRing className="w-4 h-4"/>} className="mt-5 dark:bg-accent dark:text-accent-foreground" onClick={onListaEspera}>Avísame cuando abra</Button>
             </div>
             <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-6">
@@ -55,7 +63,7 @@ export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy}:{onLo
       </main>
 
       <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>? 2026 Zarpi</span>
+        <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>

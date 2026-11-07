@@ -69,7 +69,7 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
       onLogin(appRole);
     },
     onError: (error) => {
-      setAuthError(error instanceof Error ? error.message : "No se pudo iniciar sesion");
+      setAuthError(error instanceof Error ? error.message : "No se pudo iniciar sesión");
     },
   });
 

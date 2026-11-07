@@ -31,7 +31,10 @@ function porcentaje(valor: number | null | undefined): string {
 }
 
 function horas(valor: number | null | undefined): string {
-  return valor === null || valor === undefined ? "—" : `${valor.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h`;
+  if (valor === null || valor === undefined) return "—";
+  // Las revisiones rápidas se leen mejor en minutos que como «0 h».
+  if (valor < 1) return valor < 1 / 60 ? "< 1 min" : `${Math.round(valor * 60)} min`;
+  return `${valor.toLocaleString("es-CO", { maximumFractionDigits: 1 })} h`;
 }
 
 function TarjetaMetrica({ icono, titulo, valor, detalle, onClick, resaltar }: {
@@ -85,7 +88,7 @@ export function ResumenLiquidaciones({ onIr }: { onIr: (destino: Destino) => voi
             icono={<Package className="h-4 w-4" />}
             titulo="Publicados"
             valor={ENTERO.format(m.publicados)}
-            detalle="Lotes disponibles ahora"
+            detalle={`Disponibles ahora · ${ENTERO.format(m.cerrados_sin_venta_30d ?? 0)} cerraron sin venta en 30 d`}
             onClick={() => onIr("liq-admin-lotes")}
           />
           <TarjetaMetrica

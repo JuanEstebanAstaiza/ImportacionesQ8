@@ -10,6 +10,8 @@ from __future__ import annotations
 ROLES_EMPRESA = ("importador", "asesor")
 ROLES_EQUIPO = ("admin", "soporte")
 ROLES_CLIENTE = ("solicitante", "importador", "asesor")
+# Quien entra al módulo: los clientes y el equipo. El diseñador no.
+ROLES_MODULO = ROLES_CLIENTE + ROLES_EQUIPO
 
 
 def cuenta_de(usuario: dict) -> str:

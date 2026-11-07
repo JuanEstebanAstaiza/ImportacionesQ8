@@ -134,6 +134,11 @@ services:
     volumes:
       - ../frontend:/app
       - /app/node_modules
+    # `node_modules` vive en un volumen que sobrevive a `--build`: si el
+    # package-lock cambia (p. ej. llega gsap), sin esto la dependencia no entra al
+    # contenedor y Vite deja la app en blanco. `npm ci` no reescribe el lockfile y
+    # solo corre cuando el lockfile difiere del de la última instalación.
+    command: sh -c "cmp -s package-lock.json node_modules/.lock-instalado || (npm ci --no-audit --no-fund && cp package-lock.json node_modules/.lock-instalado); npm run dev -- --host 0.0.0.0"
     depends_on:
       backend:
         condition: service_started

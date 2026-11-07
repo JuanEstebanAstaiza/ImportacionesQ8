@@ -261,15 +261,18 @@ def _validar_lote(db: Database, datos, cuenta: str, lote_id: str) -> Optional[Di
     if datos.dias_cierre > p["dias_max_cierre"]:
         raise _error(status.HTTP_400_BAD_REQUEST,
                      f"La fecha de cierre puede ser de hasta {p['dias_max_cierre']} días")
+    grupos = [("foto", datos.fotos), ("video", datos.videos)]
+    if datos.ficha_tecnica_id:
+        grupos.append(("ficha_tecnica", [datos.ficha_tecnica_id]))
     try:
-        archivos.reclamar(db, ids=datos.fotos, tipo="foto", cuenta=cuenta, lote_id=lote_id)
-        archivos.reclamar(db, ids=datos.videos, tipo="video", cuenta=cuenta, lote_id=lote_id)
-        if datos.ficha_tecnica_id:
-            return archivos.reclamar(db, ids=[datos.ficha_tecnica_id], tipo="ficha_tecnica", cuenta=cuenta,
-                                     lote_id=lote_id)[0]
+        # Primero se revisan todos: si uno falla, ninguno queda ligado al lote.
+        for tipo, ids in grupos:
+            archivos.verificar(db, ids=ids, tipo=tipo, cuenta=cuenta, lote_id=lote_id)
+        ligados = {tipo: archivos.reclamar(db, ids=ids, tipo=tipo, cuenta=cuenta, lote_id=lote_id)
+                   for tipo, ids in grupos}
     except archivos.ArchivoInvalido as exc:
         raise _error(status.HTTP_400_BAD_REQUEST, str(exc))
-    return None
+    return ligados["ficha_tecnica"][0] if datos.ficha_tecnica_id else None
 
 
 def _campos_lote(datos) -> Dict[str, Any]:
@@ -395,6 +398,7 @@ def mis_lotes(db: Database, sql: Session, usuario: dict) -> Dict:
             "pendientes": contar("en_revision"),
             "reservadas": contar("reservado"),
             "vendidas": contar("vendido"),
+            "necesitan_cambios": contar("rechazado"),
         },
         "lotes": filas,
     }
@@ -511,7 +515,9 @@ def rechazar(db: Database, sql: Session, usuario: dict, lote_id: str, motivos: L
         raise _error(status.HTTP_409_CONFLICT, "Esta liquidación ya no está pendiente de revisión")
     avisos.avisar(sql, cuenta=lote["cuenta_vendedor"], tipo="liquidacion_rechazada",
                   titulo="Tu liquidación necesita cambios",
-                  mensaje=f"«{lote['nombre']}»: {'; '.join(motivos)}. Corrígela y vuelve a enviarla.",
+                  mensaje=f"«{lote['nombre']}»: {'; '.join(motivos)}."
+                          + (f" Nota de Zarpi: «{rechazo['nota']}»." if rechazo["nota"] else "")
+                          + " Corrígela y vuelve a enviarla.",
                   data={"lote_id": lote_id}, enlace="/liquidaciones/mis-lotes", externo=True)
     return a_lote(lote, usuario)
 
@@ -949,8 +955,10 @@ def metricas(db: Database, sql: Optional[Session]) -> Dict:
         "valor_vendido_30d_cop": sum(int((v.get("lote") or {}).get("precio_cop") or 0) for v in vendidas),
         "vencidas_30d": vencidas,
         "canceladas_30d": canceladas,
+        "cerrados_sin_venta_30d": db.lotes.count_documents({"estado": "cerrado_sin_venta",
+                                                             "actualizado_en": {"$gte": desde}}),
         "tasa_venta_30d": round(len(vendidas) / cerradas, 3) if cerradas else None,
-        "horas_promedio_revision": round(sum(horas) / len(horas), 1) if horas else None,
+        "horas_promedio_revision": round(sum(horas) / len(horas), 3) if horas else None,
         "cuentas_activadas": db.activaciones.count_documents({}),
         "cuentas_suspendidas": db.activaciones.count_documents({"suspendida": True}),
     }

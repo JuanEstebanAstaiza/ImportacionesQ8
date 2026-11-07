@@ -29,11 +29,11 @@ export function mapBackendNotificationToUi(notification: { id: string; tipo: str
   const data = notification.data || {};
   const cotizacionId = typeof data.cotizacion_id === "string" ? data.cotizacion_id : undefined;
   const conversationId = typeof data.conversacion_id === "string" ? data.conversacion_id : undefined;
-  const approval = notification.tipo === "negociacion" || /cotizaci[o?]n aprobada/i.test(notification.titulo);
+  const approval = notification.tipo === "negociacion" || /cotizaci[oó]n aprobada/i.test(notification.titulo);
   const company = companyName || (typeof data.nombre_empresa === "string" ? data.nombre_empresa : "la empresa importadora");
-  const title = approval ? "Cotizaci?n Aprobada" : notification.titulo;
+  const title = approval ? "Cotización Aprobada" : notification.titulo;
   const body = approval && cotizacionId
-     ? `Tu cotizaci?n con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrar?s las instrucciones y siguientes pasos para continuar.`
+     ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
     : notification.mensaje;
   if (notification.tipo.startsWith("liquidacion_")) {
     return {

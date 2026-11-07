@@ -6,8 +6,12 @@ import { mapBackendChatMessage } from "@shared/chat/mappers";
 import { formatShortDate } from "@/utils/format";
 import type { Importer } from "@/types/importer";
 
+// Default estable: un `[]` en la firma sería un arreglo nuevo en cada render y
+// cambiaría `reloadChatData`, que las pantallas usan como dependencia de efecto.
+const SIN_IMPORTADORAS: Importer[] = [];
+
 /** Conversation state and the local mutations used by chat screens. */
-export function useChatManager(importers: Importer[] = [], userId?: string) {
+export function useChatManager(importers: Importer[] = SIN_IMPORTADORAS, userId?: string) {
   const [chatConversations, setChatConversations] = useState<ChatConv[]>([]);
   const [chatMessagesByConversation, setChatMessagesByConversation] = useState<Record<string, ChatMsg[]>>({});
   const [chatAttachmentsByConversation, setChatAttachmentsByConversation] = useState<Record<string, BackendChatAttachmentItem[]>>({});

@@ -347,8 +347,14 @@ export default function App() {
   useEffect(() => {
     if (!PANTALLAS_COMUNES.includes(screen)) setProductoActivo(productoDe(screen));
   }, [screen]);
+  // La pestaña del navegador dice en qué producto de la suite se está.
+  const tituloBase = useRef(document.title);
+  useEffect(() => {
+    document.title = moduloDe(productoActivo).tituloPestana ?? tituloBase.current;
+  }, [productoActivo]);
   // Quien inicia sesión (o se registra) desde la landing de Liquidaciones vuelve a Liquidaciones.
   const volverALiquidaciones = useRef(false);
+  useEffect(() => { if (screen === "landing") volverALiquidaciones.current = false; }, [screen]);
   const [loginPrefillEmail,setLoginPrefillEmail]=useState("");
   const [resetToken,setResetToken]=useState<string>(() =>
     new URLSearchParams(window.location.search).get("token") ?? "",
@@ -1697,14 +1703,14 @@ export default function App() {
     onPoliticaDatos={()=>goTo("policy-data")}
     prefill={isAuthenticated&&currentUserProfile?{email:currentUserProfile.email,nombre:currentUserProfile.nombre??undefined,telefono:currentUserProfile.telefono??undefined}:undefined}
   />;
-  if(screen==="register"&&!registroAbierto())return <RegistroCerrado onLogin={()=>goTo("login")} onLanding={()=>goTo("landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
+  if(screen==="register"&&!registroAbierto())return <RegistroCerrado producto={volverALiquidaciones.current?"liquidaciones":undefined} onLogin={()=>goTo("login")} onLanding={()=>goTo(volverALiquidaciones.current?"liq-landing":"landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="register")return <RegisterScreen onBack={()=>goTo("login")} onSuccess={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="reset-password")return <ResetPasswordScreen token={resetToken} onBackToLogin={()=>goTo("login")}/>;
   // Pasar de un documento legal a otro no toca `prevScreen`, para que Â«VolverÂ»
   // regrese a donde estaba el usuario antes de abrir el primero.
   const legalPage=(Object.keys(PANTALLA_LEGAL) as LegalPage[]).find(page=>PANTALLA_LEGAL[page]===screen);
   if(legalPage)return <LegalPolicyScreen page={legalPage} onBack={()=>goTo(prevScreen)} onOpen={page=>setScreen(PANTALLA_LEGAL[page])}/>;
-  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo("landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
+  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo(volverALiquidaciones.current?"liq-landing":"landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
 
   const renderPrivateScreen = () => {
     // Zarpi Liquidaciones resuelve sus pantallas (las del producto y las de su panel admin) en su propio router.

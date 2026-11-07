@@ -74,11 +74,16 @@ export function LiquidacionesRouter({ screen, sb, idRuta, navegar, rol, empresa,
         puedeComprar={!esEquipo}
         onReservado={(id) => navegar("liq-reservas", id)}
         onVerOperacion={(id) => navegar("liq-reservas", id)}
-        onActivar={() => navegar("liq-activar")}
+        onActivar={() => navegar("liq-activar", idRuta)}
         onReportar={esEquipo ? undefined : onSoporte}
       />
     ),
-    "liq-activar": <ActivarLiquidaciones onActivada={() => navegar("liq-catalogo")} onCancelar={() => navegar("liq-catalogo")} />,
+    "liq-activar": (
+      <ActivarLiquidaciones
+        onActivada={() => (idRuta ? abrirLote(idRuta) : navegar("liq-catalogo"))}
+        onCancelar={() => (idRuta ? abrirLote(idRuta) : navegar("liq-catalogo"))}
+      />
+    ),
     "liq-reservas": (
       <OperacionesLotes lado="comprador" operacionId={idRuta || undefined} onElegir={(id) => navegar("liq-reservas", id)}
         onReportar={onSoporte} onIrCatalogo={() => navegar("liq-catalogo")} />
@@ -117,8 +122,11 @@ export function LiquidacionesRouter({ screen, sb, idRuta, navegar, rol, empresa,
   if (!vista) return null;
   // El menú marca la sección; la ficha de un lote cuelga del catálogo (o de «Lotes» en el panel).
   const activo = screen === "liq-lote" ? (esEquipo ? "liq-admin-lotes" : "liq-catalogo") : screen;
+  const padre = screen === "liq-lote"
+    ? { label: esEquipo ? "Lotes" : "Liquidaciones", onClick: () => navegar(activo as Screen) }
+    : undefined;
   return (
-    <PantallaPortal sb={sb} active={activo} titulo={TITULOS[screen] ?? "Liquidaciones"}>
+    <PantallaPortal sb={sb} active={activo} titulo={TITULOS[screen] ?? "Liquidaciones"} padre={padre}>
       {vista}
     </PantallaPortal>
   );

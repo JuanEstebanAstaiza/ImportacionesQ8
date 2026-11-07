@@ -75,7 +75,7 @@ export function LoginForm({
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="space-y-2 text-center">
-        <CardTitle className="text-xl font-semibold tracking-tight">Iniciar sesion</CardTitle>
+        <CardTitle className="text-xl font-semibold tracking-tight">Iniciar sesión</CardTitle>
         <CardDescription>Selecciona tu rol y accede a tu portal</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -103,7 +103,7 @@ export function LoginForm({
 
         <form className="space-y-4" noValidate onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="space-y-2">
-            <Label htmlFor="login-email">Correo electronico</Label>
+            <Label htmlFor="login-email">Correo electrónico</Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -129,7 +129,7 @@ export function LoginForm({
                 onClick={onForgotPassword}
                 className="text-xs font-medium text-primary dark:text-accent hover:underline"
               >
-                Olvidaste tu contraseña?
+                ¿Olvidaste tu contraseña?
               </button>
             </div>
             <div className="relative">
@@ -194,7 +194,7 @@ export function LoginForm({
             </p>
           )}
           <button type="button" onClick={onLanding} className="hover:text-foreground">
-            Volver a la pagina principal
+            Volver a la página principal
           </button>
         </div>
       </CardContent>

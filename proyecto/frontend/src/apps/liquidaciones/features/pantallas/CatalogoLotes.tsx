@@ -8,6 +8,8 @@ import { CONDICIONES, ENTREGAS, ORDEN_CONDICIONES } from "@apps/liquidaciones/fe
 import { useCatalogo } from "@apps/liquidaciones/features/useLiquidaciones";
 import type { Condicion, Entrega, FiltrosCatalogo } from "@apps/liquidaciones/features/tipos";
 
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
 /** «Oportunidades por lote, a precio fijo»: el catálogo que ven compradores y el equipo. */
 export function CatalogoLotes({ onAbrir, titulo = "Oportunidades por lote, a precio fijo" }: { onAbrir: (id: string) => void; titulo?: string }) {
   const [busqueda, setBusqueda] = useState("");
@@ -22,6 +24,9 @@ export function CatalogoLotes({ onAbrir, titulo = "Oportunidades por lote, a pre
   const { data, isLoading, error } = useCatalogo(filtros);
   const categorias = useMemo(() => data?.categorias ?? [], [data]);
   const fijar = (cambio: Partial<FiltrosCatalogo>) => setFiltros((f) => ({ ...f, ...cambio }));
+  const conFiltros = Object.values(filtros).some(Boolean);
+  const destacados = data?.destacados.length ?? 0;
+  const resto = data?.lotes.length ?? 0;
 
   return (
     <div className="space-y-5">
@@ -34,7 +39,7 @@ export function CatalogoLotes({ onAbrir, titulo = "Oportunidades por lote, a pre
             Se vende el lote completo; el primero en dar clic en «Comprar lote» lo reserva.
           </p>
         </div>
-        {data && <p className="text-xs text-muted-foreground">{data.disponibles} disponibles · {data.publicados} publicadas</p>}
+        {data && <p className="text-xs text-muted-foreground">{plural(data.disponibles, "disponible", "disponibles")} · {plural(data.publicados, "publicada", "publicadas")}</p>}
       </div>
 
       <div className="grid gap-2 md:grid-cols-[1fr_180px_180px_200px]">
@@ -97,18 +102,25 @@ export function CatalogoLotes({ onAbrir, titulo = "Oportunidades por lote, a pre
               </div>
             </section>
           )}
-          <section className="space-y-2">
-            <p className="text-sm font-semibold">{data?.lotes.length ?? 0} liquidaciones</p>
-            {data && data.lotes.length === 0 && data.destacados.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                No hay lotes con esos filtros por ahora. Vuelve pronto: cada día se publican oportunidades nuevas.
+          {/* Con destacadas arriba, esta sección es «el resto»: si está vacía, no se muestra. */}
+          {(resto > 0 || destacados === 0) && (
+            <section className="space-y-2">
+              <p className="text-sm font-semibold">
+                {destacados > 0 ? `Más liquidaciones · ${resto}` : plural(resto, "liquidación", "liquidaciones")}
               </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-                {data?.lotes.map((lote) => <TarjetaLote key={lote.id} lote={lote} onAbrir={onAbrir} compacta />)}
-              </div>
-            )}
-          </section>
+              {resto === 0 ? (
+                <p className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                  {conFiltros
+                    ? "No hay lotes con esos filtros por ahora. Prueba quitando alguno."
+                    : "Todavía no hay lotes publicados. Vuelve pronto: cada día se publican oportunidades nuevas."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  {data?.lotes.map((lote) => <TarjetaLote key={lote.id} lote={lote} onAbrir={onAbrir} compacta />)}
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
     </div>

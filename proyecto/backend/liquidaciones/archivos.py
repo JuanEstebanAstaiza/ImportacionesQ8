@@ -11,7 +11,7 @@ decide aquello a lo que está ligado (ver `puede_ver`).
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import BinaryIO, Dict, Iterator, List, Optional, Tuple
 
@@ -43,6 +43,11 @@ MIME_POR_EXTENSION = {
 ESTADOS_LOTE_PUBLICOS = ("publicado", "reservado", "vendido")
 
 TROZO = 1024 * 1024
+
+# Un archivo que se sube y nunca se adjunta (formulario abandonado, foto quitada
+# antes de enviar) no lo ve nadie: pasado este plazo se borra.
+HORAS_ARCHIVO_SUELTO = 24
+_ultima_limpieza: Optional[datetime] = None
 
 
 class ArchivoInvalido(ValueError):
@@ -88,6 +93,10 @@ def subir(
     usuario: dict,
 ) -> Dict:
     """Vuelca el archivo a GridFS por trozos, sin cargarlo entero en memoria."""
+    try:
+        limpiar_huerfanos(db)
+    except Exception:  # noqa: BLE001 - la limpieza nunca debe tumbar una subida
+        pass
     if tipo not in TIPOS:
         raise ArchivoInvalido("Tipo de archivo no admitido")
     nombre_bucket, extensiones = TIPOS[tipo]
@@ -183,10 +192,32 @@ def reclamar(
 
     Solo admite archivos que subió esa misma cuenta, del tipo esperado y que no
     estén ligados a otra cosa: así nadie adjunta el archivo de otro adivinando su id.
+    Verifica todos antes de ligar ninguno, para que un archivo inválido no deje
+    los demás atados a una publicación que no se creó.
     """
-    nombre_bucket = TIPOS[tipo][0]
-    coleccion = db[f"{nombre_bucket}.files"]
-    referencias = []
+    filas = verificar(db, ids=ids, tipo=tipo, cuenta=cuenta, lote_id=lote_id, operacion_id=operacion_id)
+    if filas:
+        db[f"{TIPOS[tipo][0]}.files"].update_many(
+            {"_id": {"$in": [fila["_id"] for fila in filas]}},
+            {"$set": {"metadata.lote_id": lote_id, "metadata.operacion_id": operacion_id}},
+        )
+    return [{"id": str(fila["_id"]), "nombre": fila["metadata"].get("nombre_original"),
+             "content_type": fila["metadata"].get("content_type"), "tamano": fila.get("length", 0)}
+            for fila in filas]
+
+
+def verificar(
+    db: Database,
+    *,
+    ids: list,
+    tipo: str,
+    cuenta: str,
+    lote_id: Optional[str] = None,
+    operacion_id: Optional[str] = None,
+) -> List[Dict]:
+    """Comprueba, sin modificar nada, que `reclamar` aceptaría esos archivos."""
+    coleccion = db[f"{TIPOS[tipo][0]}.files"]
+    filas = []
     for archivo_id in ids:
         oid = _oid(archivo_id)
         fila = coleccion.find_one({"_id": oid}) if oid else None
@@ -196,13 +227,8 @@ def reclamar(
         ligado_a = meta.get("lote_id") or meta.get("operacion_id")
         if ligado_a and ligado_a not in (lote_id, operacion_id):
             raise ArchivoInvalido("Uno de los archivos ya está adjunto a otra publicación")
-        coleccion.update_one(
-            {"_id": oid},
-            {"$set": {"metadata.lote_id": lote_id, "metadata.operacion_id": operacion_id}},
-        )
-        referencias.append({"id": str(oid), "nombre": meta.get("nombre_original"),
-                            "content_type": meta.get("content_type"), "tamano": fila.get("length", 0)})
-    return referencias
+        filas.append(fila)
+    return filas
 
 
 def ref_documento(referencia) -> Optional[Dict]:
@@ -224,6 +250,36 @@ def borrar(db: Database, nombre_bucket: str, ids) -> None:
             bucket.delete(oid)
         except NoFile:
             pass
+
+
+def limpiar_huerfanos(db: Database, *, ahora: Optional[datetime] = None, forzar: bool = False) -> int:
+    """Borra los archivos sueltos de más de `HORAS_ARCHIVO_SUELTO` y los ligados a
+    un lote que no existe. Sin tarea programada: se llama al subir y corre como
+    mucho una vez por hora en cada proceso. Devuelve cuántos borró."""
+    global _ultima_limpieza
+    ahora = ahora or datetime.utcnow()
+    if not forzar and _ultima_limpieza and ahora - _ultima_limpieza < timedelta(hours=1):
+        return 0
+    _ultima_limpieza = ahora
+    limite = ahora - timedelta(hours=HORAS_ARCHIVO_SUELTO)
+    # El RUT queda suelto a propósito (no es de un lote ni de una operación).
+    ruts = {str((a.get("rut") or {}).get("id")) for a in db.activaciones.find({}, {"rut.id": 1})}
+    borrados = 0
+    for nombre_bucket in (mongo.BUCKET_MEDIOS, mongo.BUCKET_DOCUMENTOS):
+        candidatos = []
+        filas = db[f"{nombre_bucket}.files"].find(
+            {"uploadDate": {"$lt": limite}, "metadata.operacion_id": None}, {"metadata": 1}).limit(500)
+        for fila in filas:
+            meta = fila.get("metadata") or {}
+            if meta.get("lote_id"):
+                if db.lotes.find_one({"_id": meta["lote_id"]}, {"_id": 1}):
+                    continue
+            elif meta.get("tipo") == "rut" and str(fila["_id"]) in ruts:
+                continue
+            candidatos.append(fila["_id"])
+        borrar(db, nombre_bucket, candidatos)
+        borrados += len(candidatos)
+    return borrados
 
 
 def puede_ver(db: Database, fila: Dict, usuario: Optional[dict]) -> bool:

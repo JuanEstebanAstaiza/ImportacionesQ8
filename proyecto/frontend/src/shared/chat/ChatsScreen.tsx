@@ -112,6 +112,13 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
   return Boolean(tier) && esCotizante && esRolAutorizado;
 }
 
+/** «operacion:<id>» → «Operación 1A2B3C4D»: la referencia que guarda un ticket abierto desde un producto. */
+function etiquetaReferencia(referencia: string): string {
+  const [tipo, id = ""] = referencia.split(":");
+  const nombre = tipo === "operacion" ? "Operación" : tipo === "lote" ? "Lote" : tipo;
+  return `${nombre} ${id.slice(0, 8).toUpperCase()}`;
+}
+
 export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onOpenProposalForm,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers,onLoadResourceFolder,userPhotoUrl}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onOpenProposalForm?:(quoteId:string)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[];onLoadResourceFolder?:(parentId:string|null)=>Promise<BackendExplorerResponse>;userPhotoUrl?:string}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
@@ -123,7 +130,9 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
   const [msgs,setMsgs]=useState<Record<string,ChatMsg[]>>(messagesByConversation);
   const [input,setInput]=useState("");
   const [sending,setSending]=useState(false);
-  const [showCtx,setShowCtx]=useState(true);
+  // En pantallas de portátil (< 1280 px) el panel de contexto le quita al chat el
+  // ancho que necesita la caja de mensaje: arranca cerrado y se abre con su botón.
+  const [showCtx,setShowCtx]=useState(()=>typeof window==="undefined"||window.innerWidth>=1280);
   const [showEmojiMenu,setShowEmojiMenu]=useState(false);
   const inputRef=useRef<HTMLTextAreaElement>(null);
   const [transferTo,setTransferTo]=useState("");
@@ -1479,13 +1488,17 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                     </p>
 
                     {[
-                      ["Asunto", conv.subject || "?"],
-                      ["Urgencia", URGENCIA_SOPORTE[conv.urgency || ""]?.label || "?"],
-                      ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "?"],
+                      // La mesa es una sola para la suite: el ticket dice de qué producto viene y sobre qué.
+                      ["Producto", moduloDe((conv.modulo || "importaciones") as Producto).nombre],
+                      ...(conv.referencia ? [["Sobre", etiquetaReferencia(conv.referencia)]] : []),
+                      ["Asunto", conv.subject || "—"],
+                      ["Urgencia", URGENCIA_SOPORTE[conv.urgency || ""]?.label || "—"],
+                      ["Nivel de mesa", conv.level ? `Nivel ${conv.level}` : "—"],
                       ["Atiende", conv.agentName || "Sin asignar"],
-                      ["Solicita", conv.counterpartName || "?"],
-                      ["Perfil", etiquetaDeRol(conv.requesterRole) || "?"],
-                      ...(conv.closed ? [["Cerró", conv.closedBy || "?"]] : []),
+                      // Para quien pidió el ticket, la contraparte es Soporte Zarpi: el que solicita es él.
+                      ["Solicita", esEquipoPlataforma ? (conv.counterpartName || "—") : "Tú"],
+                      ["Perfil", etiquetaDeRol(conv.requesterRole) || "—"],
+                      ...(conv.closed ? [["Cerró", conv.closedBy || "—"]] : []),
                       ...(conv.rating ? [["Calificación", `${conv.rating} de 5`]] : []),
                     ].map(([k, v]) => (
                       <div key={k} className="flex justify-between items-start gap-1">

@@ -92,7 +92,7 @@ export interface CatalogoLotes {
 }
 
 export interface MisLotes {
-  contadores: { disponibles: number; pendientes: number; reservadas: number; vendidas: number };
+  contadores: { disponibles: number; pendientes: number; reservadas: number; vendidas: number; necesitan_cambios?: number };
   lotes: Lote[];
 }
 
@@ -201,6 +201,7 @@ export interface MetricasLiquidaciones {
   valor_vendido_30d_cop: number;
   vencidas_30d: number;
   canceladas_30d: number;
+  cerrados_sin_venta_30d?: number;
   tasa_venta_30d: number | null;
   horas_promedio_revision: number | null;
   cuentas_activadas: number;

@@ -10,6 +10,9 @@ Tono del producto: se habla de **oportunidad**, nunca de «baja rotación», «s
 - **Archivos en GridFS**, en dos buckets:
   - `medios`: fotos y videos de los lotes.
   - `documentos`: fichas técnicas, comprobantes de pago, facturas y RUT.
+
+  Un archivo nace suelto y queda ligado al lote u operación al adjuntarse. Al publicar se verifican todos los archivos antes de ligar ninguno, así un archivo inválido no deja a los demás atados a un lote que no se creó. Los archivos sueltos de más de 24 h (formulario abandonado, foto quitada) y los ligados a un lote inexistente se borran solos: la limpieza corre al subir un archivo, como mucho una vez por hora, y respeta el RUT de las cuentas activadas.
+- **Quién entra:** cotizante, empresa (dueña y asesores), admin y soporte. Otros roles, como diseñador, reciben 403.
 - **Lo único que escribe en MySQL:**
   - los avisos de la campana, que es común a la suite;
   - el campo `modulo` de los tickets de la mesa de ayuda, que también es una sola.
@@ -71,7 +74,7 @@ en_revision → publicado → reservado → vendido
 
 ## Mesa de ayuda compartida
 
-`POST /chat/soporte` acepta `modulo` (`importaciones` | `liquidaciones`) y `referencia` (`lote:<id>`, `operacion:<id>`). La migración `20261024_0045` añade esas columnas a `conversaciones_chat`; los tickets anteriores se leen como de Importaciones. `GET /admin/conversaciones?modulo=` filtra, y la bandeja del equipo tiene chips por producto.
+`POST /chat/soporte` acepta `modulo` (`importaciones` | `liquidaciones`) y `referencia` (`lote:<id>`, `operacion:<id>`). El panel de contexto del ticket muestra el producto y la referencia; la bandeja `/chats` es común a la suite y abrirla no cambia de producto. La migración `20261024_0045` añade esas columnas a `conversaciones_chat`; los tickets anteriores se leen como de Importaciones. `GET /admin/conversaciones?modulo=` filtra, y la bandeja del equipo tiene chips por producto.
 
 ## Frontend
 

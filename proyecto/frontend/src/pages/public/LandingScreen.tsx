@@ -54,7 +54,7 @@ function FooterPublico({ onLanding, onPlanes, onPolicy, onTendencias }: FooterPu
           <span className="font-semibold text-white/70">Aviso legal: </span>
           Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
         </p>
-        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">? 2026 Zarpi. Todos los derechos reservados.</p>
+        <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
         <div className="flex justify-center border-t border-white/10 pt-5">
           <PublicSicLogo />
         </div>
@@ -99,7 +99,7 @@ export function PantallaPublica({activa,onLanding,onPlanes,onLogin,onRegister,on
               type="button"
               onClick={toggleTheme}
               title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground"
             >
               {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
@@ -328,7 +328,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
             <button
               onClick={toggleTheme}
               title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              aria-label={dark ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground active:bg-primary/90 dark:active:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
@@ -514,7 +514,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
             <span className="font-semibold text-white/70">Aviso legal: </span>
             Zarpi S.A.S. es una plataforma de intermediación tecnológica. No importa, no transporta, no nacionaliza ni recibe el dinero de las operaciones. Cada operación se celebra directamente entre quien importa y la empresa importadora que elige.
           </p>
-          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">? 2026 Zarpi. Todos los derechos reservados.</p>
+          <p className="border-t border-white/10 pt-5 text-center text-xs text-white/40">© 2026 Zarpi. Todos los derechos reservados.</p>
           <div className="flex justify-center border-t border-white/10 pt-5">
             <PublicSicLogo />
           </div>

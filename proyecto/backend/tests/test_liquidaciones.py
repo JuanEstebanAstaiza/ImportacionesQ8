@@ -443,3 +443,74 @@ def test_modulo_apagado_responde_404(client, db_session, comprador):
     finally:
         modulos.fijar(db_session, "liquidaciones", True, "test")
         db_session.commit()
+
+
+# ==================== Correcciones tras la prueba E2E ====================
+
+def test_publicacion_fallida_no_bloquea_las_fotos(client, empresa, db_session):
+    """Si un archivo del lote es inválido, los demás no quedan atados a un lote que no se creó."""
+    _, _, h_empresa = empresa
+    _activar(client, h_empresa)
+    fotos = [_subir(client, h_empresa, "foto")["id"] for _ in range(3)]
+    _, otra_dueña = crear_empresa_importadora(db_session, nombre_empresa=f"Otra {uuid4().hex[:6]}",
+                                              email_dueño=f"otra_{uuid4().hex[:8]}@example.com")
+    ajena = _subir(client, auth_headers_for(otra_dueña), "foto")["id"]
+    base = {"nombre": "Lote", "categoria": "Hogar", "unidades": 10, "condicion": "nuevo",
+            "precio_cop": 100_000, "ciudad": "Cali", "entrega": "comprador_recoge", "dias_cierre": 5}
+
+    r = client.post("/liquidaciones/mis-lotes", json={**base, "fotos": fotos[:2] + [ajena]}, headers=h_empresa)
+    assert r.status_code == 400
+    # Tampoco si lo inválido es la ficha técnica, que se revisa después de las fotos.
+    r = client.post("/liquidaciones/mis-lotes", json={**base, "fotos": fotos, "ficha_tecnica_id": ajena},
+                    headers=h_empresa)
+    assert r.status_code == 400
+
+    r = client.post("/liquidaciones/mis-lotes", json={**base, "fotos": fotos}, headers=h_empresa)
+    assert r.status_code == 201, r.text
+
+
+def test_limpieza_de_archivos_huerfanos(client, empresa, equipo, mongo_liq):
+    from liquidaciones import archivos
+
+    _, _, h_empresa = empresa
+    _, h_equipo = equipo
+    _activar(client, h_empresa)
+    lote = _lote(client, h_empresa)
+    suelto = _subir(client, h_empresa, "foto")["id"]
+    fantasma = _subir(client, h_empresa, "foto")["id"]
+    medios = mongo_liq[f"{mongo.BUCKET_MEDIOS}.files"]
+    medios.update_one({"_id": archivos._oid(fantasma)}, {"$set": {"metadata.lote_id": "lote-que-no-existe"}})
+
+    # Recién subidos no se tocan: el vendedor puede estar llenando el formulario.
+    assert archivos.limpiar_huerfanos(mongo_liq, forzar=True) == 0
+
+    despues = datetime.utcnow() + timedelta(hours=archivos.HORAS_ARCHIVO_SUELTO + 1)
+    archivos.limpiar_huerfanos(mongo_liq, ahora=despues, forzar=True)
+    assert medios.find_one({"_id": archivos._oid(suelto)}) is None
+    assert medios.find_one({"_id": archivos._oid(fantasma)}) is None
+    # Las fotos del lote y el RUT de la cuenta activada se conservan.
+    assert all(medios.find_one({"_id": archivos._oid(f["id"])}) for f in lote["fotos"])
+    rut = mongo_liq.activaciones.find_one({})["rut"]["id"]
+    assert mongo_liq[f"{mongo.BUCKET_DOCUMENTOS}.files"].find_one({"_id": archivos._oid(rut)})
+
+
+def test_roles_fuera_del_modulo_no_entran(client, db_session):
+    _, headers = crear_usuario_con_token(db_session, rol="designer")
+    assert client.get("/liquidaciones/lotes", headers=headers).status_code == 403
+    assert client.get("/liquidaciones/parametros", headers=headers).status_code == 403
+
+
+def test_rechazo_avisa_la_nota_y_cuenta_en_mis_lotes(client, empresa, equipo, db_session):
+    from models.notificacion import Notificacion
+
+    _, dueña, h_empresa = empresa
+    _, h_equipo = equipo
+    _activar(client, h_empresa)
+    lote = _lote(client, h_empresa)
+    client.post(f"/liquidaciones/admin/lotes/{lote['id']}/rechazar",
+                json={"motivos": ["Precio incoherente con el lote"], "nota": "Revisa el precio por unidad"},
+                headers=h_equipo)
+    aviso = db_session.query(Notificacion).filter(Notificacion.usuario_id == dueña.id,
+                                                  Notificacion.tipo == "liquidacion_rechazada").first()
+    assert "Revisa el precio por unidad" in aviso.mensaje
+    assert client.get("/liquidaciones/mis-lotes", headers=h_empresa).json()["contadores"]["necesitan_cambios"] == 1

@@ -5,9 +5,9 @@ import { clsx } from "clsx";
 import type { SidebarCtrl } from "@/types/portal";
 import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { gruposAdminDeModulos } from "@shared/suite/suite";
-import { SelectorProducto } from "@shared/layout/SelectorProducto";
+import { LogoProducto } from "@shared/layout/LogoProducto";
 
-export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo,productos,producto,onProducto}:SidebarCtrl) {
+export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo,productos,producto}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
@@ -49,7 +49,7 @@ export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoport
           : pinned ? "w-full" : "w-14"
       )}>
         <div className={clsx("flex items-center h-[57px] border-b border-sidebar-border",isExpanded?"px-2.5":"justify-center px-0")}>
-          <SelectorProducto dark={dark} expandido={isExpanded} productos={productos??[]} producto={producto} onProducto={onProducto}/>
+          <LogoProducto dark={dark} expandido={isExpanded} nombre={producto&&producto!=="importaciones"?productos?.find(p=>p.clave===producto)?.nombre:undefined}/>
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1 overflow-y-auto">
@@ -211,7 +211,7 @@ export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoport
           >
             <LogIn className="w-4 h-4 flex-shrink-0 rotate-180"/>
             <div className={clsx("overflow-hidden transition-all duration-200",isExpanded?"w-auto opacity-100":"w-0 opacity-0")}>
-              <span className="whitespace-nowrap">Cerrar sesion</span>
+              <span className="whitespace-nowrap">Cerrar sesión</span>
             </div>
           </button>
         </div>

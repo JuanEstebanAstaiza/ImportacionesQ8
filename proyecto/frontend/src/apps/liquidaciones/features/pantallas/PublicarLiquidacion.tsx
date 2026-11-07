@@ -203,11 +203,11 @@ export function PublicarLiquidacion({ loteId, onListo, onCancelar }: { loteId?: 
 
         <Seccion titulo="Fotos y videos reales del lote" extra={<span className="text-xs text-muted-foreground">{fotos.length} de mínimo {fotosMin}</span>}>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {fotos.map((foto) => (
+            {fotos.map((foto, i) => (
               <div key={foto.id} className="group relative aspect-square overflow-hidden rounded-lg border border-border">
                 <FotoLote foto={foto} alt="Foto del lote" className="h-full" />
                 <button type="button" onClick={() => setFotos((l) => l.filter((f) => f.id !== foto.id))}
-                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100" aria-label="Quitar foto">
+                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Quitar foto ${i + 1}`}>
                   <X className="h-3 w-3" />
                 </button>
               </div>
@@ -226,7 +226,7 @@ export function PublicarLiquidacion({ loteId, onListo, onCancelar }: { loteId?: 
               {videos.map((video, i) => (
                 <div key={video.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
                   <span>Video {i + 1}</span>
-                  <button type="button" onClick={() => setVideos((l) => l.filter((v) => v.id !== video.id))} className="text-xs text-muted-foreground hover:text-foreground">Quitar</button>
+                  <button type="button" onClick={() => setVideos((l) => l.filter((v) => v.id !== video.id))} className="text-xs text-muted-foreground hover:text-foreground" aria-label={`Quitar video ${i + 1}`}>Quitar</button>
                 </div>
               ))}
               {videos.length < videosMax && (
@@ -241,7 +241,7 @@ export function PublicarLiquidacion({ loteId, onListo, onCancelar }: { loteId?: 
             {ficha ? (
               <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
                 <span className="flex items-center gap-2 truncate"><FileText className="h-4 w-4 text-primary dark:text-accent" />{ficha.nombre || "Ficha técnica"}</span>
-                <button type="button" onClick={() => setFicha(null)} className="text-xs text-muted-foreground hover:text-foreground">Quitar</button>
+                <button type="button" onClick={() => setFicha(null)} className="text-xs text-muted-foreground hover:text-foreground" aria-label="Quitar ficha técnica">Quitar</button>
               </div>
             ) : (
               <SubirArchivo tipo="ficha_tecnica" etiqueta="Subir ficha técnica" ayuda="PDF con especificaciones del producto" maxMb={p?.mb_max_documento}
@@ -252,8 +252,8 @@ export function PublicarLiquidacion({ loteId, onListo, onCancelar }: { loteId?: 
 
         <Seccion titulo="Precio, ubicación y entrega">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Input label="Precio del lote completo (COP)" inputMode="numeric" placeholder="10500000"
-              value={precio} onChange={(e) => setPrecio(e.target.value.replace(/\D/g, ""))} error={errores.precio} />
+            <Input label="Precio del lote completo (COP)" inputMode="numeric" placeholder="10.500.000"
+              value={precioNumero ? precioNumero.toLocaleString("es-CO") : ""} onChange={(e) => setPrecio(e.target.value.replace(/\D/g, ""))} error={errores.precio} />
             <Input label="Precio por unidad" value={precioUnidad ? cop(precioUnidad) : "—"} readOnly disabled />
             <Select label="Ciudad de la mercancía" value={ciudad} onChange={(e) => setCiudad(e.target.value)}>
               <option value="">Selecciona</option>
@@ -296,11 +296,12 @@ export function PublicarLiquidacion({ loteId, onListo, onCancelar }: { loteId?: 
           <div>
             <div className="mb-1 flex items-center justify-between text-sm">
               <span className="font-medium">Fecha de cierre</span>
-              <span className="text-muted-foreground">{fechaCorta(fechaCierre)} · {dias} {dias === 1 ? "día" : "días"}</span>
+              <span className="text-muted-foreground">{dias} {dias === 1 ? "día" : "días"} después de aprobada</span>
             </div>
             <input type="range" min={1} max={diasMax} value={Math.min(dias, diasMax)} onChange={(e) => setDias(Number(e.target.value))}
               className="w-full accent-[var(--primary)]" aria-label="Días hasta el cierre" />
-            <p className="text-xs text-muted-foreground">Máximo {diasMax} días después de publicada.</p>
+            {/* El plazo corre desde que Zarpi la aprueba, no desde hoy: la fecha es una referencia. */}
+            <p className="text-xs text-muted-foreground">Si se aprueba hoy, cierra el {fechaCorta(fechaCierre)}. Máximo {diasMax} días.</p>
           </div>
           <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5">
             <input type="checkbox" checked={destacado} onChange={(e) => setDestacado(e.target.checked)} className="mt-1" />

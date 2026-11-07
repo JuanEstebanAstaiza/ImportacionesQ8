@@ -218,7 +218,7 @@ export function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSu
           <>
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4"/>
             <h2 className="text-lg font-semibold mb-2">¡Cuenta activada con Éxito!</h2>
-            <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesion...</p>
+            <p className="text-sm text-muted-foreground">Redirigiendo al inicio de sesión…</p>
           </>
         )}
       </div>
@@ -420,7 +420,7 @@ export function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSu
       </main>
 
       <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>? 2026 Zarpi</span>
+        <span>© 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>

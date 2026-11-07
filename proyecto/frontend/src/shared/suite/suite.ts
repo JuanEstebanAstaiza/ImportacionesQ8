@@ -26,6 +26,8 @@ export interface ModuloSuite {
   clave: Producto;
   nombre: string;
   descripcion: string;
+  /** Título de la pestaña del navegador en este producto; sin él queda el de index.html. */
+  tituloPestana?: string;
   /** Bandera de `/configuracion-publica` que lo enciende; null = siempre activo. */
   flag: keyof PlatformConfig | null;
   /** Roles que lo usan como producto (entran por el selector). */
@@ -77,6 +79,7 @@ export const LIQUIDACIONES: ModuloSuite = {
   clave: "liquidaciones",
   nombre: "Liquidaciones",
   descripcion: "Lotes completos a precio fijo, por tiempo limitado",
+  tituloPestana: "Zarpi Liquidaciones | Lotes completos a precio de oportunidad",
   flag: "modulo_liquidaciones_habilitado",
   roles: ["solicitante", "importadora", "asesor"],
   esPantalla: esPantallaLiquidaciones,
@@ -151,7 +154,8 @@ export function modulosActivos(config: PlatformConfig): ModuloSuite[] {
  * Pantallas de la cuenta, no de un producto: abrirlas no cambia el producto en
  * uso (el menú sigue siendo el de Liquidaciones si se venía de ahí).
  */
-export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "login", "register", "landing", "mkt-landing", "maq-landing"];
+// `chats` es la bandeja de toda la suite (tickets de soporte de cualquier producto): abrirla no cambia de producto.
+export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing", "maq-landing"];
 
 /** Producto al que pertenece una pantalla. */
 export function productoDe(screen: Screen): Producto {

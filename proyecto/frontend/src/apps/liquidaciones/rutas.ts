@@ -23,6 +23,8 @@ export const RUTAS_LIQUIDACIONES: Ruta[] = [
   { screen: "liq-catalogo", path: "/liquidaciones/lotes" },
   { screen: "liq-lote", path: "/liquidaciones/lotes", param: "lote" },
   { screen: "liq-activar", path: "/liquidaciones/activar" },
+  // Al activar desde «Comprar lote», la ruta lleva el lote para volver a él.
+  { screen: "liq-activar", path: "/liquidaciones/activar", param: "lote" },
   { screen: "liq-reservas", path: "/liquidaciones/reservas" },
   { screen: "liq-reservas", path: "/liquidaciones/reservas", param: "operacion" },
   { screen: "liq-mis-lotes", path: "/liquidaciones/mis-lotes" },

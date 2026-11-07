@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Building2, ChevronRight, FileText, Users } from "lucide-react";
 import { Sidebar } from "@shared/layout/Sidebar";
 import { AppHeader, USER_IMPORTADORA } from "@shared/layout/AppHeader";
@@ -7,19 +6,13 @@ import { Badge, Button, Card } from "@shared/ui/design-system";
 import { PanelEmpresa } from "@apps/importaciones/features/importador/PanelEmpresa";
 import type { SidebarCtrl } from "@/types/portal";
 import type { BadgeVariant } from "@/types/design-system";
-import { useImporterData } from "@/hooks/useImporterData";
-import { useChatManager } from "@/hooks/useChatManager";
+import type { ChatConv } from "@/types/chat";
+import type { CompanyAdvisor } from "@/types/portal";
+import type { Quote } from "@/types/quote";
 
-export function ImporterDashboardScreen({sb,companyName}:{sb:SidebarCtrl;companyName:string}) {
-  const { importerQuotes: quotes, companyAdvisors: advisors, reloadImporterQuotes, reloadCompanyAdvisors } = useImporterData();
-  const { chatConversations: chats, reloadChatData } = useChatManager();
-  useEffect(() => {
-    void Promise.all([
-      reloadImporterQuotes(),
-      reloadCompanyAdvisors(),
-      reloadChatData(),
-    ]);
-  }, [reloadChatData, reloadCompanyAdvisors, reloadImporterQuotes]);
+/** Panel de la empresa. Los datos los carga App y llegan por el portal: pedirlos aquí
+ * otra vez duplicaba decenas de peticiones (mensajes y adjuntos de cada chat). */
+export function ImporterDashboardScreen({sb,companyName,quotes,advisors,chats}:{sb:SidebarCtrl;companyName:string;quotes:Quote[];advisors:CompanyAdvisor[];chats:ChatConv[]}) {
   const activeChatsCount = chats.filter(c=>c.status==="activa").length;
   const activeAdvisors = advisors.filter(a=>a.status==="activo").length;
   return (

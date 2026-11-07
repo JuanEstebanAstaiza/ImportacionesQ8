@@ -135,7 +135,7 @@ export function ResetPasswordForm({
         >
           {/* OTP */}
           <div className="space-y-2">
-            <Label htmlFor="reset-otp">Codigo OTP</Label>
+            <Label htmlFor="reset-otp">Código OTP</Label>
 
             <Input
               id="reset-otp"

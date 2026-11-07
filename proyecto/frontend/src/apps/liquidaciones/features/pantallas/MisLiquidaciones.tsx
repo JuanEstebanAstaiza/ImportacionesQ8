@@ -1,4 +1,4 @@
-import { CircleCheck, CirclePlus, Hourglass, Loader2, Bookmark, Tag } from "lucide-react";
+import { CircleAlert, CircleCheck, CirclePlus, Hourglass, Loader2, Bookmark, Tag } from "lucide-react";
 
 import { Button, Card } from "@shared/ui/design-system";
 import { InsigniaEstadoLote } from "@apps/liquidaciones/features/componentes/Insignias";
@@ -77,9 +77,10 @@ export function MisLiquidaciones({
         <Button variant="acento" icon={<CirclePlus className="h-4 w-4" />} onClick={onPublicar}>Publicar liquidación</Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Contador icono={<Tag className="h-4 w-4" />} valor={data?.contadores.disponibles ?? 0} etiqueta="Disponibles" tono="bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" />
         <Contador icono={<Hourglass className="h-4 w-4" />} valor={data?.contadores.pendientes ?? 0} etiqueta="Pendientes de revisión" tono="bg-amber-500/10 text-amber-600 dark:text-amber-300" />
+        <Contador icono={<CircleAlert className="h-4 w-4" />} valor={data?.contadores.necesitan_cambios ?? 0} etiqueta="Necesitan cambios" tono="bg-red-500/10 text-red-600 dark:text-red-300" />
         <Contador icono={<Bookmark className="h-4 w-4" />} valor={data?.contadores.reservadas ?? 0} etiqueta="Reservadas" tono="bg-violet-500/10 text-violet-600 dark:text-violet-300" />
         <Contador icono={<CircleCheck className="h-4 w-4" />} valor={data?.contadores.vendidas ?? 0} etiqueta="Vendidas" tono="bg-slate-500/10 text-slate-600 dark:text-slate-300" />
       </div>
