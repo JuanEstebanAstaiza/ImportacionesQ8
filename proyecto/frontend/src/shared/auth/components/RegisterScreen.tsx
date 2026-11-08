@@ -420,7 +420,7 @@ export function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSu
       </main>
 
       <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
-        <span>© 2026 Zarpi</span>
+        <span>® 2026 Zarpi</span>
         <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
           Tratamiento de Datos
         </button>
