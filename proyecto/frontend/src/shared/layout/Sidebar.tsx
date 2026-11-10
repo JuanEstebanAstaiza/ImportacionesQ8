@@ -7,7 +7,7 @@ import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { gruposAdminDeModulos } from "@shared/suite/suite";
 import { LogoProducto } from "@shared/layout/LogoProducto";
 
-export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo,productos,producto}:SidebarCtrl) {
+export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoporte,showSoporte,onCanalEquipo,showCanalEquipo}:SidebarCtrl) {
   const { dark } = useBrandTheme();
   const [hovered,setHovered]=useState(false);
   const [openAdminGroup,setOpenAdminGroup]=useState<string|null>(null);
@@ -49,7 +49,7 @@ export function Sidebar({active,onNav,pinned,onToggle,navItems,onLogout,onSoport
           : pinned ? "w-full" : "w-14"
       )}>
         <div className={clsx("flex items-center h-[57px] border-b border-sidebar-border",isExpanded?"px-2.5":"justify-center px-0")}>
-          <LogoProducto dark={dark} expandido={isExpanded} nombre={producto&&producto!=="importaciones"?productos?.find(p=>p.clave===producto)?.nombre:undefined}/>
+          <LogoProducto dark={dark} expandido={isExpanded}/>
         </div>
 
         <nav className="flex flex-col gap-0.5 p-2 mt-1 flex-1 overflow-y-auto">

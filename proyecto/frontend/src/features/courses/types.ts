@@ -1,5 +1,7 @@
 export type CourseLevel = "Principiante" | "Avanzado";
 export type ResourceType = "archivo" | "plantilla" | "checklist" | "guia";
+/** Cómo se accede al curso: de pago, gratis, o con el primer módulo gratis. */
+export type CourseModality = "pago" | "gratis" | "primer_modulo_gratis";
 
 export interface LessonResource {
   id: string;
@@ -32,6 +34,7 @@ export interface Course {
   descripcion: string;
   portada_url?: string | null;
   precio: number;
+  modalidad: CourseModality;
   nivel: CourseLevel;
   categoria: string;
   importador_id?: string;
@@ -47,6 +50,8 @@ export interface Course {
   pagoManual?: boolean;
   /** Ya subió el comprobante de este curso y lo están revisando. */
   comprobantePendiente?: boolean;
+  /** Primer módulo gratis: ya lo terminó sin haber comprado el curso. */
+  moduloGratisCompletado?: boolean;
 }
 
 export interface PublishLessonResourceInput {
@@ -81,6 +86,7 @@ export interface PublishCourseInput {
   descripcion: string;
   portada_url?: string;
   precio: number;
+  modalidad: CourseModality;
   nivel: CourseLevel;
   categoria: string;
   modulos: PublishModuleInput[];

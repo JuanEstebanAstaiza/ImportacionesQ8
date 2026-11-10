@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator, model_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -7,6 +7,17 @@ from utils.urls import canonicalize_resource_url
 
 NivelCursoLiteral = Literal["Principiante", "Avanzado"]
 TipoRecursoLiteral = Literal["archivo", "plantilla", "checklist", "guia"]
+ModalidadCursoLiteral = Literal["pago", "gratis", "primer_modulo_gratis"]
+
+
+def precio_segun_modalidad(modalidad: str, precio: float) -> float:
+    """Un curso gratis no lleva precio; uno de pago (o con el primer módulo
+    gratis) necesita uno: así no vuelven a aparecer cursos de «$0»."""
+    if modalidad == "gratis":
+        return 0.0
+    if not precio or precio <= 0:
+        raise ValueError("Un curso de pago necesita un precio mayor a cero. Si no se cobra, elige «Gratis».")
+    return precio
 
 # Límites anti-DoS en payload de publicación
 MAX_MODULOS = 30
@@ -81,9 +92,18 @@ class CursoCreate(BaseModel):
     portada_url: Optional[str] = Field(default=None, max_length=500)
     # En COP (los cursos se pagan por transferencia mientras no hay pasarela).
     precio: float = Field(default=0.0, ge=0, le=100_000_000)
+    # Sin modalidad (clientes anteriores): precio 0 es gratis y lo demás de pago.
+    modalidad: Optional[ModalidadCursoLiteral] = None
     nivel: NivelCursoLiteral = "Principiante"
     categoria: str = Field(default="General", min_length=1, max_length=120)
     modulos: List[ModuloCreate] = Field(..., min_length=1, max_length=MAX_MODULOS)
+
+    @model_validator(mode="after")
+    def precio_coherente(self) -> "CursoCreate":
+        if self.modalidad is None:
+            self.modalidad = "gratis" if not self.precio or self.precio <= 0 else "pago"
+        self.precio = precio_segun_modalidad(self.modalidad, self.precio)
+        return self
 
     @field_validator("portada_url")
     @classmethod
@@ -103,6 +123,8 @@ class CursoUpdate(BaseModel):
     descripcion: Optional[str] = Field(default=None, max_length=5000)
     portada_url: Optional[str] = Field(default=None, max_length=500)
     precio: Optional[float] = Field(default=None, ge=0, le=100_000_000)
+    # El precio se valida contra la modalidad en el router, con los valores que ya tiene el curso.
+    modalidad: Optional[ModalidadCursoLiteral] = None
     nivel: Optional[NivelCursoLiteral] = None
     categoria: Optional[str] = Field(default=None, min_length=1, max_length=120)
     estado: Optional[Literal["borrador", "publicado", "archivado"]] = None
@@ -161,6 +183,7 @@ class CursoListItem(BaseModel):
     descripcion: str
     portada_url: Optional[str] = None
     precio: float
+    modalidad: str = "pago"
     nivel: str
     categoria: str
     # Vacío en los cursos propios de Zarpi (importadora_nombre = «Zarpi»).
@@ -182,6 +205,8 @@ class CursoDetailResponse(CursoListItem):
     comprobante_pendiente: bool = False
     lecciones_completadas: List[str] = Field(default_factory=list)
     progreso_pct: float = 0.0
+    # Primer módulo gratis: ya lo terminó sin haber comprado el curso.
+    modulo_gratis_completado: bool = False
 
 
 class CompraCursoResponse(BaseModel):
@@ -222,3 +247,5 @@ class ProgresoLeccionResponse(BaseModel):
     total_lecciones: int
     progreso_pct: float
     fecha_completado: Optional[datetime] = None
+    # Primer módulo gratis: con esta lección lo terminó y tiene que comprar para seguir.
+    modulo_gratis_completado: bool = False

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Course, CourseProgress, LearningState, PublishCourseInput } from "./types";
 import { coursesService } from "@/services/courses.service";
+import type { ProgresoLeccionResponse } from "@/services/courses.service";
 
 const DEFAULT_LEARNING_STATE: LearningState = {
   lastCourseId: null,
@@ -108,6 +109,9 @@ export function useCourses() {
 
       if (course.comprado) {
         setPurchasedCourseIds((current) => current.includes(course.id) ? current : [...current, course.id]);
+      }
+      // Con el primer módulo gratis el progreso existe aunque no lo haya comprado.
+      if (course.comprado || course.modalidad === "primer_modulo_gratis") {
         setCompletedLessonsByCourse((current) => ({
           ...current,
           [course.id]: completedLessonIds,
@@ -154,7 +158,7 @@ export function useCourses() {
     });
   }
 
-  async function toggleLessonCompleted(courseId: string, lessonId: string, completed: boolean): Promise<void> {
+  async function toggleLessonCompleted(courseId: string, lessonId: string, completed: boolean): Promise<ProgresoLeccionResponse> {
     setIsSavingProgress(true);
     try {
       const result = await coursesService.markLessonProgress(courseId, lessonId, completed);
@@ -164,9 +168,10 @@ export function useCourses() {
       }));
       setCatalogCourses((current) => current.map((row) => (
         row.id === result.curso_id
-          ? { ...row, progreso_pct: result.progreso_pct }
+          ? { ...row, progreso_pct: result.progreso_pct, moduloGratisCompletado: Boolean(result.modulo_gratis_completado) || row.moduloGratisCompletado }
           : row
       )));
+      return result;
     } finally {
       setIsSavingProgress(false);
     }

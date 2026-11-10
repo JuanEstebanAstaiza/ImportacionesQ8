@@ -12,14 +12,14 @@ from sqlalchemy import func, or_
 
 from models.curso import (
     Curso, ModuloCurso, LeccionCurso, RecursoLeccion, CompraCurso, ProgresoLeccion,
-    CertificadoCurso, EstadoCurso,
+    CertificadoCurso, EstadoCurso, ModalidadCurso,
 )
 from models.documental import Archivo, CursoRecurso
 from models.importador import Importador
 from schemas.curso import (
     CursoCreate, CursoUpdate, CursoListItem, CursoDetailResponse, CompraCursoResponse,
     ProgresoLeccionRequest, ProgresoLeccionResponse, ModuloResponse, LeccionResponse,
-    RecursoLeccionResponse, CertificadoCursoResponse, AccesoCursoCreate,
+    RecursoLeccionResponse, CertificadoCursoResponse, AccesoCursoCreate, precio_segun_modalidad,
 )
 from services import acceso_cursos
 from services.notificacion_service import crear_notificacion_best_effort
@@ -120,6 +120,7 @@ def _to_list_item(curso: Curso, nombres: Optional[dict] = None, db: Optional[Ses
         descripcion=curso.descripcion or "",
         portada_url=curso.portada_url,
         precio=float(curso.precio or 0),
+        modalidad=curso.modalidad or ModalidadCurso.pago.value,
         nivel=curso.nivel,
         categoria=curso.categoria,
         importador_id=curso.importador_id,
@@ -154,6 +155,37 @@ def _progreso_usuario(db: Session, usuario_id: str, curso_id: str) -> tuple:
     ]
     pct = round((len(completadas) / total * 100), 2) if total > 0 else 0.0
     return completadas, int(total), pct
+
+
+def _es_primer_modulo_gratis(curso: Curso) -> bool:
+    return curso.modalidad == ModalidadCurso.primer_modulo_gratis.value
+
+
+def _lecciones_modulo_gratis(db: Session, curso_id: str) -> List[str]:
+    """Ids de las lecciones del primer módulo (el que se ve sin pagar)."""
+    primero = (db.query(ModuloCurso.id).filter(ModuloCurso.curso_id == curso_id)
+               .order_by(ModuloCurso.orden.asc()).first())
+    if primero is None:
+        return []
+    return [fila.id for fila in db.query(LeccionCurso.id).filter(LeccionCurso.modulo_id == primero.id).all()]
+
+
+def _modulo_gratis_completado(db: Session, curso: Curso, completadas: List[str]) -> bool:
+    if not _es_primer_modulo_gratis(curso):
+        return False
+    gratis = _lecciones_modulo_gratis(db, curso.id)
+    return bool(gratis) and set(gratis) <= set(completadas)
+
+
+def _marcar_modulo_gratis(curso: Curso, *, abierto: bool) -> None:
+    """Abre (o vuelve a cerrar) las lecciones del primer módulo al cambiar la
+    modalidad sin reenviar el temario. La primera lección del curso siempre es
+    la vista previa, así que nunca se cierra."""
+    modulos = sorted(curso.modulos or [], key=lambda m: m.orden)
+    if not modulos:
+        return
+    for indice, leccion in enumerate(sorted(modulos[0].lecciones or [], key=lambda l: l.orden)):
+        leccion.es_preview = True if (abierto or indice == 0) else False
 
 
 def _modulos_response(curso: Curso, *, acceso_completo: bool) -> List[ModuloResponse]:
@@ -312,6 +344,8 @@ def _reemplazar_estructura_curso(db: Session, curso: Curso, modulos: List) -> No
     db.query(CursoRecurso).filter(CursoRecurso.curso_id == curso.id).delete(synchronize_session=False)
 
     primera_leccion = True
+    # Primer módulo gratis: todas sus lecciones se ven sin pagar.
+    modulo_gratis = _es_primer_modulo_gratis(curso)
     for modulo_index, modulo_data in enumerate(modulos):
         modulo = modulos_existentes.get(str(getattr(modulo_data, "id", None) or ""))
         if modulo is None:
@@ -334,7 +368,7 @@ def _reemplazar_estructura_curso(db: Session, curso: Curso, modulos: List) -> No
             leccion.duracion = leccion_data.duracion or "10 min"
             leccion.video_url = video_url
             leccion.orden = leccion_index
-            leccion.es_preview = bool(leccion_data.es_preview or primera_leccion)
+            leccion.es_preview = bool(leccion_data.es_preview or primera_leccion or (modulo_gratis and modulo_index == 0))
             db.flush()
             lecciones_conservadas.add(str(leccion.id))
 
@@ -467,9 +501,15 @@ async def obtener_curso(
             lecciones_completadas, _, progreso_pct = _progreso_usuario(
                 db, current_user["user_id"], curso.id
             )
-        elif item.pago_manual:
-            comprobante_pendiente = acceso_cursos.comprobante_pendiente(
-                db, current_user["user_id"], curso.id) is not None
+        else:
+            if _es_primer_modulo_gratis(curso):
+                # Lo que avanzó en el módulo gratis, para retomarlo donde iba.
+                lecciones_completadas, _, progreso_pct = _progreso_usuario(
+                    db, current_user["user_id"], curso.id
+                )
+            if item.pago_manual:
+                comprobante_pendiente = acceso_cursos.comprobante_pendiente(
+                    db, current_user["user_id"], curso.id) is not None
 
     acceso = _puede_ver_contenido_completo(curso, current_user, comprado)
     return CursoDetailResponse(
@@ -479,6 +519,7 @@ async def obtener_curso(
         comprobante_pendiente=comprobante_pendiente,
         lecciones_completadas=lecciones_completadas,
         progreso_pct=progreso_pct,
+        modulo_gratis_completado=not comprado and _modulo_gratis_completado(db, curso, lecciones_completadas),
     )
 
 
@@ -516,6 +557,7 @@ async def crear_curso(
         descripcion=datos.descripcion or "",
         portada_url=datos.portada_url,
         precio=float(datos.precio),
+        modalidad=datos.modalidad,
         nivel=datos.nivel,
         categoria=datos.categoria.strip(),
         importador_id=importador_id,
@@ -750,18 +792,24 @@ async def marcar_progreso_leccion(
         CompraCurso.curso_id == curso.id,
         CompraCurso.usuario_id == usuario_id,
     ).first()
-    if not compra:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debes comprar el curso para registrar progreso",
-        )
-
     leccion = db.query(LeccionCurso).filter(
         LeccionCurso.id == leccion_id,
         LeccionCurso.curso_id == curso.id,
     ).first()
+    # Sin compra solo se avanza en el primer módulo de un curso que lo regala.
+    en_modulo_gratis = (
+        leccion is not None
+        and _es_primer_modulo_gratis(curso)
+        and leccion.id in _lecciones_modulo_gratis(db, curso.id)
+    )
+    if not compra and not en_modulo_gratis:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debes comprar el curso para registrar progreso",
+        )
     if not leccion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lección no encontrada")
+    gratis_antes = not compra and _modulo_gratis_completado(db, curso, _progreso_usuario(db, usuario_id, curso.id)[0])
 
     progreso = db.query(ProgresoLeccion).filter(
         ProgresoLeccion.usuario_id == usuario_id,
@@ -791,6 +839,18 @@ async def marcar_progreso_leccion(
     db.commit()
 
     lecciones_completadas, total, pct = _progreso_usuario(db, usuario_id, curso.id)
+    gratis_terminado = not compra and _modulo_gratis_completado(db, curso, lecciones_completadas)
+    if gratis_terminado and not gratis_antes:
+        # Acaba de terminar el módulo gratis: se le avisa que el resto es de pago.
+        crear_notificacion_best_effort(
+            db,
+            usuario_id=usuario_id,
+            tipo="curso",
+            titulo="Terminaste el módulo gratis",
+            mensaje=f"Completaste el primer módulo de «{curso.titulo}». Compra el curso para seguir con las demás lecciones.",
+            data={"evento": "modulo_gratis_completado", "curso_id": str(curso.id), "slug": curso.slug},
+        )
+        db.commit()
     return ProgresoLeccionResponse(
         curso_id=str(curso.id),
         leccion_id=leccion_id,
@@ -799,6 +859,7 @@ async def marcar_progreso_leccion(
         total_lecciones=total,
         progreso_pct=pct,
         fecha_completado=progreso.fecha_completado,
+        modulo_gratis_completado=gratis_terminado,
     )
 
 
@@ -900,8 +961,18 @@ async def actualizar_curso(
         curso.descripcion = datos.descripcion
     if datos.portada_url is not None:
         curso.portada_url = _url_documental_obligatoria(datos.portada_url, campo="portada_url")
-    if datos.precio is not None:
-        curso.precio = float(datos.precio)
+    if datos.precio is not None or datos.modalidad is not None:
+        modalidad_antes = curso.modalidad or ModalidadCurso.pago.value
+        modalidad = datos.modalidad or modalidad_antes
+        try:
+            curso.precio = precio_segun_modalidad(
+                modalidad, float(datos.precio if datos.precio is not None else (curso.precio or 0)))
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error))
+        curso.modalidad = modalidad
+        if (datos.modulos is None and modalidad != modalidad_antes
+                and ModalidadCurso.primer_modulo_gratis.value in (modalidad, modalidad_antes)):
+            _marcar_modulo_gratis(curso, abierto=modalidad == ModalidadCurso.primer_modulo_gratis.value)
     if datos.nivel is not None:
         curso.nivel = datos.nivel
     if datos.categoria is not None:

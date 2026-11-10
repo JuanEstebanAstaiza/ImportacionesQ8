@@ -161,6 +161,8 @@ services:
       RATE_LIMIT_REGISTER: 1000/minute
       RATE_LIMIT_FORGOT_PASSWORD: 1000/minute
       RATE_LIMIT_OTP: 1000/minute
+      # La suite crea muchos cursos y cotizaciones seguidos desde la misma IP.
+      RATE_LIMIT_PUBLIC_WRITE: 1000/minute
       # Mongo real (no un simulador): las pruebas de Liquidaciones ejercen GridFS,
       # los índices únicos parciales y find_one_and_update tal cual en producción.
       MONGO_URL: mongodb://${MONGO_ROOT_USER:-zarpi}:${MONGO_ROOT_PASSWORD:-mongo_q8_dev_change_me}@mongo:27017/?authSource=admin

@@ -12,6 +12,7 @@ import {
   FileDown,
   Flame,
   FolderKanban,
+  Lock,
   GraduationCap,
   LibraryBig,
   Plus,
@@ -62,6 +63,7 @@ import { useCourses } from "./useCourses";
 import type {
   Course,
   CourseLevel,
+  CourseModality,
   Lesson,
   PublishCourseInput,
   PublishLessonResourceInput,
@@ -113,6 +115,8 @@ type DraftLesson = {
   titulo: string;
   duracion: string;
   video_url: string;
+  /** Lección abierta a todos antes de comprar (la primera del curso siempre lo es). */
+  es_preview: boolean;
   recursos: DraftResource[];
 };
 
@@ -133,6 +137,7 @@ type PublishFormState = {
   descripcion: string;
   portada_url: string;
   precio: string;
+  modalidad: CourseModality;
   nivel: CourseLevel;
   categoria: string;
   modulos: DraftModule[];
@@ -166,6 +171,7 @@ function createDraftLesson(): DraftLesson {
     titulo: "",
     duracion: "10 min",
     video_url: "",
+    es_preview: false,
     recursos: [createDraftResource()],
   };
 }
@@ -183,6 +189,7 @@ const INITIAL_PUBLISH_FORM: PublishFormState = {
   descripcion: "",
   portada_url: "",
   precio: "",
+  modalidad: "pago",
   nivel: "Principiante",
   categoria: "",
   modulos: [createDraftModule()],
@@ -193,7 +200,8 @@ function draftFormFromCourse(course: Course): PublishFormState {
     titulo: course.titulo,
     descripcion: course.descripcion,
     portada_url: course.portada_url || "",
-    precio: String(course.precio),
+    precio: course.modalidad === "gratis" ? "" : String(course.precio),
+    modalidad: course.modalidad,
     nivel: course.nivel,
     categoria: course.categoria,
     modulos: course.modulos.length > 0
@@ -208,6 +216,7 @@ function draftFormFromCourse(course: Course): PublishFormState {
                 titulo: lesson.titulo,
                 duracion: lesson.duracion,
                 video_url: lesson.video_url,
+                es_preview: Boolean(lesson.es_preview),
                 recursos: lesson.recursos.length > 0
                   ? lesson.recursos.map((resource) => ({
                       id: createTempId("resource"),
@@ -273,6 +282,21 @@ function getNextLesson(course: Course | null, currentLessonId: string | null, co
   return nextIncomplete || lessons[Math.min(currentIndex + 1, lessons.length - 1)] || lessons[0];
 }
 
+function esCursoGratis(course: Pick<Course, "modalidad" | "precio">): boolean {
+  return course.modalidad === "gratis" || course.precio <= 0;
+}
+
+/** Precio que se muestra: un curso gratis dice «Gratis», nunca «$0». */
+function formatPrecioCurso(course: Pick<Course, "modalidad" | "precio">): string {
+  return esCursoGratis(course) ? "Gratis" : formatCurrency(course.precio);
+}
+
+const MODALIDADES: { value: CourseModality; label: string; ayuda: string }[] = [
+  { value: "pago", label: "De pago", ayuda: "Se ve completo después de comprarlo." },
+  { value: "primer_modulo_gratis", label: "Primer módulo gratis", ayuda: "Todo el primer módulo se ve sin pagar; al terminarlo se le pide comprar para seguir." },
+  { value: "gratis", label: "Gratis", ayuda: "Cualquiera se inscribe sin pagar ni esperar aprobación." },
+];
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -325,8 +349,9 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
     return { value: null, error: "La portada debe apuntar a un recurso http(s) válido." };
   }
 
-  if (Number.isNaN(precio) || precio <= 0) {
-    return { value: null, error: "Ingresa un precio valido mayor a cero." };
+  const gratis = form.modalidad === "gratis";
+  if (!gratis && (!form.precio.trim() || Number.isNaN(precio) || precio <= 0)) {
+    return { value: null, error: "Ingresa un precio mayor a cero. Si el curso no se cobra, elige «Gratis»." };
   }
 
   if (form.modulos.length === 0) {
@@ -385,6 +410,7 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
         titulo: lesson.titulo.trim(),
         duracion: lesson.duracion.trim(),
         video_url: video.canonical,
+        es_preview: lesson.es_preview,
         recursos: resources,
       });
     }
@@ -401,7 +427,8 @@ function toPublishInput(form: PublishFormState): { value: PublishCourseInput | n
       titulo: form.titulo.trim(),
       descripcion: form.descripcion.trim(),
       portada_url: portada.canonical,
-      precio,
+      precio: gratis ? 0 : precio,
+      modalidad: form.modalidad,
       nivel: form.nivel,
       categoria: form.categoria.trim(),
       modulos: modules,
@@ -445,6 +472,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
   const [ratingFilter, setRatingFilter] = useState("Todas");
   const [priceFilter, setPriceFilter] = useState("Todas");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  // Lección de vista previa que se reproduce en la ficha (null = la introducción).
+  const [previewLessonId, setPreviewLessonId] = useState<string | null>(null);
+  useEffect(() => { setPreviewLessonId(null); }, [selectedCourseId]);
   const [activePlayerCourseId, setActivePlayerCourseId] = useState<string | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
@@ -520,6 +550,15 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
   const continueProgress = continueCourse ? getProgressPercentage(continueCourse, continueCompletedIds) : 0;
   const nextLesson = continueCourse ? getNextLesson(continueCourse, continueLessonId, continueCompletedIds) : null;
   const playerProgress = playerCourse ? getProgressPercentage(playerCourse, completedLessonsByCourse[playerCourse.id] || []) : 0;
+  // Viendo el módulo gratis de un curso que aún no compró: el resto está bloqueado.
+  const enPrueba = Boolean(playerCourse && !purchasedCourseIds.includes(playerCourse.id));
+  const leccionesGratis = useMemo(
+    () => new Set(playerCourse?.modalidad === "primer_modulo_gratis" ? (playerCourse.modulos[0]?.lecciones ?? []).map((l) => l.id) : []),
+    [playerCourse],
+  );
+  const leccionBloqueada = (lesson: Lesson) => enPrueba && !lesson.es_preview;
+  const puedeAvanzar = (lessonId: string) => !enPrueba || leccionesGratis.has(lessonId);
+  const pideCompra = enPrueba && Boolean(playerCourse?.moduloGratisCompletado);
 
   const [isDownloadingCertificate, setIsDownloadingCertificate] = useState(false);
   const [certificateError, setCertificateError] = useState("");
@@ -612,20 +651,21 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
 
     try {
       const alreadyCompleted = (completedLessonsByCourse[playerCourse.id] || []).includes(targetLessonId);
-      if (!alreadyCompleted) {
+      if (!alreadyCompleted && puedeAvanzar(targetLessonId)) {
         await toggleLessonCompleted(playerCourse.id, targetLessonId, true);
       }
 
       const currentIndex = playerLessons.findIndex((lesson) => lesson.id === targetLessonId);
       const nextLesson = currentIndex >= 0 ? playerLessons[currentIndex + 1] : null;
-      if (nextLesson) {
+      // Sin comprar no se pasa a una lección bloqueada: ahí aparece el aviso de compra.
+      if (nextLesson && !leccionBloqueada(nextLesson)) {
         setActiveLessonId(nextLesson.id);
         markLessonViewed(playerCourse.id, nextLesson.id);
       }
     } finally {
       finishingLessonRef.current = null;
     }
-  }, [activeLesson?.id, completedLessonsByCourse, markLessonViewed, playerCourse, playerLessons, toggleLessonCompleted]);
+  }, [activeLesson?.id, completedLessonsByCourse, markLessonViewed, playerCourse, playerLessons, toggleLessonCompleted, enPrueba, leccionesGratis]);
 
   async function handleOpenCourseDetail(courseId: string): Promise<void> {
     const normalizedCourseId = courseId?.trim();
@@ -647,6 +687,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
     } catch (requestError) {
       setActionError(requestError instanceof Error ? requestError.message : "No se pudo cargar la información del curso.");
     }
+  }
+
+  /** Comprar desde el reproductor al terminar el módulo gratis. */
+  function comprarCurso(course: Course): void {
+    if (course.pagoManual && onComprarAcceso) {
+      setPlayerModalOpen(false);
+      onComprarAcceso(course.id);
+      return;
+    }
+    void handlePurchase(course.id);
   }
 
   async function handlePurchase(courseId: string): Promise<void> {
@@ -1091,6 +1141,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">{course.categoria}</Badge>
+                {course.modalidad === "primer_modulo_gratis" ? <Badge variant="outline">Primer módulo gratis</Badge> : null}
                 <Badge variant="outline">
                   <Star className="size-3 fill-current" />
                   {course.rating.toFixed(1)}
@@ -1115,7 +1166,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
             <CardFooter className="items-center justify-between gap-3 border-t">
               <div>
                 <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Precio</p>
-                <p className="text-lg font-semibold">{formatCurrency(course.precio)}</p>
+                <p className="text-lg font-semibold">{formatPrecioCurso(course)}</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="dark:hover:bg-accent" onClick={() => { void handleOpenCourseDetail(course.id); }}>
@@ -1255,6 +1306,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Todas">Todos los precios</SelectItem>
+                  <SelectItem value="0">Gratis</SelectItem>
                   <SelectItem value="500000">Hasta $500.000</SelectItem>
                   <SelectItem value="1000000">Hasta $1.000.000</SelectItem>
                   <SelectItem value="2000000">Hasta $2.000.000</SelectItem>
@@ -1608,7 +1660,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                       <TableCell className="whitespace-normal">
                         <div>
                           <p className="font-medium">{course.titulo}</p>
-                          <p className="text-sm text-muted-foreground">{formatCurrency(course.precio)}</p>
+                          <p className="text-sm text-muted-foreground">{formatPrecioCurso(course)}</p>
                         </div>
                       </TableCell>
                       <TableCell>{course.categoria}</TableCell>
@@ -1664,7 +1716,9 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
           <DialogHeader>
             <DialogTitle>Reproductor / Mis cursos</DialogTitle>
             <DialogDescription>
-              {playerCourse
+              {playerCourse && enPrueba
+                ? `Estás viendo el módulo gratis de ${playerCourse.titulo}. El resto del curso se abre al comprarlo.`
+                : playerCourse
                 ? `Continua el curso ${playerCourse.titulo} y abre sus materiales descargables.`
                 : "Compra un curso para habilitar el reproductor y el seguimiento de progreso."}
             </DialogDescription>
@@ -1673,7 +1727,37 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
           <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
             <Card className="gap-0 overflow-hidden">
               <CardContent className="space-y-4 pt-6">
-                {playerCourse && activeLesson ? (
+                {pideCompra && playerCourse ? (
+                  <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-accent/40 dark:bg-accent/10">
+                    <div>
+                      <p className="font-semibold">Terminaste el módulo gratis</p>
+                      <p className="text-sm text-muted-foreground">Compra el curso para seguir con las demás lecciones; tu avance se conserva.</p>
+                    </div>
+                    {playerCourse.comprobantePendiente ? (
+                      <Badge variant="secondary"><Clock className="size-3" /> Comprobante en revisión</Badge>
+                    ) : (
+                      <Button disabled={pendingPurchaseCourseId === playerCourse.id} onClick={() => comprarCurso(playerCourse)}>
+                        <Coins className="size-4" />
+                        {pendingPurchaseCourseId === playerCourse.id ? "Procesando..." : "Comprar el curso"}
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+                {playerCourse && activeLesson && leccionBloqueada(activeLesson) ? (
+                  <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center">
+                    <Lock className="size-10 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">{activeLesson.titulo}</p>
+                      <p className="text-sm text-muted-foreground">Esta lección es parte del curso completo. Cómpralo para verla.</p>
+                    </div>
+                    {!playerCourse.comprobantePendiente ? (
+                      <Button disabled={pendingPurchaseCourseId === playerCourse.id} onClick={() => comprarCurso(playerCourse)}>
+                        <Coins className="size-4" />
+                        Comprar el curso
+                      </Button>
+                    ) : <Badge variant="secondary"><Clock className="size-3" /> Comprobante en revisión</Badge>}
+                  </div>
+                ) : playerCourse && activeLesson ? (
                   <>
                     <div className="overflow-hidden rounded-xl border bg-slate-950 shadow-sm">
                       <div className="aspect-video">
@@ -1713,14 +1797,14 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={isSavingProgress}
+                            disabled={isSavingProgress || !puedeAvanzar(activeLesson.id)}
                             onClick={() => { void handleVideoFinished(activeLesson.id); }}
                           >
                             Marcar clase como completada
                           </Button>
                           {/* El certificado solo aparece con el curso terminado:
                               es exactamente la condición que valida el backend. */}
-                          {playerProgress >= 100 && playerCourse ? (
+                          {playerProgress >= 100 && playerCourse && !enPrueba ? (
                             <Button
                               size="sm"
                               disabled={isDownloadingCertificate}
@@ -1758,6 +1842,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                     <div className="space-y-3">
                       {playerLessons.map((lesson, index) => {
                         const completed = (completedLessonsByCourse[playerCourse.id] || []).includes(lesson.id);
+                        const bloqueada = leccionBloqueada(lesson);
                         return (
                           <div
                             key={lesson.id}
@@ -1766,14 +1851,18 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                               activeLesson?.id === lesson.id ? "border-primary bg-primary/5" : "hover:bg-muted/40",
                             )}
                           >
-                            <Checkbox
-                              checked={completed}
-                              onCheckedChange={(checked) => { void toggleLessonCompleted(playerCourse.id, lesson.id, checked === true); }}
-                              className="mt-1"
-                              disabled={isSavingProgress}
-                            />
-                            <button className="flex-1 text-left" onClick={() => setActiveLessonId(lesson.id)}>
-                              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Leccion {index + 1}</p>
+                            {bloqueada ? (
+                              <Lock className="mt-1 size-4 flex-shrink-0 text-muted-foreground" aria-label="Lección del curso completo" />
+                            ) : (
+                              <Checkbox
+                                checked={completed}
+                                onCheckedChange={(checked) => { void toggleLessonCompleted(playerCourse.id, lesson.id, checked === true); }}
+                                className="mt-1"
+                                disabled={isSavingProgress || !puedeAvanzar(lesson.id)}
+                              />
+                            )}
+                            <button className={clsx("flex-1 text-left", bloqueada && "opacity-60")} onClick={() => setActiveLessonId(lesson.id)}>
+                              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Leccion {index + 1}{!enPrueba ? "" : bloqueada ? " · De pago" : " · Gratis"}</p>
                               <p className="font-medium">{lesson.titulo}</p>
                               <p className="text-sm text-muted-foreground">{lesson.duracion}</p>
                             </button>
@@ -1839,7 +1928,8 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                   <div className="overflow-hidden rounded-xl border bg-slate-950">
                     <div className="aspect-video">
                       {(() => {
-                        const trailer = flattenLessons(selectedCourse)[0]?.video_url || "";
+                        const lecciones = flattenLessons(selectedCourse);
+                        const trailer = (lecciones.find((l) => l.id === previewLessonId) ?? lecciones[0])?.video_url || "";
                         const playable = resolvePlayableVideoSource(trailer);
                         if (playable?.kind === "video") {
                           return <ProtectedVideoPlayer url={playable.src} />;
@@ -1880,10 +1970,28 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                         <AccordionContent>
                           <div className="space-y-2">
                             {module.lecciones.map((lesson) => (
-                              <div key={lesson.id} className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                                <p className="font-medium">{lesson.titulo}</p>
-                                <p className="text-xs text-muted-foreground">{lesson.duracion} · {lesson.recursos.length} recursos</p>
-                              </div>
+                              lesson.es_preview && lesson.video_url ? (
+                                <button
+                                  key={lesson.id}
+                                  type="button"
+                                  onClick={() => setPreviewLessonId(lesson.id)}
+                                  className={clsx(
+                                    "flex w-full items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
+                                    previewLessonId === lesson.id && "ring-1 ring-primary dark:ring-accent",
+                                  )}
+                                >
+                                  <CirclePlay className="mt-0.5 size-4 flex-shrink-0 text-primary dark:text-accent" />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block font-medium">{lesson.titulo}</span>
+                                    <span className="block text-xs text-muted-foreground">{lesson.duracion} · Vista previa gratis</span>
+                                  </span>
+                                </button>
+                              ) : (
+                                <div key={lesson.id} className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                                  <p className="font-medium">{lesson.titulo}</p>
+                                  <p className="text-xs text-muted-foreground">{lesson.duracion} · {lesson.recursos.length} recursos</p>
+                                </div>
+                              )
                             ))}
                           </div>
                         </AccordionContent>
@@ -1906,7 +2014,17 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
 
                   <div className="rounded-xl border bg-muted/20 p-4">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Precio del curso</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrency(selectedCourse.precio)}</p>
+                    <p className="mt-2 text-2xl font-semibold">{formatPrecioCurso(selectedCourse)}</p>
+                    {esCursoGratis(selectedCourse) && !purchasedCourseIds.includes(selectedCourse.id) ? (
+                      <p className="mt-2 text-xs text-muted-foreground">Curso gratis: te inscribes y empiezas de inmediato, sin pagos ni aprobación.</p>
+                    ) : null}
+                    {selectedCourse.modalidad === "primer_modulo_gratis" && !purchasedCourseIds.includes(selectedCourse.id) ? (
+                      <p className="mt-2 text-xs font-medium text-primary dark:text-accent">
+                        {selectedCourse.moduloGratisCompletado
+                          ? "Ya terminaste el módulo gratis. Compra el curso para seguir con el resto."
+                          : "El primer módulo es gratis: empieza ya y, cuando lo termines, compras el curso para seguir."}
+                      </p>
+                    ) : null}
                     {selectedCourse.pagoManual && !purchasedCourseIds.includes(selectedCourse.id) ? (
                       <p className="mt-2 text-xs text-muted-foreground">
                         {selectedCourse.comprobantePendiente
@@ -1920,6 +2038,16 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setSelectedCourseId(null)}>Cerrar</Button>
+                {selectedCourse.modalidad === "primer_modulo_gratis" && !purchasedCourseIds.includes(selectedCourse.id) ? (
+                  <Button
+                    variant="secondary"
+                    disabled={!selectedCourse.modulos[0]?.lecciones.length}
+                    onClick={() => { setSelectedCourseId(null); handleOpenPlayer(selectedCourse.id, selectedCourse.modulos[0]?.lecciones[0]?.id); }}
+                  >
+                    <CirclePlay className="size-4" />
+                    {selectedCourse.moduloGratisCompletado ? "Ver módulo gratis" : "Empezar gratis"}
+                  </Button>
+                ) : null}
                 {purchasedCourseIds.includes(selectedCourse.id) ? (
                   <Button onClick={() => { setSelectedCourseId(null); handleOpenPlayer(selectedCourse.id, learningState.lastLessonIdByCourse[selectedCourse.id]); }}>
                     Ir a mi curso
@@ -1937,7 +2065,7 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                 ) : (
                   <Button disabled={pendingPurchaseCourseId === selectedCourse.id} onClick={() => { void handlePurchase(selectedCourse.id); }}>
                     <Coins className="size-4" />
-                    {pendingPurchaseCourseId === selectedCourse.id ? "Procesando..." : "Comprar curso"}
+                    {pendingPurchaseCourseId === selectedCourse.id ? "Procesando..." : esCursoGratis(selectedCourse) ? "Inscribirme gratis" : "Comprar curso"}
                   </Button>
                 )}
               </DialogFooter>
@@ -2002,14 +2130,28 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Precio (COP)</p>
-                  <Input 
-                    type="number" 
-                    min="1" 
-                    value={publishForm.precio} 
-                    onChange={(event) => setPublishForm((current) => ({ ...current, precio: event.target.value }))} 
-                    placeholder="2000000" 
-                  />
+                  <p className="text-sm font-medium">Acceso al curso</p>
+                  <Select value={publishForm.modalidad} onValueChange={(value) => setPublishForm((current) => ({ ...current, modalidad: value as CourseModality }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elige cómo se accede" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MODALIDADES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{MODALIDADES.find((m) => m.value === publishForm.modalidad)?.ayuda}</p>
+                  {publishForm.modalidad !== "gratis" ? (
+                    <>
+                      <p className="text-sm font-medium">Precio (COP)</p>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={publishForm.precio}
+                        onChange={(event) => setPublishForm((current) => ({ ...current, precio: event.target.value }))}
+                        placeholder="2000000"
+                      />
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -2167,6 +2309,24 @@ export function CoursesScreen({ role, companyName, onGoDashboard, onComprarAcces
                                 placeholder="12 min"
                               />
                             </div>
+                            <label className="flex items-start gap-2 text-xs sm:col-span-3">
+                              <Checkbox
+                                checked={lesson.es_preview || (moduleIndex === 0 && (lessonIndex === 0 || publishForm.modalidad === "primer_modulo_gratis"))}
+                                disabled={moduleIndex === 0 && (lessonIndex === 0 || publishForm.modalidad === "primer_modulo_gratis")}
+                                onCheckedChange={(checked) => updateLesson(module.id, lesson.id, (current) => ({ ...current, es_preview: checked === true }))}
+                                className="mt-0.5"
+                              />
+                              <span>
+                                <span className="font-medium">Vista previa gratis</span>
+                                <span className="block text-muted-foreground">
+                                  {moduleIndex === 0 && publishForm.modalidad === "primer_modulo_gratis"
+                                    ? "Incluida en el primer módulo gratis."
+                                    : moduleIndex === 0 && lessonIndex === 0
+                                    ? "La primera lección siempre es la introducción abierta del curso."
+                                    : "Cualquiera la ve antes de comprar; el resto del curso sigue siendo de pago."}
+                                </span>
+                              </span>
+                            </label>
                             <div className="space-y-1 sm:col-span-3">
                               <p className="text-xs font-medium">Video de la lección</p>
                               <Input
