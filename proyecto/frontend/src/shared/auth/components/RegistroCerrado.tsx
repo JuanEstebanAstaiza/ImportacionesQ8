@@ -1,0 +1,80 @@
+import { Lock, Moon, Sun, ChevronLeft, BellRing } from "lucide-react";
+
+import { Button, Logo } from "@shared/ui/design-system";
+import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
+import type { LegalPage } from "@shared/legal/types";
+import { LISTA_CERRADA } from "@shared/planes/SeccionPlanes";
+import { useBrandTheme } from "@/hooks/useBrandTheme";
+
+// Quien llega desde la landing de Liquidaciones no viene por planes de importación:
+// se le explica el acceso en términos de su producto (la cuenta es la misma).
+const TEXTO_LIQUIDACIONES = {
+  titulo: "Zarpi Liquidaciones abre pronto",
+  texto: "Por ahora el acceso a Zarpi es por invitación. Si ya tienes cuenta de Zarpi, como comprador o como empresa, entra con ella: es la misma para Liquidaciones.",
+};
+
+export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,producto}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void;producto?:"liquidaciones"}) {
+  const { dark, toggleTheme } = useBrandTheme();
+  const textos = producto === "liquidaciones" ? TEXTO_LIQUIDACIONES : { titulo: LISTA_CERRADA.titulo.replace(/\.$/, ""), texto: LISTA_CERRADA.texto };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-3.5 relative z-10">
+        <button type="button" onClick={onLanding} aria-label="Ir al inicio">
+          <Logo/>
+        </button>
+        <div className="flex items-center gap-1.5 w-fit">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground transition-colors"
+          >
+            {dark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+          </button>
+          <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-3.5 h-3.5"/>} onClick={onLanding}>Volver</Button>
+        </div>
+      </header>
+
+      <main className="relative flex flex-1 items-center justify-center px-4 py-10 overflow-hidden">
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <img
+            src={dark ? "/brand/fondo-1.png" : "/brand/fondo-4.png"}
+            alt="Fondo de solicitud de acceso"
+            className="auth-background w-full h-full object-cover object-center transition-all duration-300"
+          />
+        </div>
+
+        <div className="relative z-10 w-full max-w-[480px]">
+          <div className="bg-white rounded-2xl border border-border shadow-sm p-6 sm:p-8">
+            <div className="text-center">
+              <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
+              <h1 className="text-xl font-semibold tracking-tight mb-2">{textos.titulo}</h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">{textos.texto}</p>
+              <Button variant="primary" icon={<BellRing className="w-4 h-4"/>} className="mt-5 dark:bg-accent dark:text-accent-foreground" onClick={onListaEspera}>Avísame cuando abra</Button>
+            </div>
+            <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-6">
+              <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>
+              <button type="button" onClick={onLanding} className="text-xs text-muted-foreground hover:text-foreground">Volver al inicio</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="flex flex-wrap items-center justify-center gap-4 border-t border-border bg-background py-4 text-center text-xs text-muted-foreground relative z-10">
+        <span>® 2026 Zarpi</span>
+        <button onClick={() => onPolicy("data")} className="transition-colors hover:text-foreground">
+          Tratamiento de Datos
+        </button>
+        <button onClick={() => onPolicy("terms")} className="transition-colors hover:text-foreground">
+          Términos
+        </button>
+        <button onClick={() => onPolicy("payments")} className="transition-colors hover:text-foreground">
+          Pagos y Reembolsos
+        </button>
+        <PublicSicLogo />
+      </footer>
+    </div>
+  );
+}

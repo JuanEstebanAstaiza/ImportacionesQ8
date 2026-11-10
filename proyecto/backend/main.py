@@ -39,6 +39,7 @@ from routers.reto import router as reto_router
 from routers.comprobantes import router as comprobantes_router
 from routers.planes import router as planes_router
 from routers.condiciones_propuesta import router as condiciones_propuesta_router
+from liquidaciones.router import router as liquidaciones_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -139,6 +140,14 @@ async def lifespan(app: FastAPI):
         init_db()
     except Exception as e:
         logger.exception("No se pudo inicializar la base de datos: %s", e)
+
+    # Base aparte del módulo Liquidaciones. Si Mongo no está, el resto de la
+    # plataforma arranca igual; solo ese módulo falla hasta que vuelva.
+    try:
+        from liquidaciones.db import asegurar_indices
+        await asyncio.to_thread(asegurar_indices)
+    except Exception as e:
+        logger.warning("No se pudieron asegurar los índices de Liquidaciones (MongoDB): %s", e)
 
     import config
 
@@ -318,6 +327,7 @@ app.include_router(reto_router)
 app.include_router(comprobantes_router)
 app.include_router(planes_router)
 app.include_router(condiciones_propuesta_router)
+app.include_router(liquidaciones_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
@@ -346,6 +356,7 @@ def configuracion_publica(db=Depends(get_db)):
     cobro_cotizaciones = modulos.activo(db, "cobro_cotizaciones")
     solo_con_plan = modulos.activo(db, "solo_con_plan")
     cotizaciones_abiertas = modulos.activo(db, "cotizaciones_abiertas")
+    liquidaciones = modulos.activo(db, "liquidaciones")
 
     return {
         "modulo_educativo_habilitado": modulo_educativo,
@@ -356,6 +367,8 @@ def configuracion_publica(db=Depends(get_db)):
         "solo_con_plan": solo_con_plan,
         # Apagadas, el formulario solo ofrece la cotización dirigida.
         "cotizaciones_abiertas": cotizaciones_abiertas,
+        # Zarpi Liquidaciones: apagado, desaparece del selector de producto y del panel.
+        "modulo_liquidaciones_habilitado": liquidaciones,
         "correo_contacto": app_config.CONTACT_EMAIL,
         "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
         "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
@@ -373,13 +386,15 @@ async def health_check():
 @app.get("/health/ready", tags=["Salud"])
 async def readiness_check():
     """
-    Readiness: MySQL y Redis deben responder.
-    Útil para orquestadores (K8s / load balancers) antes de enviar tráfico.
+    Readiness: MySQL y Redis deben responder, y MongoDB si Liquidaciones está
+    encendido por defecto. Útil para orquestadores (K8s / load balancers) antes
+    de enviar tráfico.
     """
     from database import check_database
-    from config import redis_client
+    from config import MODULO_LIQUIDACIONES_HABILITADO, redis_client
+    from liquidaciones.db import ping as mongo_ping
 
-    checks = {"database": False, "redis": False}
+    checks = {"database": False, "redis": False, "mongo": False}
 
     checks["database"] = check_database()
 
@@ -388,7 +403,9 @@ async def readiness_check():
     except Exception:
         checks["redis"] = False
 
-    if checks["database"] and checks["redis"]:
+    checks["mongo"] = await asyncio.to_thread(mongo_ping)
+
+    if checks["database"] and checks["redis"] and (checks["mongo"] or not MODULO_LIQUIDACIONES_HABILITADO):
         return {"status": "ready", "checks": checks}
 
     return JSONResponse(

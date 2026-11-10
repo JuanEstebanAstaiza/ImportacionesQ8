@@ -22,6 +22,15 @@ class TipoRecursoLeccion(str, enum.Enum):
     guia = "guia"
 
 
+class ModalidadCurso(str, enum.Enum):
+    """Cómo se accede al curso."""
+    pago = "pago"
+    gratis = "gratis"
+    # El primer módulo se ve (y registra progreso) sin pagar; al terminarlo se
+    # le pide comprar el curso para seguir.
+    primer_modulo_gratis = "primer_modulo_gratis"
+
+
 class EstadoCurso(str, enum.Enum):
     borrador = "borrador"
     publicado = "publicado"
@@ -38,6 +47,7 @@ class Curso(Base):
     descripcion = Column(Text, nullable=False, default="")
     portada_url = Column(String(500), nullable=True)
     precio = Column(Float, nullable=False, default=0.0)
+    modalidad = Column(String(30), nullable=False, default=ModalidadCurso.pago.value, server_default="pago")
     nivel = Column(String(30), nullable=False, default=NivelCurso.principiante.value)
     categoria = Column(String(120), nullable=False, default="General", index=True)
     # Empresa que lo publica. Vacío: curso propio de Zarpi (lo crea el admin).

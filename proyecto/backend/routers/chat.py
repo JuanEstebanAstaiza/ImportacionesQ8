@@ -274,6 +274,8 @@ def _respuesta_conversacion(
         contraparte_foto_url=contraparte.foto_url,
         asunto=conversacion.asunto,
         urgencia=conversacion.urgencia,
+        modulo=(conversacion.modulo or "importaciones") if conversacion.tipo == TipoConversacion.soporte.value else None,
+        referencia=conversacion.referencia,
         solicitante_rol=rol_solicitante,
         no_leidos=_contar_no_leidos(db, str(conversacion.id), current_user["user_id"]),
         fecha_creacion=conversacion.fecha_creacion,
@@ -733,6 +735,8 @@ async def abrir_ticket_soporte(
         solicitante_id=user_id,
         asunto=datos.asunto.strip()[:160],
         urgencia=datos.urgencia,
+        modulo=datos.modulo,
+        referencia=datos.referencia,
         nivel=nivel,
         agente_asignado_id=str(agente.id) if agente else None,
     )
@@ -750,6 +754,8 @@ async def abrir_ticket_soporte(
 
     quien = db.query(Usuario).filter(Usuario.id == user_id).first()
     nombre = (quien.nombre or quien.email) if quien else "Un usuario"
+    # El agente sabe de un vistazo de qué producto de la suite viene el caso.
+    prefijo = "" if datos.modulo == "importaciones" else f"[{datos.modulo.capitalize()}] "
 
     from services.notificacion_service import crear_notificacion_best_effort
 
@@ -757,7 +763,7 @@ async def abrir_ticket_soporte(
         # Con dueño asignado, el aviso va a quien tiene que actuar. Avisar a
         # todos convertiría la responsabilidad en tierra de nadie.
         destinatarios = [agente]
-        titulo = f"Ticket nivel {nivel} ({datos.urgencia}): {datos.asunto.strip()[:70]}"
+        titulo = f"{prefijo}Ticket nivel {nivel} ({datos.urgencia}): {datos.asunto.strip()[:70]}"
     else:
         # Sin nadie de ese nivel en la mesa, lo ve toda la administración para
         # que alguien lo tome o suba a alguien de nivel.
@@ -765,7 +771,7 @@ async def abrir_ticket_soporte(
             Usuario.rol == "admin",
             Usuario.activo.is_(True),
         ).all()
-        titulo = f"Ticket nivel {nivel} SIN AGENTE: {datos.asunto.strip()[:60]}"
+        titulo = f"{prefijo}Ticket nivel {nivel} SIN AGENTE: {datos.asunto.strip()[:60]}"
 
     for destinatario in destinatarios:
         crear_notificacion_best_effort(
@@ -778,6 +784,7 @@ async def abrir_ticket_soporte(
                 "conversacion_id": str(conversacion.id),
                 "urgencia": datos.urgencia,
                 "nivel": nivel,
+                "modulo": datos.modulo,
             },
         )
 

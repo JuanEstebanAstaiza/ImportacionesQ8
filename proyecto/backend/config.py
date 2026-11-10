@@ -212,6 +212,13 @@ try:
 except Exception:
     redis_client = None
 
+# Base del módulo Liquidaciones. Cada módulo de la suite guarda sus datos aparte
+# de MySQL (con MySQL solo comparte login y usuarios); ver liquidaciones/db.py.
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+MONGO_DB = os.getenv("MONGO_DB", "zarpi_liquidaciones")
+# Encendido por defecto: el admin lo apaga en Módulos.
+MODULO_LIQUIDACIONES_HABILITADO = os.getenv("MODULO_LIQUIDACIONES_HABILITADO", "true").lower() == "true"
+
 COTIZACION_ABIERTA_TTL = 259200  # 72h
 # Índice Redis (SET) de cotizaciones abiertas por importador — evita KEYS O(N)
 INDICE_COTIZACIONES_ABIERTAS = "indice:cotizaciones_abiertas"

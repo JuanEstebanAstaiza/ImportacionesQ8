@@ -1,5 +1,5 @@
 import { apiRequest } from "@/services/api-client";
-import type { Course, Module, Lesson, LessonResource, PublishCourseInput } from "@/features/courses/types";
+import type { Course, CourseModality, Module, Lesson, LessonResource, PublishCourseInput } from "@/features/courses/types";
 
 interface BackendLessonResource {
   id: string;
@@ -32,6 +32,7 @@ interface BackendCourseListItem {
   descripcion: string;
   portada_url: string | null;
   precio: number;
+  modalidad?: CourseModality;
   nivel: "Principiante" | "Avanzado";
   categoria: string;
   /** Vacío en los cursos propios de Zarpi. */
@@ -50,6 +51,7 @@ interface BackendCourseDetail extends BackendCourseListItem {
   comprobante_pendiente?: boolean;
   lecciones_completadas: string[];
   progreso_pct: number;
+  modulo_gratis_completado?: boolean;
 }
 
 interface CompraCursoResponse {
@@ -61,7 +63,7 @@ interface CompraCursoResponse {
   curso: BackendCourseListItem | null;
 }
 
-interface ProgresoLeccionResponse {
+export interface ProgresoLeccionResponse {
   curso_id: string;
   leccion_id: string;
   completada: boolean;
@@ -69,6 +71,8 @@ interface ProgresoLeccionResponse {
   total_lecciones: number;
   progreso_pct: number;
   fecha_completado: string | null;
+  /** Primer módulo gratis: con esta lección lo terminó y tiene que comprar para seguir. */
+  modulo_gratis_completado?: boolean;
 }
 
 export interface CertificadoCursoResponse {
@@ -143,6 +147,7 @@ export function mapBackendCourseToCourse(course: BackendCourseListItem | Backend
     descripcion: course.descripcion,
     portada_url: course.portada_url,
     precio: Number(course.precio || 0),
+    modalidad: course.modalidad ?? (Number(course.precio || 0) > 0 ? "pago" : "gratis"),
     nivel: course.nivel,
     categoria: course.categoria,
     importador_id: course.importador_id ?? undefined,
@@ -156,6 +161,7 @@ export function mapBackendCourseToCourse(course: BackendCourseListItem | Backend
     modulos: withDetail ? course.modulos.map(mapModule) : [],
     pagoManual: Boolean(course.pago_manual),
     comprobantePendiente: withDetail ? Boolean(course.comprobante_pendiente) : false,
+    moduloGratisCompletado: withDetail ? Boolean(course.modulo_gratis_completado) : false,
   };
 }
 
@@ -179,12 +185,13 @@ function toPublishPayload(input: PublishCourseInput): Record<string, unknown> {
     titulo: input.titulo,
     descripcion: input.descripcion,
     portada_url: input.portada_url || null,
-    precio: input.precio,
+    precio: input.modalidad === "gratis" ? 0 : input.precio,
+    modalidad: input.modalidad,
     nivel: input.nivel,
     categoria: input.categoria,
     // Los ids solo se envían cuando existen (edición). En una publicación nueva
     // se omiten y el backend genera los suyos.
-    modulos: input.modulos.map((module) => ({
+    modulos: input.modulos.map((module, moduleIndex) => ({
       ...(module.id ? { id: module.id } : {}),
       titulo: module.titulo,
       lecciones: module.lecciones.map((lesson, index) => ({
@@ -192,7 +199,7 @@ function toPublishPayload(input: PublishCourseInput): Record<string, unknown> {
         titulo: lesson.titulo,
         duracion: lesson.duracion,
         video_url: lesson.video_url,
-        es_preview: Boolean(lesson.es_preview) || index === 0,
+        es_preview: Boolean(lesson.es_preview) || (moduleIndex === 0 && (index === 0 || input.modalidad === "primer_modulo_gratis")),
         recursos: lesson.recursos.map((resource) => ({
           nombre: resource.nombre,
           url: resource.url,

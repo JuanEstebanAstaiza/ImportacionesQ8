@@ -34,6 +34,8 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': srcBase.pathname,
+      '@apps': new URL('./apps/', srcBase).pathname,
+      '@shared': new URL('./shared/', srcBase).pathname,
     },
   },
 

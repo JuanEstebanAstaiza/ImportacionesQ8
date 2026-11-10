@@ -1,5 +1,5 @@
 import { apiRequest } from "@/services/api-client";
-import type { CondicionesPropuesta, FormularioPropuesta } from "@/features/propuestas/calculo";
+import type { CondicionesPropuesta, FormularioPropuesta } from "@apps/importaciones/features/propuestas/calculo";
 
 /** Sello otorgado por la plataforma, tal como llega en el catálogo. */
 export interface BackendCertificacionOtorgada {
@@ -584,6 +584,9 @@ export interface BackendChatConversation {
   /** Solo en tickets de soporte. */
   asunto: string | null;
   urgencia: UrgenciaSoporte | null;
+  /** Producto de la suite del ticket; null en los que no son de soporte. */
+  modulo?: string | null;
+  referencia?: string | null;
   solicitante_rol: string | null;
   /** Mensajes ajenos posteriores a la última lectura de quien consulta. */
   no_leidos: number;
@@ -886,7 +889,7 @@ export const businessService = {
   },
 
   /** Pide ayuda al equipo de la plataforma. Cada llamada abre un ticket propio. */
-  openSupportTicket(payload: { asunto: string; urgencia: UrgenciaSoporte; mensaje?: string }): Promise<BackendChatConversation> {
+  openSupportTicket(payload: { asunto: string; urgencia: UrgenciaSoporte; mensaje?: string; modulo?: string; referencia?: string }): Promise<BackendChatConversation> {
     return apiRequest<BackendChatConversation>("/chat/soporte", {
       method: "POST",
       body: payload,

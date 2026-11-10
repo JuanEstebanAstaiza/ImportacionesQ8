@@ -8,7 +8,7 @@ import {
   type RemitenteCorreo,
   type UsuarioEncontrado,
 } from "@/services/admin.service";
-import { BuscadorUsuarios } from "@/app/components/busqueda/BuscadorUsuarios";
+import { BuscadorUsuarios } from "@/components/busqueda/BuscadorUsuarios";
 
 const SEGMENTS = [
   { value: "solicitante", label: "Cotizantes" },

@@ -82,6 +82,12 @@ class ConversacionAdminItem(BaseModel):
     ultimo_mensaje_texto: Optional[str] = None
     ultimo_mensaje_fecha: Optional[datetime] = None
 
+    # Producto de la suite. Los chats de negociación e internos son de
+    # Importaciones; los tickets de soporte dicen el suyo.
+    modulo: str = "importaciones"
+    asunto: Optional[str] = None
+    referencia: Optional[str] = None
+
 
 class ConversacionesAdminResponse(BaseModel):
     items: List[ConversacionAdminItem]

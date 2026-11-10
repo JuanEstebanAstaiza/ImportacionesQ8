@@ -11,6 +11,9 @@
  * (`/cotizaciones/<id>`), que es lo que permite abrirlas directamente.
  */
 
+// Import directo del archivo de rutas (no del index) para no arrastrar componentes ni ciclos.
+import { RUTAS_LIQUIDACIONES, type ScreenLiquidaciones } from "@apps/liquidaciones/rutas";
+
 export type Screen =
   | "landing"
   | "login"
@@ -68,15 +71,55 @@ export type Screen =
   | "reto"
   | "admin-reto"
   | "admin-tendencias"
+  | "admin-tendencias-aprobacion"
   | "admin-modulos"
   | "admin-pagos"
   | "admin-cursos-accesos"
   | "admin-presentaciones"
   | "admin-cursos"
-  | "admin-tipografia";
+  | "admin-tipografia"
+  // Landings prototipo de Marketplace y Maquilas
+  | "mkt-landing"
+  | "maq-landing"
+  // Zarpi Liquidaciones: sus pantallas se declaran en apps/liquidaciones/rutas.ts
+  | ScreenLiquidaciones;
+
+export type AdminTab =
+  | "metricas"
+  | "empresas"
+  | "asignacion"
+  | "usuarios"
+  | "cotizantes"
+  | "soporte"
+  | "certificaciones"
+  | "respaldos"
+  | "landing"
+  | "correos"
+  | "tendencias"
+  | "tendencias-aprobacion";
+
+export const ADMIN_TAB_BY_PATH: Record<string, AdminTab> = {
+  "/admin": "metricas",
+  "/admin/empresas": "empresas",
+  "/admin/asignacion": "asignacion",
+  "/admin/usuarios": "usuarios",
+  "/admin/cotizantes": "cotizantes",
+  "/admin/soporte": "soporte",
+  "/admin/certificaciones": "certificaciones",
+  "/admin/respaldos": "respaldos",
+  "/admin/landing": "landing",
+  "/admin/correos": "correos",
+  "/admin/tendencias": "tendencias",
+  "/admin/tendencias/aprobacion": "tendencias-aprobacion",
+};
+
+export function adminTabFromPath(pathname: string): AdminTab | null {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  return ADMIN_TAB_BY_PATH[normalized] ?? null;
+}
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
-export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia";
+export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia" | "lote" | "operacion";
 
 export interface Ruta {
   screen: Screen;
@@ -102,6 +145,8 @@ export const RUTAS: Ruta[] = [
   { screen: "planes-inscripcion", path: "/planes/inscripcion" },
   // «Avísame cuando abra»: lista de espera de la apertura al público (pública).
   { screen: "lista-espera", path: "/lista-espera" },
+  { screen: "mkt-landing", path: "/marketplace" },
+  { screen: "maq-landing", path: "/maquilas" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },
@@ -124,6 +169,7 @@ export const RUTAS: Ruta[] = [
   { screen: "diseno", path: "/diseno" },
   // Admin: catálogo del equipo, muro de pago y precio de Tendencias; y los módulos.
   { screen: "admin-tendencias", path: "/admin/tendencias" },
+  { screen: "admin-tendencias-aprobacion", path: "/admin/tendencias/aprobacion" },
   { screen: "admin-modulos", path: "/admin/modulos" },
   // Revisión de comprobantes de pago (tokens y suscripción) mientras llega la pasarela.
   { screen: "admin-pagos", path: "/admin/pagos" },
@@ -176,9 +222,22 @@ export const RUTAS: Ruta[] = [
   { screen: "admin-correos", path: "/admin/correos" },
   { screen: "admin-tipografia", path: "/admin/tipografia" },
   { screen: "admin-reto", path: "/admin/reto" },
+
+  // Zarpi Liquidaciones
+  ...RUTAS_LIQUIDACIONES,
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";
+
+/**
+ * Lleva a una dirección de la app desde un componente que no recibe `goTo`
+ * (p. ej. una tarjeta del panel admin que enlaza al panel de un módulo). App.tsx
+ * escucha `popstate` y pinta la pantalla de esa dirección.
+ */
+export function irARuta(pathname: string): void {
+  window.history.pushState({}, "", pathname);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 const PANTALLAS = new Set<string>(RUTAS.map((r) => r.screen));
 

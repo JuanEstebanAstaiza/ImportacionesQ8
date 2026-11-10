@@ -370,6 +370,24 @@
   animation: zarpi-hero-in 700ms ease-out both;
 }
 
+.landing-dynamic-accent-text {
+  position: relative;
+  display: inline-block;
+  color: var(--accent);
+}
+
+.landing-dynamic-accent-text__base,
+.landing-dynamic-accent-text__contrast {
+  display: block;
+}
+
+.landing-dynamic-accent-text__contrast {
+  position: absolute;
+  inset: 0;
+  color: var(--primary);
+  pointer-events: none;
+}
+
 .landing-reveal {
   animation: zarpi-reveal 650ms ease-out both;
 }

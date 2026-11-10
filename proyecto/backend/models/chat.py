@@ -110,6 +110,14 @@ class ConversacionChat(Base):
     # Solo en los tickets de soporte.
     asunto = Column(String(160), nullable=True)
     urgencia = Column(String(20), nullable=True)
+    # Producto de la suite del que viene el ticket (services/modulos.MODULOS_SUITE).
+    # La mesa es una sola para toda la suite; NULL son los tickets anteriores a
+    # la suite, que se leen como de Importaciones.
+    modulo = Column(String(30), nullable=True)
+    # Sobre qué pide ayuda, si lo abrió desde algo concreto: "lote:<id>",
+    # "operacion:<id>"... Es texto libre del módulo, sin FK: los datos de cada
+    # módulo viven en su propia base.
+    referencia = Column(String(80), nullable=True)
     # Nivel de mesa que requiere el caso y agente que lo atiende. La asignación
     # es automática al abrirlo (ver `asignar_agente`), y un agente puede escalar
     # el ticket si al leerlo ve que le queda grande.

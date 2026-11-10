@@ -22,7 +22,7 @@ import {
 
 import { businessService, type BackendArchivoItem, type BackendExplorerResponse } from "@/services/business.service";
 import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import {
   landingService,
   type LandingAlly,
@@ -86,7 +86,7 @@ const TOKEN_BUTTON_CLASS: Record<LandingBrandToken, string> = {
 };
 
 const BUTTON_ACTIONS: { key: LandingButtonAction; label: string }[] = [
-  { key: "open_login", label: "Abrir inicio de sesion" },
+  { key: "open_login", label: "Abrir inicio de sesión" },
   { key: "open_register", label: "Abrir registro" },
   { key: "external_link", label: "Enlace externo" },
 ];

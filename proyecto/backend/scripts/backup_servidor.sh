@@ -17,6 +17,9 @@
 #                                             (72 h) y sesiones revocadas. Sin él, tras un
 #                                             `down -v` las empresas no pueden responder las
 #                                             abiertas en curso.
+#   mongo/mongo-*.archive.gz (+ .sha256)      mongodump de la base de Liquidaciones (y de los
+#                                             módulos de la suite que vengan): lotes, operaciones,
+#                                             chats y sus fotos, videos y documentos (GridFS).
 #   env/env-*                                 Copia del .env (secretos, permisos 600).
 #
 # Variables opcionales en .env:
@@ -59,7 +62,7 @@ REMOTO_ENV=$(valor_env BACKUP_REMOTO_INCLUIR_ENV)
 REDIS_PASSWORD=$(valor_env REDIS_PASSWORD); REDIS_PASSWORD=${REDIS_PASSWORD:-redis_q8_dev_change_me}
 MARCA=$(date -u +%Y%m%d-%H%M%S)
 
-mkdir -p "$DIR/mysql" "$DIR/redis" "$DIR/env"
+mkdir -p "$DIR/mysql" "$DIR/redis" "$DIR/mongo" "$DIR/env"
 chmod 700 "$DIR"
 
 # Dos ejecuciones a la vez (cron + manual) se pisarían los archivos.
@@ -69,10 +72,10 @@ if ! flock -n 9; then
   exit 1
 fi
 
-log "1/4 Copia portable (base de datos + archivos subidos)"
+log "1/5 Copia portable (base de datos + archivos subidos)"
 docker compose exec -T backend python scripts/backup.py --destino /app/backups --retener "$RETENCION"
 
-log "2/4 mysqldump"
+log "2/5 mysqldump"
 DUMP="$DIR/mysql/mysql-$MARCA.sql.gz"
 # --single-transaction: copia coherente sin bloquear la aplicación (InnoDB).
 docker compose exec -T mysql sh -c \
@@ -84,7 +87,7 @@ mv "$DUMP.parcial" "$DUMP"
 retener "$DIR/mysql" 'mysql-*.sql.gz' "$RETENCION"
 log "    $(du -h "$DUMP" | cut -f1) en $DUMP"
 
-log "3/4 Snapshot de Redis"
+log "3/5 Snapshot de Redis"
 RDB="$DIR/redis/redis-$MARCA.rdb"
 docker compose exec -T -e REDISCLI_AUTH="$REDIS_PASSWORD" redis redis-cli SAVE >/dev/null
 docker compose cp redis:/data/dump.rdb "$RDB"
@@ -92,7 +95,18 @@ chmod 644 "$RDB"
 retener "$DIR/redis" 'redis-*.rdb' "$RETENCION"
 log "    $(du -h "$RDB" | cut -f1) en $RDB"
 
-log "4/4 Copia del .env"
+log "4/5 mongodump (módulos de la suite)"
+MONGO_DUMP="$DIR/mongo/mongo-$MARCA.archive.gz"
+# Toda la instancia: hoy es solo Liquidaciones, y un módulo nuevo entra solo en la copia.
+docker compose exec -T mongo sh -c   'exec mongodump --quiet --archive --gzip -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin'   > "$MONGO_DUMP.parcial"
+gzip -t "$MONGO_DUMP.parcial"
+mv "$MONGO_DUMP.parcial" "$MONGO_DUMP"
+( cd "$DIR/mongo" && sha256sum "$(basename "$MONGO_DUMP")" > "$(basename "$MONGO_DUMP").sha256" )
+retener "$DIR/mongo" 'mongo-*.archive.gz' "$RETENCION"
+log "    $(du -h "$MONGO_DUMP" | cut -f1) en $MONGO_DUMP"
+# Restaurar: docker compose exec -T mongo sh -c 'mongorestore --archive --gzip --drop -u ... --authenticationDatabase admin' < archivo
+
+log "5/5 Copia del .env"
 install -m 600 .env "$DIR/env/env-$MARCA"
 retener "$DIR/env" 'env-*' "$RETENCION"
 

@@ -35,6 +35,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # Base del módulo Liquidaciones (y de los módulos que vengan): cada módulo de
+  # la suite guarda sus datos aparte; con MySQL solo se comparten login y usuarios.
+  # Las fotos, videos y documentos del módulo van en GridFS dentro de esta base.
+  mongo:
+    image: mongo:7
+    container_name: importacionesq8_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-zarpi}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-mongo_q8_dev_change_me}
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build: .
     container_name: importacionesq8_backend
@@ -50,6 +70,8 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_q8_dev_change_me}@redis:6379/0
+      MONGO_URL: mongodb://${MONGO_ROOT_USER:-zarpi}:${MONGO_ROOT_PASSWORD:-mongo_q8_dev_change_me}@mongo:27017/?authSource=admin
+      MONGO_DB: ${MONGO_DB:-zarpi_liquidaciones}
       APP_ENV: ${APP_ENV:-development}
       LOAD_TEST_AUTO_VERIFY: ${LOAD_TEST_AUTO_VERIFY:-false}
       # Capacidad objetivo: ~1000 usuarios concurrentes / ~100 ops simultáneas.
@@ -85,6 +107,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mongo:
+        condition: service_healthy
 
   frontend:
     build:
@@ -110,6 +134,11 @@ services:
     volumes:
       - ../frontend:/app
       - /app/node_modules
+    # `node_modules` vive en un volumen que sobrevive a `--build`: si el
+    # package-lock cambia (p. ej. llega gsap), sin esto la dependencia no entra al
+    # contenedor y Vite deja la app en blanco. `npm ci` no reescribe el lockfile y
+    # solo corre cuando el lockfile difiere del de la última instalación.
+    command: sh -c "cmp -s package-lock.json node_modules/.lock-instalado || (npm ci --no-audit --no-fund && cp package-lock.json node_modules/.lock-instalado); npm run dev -- --host 0.0.0.0"
     depends_on:
       backend:
         condition: service_started
@@ -132,13 +161,24 @@ services:
       RATE_LIMIT_REGISTER: 1000/minute
       RATE_LIMIT_FORGOT_PASSWORD: 1000/minute
       RATE_LIMIT_OTP: 1000/minute
+      # La suite crea muchos cursos y cotizaciones seguidos desde la misma IP.
+      RATE_LIMIT_PUBLIC_WRITE: 1000/minute
+      # Mongo real (no un simulador): las pruebas de Liquidaciones ejercen GridFS,
+      # los índices únicos parciales y find_one_and_update tal cual en producción.
+      MONGO_URL: mongodb://${MONGO_ROOT_USER:-zarpi}:${MONGO_ROOT_PASSWORD:-mongo_q8_dev_change_me}@mongo:27017/?authSource=admin
+      MONGO_DB: zarpi_liquidaciones_test
     volumes:
       - ./test_data:/app/test_data
+    depends_on:
+      mongo:
+        condition: service_healthy
 
 volumes:
   mysql_data:
     driver: local
   redis_data:
+    driver: local
+  mongo_data:
     driver: local
   # Sobreviven a `docker compose down` y a reconstruir la imagen; solo
   # `docker compose down -v` los borra.

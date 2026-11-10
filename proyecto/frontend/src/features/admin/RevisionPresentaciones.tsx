@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Check, ExternalLink, FileText, Film, ImageIcon, Inbox, Loader2, RefreshCw, X } from "lucide-react";
 
-import { ProtectedVideoPlayer } from "@/app/components/media/ReproductorVideo";
-import { ImagenArchivo } from "@/app/components/files/ImagenArchivo";
-import { abrirArchivoEnPestana } from "@/lib/abrir-archivo";
+import { ProtectedVideoPlayer } from "@shared/ui/media/ReproductorVideo";
+import { ImagenArchivo } from "@shared/ui/files/ImagenArchivo";
+import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import {
   presentacionesService,
   type EstadoPresentacion,
@@ -17,7 +17,7 @@ import {
   CLASE_INPUT,
   fechaCorta,
   mensajeError,
-} from "../tendencias/AprobacionComun";
+} from "@apps/importaciones/features/tendencias/AprobacionComun";
 
 /**
  * Presentaciones de empresas: el video, las fotos y los soportes que cada

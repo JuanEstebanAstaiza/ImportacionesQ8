@@ -827,22 +827,21 @@ async def listar_adjuntos_chat(
     return items
 
 
-def _es_adjunto_de_chat_del_usuario(db: Session, archivo_id: str, user_id: str) -> bool:
+def _es_adjunto_de_chat_del_usuario(db: Session, archivo_id: str, current_user: dict) -> bool:
     linked = (
-        db.query(MensajeAdjunto)
-        .join(MensajeChat, MensajeChat.id == MensajeAdjunto.mensaje_id)
-        .join(ConversacionChat, ConversacionChat.id == MensajeChat.conversacion_id)
+        db.query(ConversacionChat)
+        .join(MensajeChat, MensajeChat.conversacion_id == ConversacionChat.id)
+        .join(MensajeAdjunto, MensajeAdjunto.mensaje_id == MensajeChat.id)
         .filter(
             MensajeAdjunto.archivo_id == archivo_id,
             MensajeAdjunto.deleted_at.is_(None),
-            or_(
-                ConversacionChat.solicitante_id == user_id,
-                ConversacionChat.importador_usuario_id == user_id,
-            ),
         )
-        .first()
+        .all()
     )
-    return linked is not None
+    return any(
+        acceso_chat.puede_acceder(conversation, current_user, db)
+        for conversation in linked
+    )
 
 
 def _es_recurso_publico_de_curso(db: Session, archivo_id: str) -> bool:
@@ -1094,7 +1093,7 @@ async def descargar_archivo(
         allowed = (
             file_row.owner_user_id == user_id
             or current_user.get("rol") == "admin"
-            or _es_adjunto_de_chat_del_usuario(db, archivo_id, user_id)
+            or _es_adjunto_de_chat_del_usuario(db, archivo_id, current_user)
             or _tiene_acceso_por_curso(db, archivo_id, current_user)
             or _es_foto_de_producto_visible(db, archivo_id, user_id)
         )

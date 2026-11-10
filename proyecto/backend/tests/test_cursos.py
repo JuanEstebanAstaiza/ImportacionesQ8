@@ -266,3 +266,140 @@ class TestCompraYProgreso:
         assert leccion_id in data["lecciones_completadas"]
         assert data["total_lecciones"] == 2
         assert data["progreso_pct"] == 50.0
+
+
+VIDEO_MODULO_2 = "/documentos/archivos/44444444-4444-4444-8444-444444444444/descargar"
+
+
+def _payload_dos_modulos(**extra):
+    """Curso con un primer módulo de dos lecciones y un segundo de una."""
+    return {**CURSO_PAYLOAD, **extra, "modulos": [
+        CURSO_PAYLOAD["modulos"][0],
+        {"titulo": "Negociación", "lecciones": [
+            {"titulo": "Cerrar con el proveedor", "duracion": "20 min", "video_url": VIDEO_MODULO_2, "recursos": []},
+        ]},
+    ]}
+
+
+class TestModalidadDelCurso:
+    """El autor elige cómo se accede: de pago, gratis o con el primer módulo
+    gratis. Ya no se publica un curso de pago a «$0»."""
+
+    def test_curso_gratis_no_lleva_precio_y_se_inscribe_directo(self, client, empresa, solicitante):
+        _, dueño = empresa
+        r = client.post("/cursos", json={**CURSO_PAYLOAD, "modalidad": "gratis", "precio": 50000},
+                        headers=auth_headers_for(dueño))
+        assert r.status_code == status.HTTP_201_CREATED
+        assert r.json()["modalidad"] == "gratis"
+        assert r.json()["precio"] == 0
+        assert r.json()["pago_manual"] is False
+
+        compra = client.post(f"/cursos/{r.json()['id']}/comprar", headers=auth_headers_for(solicitante))
+        assert compra.status_code == status.HTTP_201_CREATED
+
+    def test_curso_de_pago_sin_precio_se_rechaza(self, client, empresa):
+        _, dueño = empresa
+        for modalidad in ("pago", "primer_modulo_gratis"):
+            r = client.post("/cursos", json={**CURSO_PAYLOAD, "modalidad": modalidad, "precio": 0},
+                            headers=auth_headers_for(dueño))
+            assert r.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, modalidad
+
+    def test_sin_modalidad_el_precio_cero_es_gratis(self, client, empresa):
+        """Los clientes que aún no mandan la modalidad siguen funcionando."""
+        _, dueño = empresa
+        r = client.post("/cursos", json={**CURSO_PAYLOAD, "precio": 0}, headers=auth_headers_for(dueño))
+        assert r.status_code == status.HTTP_201_CREATED
+        assert r.json()["modalidad"] == "gratis"
+        pago = client.post("/cursos", json=CURSO_PAYLOAD, headers=auth_headers_for(dueño)).json()
+        assert pago["modalidad"] == "pago"
+
+    def test_editar_a_pago_sin_precio_se_rechaza(self, client, empresa):
+        _, dueño = empresa
+        gratis = client.post("/cursos", json={**CURSO_PAYLOAD, "modalidad": "gratis"},
+                             headers=auth_headers_for(dueño)).json()
+        r = client.put(f"/cursos/{gratis['id']}", json={"modalidad": "pago"}, headers=auth_headers_for(dueño))
+        assert r.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        r = client.put(f"/cursos/{gratis['id']}", json={"modalidad": "pago", "precio": 90000},
+                       headers=auth_headers_for(dueño))
+        assert r.status_code == 200
+        assert (r.json()["modalidad"], r.json()["precio"]) == ("pago", 90000)
+
+    def test_leccion_marcada_como_vista_previa_se_ve_sin_comprar(self, client, empresa):
+        _, dueño = empresa
+        payload = {**CURSO_PAYLOAD, "modulos": [{
+            **CURSO_PAYLOAD["modulos"][0],
+            "lecciones": [
+                CURSO_PAYLOAD["modulos"][0]["lecciones"][0],
+                {**CURSO_PAYLOAD["modulos"][0]["lecciones"][1], "es_preview": True},
+            ],
+        }]}
+        curso = client.post("/cursos", json=payload, headers=auth_headers_for(dueño)).json()
+        lecciones = client.get(f"/cursos/{curso['id']}").json()["modulos"][0]["lecciones"]
+        assert [l["es_preview"] for l in lecciones] == [True, True]
+        assert all(l["video_url"] for l in lecciones)
+
+
+class TestPrimerModuloGratis:
+    def test_el_primer_modulo_se_ve_y_el_segundo_no(self, client, empresa):
+        _, dueño = empresa
+        curso = client.post("/cursos", json=_payload_dos_modulos(modalidad="primer_modulo_gratis"),
+                            headers=auth_headers_for(dueño)).json()
+        modulos = client.get(f"/cursos/{curso['id']}").json()["modulos"]
+        assert all(l["es_preview"] and l["video_url"] for l in modulos[0]["lecciones"])
+        assert all(not l["es_preview"] and l["video_url"] == "" for l in modulos[1]["lecciones"])
+
+    def test_al_terminar_el_modulo_gratis_se_avisa_que_hay_que_pagar(self, client, db_session, empresa, solicitante):
+        from models.notificacion import Notificacion
+
+        _, dueño = empresa
+        alumno = auth_headers_for(solicitante)
+        curso = client.post("/cursos", json=_payload_dos_modulos(modalidad="primer_modulo_gratis"),
+                            headers=auth_headers_for(dueño)).json()
+        gratis, de_pago = curso["modulos"][0]["lecciones"], curso["modulos"][1]["lecciones"]
+
+        # El segundo módulo no registra progreso sin comprar.
+        r = client.post(f"/cursos/{curso['id']}/lecciones/{de_pago[0]['id']}/progreso",
+                        json={"completada": True}, headers=alumno)
+        assert r.status_code == status.HTTP_403_FORBIDDEN
+
+        r = client.post(f"/cursos/{curso['id']}/lecciones/{gratis[0]['id']}/progreso",
+                        json={"completada": True}, headers=alumno)
+        assert r.status_code == 200
+        assert r.json()["modulo_gratis_completado"] is False
+
+        r = client.post(f"/cursos/{curso['id']}/lecciones/{gratis[1]['id']}/progreso",
+                        json={"completada": True}, headers=alumno)
+        assert r.json()["modulo_gratis_completado"] is True
+
+        # Repetir la última lección no vuelve a avisar.
+        client.post(f"/cursos/{curso['id']}/lecciones/{gratis[1]['id']}/progreso",
+                    json={"completada": True}, headers=alumno)
+        avisos = db_session.query(Notificacion).filter(
+            Notificacion.usuario_id == solicitante.id, Notificacion.titulo == "Terminaste el módulo gratis").count()
+        assert avisos == 1
+
+        detalle = client.get(f"/cursos/{curso['id']}", headers=alumno).json()
+        assert detalle["comprado"] is False
+        assert detalle["modulo_gratis_completado"] is True
+        assert set(detalle["lecciones_completadas"]) == {gratis[0]["id"], gratis[1]["id"]}
+
+        # Al comprar sigue con todo, y el progreso del módulo gratis se conserva.
+        assert client.post(f"/cursos/{curso['id']}/comprar", headers=alumno).status_code == 201
+        detalle = client.get(f"/cursos/{curso['id']}", headers=alumno).json()
+        assert detalle["modulo_gratis_completado"] is False
+        assert all(l["video_url"] for m in detalle["modulos"] for l in m["lecciones"])
+        assert len(detalle["lecciones_completadas"]) == 2
+
+    def test_cambiar_la_modalidad_abre_y_cierra_el_primer_modulo(self, client, empresa):
+        _, dueño = empresa
+        h = auth_headers_for(dueño)
+        curso = client.post("/cursos", json=_payload_dos_modulos(), headers=h).json()
+        assert curso["modalidad"] == "pago"
+
+        client.put(f"/cursos/{curso['id']}", json={"modalidad": "primer_modulo_gratis"}, headers=h)
+        lecciones = client.get(f"/cursos/{curso['id']}").json()["modulos"][0]["lecciones"]
+        assert [l["es_preview"] for l in lecciones] == [True, True]
+
+        client.put(f"/cursos/{curso['id']}", json={"modalidad": "pago"}, headers=h)
+        lecciones = client.get(f"/cursos/{curso['id']}").json()["modulos"][0]["lecciones"]
+        assert [l["es_preview"] for l in lecciones] == [True, False]

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { History, Save, Search, WalletCards } from "lucide-react";
 
-import { TierBadge } from "@/features/cotizante/TierBadge";
+import { TierBadge } from "@apps/importaciones/features/cotizante/TierBadge";
 import { CategoriasCotizante, textoCategoria } from "@/features/admin/CategoriasCotizante";
 import {
   adminService,
