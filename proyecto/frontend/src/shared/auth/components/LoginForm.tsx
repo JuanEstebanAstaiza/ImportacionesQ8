@@ -28,6 +28,8 @@ interface LoginFormProps {
   isPending: boolean;
   errorMessage?: string;
   initialEmail?: string;
+  /** Rol preseleccionado (p. ej. «Maquila» al venir del registro de maquilas). */
+  initialRole?: PortalRole;
 }
 
 // El backend guarda "importador", no "importadora": este selector es la única
@@ -47,9 +49,10 @@ export function LoginForm({
   isPending,
   errorMessage,
   initialEmail,
+  initialRole,
 }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<PortalRole>("solicitante");
+  const [selectedRole, setSelectedRole] = useState<PortalRole>(initialRole ?? "solicitante");
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),

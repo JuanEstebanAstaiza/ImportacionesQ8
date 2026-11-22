@@ -363,6 +363,7 @@ export default function App() {
   const volverALiquidaciones = useRef(false);
   useEffect(() => { if (screen === "landing") volverALiquidaciones.current = false; }, [screen]);
   const [loginPrefillEmail,setLoginPrefillEmail]=useState("");
+  const [loginPrefillRol,setLoginPrefillRol]=useState<"maquiladora"|undefined>(undefined);
   const [resetToken,setResetToken]=useState<string>(() =>
     new URLSearchParams(window.location.search).get("token") ?? "",
   );
@@ -1699,8 +1700,8 @@ export default function App() {
   if(screen==="mkt-landing")return <LandingMarketplace {...propsLandingSuite}/>;
   if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite} onRegistrarMaquila={()=>goTo("maq-registro")}/>;
   // Registro propio de las maquiladoras (las empresas importadoras las sigue creando el equipo).
-  if(screen==="maq-registro"&&!registroAbierto())return <RegistroCerrado producto="maquilas" onLogin={()=>goTo("login")} onLanding={()=>goTo("maq-landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
-  if(screen==="maq-registro")return <RegistroMaquila onVolver={()=>goTo("maq-landing")} onLogin={()=>goTo("login")} onRegistrada={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
+  if(screen==="maq-registro"&&!registroAbierto())return <RegistroCerrado producto="maquilas" correoContacto={platformConfig.correo_contacto} onLogin={()=>goTo("login")} onLanding={()=>goTo("maq-landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
+  if(screen==="maq-registro")return <RegistroMaquila onVolver={()=>goTo("maq-landing")} onLogin={()=>goTo("login")} onRegistrada={(email)=>{setLoginPrefillEmail(email);setLoginPrefillRol("maquiladora");goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="liq-landing")return <LandingLiquidaciones
     destinosSuite={destinosSuite}
     autenticado={isAuthenticated}
@@ -1736,7 +1737,7 @@ export default function App() {
   // regrese a donde estaba el usuario antes de abrir el primero.
   const legalPage=(Object.keys(PANTALLA_LEGAL) as LegalPage[]).find(page=>PANTALLA_LEGAL[page]===screen);
   if(legalPage)return <LegalPolicyScreen page={legalPage} onBack={()=>goTo(prevScreen)} onOpen={page=>setScreen(PANTALLA_LEGAL[page])}/>;
-  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo(volverALiquidaciones.current?"liq-landing":"landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail}/>;
+  if(screen==="login")return <LoginScreen onLogin={handleLogin} onRegister={()=>goTo("register")} onLanding={()=>goTo(volverALiquidaciones.current?"liq-landing":"landing")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])} initialEmail={loginPrefillEmail} initialRole={loginPrefillRol}/>;
 
   const renderPrivateScreen = () => {
     // Zarpi Liquidaciones resuelve sus pantallas (las del producto y las de su panel admin) en su propio router.

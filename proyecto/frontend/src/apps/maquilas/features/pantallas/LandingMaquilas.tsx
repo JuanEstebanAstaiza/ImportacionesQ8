@@ -4,6 +4,7 @@ import { LandingApp, type ContenidoLandingApp, type PropsLandingApp } from "@sha
 
 const CONTENIDO: ContenidoLandingApp = {
   appId: "maquilas",
+  prototipo: false,
   nombre: "Zarpi Maquilas",
   acento: "#FF007A",
   eyebrow: "Zarpi Maquilas",

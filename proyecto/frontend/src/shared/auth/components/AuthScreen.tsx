@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth.service";
 import { mapBackendRoleToAppRole } from "@/utils/auth-roles";
 import { ForgotPasswordForm, type ForgotPasswordFormValues } from "@shared/auth/components/ForgotPasswordForm";
-import { LoginForm, type LoginFormValues } from "@shared/auth/components/LoginForm";
+import { LoginForm, type LoginFormValues, type PortalRole as LoginPortalRole } from "@shared/auth/components/LoginForm";
 import { LoginOtpForm } from "@shared/auth/components/LoginOtpForm";
 import { useBrandTheme } from "@/hooks/useBrandTheme";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
@@ -22,9 +22,10 @@ interface AuthScreenProps {
   onPolicy: (page: LegalPage) => void;
   logo: React.ReactNode;
   initialEmail?: string;
+  initialRole?: LoginPortalRole;
 }
 
-export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, initialEmail }: AuthScreenProps) {
+export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, initialEmail, initialRole }: AuthScreenProps) {
   const { signIn, verifyLoginOtp, requestPasswordReset } = useAuth();
   const [view, setView] = useState<AuthView>("login");
   const { dark, toggleTheme } = useBrandTheme();
@@ -199,6 +200,7 @@ export function AuthScreen({ onLogin, onRegister, onLanding, onPolicy, logo, ini
               isPending={loginMutation.isPending}
               errorMessage={authError}
               initialEmail={initialEmail}
+              initialRole={initialRole}
             />
           ) : view === "otp" ? (
             <LoginOtpForm

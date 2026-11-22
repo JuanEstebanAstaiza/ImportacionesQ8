@@ -258,10 +258,10 @@ export function RegistroMaquila({ onVolver, onLogin, onRegistrada, onPolicy }: {
               <Card padding="lg" className="space-y-4">
                 {paso === 0 && (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Input label="Razón social" value={f.razon_social} onChange={(e) => poner("razon_social", e.target.value)} error={errores.razon_social} placeholder="Confecciones Aburrá S.A.S." />
-                    <Input label="Nombre comercial" value={f.nombre_comercial} onChange={(e) => poner("nombre_comercial", e.target.value)} error={errores.nombre_comercial} placeholder="Confecciones Aburrá" />
-                    <Input label="NIT" value={f.nit} onChange={(e) => poner("nit", e.target.value)} error={errores.nit} placeholder="901555111-2" />
-                    <Input label="Ciudad" value={f.ciudad} onChange={(e) => poner("ciudad", e.target.value)} error={errores.ciudad} placeholder="Medellín" />
+                    <Input label="Razón social" value={f.razon_social} onChange={(e) => poner("razon_social", e.target.value)} error={errores.razon_social} placeholder="Tu empresa S.A.S." />
+                    <Input label="Nombre comercial" value={f.nombre_comercial} onChange={(e) => poner("nombre_comercial", e.target.value)} error={errores.nombre_comercial} placeholder="Como te conocen tus clientes" />
+                    <Input label="NIT" value={f.nit} onChange={(e) => poner("nit", e.target.value)} error={errores.nit} placeholder="900123456-7" />
+                    <Input label="Ciudad" value={f.ciudad} onChange={(e) => poner("ciudad", e.target.value)} error={errores.ciudad} placeholder="Ciudad de la planta o el taller" />
                     <Input label="Dirección (opcional)" value={f.direccion} onChange={(e) => poner("direccion", e.target.value)} />
                     <Input label="Teléfono de la empresa (opcional)" value={f.telefono_empresa} onChange={(e) => poner("telefono_empresa", e.target.value)} />
                     <div className="sm:col-span-2">

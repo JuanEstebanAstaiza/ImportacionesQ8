@@ -1,4 +1,4 @@
-import { Lock, Moon, Sun, ChevronLeft, BellRing } from "lucide-react";
+import { Lock, Mail, Moon, Sun, ChevronLeft, BellRing } from "lucide-react";
 
 import { Button, Logo } from "@shared/ui/design-system";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
@@ -18,7 +18,7 @@ const TEXTO_MAQUILAS = {
   texto: "Por ahora damos de alta las maquilas por invitación. Escríbenos y el equipo de Zarpi crea la cuenta de tu taller o planta.",
 };
 
-export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,producto}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void;producto?:"liquidaciones"|"maquilas"}) {
+export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,producto,correoContacto}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void;producto?:"liquidaciones"|"maquilas";correoContacto?:string}) {
   const { dark, toggleTheme } = useBrandTheme();
   const textos = producto === "liquidaciones" ? TEXTO_LIQUIDACIONES
     : producto === "maquilas" ? TEXTO_MAQUILAS
@@ -59,7 +59,14 @@ export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,produc
               <Lock className="w-10 h-10 text-primary dark:text-accent mx-auto mb-4"/>
               <h1 className="text-xl font-semibold tracking-tight mb-2">{textos.titulo}</h1>
               <p className="text-sm leading-relaxed text-muted-foreground">{textos.texto}</p>
-              <Button variant="primary" icon={<BellRing className="w-4 h-4"/>} className="mt-5 dark:bg-accent dark:text-accent-foreground" onClick={onListaEspera}>Avísame cuando abra</Button>
+              {producto === "maquilas" && correoContacto ? (
+                <Button variant="primary" icon={<Mail className="w-4 h-4"/>} className="mt-5 dark:bg-accent dark:text-accent-foreground"
+                  onClick={() => { window.location.href = `mailto:${correoContacto}?subject=${encodeURIComponent("Quiero registrar mi maquila en Zarpi")}`; }}>
+                  Escribir al equipo
+                </Button>
+              ) : (
+                <Button variant="primary" icon={<BellRing className="w-4 h-4"/>} className="mt-5 dark:bg-accent dark:text-accent-foreground" onClick={onListaEspera}>Avísame cuando abra</Button>
+              )}
             </div>
             <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-6">
               <Button variant="secondary" fullWidth onClick={onLogin}>Ya tengo cuenta: iniciar sesión</Button>

@@ -10,6 +10,14 @@ function destinoLiquidaciones(tipo: string, data: Record<string, unknown>): Pick
   return { destino: loteId ? "liq-mis-lotes" : "liq-catalogo" };
 }
 
+/** A qué pantalla lleva un aviso de Zarpi Maquilas (tipos `maquila_*`). */
+function destinoMaquilas(tipo: string, data: Record<string, unknown>): Pick<AppNotification, "destino" | "destinoId"> {
+  const maquiladoraId = typeof data.maquiladora_id === "string" ? data.maquiladora_id : undefined;
+  // Al equipo: el expediente que hay que revisar. A la maquiladora: su perfil.
+  if (tipo === "maquila_en_revision" || tipo === "maquila_registrada") return { destino: "maq-admin-verificacion", destinoId: maquiladoraId };
+  return { destino: "maq-perfil" };
+}
+
 function formatShortDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
@@ -35,6 +43,17 @@ export function mapBackendNotificationToUi(notification: { id: string; tipo: str
   const body = approval && cotizacionId
      ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
     : notification.mensaje;
+  if (notification.tipo.startsWith("maquila_")) {
+    return {
+      id: notification.id,
+      type: "status",
+      title: notification.titulo,
+      body: notification.mensaje,
+      date: formatShortDate(notification.fecha_creacion),
+      read: notification.leida,
+      ...destinoMaquilas(notification.tipo, data),
+    };
+  }
   if (notification.tipo.startsWith("liquidacion_")) {
     return {
       id: notification.id,

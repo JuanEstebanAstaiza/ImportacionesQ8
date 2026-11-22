@@ -182,7 +182,7 @@ export function modulosActivos(config: PlatformConfig): ModuloSuite[] {
  * uso (el menú sigue siendo el de Liquidaciones si se venía de ahí).
  */
 // `chats` es la bandeja de toda la suite (tickets de soporte de cualquier producto): abrirla no cambia de producto.
-export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing", "maq-landing", "maq-registro"];
+export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing"];
 
 /** Producto al que pertenece una pantalla. */
 export function productoDe(screen: Screen): Producto {

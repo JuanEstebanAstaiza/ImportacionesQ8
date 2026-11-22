@@ -27,6 +27,8 @@ export interface ContenidoLandingApp {
   bloques: { icono: LucideIcon; titulo: string; texto: string; items: string[] }[];
   cierreTitulo: string;
   cierreTexto: string;
+  /** App que todavía es solo vitrina: muestra las notas de «prototipo». Por defecto, sí. */
+  prototipo?: boolean;
 }
 
 export type PropsLandingApp = {
@@ -65,7 +67,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
       onCrearCuenta={onCrearCuenta}
       onEntrar={onEntrar}
       onPolicy={onPolicy}
-      notaPie={`Prototipo visual con contenido de ejemplo. ${c.nombre} aún no está disponible.`}
+      notaPie={c.prototipo === false ? undefined : `Prototipo visual con contenido de ejemplo. ${c.nombre} aún no está disponible.`}
     >
       {/* HERO */}
       <section className="relative overflow-hidden px-4 pb-20 pt-14 sm:px-6 lg:pt-20">
@@ -100,7 +102,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
                 <p className="mt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">{e.etiqueta}</p>
               </div>
             ))}
-            <p className="col-span-2 text-center text-xs text-muted-foreground">Cifras de ejemplo del prototipo.</p>
+            {c.prototipo !== false && <p className="col-span-2 text-center text-xs text-muted-foreground">Cifras de ejemplo del prototipo.</p>}
           </div>
         </div>
       </section>
