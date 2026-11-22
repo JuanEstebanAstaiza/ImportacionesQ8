@@ -5,6 +5,8 @@ Colecciones:
 - `solicitudes`, `propuestas`, `pedidos` y `mensajes`: el flujo de fabricación.
 - `productos_mb`: catálogo de marca blanca de cada maquiladora.
 - `resenas`: una por pedido entregado (alimenta `maquiladoras.metricas`).
+- `marcas` (kit de marca y avance de la ruta legal) y `encargos` (diseños que pide el
+  cliente al equipo de Diseño de Zarpi).
 - `miembros`: qué usuarios (dueño y colaboradores) atienden cada maquiladora;
   `_id` es el id del usuario, así un usuario pertenece a una sola.
 - `configuracion`: parámetros del módulo que edita el admin.
@@ -68,3 +70,8 @@ def asegurar_indices(db: Optional[Database] = None) -> None:
     db.productos_mb.create_index([("activo", ASCENDING), ("categoria", ASCENDING), ("pedidos", DESCENDING)])
     db.resenas.create_index([("pedido_id", ASCENDING)], unique=True, name="una_resena_por_pedido")
     db.resenas.create_index([("maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])
+    # Fase 4: estudio de marca y encargos de diseño.
+    db.marcas.create_index([("cuenta_cliente", ASCENDING), ("creado_en", DESCENDING)])
+    db.encargos.create_index([("cuenta_cliente", ASCENDING), ("creado_en", DESCENDING)])
+    db.encargos.create_index([("estado", ASCENDING), ("actualizado_en", ASCENDING)])
+    db.solicitudes.create_index([("marca.archivos_ids", ASCENDING)], sparse=True)

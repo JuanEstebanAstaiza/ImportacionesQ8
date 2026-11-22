@@ -10,6 +10,7 @@ import { unidades } from "@apps/maquilas/features/formato";
 import { useInvalidarMaquilas, useParametrosMaquilas, usePerfilPublico } from "@apps/maquilas/features/useMaquilas";
 import { ArchivosVista } from "@apps/maquilas/features/componentes/ArchivosVista";
 import { SubirArchivoMaquila } from "@apps/maquilas/features/componentes/SubirArchivoMaquila";
+import { SelectorMarca } from "@apps/maquilas/features/componentes/KitMarca";
 import type { ArchivoMaquila, FichaGuiada } from "@apps/maquilas/features/tipos";
 
 const SECCIONES_FICHA: { clave: keyof FichaGuiada; etiqueta: string; ayuda: string }[] = [
@@ -53,6 +54,7 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
   const [ficha, setFicha] = useState<ArchivoMaquila | null>(null);
   const [confidencial, setConfidencial] = useState(false);
   const [conFicha, setConFicha] = useState(false);
+  const [marcaId, setMarcaId] = useState("");
   const [fichaGuiada, setFichaGuiada] = useState<FichaGuiada>(FICHA_VACIA);
   const [generando, setGenerando] = useState(false);
   const fichaLlena = conFicha && Object.values(fichaGuiada).some((v) => v.trim());
@@ -98,6 +100,7 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
         referencias: referencias.map((r) => r.id),
         ficha_tecnica: ficha?.id ?? null,
         ficha_guiada: fichaLlena ? fichaGuiada : null,
+        marca_id: marcaId || null,
         confidencial,
       });
       await invalidar();
@@ -199,6 +202,7 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
         </div>
         <ArchivosVista archivos={[...referencias, ...(ficha ? [ficha] : [])]}
           onQuitar={(id) => (ficha?.id === id ? setFicha(null) : setReferencias((r) => r.filter((x) => x.id !== id)))} />
+        <SelectorMarca valor={marcaId} onCambiar={setMarcaId} />
         <div className="rounded-xl border border-border p-3">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" checked={conFicha} onChange={(e) => setConFicha(e.target.checked)} className="mt-1" />

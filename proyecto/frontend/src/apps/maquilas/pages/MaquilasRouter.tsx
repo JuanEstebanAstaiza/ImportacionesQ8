@@ -19,6 +19,10 @@ import { MarcaBlanca } from "@apps/maquilas/features/pantallas/MarcaBlanca";
 import { ResenasMaquila } from "@apps/maquilas/features/pantallas/ResenasMaquila";
 import { CalculadoraMargen } from "@apps/maquilas/features/componentes/CalculadoraMargen";
 import { Card } from "@shared/ui/design-system";
+import { EstudioMarca } from "@apps/maquilas/features/pantallas/EstudioMarca";
+import { ColaDiseno, DetalleEncargo } from "@apps/maquilas/features/pantallas/EncargosDiseno";
+import { EquipoMaquila } from "@apps/maquilas/features/pantallas/EquipoMaquila";
+import { ConfiguracionMaquilas, MonitoreoMaquilas, ResumenMaquilas } from "@apps/maquilas/features/admin/PanelAdminMaquilas";
 
 const TITULOS: Partial<Record<Screen, string>> = {
   "maq-panel": "Panel de la maquila",
@@ -30,6 +34,13 @@ const TITULOS: Partial<Record<Screen, string>> = {
   "maq-marca-blanca": "Marca blanca",
   "maq-calculadora": "Calculadora de costo y margen",
   "maq-admin-moderacion": "Maquilas · Moderación",
+  "maq-equipo": "Equipo de la maquila",
+  "maq-marca": "Mi marca",
+  "maq-encargo": "Encargo de diseño",
+  "maq-encargos": "Encargos de marca",
+  "maq-admin-resumen": "Maquilas · Resumen",
+  "maq-admin-monitoreo": "Maquilas · Monitoreo",
+  "maq-admin-config": "Maquilas · Configuración",
   "maq-directorio": "Directorio de maquilas",
   "maq-maquiladora": "Perfil de la maquila",
   "maq-solicitar": "Nueva solicitud",
@@ -63,6 +74,7 @@ export function MaquilasRouter({ screen, sb, idRuta, navegar, rol, onSoporte }: 
     "maq-produccion": <PedidosMaquilas pedidoId={id} onAbrir={(x) => navegar("maq-produccion", x)} onReportar={onSoporte} />,
     "maq-catalogo": <CatalogoMaquila />,
     "maq-resenas": <ResenasMaquila />,
+    "maq-equipo": <EquipoMaquila />,
     // Cliente
     "maq-directorio": <DirectorioMaquilas onAbrir={(x) => navegar("maq-maquiladora", x)} onSolicitarAbierta={() => navegar("maq-solicitar")} />,
     "maq-maquiladora": id ? <PerfilMaquilaPublico maquiladoraId={id} onSolicitar={(x) => navegar("maq-solicitar", x)}
@@ -89,11 +101,23 @@ export function MaquilasRouter({ screen, sb, idRuta, navegar, rol, onSoporte }: 
       <VerificacionMaquiladoras maquiladoraId={id} esAdmin={rol === "admin"} onAbrir={(x) => navegar("maq-admin-verificacion", x)} />
     ),
     "maq-admin-moderacion": <ModeracionMaquilas />,
+    "maq-admin-resumen": <ResumenMaquilas onIr={navegar} />,
+    "maq-admin-monitoreo": <MonitoreoMaquilas pedidoId={id} onAbrir={(x) => navegar("maq-admin-monitoreo", x)} />,
+    "maq-admin-config": <ConfiguracionMaquilas />,
+    // Estudio de marca (cliente) y encargos de diseño (cliente y equipo de Diseño)
+    "maq-marca": <EstudioMarca marcaId={id} onAbrir={(x) => navegar("maq-marca", x)} onAbrirEncargo={(x) => navegar("maq-encargo", x)} />,
+    "maq-encargo": id ? (
+      rol === "designer" || rol === "admin" || rol === "soporte"
+        ? <DetalleEncargo id={id} textoVolver="Encargos" onVolver={() => navegar("maq-encargos")} />
+        : <DetalleEncargo id={id} textoVolver="Mi marca" onVolver={() => navegar("maq-marca")} />
+    ) : null,
+    "maq-encargos": <ColaDiseno encargoId={id} onAbrir={(x) => navegar(x ? "maq-encargo" : "maq-encargos", x)} />,
   };
   const vista = vistas[screen];
   if (!vista) return null;
   // La ficha de una maquila cuelga del directorio; el menú marca esa sección.
-  const activo = screen === "maq-maquiladora" ? "maq-directorio" : screen;
+  const activo = screen === "maq-maquiladora" ? "maq-directorio"
+    : screen === "maq-encargo" ? (rol === "designer" || rol === "admin" || rol === "soporte" ? "maq-encargos" : "maq-marca") : screen;
   const padre = screen === "maq-maquiladora" ? { label: "Directorio", onClick: () => navegar("maq-directorio") }
     : screen === "maq-marca-blanca" && id ? { label: "Marca blanca", onClick: () => navegar("maq-marca-blanca") } : undefined;
   return (

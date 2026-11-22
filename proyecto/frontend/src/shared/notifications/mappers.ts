@@ -16,6 +16,9 @@ function destinoMaquilas(tipo: string, data: Record<string, unknown>): Pick<AppN
   const maquiladoraId = texto("maquiladora_id");
   const solicitudId = texto("solicitud_id");
   const pedidoId = texto("pedido_id");
+  const encargoId = texto("encargo_id");
+  // Encargos de diseño: el cliente y Diseño abren el mismo detalle.
+  if (encargoId) return { destino: "maq-encargo", destinoId: encargoId };
   // Al equipo: el expediente que hay que revisar.
   if (tipo === "maquila_en_revision" || tipo === "maquila_registrada") return { destino: "maq-admin-verificacion", destinoId: maquiladoraId };
   // Pedido: cada lado lo ve en su sección.

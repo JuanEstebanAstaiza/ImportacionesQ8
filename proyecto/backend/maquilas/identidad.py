@@ -17,12 +17,18 @@ from pymongo.database import Database
 ROLES_MAQUILADORA = ("maquiladora",)
 ROLES_CLIENTE = ("solicitante", "importador", "asesor")
 ROLES_EQUIPO = ("admin", "soporte")
+# El equipo de Diseño de Zarpi atiende los encargos del estudio de marca (fase 4).
+ROLES_DISENO = ("designer",)
 # Quien entra al módulo. El diseñador no (en la fase de marca tendrá su cola propia).
 ROLES_MODULO = ROLES_CLIENTE + ROLES_MAQUILADORA + ROLES_EQUIPO
 
 
 def es_equipo(usuario: Optional[dict]) -> bool:
     return bool(usuario) and usuario.get("rol") in ROLES_EQUIPO
+
+
+def es_disenador(usuario: Optional[dict]) -> bool:
+    return bool(usuario) and usuario.get("rol") in ROLES_DISENO
 
 
 def es_maquiladora(usuario: Optional[dict]) -> bool:

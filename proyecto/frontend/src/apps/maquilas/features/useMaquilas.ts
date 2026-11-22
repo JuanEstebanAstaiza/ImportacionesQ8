@@ -28,6 +28,16 @@ export const claves = {
   resenasPublicas: (id: string) => ["maquilas", "resenas", id] as const,
   productosAdmin: (filtros: object) => ["maquilas", "admin", "productos", filtros] as const,
   resenasAdmin: (filtros: object) => ["maquilas", "admin", "resenas", filtros] as const,
+  marcas: ["maquilas", "marcas"] as const,
+  marca: (id: string) => ["maquilas", "marcas", id] as const,
+  encargos: (marca: string) => ["maquilas", "encargos", marca] as const,
+  encargo: (id: string) => ["maquilas", "encargo", id] as const,
+  colaDiseno: (filtros: object) => ["maquilas", "diseno", filtros] as const,
+  equipo: ["maquilas", "equipo"] as const,
+  resumenAdmin: ["maquilas", "admin", "resumen"] as const,
+  solicitudesAdmin: (filtros: object) => ["maquilas", "admin", "solicitudes", filtros] as const,
+  pedidosAdmin: (filtros: object) => ["maquilas", "admin", "pedidos", filtros] as const,
+  configuracion: ["maquilas", "admin", "configuracion"] as const,
 };
 
 export function useParametrosMaquilas() {
@@ -117,4 +127,46 @@ export function useProductosAdmin(filtros: { q?: string; ocultos?: boolean }) {
 
 export function useResenasAdmin(filtros: { ocultas?: boolean; maximo?: number }) {
   return useQuery({ queryKey: claves.resenasAdmin(filtros), queryFn: () => maquilasService.resenasAdmin(filtros) });
+}
+
+// ── Fase 4 ──────────────────────────────────────────────────────────────────
+
+export function useMarcas(enabled = true) {
+  return useQuery({ queryKey: claves.marcas, queryFn: maquilasService.marcas, enabled });
+}
+
+export function useMarca(id: string | undefined) {
+  return useQuery({ queryKey: claves.marca(id ?? ""), queryFn: () => maquilasService.marca(id!), enabled: Boolean(id) });
+}
+
+export function useEncargos(marcaId?: string) {
+  return useQuery({ queryKey: claves.encargos(marcaId ?? ""), queryFn: () => maquilasService.misEncargos(marcaId) });
+}
+
+export function useEncargo(id: string | undefined) {
+  return useQuery({ queryKey: claves.encargo(id ?? ""), queryFn: () => maquilasService.encargo(id!), enabled: Boolean(id), refetchInterval: 30_000 });
+}
+
+export function useColaDiseno(filtros: { estado?: string; mios?: boolean }) {
+  return useQuery({ queryKey: claves.colaDiseno(filtros), queryFn: () => maquilasService.colaDiseno(filtros), refetchInterval: 60_000 });
+}
+
+export function useEquipo(enabled = true) {
+  return useQuery({ queryKey: claves.equipo, queryFn: maquilasService.equipo, retry: false, enabled });
+}
+
+export function useResumenAdmin() {
+  return useQuery({ queryKey: claves.resumenAdmin, queryFn: maquilasService.resumenAdmin, refetchInterval: 120_000 });
+}
+
+export function useSolicitudesAdmin(filtros: { estado?: string; modalidad?: string; q?: string }) {
+  return useQuery({ queryKey: claves.solicitudesAdmin(filtros), queryFn: () => maquilasService.solicitudesAdmin(filtros) });
+}
+
+export function usePedidosAdmin(filtros: { estado?: string; q?: string; retrasados?: boolean }) {
+  return useQuery({ queryKey: claves.pedidosAdmin(filtros), queryFn: () => maquilasService.pedidosAdmin(filtros) });
+}
+
+export function useConfiguracionMaquilas() {
+  return useQuery({ queryKey: claves.configuracion, queryFn: maquilasService.configuracion });
 }

@@ -6,7 +6,7 @@ Se construye por fases:
 - **Fase 1:** la cuenta de la maquiladora, su registro, su expediente y la verificación del equipo.
 - **Fase 2:** directorio, solicitudes de fabricación (dirigidas y abiertas), confidencialidad, propuestas comparables, pedido con muestra, producción por etapas, pagos por hitos y chat.
 - **Fase 3:** marca blanca, ficha técnica guiada con PDF, calculadora de costo y margen, checklist y reporte de calidad, reseñas con métricas públicas y repetir pedido.
-- Siguiente (fase 4): estudio de marca, ruta legal y el admin completo.
+- **Fase 4:** estudio de marca, encargos de diseño al equipo de Diseño, ruta legal, colaboradores de la maquiladora y el panel del equipo (resumen, monitoreo y configuración).
 
 ## Arquitectura
 
@@ -187,6 +187,57 @@ Con el pedido entregado, el cliente elige cantidad y fecha y se crea una solicit
 Frontend: maquila `maq-catalogo` y `maq-resenas`; cliente `maq-marca-blanca[/<producto>]` y `maq-calculadora`; admin `maq-admin-moderacion`. Pruebas: `tests/test_maquilas_fase3.py`.
 
 Las descargas de GridFS (Maquilas y Liquidaciones) mandan el nombre del archivo con `filename*` (UTF-8): un nombre con tildes rompía la cabecera.
+
+## Fase 4: marca, equipo y panel
+
+### Estudio de marca (`marcas`)
+
+- Cada cuenta de cliente (cotizante o empresa) tiene hasta `marcas_max` marcas: nombre, eslogan, categoría, historia, logo (`marca`, imagen), paleta (hasta `paleta_max` colores en `#RRGGBB`), tipografías y archivos (`marca_archivo`: etiquetas, empaques, manual; hasta `archivos_marca_max`).
+- Al pedir una fabricación (nueva solicitud o marca blanca) el cliente puede adjuntar una marca: la solicitud guarda una **copia** (`marca`, con `archivos_ids`). La maquila la ve con el brief; si la solicitud es confidencial, solo el nombre hasta aceptar el acuerdo. Los archivos de la marca solo los ve la maquila a la que le llegó esa solicitud.
+
+### Ruta legal
+
+`parametros.ruta_legal`: pasos con guía y enlace oficial; `categorias` vacío aplica a todas (RUT, registro de marca en la SIC, facturación electrónica, etiquetado, GS1) y los demás solo a esas categorías (INVIMA para cosmética, alimentos, suplementos y aseo). El cliente marca cada paso como pendiente, en curso, hecho o no aplica, con nota. Zarpi no hace el trámite: es una guía.
+
+### Encargos de diseño (`encargos`)
+
+| Estado | Qué pasa |
+|---|---|
+| `nuevo` | El cliente lo pidió desde su marca (tipo, brief, referencias). Lo puede cancelar |
+| `en_proceso` | Un diseñador (rol `designer`) lo tomó |
+| `entregado` | El diseñador subió una versión (`diseno`: PNG, JPG o PDF) |
+| `cambios` | El cliente pidió ajustes con comentario |
+| `aprobado` | El cliente aprobó: los archivos pasan al kit de la marca; en un logo, la primera imagen queda como logo |
+| `cancelado` | El cliente lo retiró antes de que lo tomaran |
+
+- Tipos en `parametros.tipos_encargo` (logo, etiqueta, empaque, otra pieza). Máximo 5 abiertos por cliente y `versiones_max` versiones por encargo. Solo el diseñador asignado entrega.
+- El equipo de Diseño lo atiende en *Encargos de marca* (su menú). No se cobra desde la plataforma.
+
+### Colaboradores de la maquiladora
+
+La cuenta dueña crea cuentas para su gente (*Equipo*): `Usuario` rol `maquiladora` con el correo ya verificado y `miembros.rol = colaborador`, hasta `colaboradores_max`. El colaborador atiende solicitudes, propuestas, pedidos, catálogo y reseñas; el perfil legal, el expediente, la verificación y el equipo son de la dueña. Desactivar deja la cuenta sin acceso (el token deja de valer) y sin avisos.
+
+### Panel del equipo (grupo «Maquilas»)
+
+- **Resumen:** pedidos activos y su valor, retrasados, entregados en 30 días, comprobantes sin revisar, solicitudes del mes por modalidad, solicitudes sin propuesta hace 3 días, maquilas verificadas y por verificar, productos publicados, calificación promedio, marcas, encargos y las maquilas con más entregas.
+- **Monitoreo:** pedidos (filtros por estado, búsqueda y retrasados; muestra qué le toca a cada lado) y solicitudes (estado, modalidad, búsqueda). El detalle del pedido es de solo lectura; para intervenir se usa la mesa de ayuda.
+- **Configuración** (solo admin): límites (cupo de la solicitud abierta, productos, fotos, colaboradores, marcas, versiones, tamaños de archivo), procesos, certificaciones, categorías, personalizaciones, tipos de encargo y la ruta legal. Las claves que ya existen se pueden renombrar pero no quitar (las usan maquilas, productos y marcas); los enlaces tienen que ser `https://`.
+
+### Endpoints de la fase 4 (`/maquilas`)
+
+| Método | Ruta | Quién |
+|---|---|---|
+| GET · POST | `/marcas` · GET · PUT `/marcas/{id}` · PUT `/marcas/{id}/ruta/{clave}` | Cliente |
+| POST | `/marcas/{id}/encargos` · GET `/encargos?marca=` | Cliente |
+| GET | `/encargos/{id}` | Cliente dueño, Diseño, equipo |
+| POST | `/encargos/{id}/responder` · `/cancelar` | Cliente |
+| GET | `/diseno/encargos?estado=&mios=` | Diseño y equipo |
+| POST | `/diseno/encargos/{id}/tomar` · `/versiones` | Diseño |
+| GET · POST | `/mi-maquiladora/equipo` · POST `/mi-maquiladora/equipo/{id}/desactivar` · `/activar` | Dueña de la maquiladora |
+| GET | `/admin/resumen` · `/admin/solicitudes` · `/admin/pedidos` | Equipo |
+| GET · PUT | `/admin/configuracion` | Admin |
+
+Frontend: cliente `maq-marca[/<marca>]` y `maq-encargo/<id>`; Diseño `maq-encargos[/<id>]`; maquila `maq-equipo`; admin `maq-admin-resumen`, `maq-admin-monitoreo[/<pedido>]` y `maq-admin-config`. Pruebas: `tests/test_maquilas_fase4.py`.
 
 ## Operación
 

@@ -13,17 +13,22 @@ from pymongo.database import Database
 from sqlalchemy.orm import Session
 
 from config import RATE_LIMIT_REGISTER
-from maquilas import archivos, chat, directorio, marca_blanca, parametros, pedidos, resenas, servicio, solicitudes
+from maquilas import (
+    admin, archivos, chat, directorio, encargos, equipo, marca, marca_blanca, parametros, pedidos, resenas, servicio, solicitudes,
+)
 from maquilas import ficha as fichas
 from maquilas.db import BUCKETS, get_mongo
 from utils import gridfs_archivos
 from maquilas.esquemas import (
-    AceptarPropuestaEntrada, AdminCrearMaquilaEntrada, ComprobanteEntrada, DocumentosEntrada, EtapaEntrada,
+    AceptarPropuestaEntrada, AdminCrearMaquilaEntrada, ColaboradorEntrada, ComprobanteEntrada, ConfiguracionEntrada,
+    DocumentosEntrada, EncargoEntrada, EtapaEntrada, MarcaEntrada, PasoRutaEntrada, RespuestaEncargoEntrada, VersionEntrada,
     FichaVistaPreviaEntrada, MensajeEntrada, MotivoEntrada, MuestraEntrada, PerfilEntrada, ProductoEntrada,
     PropuestaEntrada, RegistroMaquilaEntrada, RepetirEntrada, ReporteCalidadEntrada, ResenaEntrada,
     RespuestaCalidadEntrada, RespuestaMuestraEntrada, RespuestaResenaEntrada, SolicitudEntrada,
 )
-from maquilas.identidad import ROLES_CLIENTE, ROLES_EQUIPO, ROLES_MAQUILADORA, ROLES_MODULO, es_maquiladora, maquiladora_id_de
+from maquilas.identidad import (
+    ROLES_CLIENTE, ROLES_DISENO, ROLES_EQUIPO, ROLES_MAQUILADORA, ROLES_MODULO, es_disenador, es_maquiladora, maquiladora_id_de,
+)
 from schemas.auth import RegistroPendienteResponse
 from utils.dependencies import get_db, get_optional_current_user, require_rol, require_rol_in
 from utils.limiter import RATE_LIMIT_CHAT_MESSAGE, RATE_LIMIT_PUBLIC_READ, RATE_LIMIT_PUBLIC_WRITE, limiter
@@ -46,6 +51,11 @@ require_modulo = require_rol_in(*ROLES_MODULO)
 # Cliente o maquiladora: las dos partes de un pedido o de un chat.
 require_parte = require_rol_in(*(ROLES_CLIENTE + ROLES_MAQUILADORA))
 require_equipo = require_rol_in(*ROLES_EQUIPO)
+require_diseno = require_rol_in(*ROLES_DISENO)
+# Quien sube archivos: las dos partes y el equipo de Diseño (entregas de los encargos).
+require_sube = require_rol_in(*(ROLES_CLIENTE + ROLES_MAQUILADORA + ROLES_DISENO))
+# Quien ve un encargo: el cliente, Diseño y el equipo.
+require_encargo = require_rol_in(*(ROLES_CLIENTE + ROLES_DISENO + ROLES_EQUIPO))
 require_admin = require_rol("admin")
 
 
@@ -112,11 +122,13 @@ def subir_archivo(
     tipo: str = Form(...),
     archivo: UploadFile = File(...),
     mongo: Database = Depends(get_mongo),
-    usuario: dict = Depends(require_parte),
+    usuario: dict = Depends(require_sube),
 ):
     """La maquiladora sube su expediente, muestras y evidencias; el cliente, referencias,
-    ficha técnica y comprobantes. Los dos, adjuntos del chat."""
-    permitidos = archivos.TIPOS_MAQUILADORA if es_maquiladora(usuario) else archivos.TIPOS_CLIENTE
+    ficha técnica, comprobantes y archivos de su marca; Diseño, las versiones de un encargo.
+    Las dos partes, adjuntos del chat."""
+    permitidos = (archivos.TIPOS_MAQUILADORA if es_maquiladora(usuario)
+                  else archivos.TIPOS_DISENO if es_disenador(usuario) else archivos.TIPOS_CLIENTE)
     if tipo not in permitidos or archivos.TIPOS[tipo][0] != bucket:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tipo de archivo no admitido aquí")
     try:
@@ -170,6 +182,29 @@ def actualizar_producto(producto_id: str, datos: ProductoEntrada, mongo: Databas
     return marca_blanca.actualizar(mongo, usuario, producto_id, datos)
 
 
+@router.get("/mi-maquiladora/equipo")
+def ver_equipo(mongo: Database = Depends(get_mongo), db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return equipo.listar(mongo, db, usuario)
+
+
+@router.post("/mi-maquiladora/equipo", status_code=status.HTTP_201_CREATED)
+def crear_colaborador(datos: ColaboradorEntrada, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                      usuario: dict = Depends(require_maquiladora)):
+    return equipo.crear(mongo, db, usuario, datos)
+
+
+@router.post("/mi-maquiladora/equipo/{colaborador_id}/desactivar")
+def desactivar_colaborador(colaborador_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                           usuario: dict = Depends(require_maquiladora)):
+    return equipo.cambiar_estado(mongo, db, usuario, colaborador_id, False)
+
+
+@router.post("/mi-maquiladora/equipo/{colaborador_id}/activar")
+def activar_colaborador(colaborador_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                        usuario: dict = Depends(require_maquiladora)):
+    return equipo.cambiar_estado(mongo, db, usuario, colaborador_id, True)
+
+
 @router.get("/mi-maquiladora/resenas")
 def mis_resenas(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_maquiladora)):
     return resenas.de_mi_maquiladora(mongo, usuario)
@@ -207,6 +242,83 @@ def resenas_publicas(maquiladora_id: str, mongo: Database = Depends(get_mongo), 
 
 
 # ==================== Marca blanca (clientes) ====================
+
+# ==================== Estudio de marca (clientes) ====================
+
+@router.get("/marcas")
+def mis_marcas(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_cliente)):
+    return marca.listar(mongo, usuario)
+
+
+@router.post("/marcas", status_code=status.HTTP_201_CREATED)
+def crear_marca(datos: MarcaEntrada, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_cliente)):
+    return marca.crear(mongo, usuario, datos)
+
+
+@router.get("/marcas/{marca_id}")
+def ver_marca(marca_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_cliente)):
+    return marca.detalle(mongo, usuario, marca_id)
+
+
+@router.put("/marcas/{marca_id}")
+def actualizar_marca(marca_id: str, datos: MarcaEntrada, mongo: Database = Depends(get_mongo),
+                     usuario: dict = Depends(require_cliente)):
+    return marca.actualizar(mongo, usuario, marca_id, datos)
+
+
+@router.put("/marcas/{marca_id}/ruta/{clave}")
+def marcar_paso_ruta(marca_id: str, clave: str, datos: PasoRutaEntrada, mongo: Database = Depends(get_mongo),
+                     usuario: dict = Depends(require_cliente)):
+    return marca.marcar_paso(mongo, usuario, marca_id, clave, datos)
+
+
+@router.post("/marcas/{marca_id}/encargos", status_code=status.HTTP_201_CREATED)
+def pedir_encargo(marca_id: str, datos: EncargoEntrada, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                  usuario: dict = Depends(require_cliente)):
+    return encargos.crear(mongo, db, usuario, marca_id, datos)
+
+
+@router.get("/encargos")
+def mis_encargos(marca_id: Optional[str] = Query(None, alias="marca", max_length=40), mongo: Database = Depends(get_mongo),
+                 usuario: dict = Depends(require_cliente)):
+    return encargos.mis_encargos(mongo, usuario, marca_id)
+
+
+@router.get("/encargos/{encargo_id}")
+def ver_encargo(encargo_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_encargo)):
+    return encargos.detalle(mongo, usuario, encargo_id)
+
+
+@router.post("/encargos/{encargo_id}/responder")
+def responder_encargo(encargo_id: str, datos: RespuestaEncargoEntrada, mongo: Database = Depends(get_mongo),
+                      db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    return encargos.responder(mongo, db, usuario, encargo_id, datos)
+
+
+@router.post("/encargos/{encargo_id}/cancelar")
+def cancelar_encargo(encargo_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_cliente)):
+    return encargos.cancelar(mongo, usuario, encargo_id)
+
+
+# ==================== Equipo de Diseño ====================
+
+@router.get("/diseno/encargos")
+def cola_de_diseno(estado: Optional[str] = Query(None, max_length=20), mios: bool = Query(False),
+                   mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_rol_in(*(ROLES_DISENO + ROLES_EQUIPO)))):
+    return encargos.cola(mongo, usuario, estado=estado, mios=mios)
+
+
+@router.post("/diseno/encargos/{encargo_id}/tomar")
+def tomar_encargo(encargo_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                  usuario: dict = Depends(require_diseno)):
+    return encargos.tomar(mongo, db, usuario, encargo_id)
+
+
+@router.post("/diseno/encargos/{encargo_id}/versiones")
+def entregar_version(encargo_id: str, datos: VersionEntrada, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                     usuario: dict = Depends(require_diseno)):
+    return encargos.entregar(mongo, db, usuario, encargo_id, datos)
+
 
 @router.get("/catalogo")
 def ver_catalogo(
@@ -488,3 +600,44 @@ def ocultar_resena(resena_id: str, datos: MotivoEntrada, mongo: Database = Depen
 @router.post("/admin/resenas/{resena_id}/mostrar")
 def mostrar_resena(resena_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_equipo)):
     return resenas.moderar(mongo, usuario, resena_id, None)
+
+
+@router.get("/admin/resumen")
+def resumen_admin(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_equipo)):
+    return admin.resumen(mongo)
+
+
+@router.get("/admin/solicitudes")
+def solicitudes_admin(
+    estado: Optional[str] = Query(None, max_length=20),
+    modalidad: Optional[str] = Query(None, max_length=20),
+    q: Optional[str] = Query(None, max_length=80),
+    mongo: Database = Depends(get_mongo),
+    usuario: dict = Depends(require_equipo),
+):
+    return admin.listar_solicitudes(mongo, usuario, estado=estado, q=q, modalidad=modalidad)
+
+
+@router.get("/admin/pedidos")
+def pedidos_admin(
+    estado: Optional[str] = Query(None, max_length=20),
+    q: Optional[str] = Query(None, max_length=80),
+    retrasados: bool = Query(False),
+    mongo: Database = Depends(get_mongo),
+    usuario: dict = Depends(require_equipo),
+):
+    return admin.listar_pedidos(mongo, usuario, estado=estado, q=q, retrasados=retrasados)
+
+
+@router.get("/admin/configuracion")
+def ver_configuracion(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_admin)):
+    return parametros.leer(mongo)
+
+
+@router.put("/admin/configuracion")
+def guardar_configuracion(datos: ConfiguracionEntrada, mongo: Database = Depends(get_mongo),
+                          usuario: dict = Depends(require_admin)):
+    try:
+        return parametros.guardar(mongo, datos.cambios, usuario["user_id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

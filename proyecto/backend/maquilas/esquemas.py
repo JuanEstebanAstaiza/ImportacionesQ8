@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
@@ -143,6 +143,7 @@ class SolicitudEntrada(BaseModel):
     maquiladora_id: Optional[str] = Field(None, max_length=40)
     producto_id: Optional[str] = Field(None, max_length=40)
     personalizacion: List[str] = Field(default_factory=list, max_length=10)
+    marca_id: Optional[str] = Field(None, max_length=40)
     ficha_guiada: Optional[FichaTecnicaEntrada] = None
     categoria: str = Field(..., min_length=2, max_length=40)
     titulo: str = Field(..., min_length=3, max_length=160)
@@ -275,3 +276,69 @@ class RespuestaResenaEntrada(BaseModel):
 class RepetirEntrada(BaseModel):
     cantidad: int = Field(..., ge=1, le=10_000_000)
     fecha_objetivo: Optional[date] = None
+
+
+# ── Fase 4: estudio de marca, encargos de diseño, equipo y configuración ─────
+
+class ColorEntrada(BaseModel):
+    nombre: str = Field("", max_length=40)
+    hex: str = Field(..., pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class MarcaEntrada(BaseModel):
+    """Kit de marca del cliente. Los archivos son ids ya subidos (`marca` para el logo,
+    `marca_archivo` para etiquetas, empaques y manuales)."""
+    nombre: str = Field(..., min_length=2, max_length=80)
+    eslogan: str = Field("", max_length=160)
+    descripcion: str = Field("", max_length=2000)
+    categoria: Optional[str] = Field(None, max_length=40)
+    logo: Optional[str] = Field(None, max_length=40)
+    paleta: List[ColorEntrada] = Field(default_factory=list, max_length=20)
+    tipografias: List[str] = Field(default_factory=list, max_length=6)
+    archivos: List[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("tipografias")
+    @classmethod
+    def tipografias_cortas(cls, v: List[str]) -> List[str]:
+        return [t.strip()[:60] for t in v if t.strip()]
+
+
+class PasoRutaEntrada(BaseModel):
+    estado: Literal["pendiente", "en_curso", "hecho", "no_aplica"]
+    nota: str = Field("", max_length=500)
+
+
+class EncargoEntrada(BaseModel):
+    tipo: str = Field(..., min_length=2, max_length=40)
+    brief: str = Field(..., min_length=20, max_length=4000)
+    referencias: List[str] = Field(default_factory=list, max_length=10)
+
+
+class VersionEntrada(BaseModel):
+    archivos: List[str] = Field(..., min_length=1, max_length=10)
+    nota: str = Field("", max_length=1000)
+
+
+class RespuestaEncargoEntrada(BaseModel):
+    aprobado: bool
+    comentario: str = Field("", max_length=1000)
+
+
+class ColaboradorEntrada(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=120)
+    apellido: str = Field("", max_length=120)
+    email: EmailStr
+    telefono: Optional[str] = Field(None, max_length=20)
+    password: str = Field(..., min_length=9, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validar_password(cls, v: str) -> str:
+        if not password_cumple_politica(v):
+            raise ValueError("La contraseña debe tener al menos 9 caracteres, una letra y un dígito")
+        return v
+
+
+class ConfiguracionEntrada(BaseModel):
+    """Cambios a los parámetros del módulo; `parametros.guardar` valida cada uno."""
+    cambios: Dict[str, Any]

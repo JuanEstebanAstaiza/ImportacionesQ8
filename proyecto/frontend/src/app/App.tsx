@@ -1591,6 +1591,7 @@ export default function App() {
     "maq-produccion": ["maquiladora"],
     "maq-catalogo": ["maquiladora"],
     "maq-resenas": ["maquiladora"],
+    "maq-equipo": ["maquiladora"],
     "maq-directorio": ["solicitante", "importadora", "asesor"],
     "maq-maquiladora": ["solicitante", "importadora", "asesor"],
     "maq-solicitar": ["solicitante", "importadora", "asesor"],
@@ -1598,8 +1599,14 @@ export default function App() {
     "maq-pedidos": ["solicitante", "importadora", "asesor"],
     "maq-marca-blanca": ["solicitante", "importadora", "asesor"],
     "maq-calculadora": ["solicitante", "importadora", "asesor"],
+    "maq-marca": ["solicitante", "importadora", "asesor"],
+    "maq-encargo": ["solicitante", "importadora", "asesor", "designer", "admin", "soporte"],
+    "maq-encargos": ["designer", "admin", "soporte"],
     "maq-admin-verificacion": ["admin", "soporte"],
     "maq-admin-moderacion": ["admin", "soporte"],
+    "maq-admin-resumen": ["admin", "soporte"],
+    "maq-admin-monitoreo": ["admin", "soporte"],
+    "maq-admin-config": ["admin"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];

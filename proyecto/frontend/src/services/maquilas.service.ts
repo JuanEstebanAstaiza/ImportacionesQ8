@@ -4,7 +4,8 @@ import type {
   ArchivoMaquila, BucketMaquilas, DocumentosEntrada, EmpresaEntrada, FabricacionEntrada, FichaGuiada, ListadoMaquiladoras,
   Maquiladora, MensajeHilo, MetricasMaquila, ParametrosMaquilas, Pedido, PedidoResumen, PerfilEntrada, Producto, ProductoEntrada,
   PropuestaEntrada, RegistroMaquilaEntrada, RepresentanteEntrada, Resena, ResenaEntrada, Solicitud, SolicitudEntrada,
-  SolicitudResumen, TipoArchivoMaquila,
+  SolicitudResumen, TipoArchivoMaquila, Colaborador, ConfiguracionMaquilas, Encargo, EncargoResumen, EstadoPaso, Marca,
+  MarcaEntrada, MarcaResumen, PedidoAdmin, ResumenAdminMaquilas, SolicitudAdmin,
 } from "@apps/maquilas/features/tipos";
 
 /**
@@ -25,6 +26,7 @@ const BUCKET_POR_TIPO: Record<TipoArchivoMaquila, BucketMaquilas> = {
   foto: "medios", rut: "documentos", camara_comercio: "documentos", certificado: "documentos",
   referencia: "medios", ficha_tecnica: "documentos", muestra: "medios", evidencia: "medios",
   comprobante: "documentos", adjunto: "documentos", producto: "medios",
+  marca: "medios", marca_archivo: "documentos", diseno: "documentos",
 };
 
 const id = (valor: string) => encodeURIComponent(valor);
@@ -140,6 +142,30 @@ export const maquilasService = {
   repetirPedido: (pedidoId: string, cantidad: number, fechaObjetivo?: string | null) =>
     apiRequest<Solicitud>(`/maquilas/pedidos/${id(pedidoId)}/repetir`, { method: "POST", body: { cantidad, fecha_objetivo: fechaObjetivo || null } }),
 
+  // Fase 4: estudio de marca, encargos de diseño y equipo de la maquila
+  marcas: () => apiRequest<MarcaResumen[]>("/maquilas/marcas"),
+  marca: (marcaId: string) => apiRequest<Marca>(`/maquilas/marcas/${id(marcaId)}`),
+  crearMarca: (datos: MarcaEntrada) => apiRequest<Marca>("/maquilas/marcas", { method: "POST", body: datos }),
+  actualizarMarca: (marcaId: string, datos: MarcaEntrada) => apiRequest<Marca>(`/maquilas/marcas/${id(marcaId)}`, { method: "PUT", body: datos }),
+  marcarPaso: (marcaId: string, clave: string, estado: EstadoPaso, nota: string) =>
+    apiRequest<Marca>(`/maquilas/marcas/${id(marcaId)}/ruta/${id(clave)}`, { method: "PUT", body: { estado, nota } }),
+  pedirEncargo: (marcaId: string, tipo: string, brief: string, referencias: string[]) =>
+    apiRequest<Encargo>(`/maquilas/marcas/${id(marcaId)}/encargos`, { method: "POST", body: { tipo, brief, referencias } }),
+  misEncargos: (marcaId?: string) => apiRequest<EncargoResumen[]>(`/maquilas/encargos${query({ marca: marcaId })}`),
+  encargo: (encargoId: string) => apiRequest<Encargo>(`/maquilas/encargos/${id(encargoId)}`),
+  responderEncargo: (encargoId: string, aprobado: boolean, comentario: string) =>
+    apiRequest<Encargo>(`/maquilas/encargos/${id(encargoId)}/responder`, { method: "POST", body: { aprobado, comentario } }),
+  cancelarEncargo: (encargoId: string) => apiRequest<Encargo>(`/maquilas/encargos/${id(encargoId)}/cancelar`, { method: "POST" }),
+  colaDiseno: (params: { estado?: string; mios?: boolean }) => apiRequest<EncargoResumen[]>(`/maquilas/diseno/encargos${query(params)}`),
+  tomarEncargo: (encargoId: string) => apiRequest<Encargo>(`/maquilas/diseno/encargos/${id(encargoId)}/tomar`, { method: "POST" }),
+  entregarVersion: (encargoId: string, archivos: string[], nota: string) =>
+    apiRequest<Encargo>(`/maquilas/diseno/encargos/${id(encargoId)}/versiones`, { method: "POST", body: { archivos, nota } }),
+  equipo: () => apiRequest<Colaborador[]>("/maquilas/mi-maquiladora/equipo"),
+  crearColaborador: (datos: { nombre: string; apellido: string; email: string; telefono?: string; password: string }) =>
+    apiRequest<Colaborador>("/maquilas/mi-maquiladora/equipo", { method: "POST", body: datos }),
+  cambiarColaborador: (colaboradorId: string, activo: boolean) =>
+    apiRequest<Colaborador>(`/maquilas/mi-maquiladora/equipo/${id(colaboradorId)}/${activo ? "activar" : "desactivar"}`, { method: "POST" }),
+
   // Chat
   mensajes: (hilo: string) => apiRequest<MensajeHilo[]>(`/maquilas/hilos/${id(hilo)}/mensajes`),
   enviarMensaje: (hilo: string, contenido: string, archivoId?: string) =>
@@ -165,4 +191,11 @@ export const maquilasService = {
   ocultarResena: (resenaId: string, motivo: string) =>
     apiRequest<Resena>(`/maquilas/admin/resenas/${id(resenaId)}/ocultar`, { method: "POST", body: { motivo } }),
   mostrarResena: (resenaId: string) => apiRequest<Resena>(`/maquilas/admin/resenas/${id(resenaId)}/mostrar`, { method: "POST" }),
+  resumenAdmin: () => apiRequest<ResumenAdminMaquilas>("/maquilas/admin/resumen"),
+  solicitudesAdmin: (params: { estado?: string; modalidad?: string; q?: string }) =>
+    apiRequest<SolicitudAdmin[]>(`/maquilas/admin/solicitudes${query(params)}`),
+  pedidosAdmin: (params: { estado?: string; q?: string; retrasados?: boolean }) => apiRequest<PedidoAdmin[]>(`/maquilas/admin/pedidos${query(params)}`),
+  configuracion: () => apiRequest<ConfiguracionMaquilas>("/maquilas/admin/configuracion"),
+  guardarConfiguracion: (cambios: Record<string, unknown>) =>
+    apiRequest<ConfiguracionMaquilas>("/maquilas/admin/configuracion", { method: "PUT", body: { cambios } }),
 };

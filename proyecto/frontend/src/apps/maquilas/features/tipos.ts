@@ -4,7 +4,8 @@ export type EstadoMaquiladora = "registrada" | "en_revision" | "verificada" | "r
 export type BucketMaquilas = "medios" | "documentos";
 export type TipoArchivoMaquila =
   | "foto" | "rut" | "camara_comercio" | "certificado"
-  | "referencia" | "ficha_tecnica" | "muestra" | "evidencia" | "comprobante" | "adjunto" | "producto";
+  | "referencia" | "ficha_tecnica" | "muestra" | "evidencia" | "comprobante" | "adjunto" | "producto"
+  | "marca" | "marca_archivo" | "diseno";
 export type TipoDocumento = "CC" | "CE" | "PPT" | "Pasaporte" | "NIT" | "DNI";
 
 export interface ArchivoMaquila {
@@ -140,6 +141,11 @@ export interface ParametrosFabricacion {
   productos_max: number;
   fotos_producto_max: number;
   criterios_calidad: Record<string, CriterioCalidad[]>;
+  marcas_max: number;
+  paleta_max: number;
+  archivos_marca_max: number;
+  tipos_encargo: TipoEncargo[];
+  ruta_legal: PasoRutaParametro[];
 }
 
 export type EstadoSolicitud = "abierta" | "con_propuestas" | "aceptada" | "cancelada";
@@ -203,6 +209,8 @@ export interface Solicitud {
   producto: ProductoEnSolicitud | null;
   personalizacion: { clave: string; nombre: string }[];
   repite_de: { pedido_id: string; codigo: string } | null;
+  /** Kit de marca adjunto (con confidencialidad, solo el nombre hasta el acuerdo). */
+  marca: MarcaEnSolicitud | { nombre: string } | null;
   // Vista del cliente
   destinos?: { maquiladora_id: string; nombre_comercial: string; estado: "pendiente" | "propuesta" | "rechazada"; motivo?: string | null; hilo: string }[];
   propuestas?: Propuesta[];
@@ -240,6 +248,7 @@ export interface SolicitudEntrada {
   producto_id?: string;
   personalizacion?: string[];
   ficha_guiada?: FichaGuiada | null;
+  marca_id?: string | null;
   categoria: string;
   titulo: string;
   descripcion: string;
@@ -460,3 +469,177 @@ export interface ResenaEntrada {
   comunicacion: number;
   comentario: string;
 }
+
+// ── Fase 4: estudio de marca, encargos de diseño, equipo y panel ────────────
+
+export interface ColorMarca {
+  nombre: string;
+  hex: string;
+}
+
+export interface TipoEncargo {
+  clave: string;
+  nombre: string;
+  descripcion: string;
+}
+
+export interface PasoRutaParametro {
+  clave: string;
+  nombre: string;
+  descripcion: string;
+  enlace: string;
+  categorias: string[];
+}
+
+export type EstadoPaso = "pendiente" | "en_curso" | "hecho" | "no_aplica";
+
+export interface PasoRuta {
+  clave: string;
+  nombre: string;
+  descripcion: string;
+  enlace: string;
+  estado: EstadoPaso;
+  nota: string;
+  actualizado_en: string | null;
+}
+
+export interface MarcaResumen {
+  id: string;
+  nombre: string;
+  eslogan: string;
+  categoria: string | null;
+  categoria_nombre: string | null;
+  logo: ArchivoMaquila | null;
+  paleta: ColorMarca[];
+  ruta_avance: { hechos: number; total: number };
+  encargos_abiertos: number;
+  actualizado_en: string | null;
+}
+
+export interface Marca extends MarcaResumen {
+  descripcion: string;
+  tipografias: string[];
+  archivos: ArchivoMaquila[];
+  ruta_legal: PasoRuta[];
+  creado_en: string | null;
+}
+
+export interface MarcaEntrada {
+  nombre: string;
+  eslogan: string;
+  descripcion: string;
+  categoria: string | null;
+  logo: string | null;
+  paleta: ColorMarca[];
+  tipografias: string[];
+  archivos: string[];
+}
+
+export interface MarcaEnSolicitud {
+  id: string;
+  nombre: string;
+  eslogan: string;
+  logo: ArchivoMaquila | null;
+  paleta: ColorMarca[];
+  tipografias: string[];
+  archivos: ArchivoMaquila[];
+}
+
+export type EstadoEncargo = "nuevo" | "en_proceso" | "entregado" | "cambios" | "aprobado" | "cancelado";
+
+export interface EncargoResumen {
+  id: string;
+  codigo: string;
+  tipo_nombre: string;
+  estado: EstadoEncargo;
+  estado_etiqueta: string;
+  marca: { id: string; nombre?: string; eslogan: string; logo: ArchivoMaquila | null; paleta: ColorMarca[]; tipografias: string[] };
+  cliente: { nombre?: string; empresa?: string | null };
+  disenador: { id: string; nombre?: string | null } | null;
+  version_vigente: number | null;
+  creado_en: string | null;
+  actualizado_en: string | null;
+  pendiente_de_mi: boolean;
+}
+
+export interface Encargo extends Omit<EncargoResumen, "pendiente_de_mi"> {
+  tipo: string;
+  brief: string;
+  referencias: ArchivoMaquila[];
+  versiones: { numero: number; archivos: ArchivoMaquila[]; nota: string; estado: "enviada" | "aprobada" | "cambios"; comentario: string; entregada_en: string | null; respondida_en: string | null }[];
+  acciones: { responder?: boolean; cancelar?: boolean; tomar?: boolean; entregar?: boolean };
+  aprobado_en: string | null;
+}
+
+export interface Colaborador {
+  id: string;
+  nombre: string;
+  email: string;
+  telefono: string | null;
+  rol: "dueno" | "colaborador";
+  activo: boolean;
+  creado_en: string | null;
+}
+
+export interface ResumenAdminMaquilas {
+  maquiladoras: Record<string, number>;
+  solicitudes: Record<string, number>;
+  solicitudes_30_dias: number;
+  solicitudes_por_modalidad: Record<string, number>;
+  solicitudes_sin_propuesta: number;
+  pedidos: Record<string, number>;
+  pedidos_activos: number;
+  valor_activo: number;
+  pedidos_retrasados: number;
+  comprobantes_por_revisar: number;
+  entregados_30_dias: { n: number; valor: number };
+  resenas: { n: number; promedio: number | null };
+  productos_publicados: number;
+  marcas: number;
+  encargos: Record<string, number>;
+  mejores_maquilas: { id: string; nombre_comercial: string; ciudad: string; metricas: MetricasMaquila }[];
+}
+
+export interface SolicitudAdmin {
+  id: string;
+  codigo: string;
+  modalidad: ModalidadSolicitud;
+  estado: EstadoSolicitud;
+  estado_etiqueta: string;
+  categoria_nombre: string;
+  titulo: string;
+  cantidad: number;
+  cliente: { nombre?: string; empresa?: string | null };
+  creado_en: string | null;
+  pedido_id: string | null;
+  destinos: number;
+  propuestas: number;
+}
+
+export interface PedidoAdmin {
+  id: string;
+  codigo: string;
+  estado: EstadoPedido;
+  estado_etiqueta: string;
+  producto: string;
+  cantidad: number;
+  total: number;
+  pagado: number;
+  cliente: { nombre?: string; empresa?: string | null };
+  maquiladora: { id: string; nombre_comercial?: string; ciudad?: string };
+  fecha_compromiso: string | null;
+  retrasado: boolean;
+  etapas_hechas: number;
+  etapas_total: number;
+  aviso_cliente: string | null;
+  aviso_maquila: string | null;
+  creado_en: string | null;
+}
+
+/** Lo que devuelve `GET /maquilas/admin/configuracion` (todos los parámetros). */
+export type ConfiguracionMaquilas = ParametrosMaquilas & {
+  cupo_abierta: number;
+  versiones_max: number;
+  colaboradores_max: number;
+  [clave: string]: unknown;
+};

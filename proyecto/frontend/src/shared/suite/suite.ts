@@ -1,6 +1,6 @@
 import {
   Bookmark, ClipboardCheck, ClipboardList, Factory, Inbox, LayoutGrid, MessagesSquare, Package, PackageSearch, CirclePlus,
-  Search, Settings2, Store, Tag, UserCheck, ChartColumn, ShieldCheck, Star, Calculator, Flag,
+  Search, Settings2, Store, Tag, UserCheck, ChartColumn, ShieldCheck, Star, Calculator, Flag, Palette, Users, Activity,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -105,11 +105,13 @@ const MAQ_MAQUILADORA: NavItem[] = [
   { icon: Tag, label: "Marca blanca", key: "maq-catalogo" },
   { icon: Star, label: "Reseñas", key: "maq-resenas" },
   { icon: Factory, label: "Mi maquila", key: "maq-perfil" },
+  { icon: Users, label: "Equipo", key: "maq-equipo" },
 ];
 
 const MAQ_CLIENTE: NavItem[] = [
   { icon: Search, label: "Directorio", key: "maq-directorio" },
   { icon: Tag, label: "Marca blanca", key: "maq-marca-blanca" },
+  { icon: Palette, label: "Mi marca", key: "maq-marca" },
   { icon: CirclePlus, label: "Nueva solicitud", key: "maq-solicitar" },
   { icon: ClipboardList, label: "Mis solicitudes", key: "maq-solicitudes" },
   { icon: Package, label: "Mis pedidos", key: "maq-pedidos" },
@@ -134,10 +136,14 @@ export const MAQUILAS: ModuloSuite = {
   admin: {
     grupo: { key: "maquilas", label: "Maquilas", icon: Factory },
     items: [
+      { icon: ChartColumn, label: "Resumen", key: "maq-admin-resumen" },
+      { icon: Activity, label: "Monitoreo", key: "maq-admin-monitoreo" },
       { icon: ShieldCheck, label: "Verificación", key: "maq-admin-verificacion" },
       { icon: Flag, label: "Moderación", key: "maq-admin-moderacion" },
+      { icon: Settings2, label: "Configuración", key: "maq-admin-config" },
     ],
     soporte: [
+      { icon: Activity, label: "Monitoreo de maquilas", key: "maq-admin-monitoreo" },
       { icon: ShieldCheck, label: "Verificación de maquilas", key: "maq-admin-verificacion" },
       { icon: Flag, label: "Moderación de maquilas", key: "maq-admin-moderacion" },
     ],

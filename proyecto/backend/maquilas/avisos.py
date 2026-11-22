@@ -18,7 +18,8 @@ logger = logging.getLogger("importacionesq8")
 
 
 def usuarios_de_maquiladora(db: Database, maquiladora_id: str) -> List[str]:
-    return [str(f["_id"]) for f in db.miembros.find({"maquiladora_id": maquiladora_id}, {"_id": 1})]
+    # Los colaboradores desactivados por el dueño ya no reciben avisos.
+    return [str(f["_id"]) for f in db.miembros.find({"maquiladora_id": maquiladora_id, "activo": {"$ne": False}}, {"_id": 1})]
 
 
 def usuarios_de_cliente(sql: Session, cuenta: str) -> List[str]:

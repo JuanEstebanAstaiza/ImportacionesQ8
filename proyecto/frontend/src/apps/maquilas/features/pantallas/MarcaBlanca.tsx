@@ -14,6 +14,7 @@ import { ArchivosVista } from "@apps/maquilas/features/componentes/ArchivosVista
 import { CalculadoraMargen } from "@apps/maquilas/features/componentes/CalculadoraMargen";
 import { MetricasMaquila } from "@apps/maquilas/features/componentes/MetricasMaquila";
 import { SubirArchivoMaquila } from "@apps/maquilas/features/componentes/SubirArchivoMaquila";
+import { SelectorMarca } from "@apps/maquilas/features/componentes/KitMarca";
 import type { ArchivoMaquila, Producto, Tramo } from "@apps/maquilas/features/tipos";
 
 const manana = () => {
@@ -63,6 +64,7 @@ function DetalleProducto({ id, onVolver, onCreada, onVerMaquila }: {
   const [enviando, setEnviando] = useState(false);
   const [calculando, setCalculando] = useState(false);
   const [foto, setFoto] = useState(0);
+  const [marcaId, setMarcaId] = useState("");
 
   if (isLoading) return <div className="flex items-center justify-center py-16 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando…</div>;
   if (error || !p) return <Card padding="lg"><p className="text-sm text-destructive">{mensajeDeError(error, "Ese producto ya no está disponible.")}</p></Card>;
@@ -84,7 +86,7 @@ function DetalleProducto({ id, onVolver, onCreada, onVerMaquila }: {
       const solicitud = await maquilasService.crearSolicitud({
         modalidad: "marca_blanca", producto_id: p!.id, categoria: p!.categoria, titulo: `${p!.nombre} con mi marca`.slice(0, 160),
         descripcion: notas.trim(), cantidad: n, fecha_objetivo: fechaObjetivo || null, ciudad_entrega: ciudad.trim(), campos: {},
-        referencias: archivos.map((a) => a.id), personalizacion: elegidas, confidencial: false,
+        referencias: archivos.map((a) => a.id), personalizacion: elegidas, confidencial: false, marca_id: marcaId || null,
       });
       await invalidar();
       toast.success(`Enviamos tu pedido a ${p!.maquiladora.nombre_comercial}. Te confirma precio y tiempos con su propuesta.`);
@@ -166,6 +168,7 @@ function DetalleProducto({ id, onVolver, onCreada, onVerMaquila }: {
               maxMb={parametros?.mb_max_foto} disabled={archivos.length >= 10} onSubido={(a) => setArchivos((x) => [...x, a])} />
             <ArchivosVista archivos={archivos} tamano="sm" onQuitar={(id) => setArchivos((x) => x.filter((a) => a.id !== id))} />
           </div>
+          <SelectorMarca valor={marcaId} onCambiar={setMarcaId} />
           <Textarea label="Cómo quieres tu marca" rows={3} value={notas} maxLength={4000} onChange={(e) => setNotas(e.target.value)}
             hint="Dónde va el logo, colores, tallas o presentaciones, texto de la etiqueta…" />
           <div className="grid gap-3 sm:grid-cols-2">

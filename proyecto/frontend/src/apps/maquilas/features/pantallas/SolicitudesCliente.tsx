@@ -11,6 +11,7 @@ import { fecha, pesos, unidades } from "@apps/maquilas/features/formato";
 import { useInvalidarMaquilas, useMisSolicitudes, useSolicitud } from "@apps/maquilas/features/useMaquilas";
 import { ArchivosVista } from "@apps/maquilas/features/componentes/ArchivosVista";
 import { CalculadoraMargen } from "@apps/maquilas/features/componentes/CalculadoraMargen";
+import { KitMarca } from "@apps/maquilas/features/componentes/KitMarca";
 import { ChatHilo } from "@apps/maquilas/features/componentes/ChatHilo";
 import { MotivoModal } from "@apps/maquilas/features/componentes/MotivoModal";
 import type { Propuesta, Solicitud } from "@apps/maquilas/features/tipos";
@@ -63,6 +64,12 @@ export function BriefSolicitud({ s }: { s: Solicitud }) {
                 </div>
               ))}
             </dl>
+          )}
+          {s.marca && "paleta" in s.marca && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Marca del cliente</h4>
+              <KitMarca marca={s.marca} />
+            </div>
           )}
           {!!s.ficha_guiada?.length && (
             <div className="space-y-2">

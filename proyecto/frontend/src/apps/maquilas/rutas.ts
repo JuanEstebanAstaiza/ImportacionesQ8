@@ -11,6 +11,7 @@ export type ScreenMaquilas =
   | "maq-produccion"
   | "maq-catalogo"
   | "maq-resenas"
+  | "maq-equipo"
   // Cliente
   | "maq-directorio"
   | "maq-maquiladora"
@@ -19,9 +20,17 @@ export type ScreenMaquilas =
   | "maq-pedidos"
   | "maq-marca-blanca"
   | "maq-calculadora"
+  | "maq-marca"
+  // Cliente y equipo de Diseño
+  | "maq-encargo"
+  // Equipo de Diseño
+  | "maq-encargos"
   // Panel admin
   | "maq-admin-verificacion"
-  | "maq-admin-moderacion";
+  | "maq-admin-moderacion"
+  | "maq-admin-resumen"
+  | "maq-admin-monitoreo"
+  | "maq-admin-config";
 
 /** Las rutas fijas van antes que las de parámetro. */
 export const RUTAS_MAQUILAS: Ruta[] = [
@@ -35,6 +44,7 @@ export const RUTAS_MAQUILAS: Ruta[] = [
   { screen: "maq-produccion", path: "/maquilas/produccion", param: "pedido" },
   { screen: "maq-catalogo", path: "/maquilas/catalogo" },
   { screen: "maq-resenas", path: "/maquilas/resenas" },
+  { screen: "maq-equipo", path: "/maquilas/equipo" },
   { screen: "maq-directorio", path: "/maquilas/directorio" },
   { screen: "maq-maquiladora", path: "/maquilas/directorio", param: "maquiladora" },
   { screen: "maq-solicitar", path: "/maquilas/solicitar" },
@@ -46,10 +56,19 @@ export const RUTAS_MAQUILAS: Ruta[] = [
   { screen: "maq-marca-blanca", path: "/maquilas/marca-blanca" },
   { screen: "maq-marca-blanca", path: "/maquilas/marca-blanca", param: "producto" },
   { screen: "maq-calculadora", path: "/maquilas/calculadora" },
+  { screen: "maq-marca", path: "/maquilas/marca" },
+  { screen: "maq-marca", path: "/maquilas/marca", param: "marca" },
+  { screen: "maq-encargo", path: "/maquilas/encargos", param: "encargo" },
+  { screen: "maq-encargos", path: "/maquilas/diseno" },
+  { screen: "maq-encargos", path: "/maquilas/diseno", param: "encargo" },
   // Su administración vive en el panel admin de siempre.
   { screen: "maq-admin-verificacion", path: "/admin/maquilas/verificacion" },
   { screen: "maq-admin-verificacion", path: "/admin/maquilas/verificacion", param: "maquiladora" },
   { screen: "maq-admin-moderacion", path: "/admin/maquilas/moderacion" },
+  { screen: "maq-admin-resumen", path: "/admin/maquilas" },
+  { screen: "maq-admin-monitoreo", path: "/admin/maquilas/monitoreo" },
+  { screen: "maq-admin-monitoreo", path: "/admin/maquilas/monitoreo", param: "pedido" },
+  { screen: "maq-admin-config", path: "/admin/maquilas/configuracion" },
 ];
 
 /** Pantallas públicas del módulo (se ven sin sesión). */

@@ -24,7 +24,7 @@ from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 from sqlalchemy.orm import Session
 
-from maquilas import acceso, archivos, avisos, chat, directorio, marca_blanca, parametros
+from maquilas import acceso, archivos, avisos, chat, directorio, marca, marca_blanca, parametros
 from maquilas import ficha as fichas
 from maquilas.comun import ahora, codigo, error, iso, nuevo_id
 from maquilas.esquemas import AceptarPropuestaEntrada, PropuestaEntrada, RepetirEntrada, SolicitudEntrada
@@ -111,6 +111,8 @@ def a_solicitud(db: Database, doc: Dict, usuario: dict) -> Dict:
         "repite_de": doc.get("repite_de"),
     }
     ve_detalle = acceso.puede_ver_detalle_solicitud(db, doc, usuario)
+    salida["marca"] = marca.snapshot_con_url(doc.get("marca")) if ve_detalle else (
+        {"nombre": doc["marca"]["nombre"]} if doc.get("marca") else None)
     if ve_detalle:
         etiquetas = {c["clave"]: c["etiqueta"] for c in parametros.plantilla(db, doc["categoria"])}
         salida.update({
@@ -233,10 +235,12 @@ def crear(db: Database, sql: Session, usuario: dict, datos: SolicitudEntrada) ->
         ficha = archivos.guardar_generado(db, tipo="ficha_tecnica", nombre=f"Ficha técnica - {datos.titulo.strip()[:80]}.pdf",
                                           contenido=contenido, usuario=usuario, cuenta=cuenta, contexto=contexto)
 
+    marca_adjunta = marca.snapshot(db, usuario, datos.marca_id) if datos.marca_id else None
     momento = ahora()
     doc = {
         "_id": solicitud_id,
         "codigo": codigo("MQ", solicitud_id),
+        "marca": marca_adjunta,
         "cuenta_cliente": cuenta,
         "creado_por": usuario["user_id"],
         "cliente": _cliente_snapshot(sql, usuario),
@@ -301,7 +305,7 @@ def repetir_pedido(db: Database, sql: Session, usuario: dict, pedido_id: str, da
     doc = {
         **{k: original.get(k) for k in ("cuenta_cliente", "categoria", "titulo", "descripcion", "presupuesto_unitario",
                                         "ciudad_entrega", "campos", "referencias", "ficha_tecnica", "ficha_guiada",
-                                        "confidencial", "personalizacion")},
+                                        "confidencial", "personalizacion", "marca")},
         "_id": solicitud_id,
         "codigo": codigo("MQ", solicitud_id),
         "creado_por": usuario["user_id"],

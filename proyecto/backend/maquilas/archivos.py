@@ -13,6 +13,8 @@ Quién ve qué:
 - Lo de una solicitud (referencias, ficha técnica): el cliente y las maquiladoras a las que
   llegó (si es confidencial, solo las que aceptaron el acuerdo).
 - Lo de un pedido o de un chat (muestras, evidencias, comprobantes, adjuntos): las dos partes.
+- Lo de una marca o un encargo de diseño: el cliente dueño y el equipo de Diseño; la maquila,
+  solo los archivos de la marca que el cliente adjuntó a una solicitud que le llegó.
 """
 from __future__ import annotations
 
@@ -51,13 +53,18 @@ TIPOS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "adjunto": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
     # Catálogo de marca blanca
     "producto": (mongo.BUCKET_MEDIOS, _IMAGENES),
+    # Estudio de marca: logo, archivos de la marca (etiquetas, empaques, manual) y entregas del diseñador
+    "marca": (mongo.BUCKET_MEDIOS, _IMAGENES),
+    "marca_archivo": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
+    "diseno": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
 }
 TIPOS_EXPEDIENTE = ("rut", "camara_comercio", "certificado", "foto")
 # Qué sube cada lado.
 TIPOS_MAQUILADORA = TIPOS_EXPEDIENTE + ("muestra", "evidencia", "adjunto", "producto")
 # Vitrina: públicos si la maquiladora está verificada.
 TIPOS_VITRINA = ("foto", "producto")
-TIPOS_CLIENTE = ("referencia", "ficha_tecnica", "comprobante", "adjunto")
+TIPOS_CLIENTE = ("referencia", "ficha_tecnica", "comprobante", "adjunto", "marca", "marca_archivo")
+TIPOS_DISENO = ("diseno",)
 
 HORAS_ARCHIVO_SUELTO = 24
 _ultima_limpieza: Optional[datetime] = None
@@ -266,6 +273,9 @@ def puede_ver(db: Database, fila: Dict, usuario: Optional[dict]) -> bool:
         return False
     from maquilas import acceso  # aquí para no crear un import circular
 
+    if contexto.get("marca_id") or contexto.get("encargo_id"):
+        return _puede_ver_de_marca(db, fila, contexto, usuario)
+
     if contexto.get("solicitud_id"):
         solicitud = db.solicitudes.find_one({"_id": contexto["solicitud_id"]})
         return bool(solicitud) and acceso.puede_ver_detalle_solicitud(db, solicitud, usuario)
@@ -274,6 +284,26 @@ def puede_ver(db: Database, fila: Dict, usuario: Optional[dict]) -> bool:
         return bool(pedido) and acceso.es_parte_del_pedido(db, pedido, usuario)
     if contexto.get("hilo"):
         return acceso.puede_usar_hilo(db, contexto["hilo"], usuario)
+    return False
+
+
+def _puede_ver_de_marca(db: Database, fila: Dict, contexto: Dict, usuario: dict) -> bool:
+    from maquilas import acceso
+    from maquilas.identidad import es_disenador, es_maquiladora, maquiladora_id_de
+
+    if es_disenador(usuario):
+        return True
+    cuenta = acceso.cuenta_cliente(usuario)
+    if cuenta:
+        if contexto.get("encargo_id"):
+            return db.encargos.count_documents({"_id": contexto["encargo_id"], "cuenta_cliente": cuenta}, limit=1) > 0
+        return db.marcas.count_documents({"_id": contexto["marca_id"], "cuenta_cliente": cuenta}, limit=1) > 0
+    if es_maquiladora(usuario):
+        # Solo lo que el cliente compartió al adjuntar su marca a una solicitud que le llegó.
+        maquiladora_id = maquiladora_id_de(db, usuario)
+        for solicitud in db.solicitudes.find({"marca.archivos_ids": str(fila["_id"]), "destinos.maquiladora_id": maquiladora_id}):
+            if acceso.acuerdo_ok(solicitud, acceso.destino_de(solicitud, maquiladora_id)):
+                return True
     return False
 
 

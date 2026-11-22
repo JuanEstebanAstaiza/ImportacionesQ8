@@ -6,8 +6,10 @@ admin nunca lo haya tocado.
 """
 from __future__ import annotations
 
+import re
 from copy import deepcopy
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any, Dict, List
 
 from pymongo.database import Database
 
@@ -127,7 +129,63 @@ POR_DEFECTO: Dict[str, Any] = {
             {"criterio": "Empaque y etiquetado según lo acordado", "tolerancia": ""},
         ],
     },
+    # Fase 4. Estudio de marca.
+    "marcas_max": 10,
+    "paleta_max": 8,
+    "archivos_marca_max": 20,
+    # Encargos de diseño que atiende el equipo de Diseño de Zarpi.
+    "tipos_encargo": [
+        {"clave": "logo", "nombre": "Logo", "descripcion": "Logotipo con sus versiones (color, una tinta, ícono) en PNG y PDF."},
+        {"clave": "etiqueta", "nombre": "Etiqueta", "descripcion": "Etiqueta de marca, de composición o frontal del producto, lista para imprimir."},
+        {"clave": "empaque", "nombre": "Empaque", "descripcion": "Caja, bolsa o envase con tu marca, con su troquel o arte final."},
+        {"clave": "otro", "nombre": "Otra pieza", "descripcion": "Tarjeta, hang tag, sticker o lo que necesites para tu marca."},
+    ],
+    "versiones_max": 6,
+    # Ruta legal: pasos para vender con marca propia en Colombia. `categorias` vacío = aplica a todas.
+    "ruta_legal": [
+        {"clave": "rut", "nombre": "RUT con la actividad económica", "categorias": [],
+         "descripcion": "Inscríbete o actualiza tu RUT en la DIAN con el código CIIU de lo que vas a vender.",
+         "enlace": "https://www.dian.gov.co"},
+        {"clave": "registro_marca", "nombre": "Registro de marca ante la SIC", "categorias": [],
+         "descripcion": "Busca que nadie tenga tu nombre y regístralo en la Superintendencia de Industria y Comercio (dura 10 años).",
+         "enlace": "https://www.sic.gov.co/marcas"},
+        {"clave": "facturacion", "nombre": "Facturación electrónica", "categorias": [],
+         "descripcion": "Habilítate como facturador electrónico ante la DIAN antes de vender.",
+         "enlace": "https://www.dian.gov.co"},
+        {"clave": "invima", "nombre": "Registro o notificación sanitaria INVIMA",
+         "categorias": ["cosmetica", "alimentos", "suplementos", "aseo"],
+         "descripcion": "Cosméticos, alimentos, suplementos y productos de aseo necesitan notificación o registro sanitario. Pregúntale a tu maquila si lo tramita con su laboratorio.",
+         "enlace": "https://www.invima.gov.co"},
+        {"clave": "etiquetado", "nombre": "Etiquetado reglamentario", "categorias": [],
+         "descripcion": "La etiqueta debe cumplir el reglamento de tu producto (p. ej. Res. 1950 para textiles, Res. 5109 o 810 para alimentos): composición, origen, fabricante, cuidados.",
+         "enlace": "https://www.sic.gov.co/reglamentos-tecnicos"},
+        {"clave": "codigo_barras", "nombre": "Códigos de barras GS1", "categorias": [],
+         "descripcion": "Si vas a vender en grandes superficies o marketplaces, afíliate a GS1 Colombia y asigna un código a cada referencia.",
+         "enlace": "https://www.gs1co.org"},
+    ],
+    # Colaboradores que puede invitar la cuenta dueña de una maquiladora.
+    "colaboradores_max": 10,
 }
+
+# Lo que el admin puede cambiar desde Maquilas › Configuración, con sus límites.
+RANGOS: Dict[str, tuple] = {
+    "fotos_galeria_max": (1, 30),
+    "certificados_max": (1, 30),
+    "mb_max_foto": (1, 50),
+    "mb_max_documento": (1, 100),
+    "mb_max_video": (10, 1024),
+    "cupo_abierta": (1, 30),
+    "productos_max": (1, 200),
+    "fotos_producto_max": (1, 12),
+    "marcas_max": (1, 50),
+    "paleta_max": (1, 20),
+    "archivos_marca_max": (1, 100),
+    "versiones_max": (1, 20),
+    "colaboradores_max": (0, 100),
+}
+LISTAS_TEXTO = ("procesos", "certificaciones")
+EDITABLES = tuple(RANGOS) + LISTAS_TEXTO + ("categorias", "personalizaciones", "tipos_encargo", "ruta_legal")
+_CLAVE = re.compile(r"^[a-z0-9_]{2,40}$")
 
 
 def leer(db: Database) -> Dict[str, Any]:
@@ -135,6 +193,73 @@ def leer(db: Database) -> Dict[str, Any]:
     valores = deepcopy(POR_DEFECTO)
     valores.update({k: v for k, v in guardado.items() if k in POR_DEFECTO})
     return valores
+
+
+def _lista_con_clave(valor: Any, nombre: str, campos: tuple, anteriores: List[Dict]) -> List[Dict]:
+    """Listas de {clave, nombre, ...}: las claves no cambian ni se borran (las usan
+    maquiladoras, productos y marcas); se pueden renombrar y agregar nuevas."""
+    if not isinstance(valor, list) or not valor:
+        raise ValueError(f"«{nombre}» no puede quedar vacío")
+    salida, vistas = [], set()
+    for item in valor:
+        clave = str((item or {}).get("clave", "")).strip()
+        texto = str((item or {}).get("nombre", "")).strip()
+        if not _CLAVE.match(clave):
+            raise ValueError(f"En «{nombre}», la clave «{clave}» solo puede tener minúsculas, números y _")
+        if not texto or clave in vistas:
+            raise ValueError(f"En «{nombre}», cada elemento necesita un nombre y una clave única")
+        vistas.add(clave)
+        limpio = {"clave": clave, "nombre": texto[:120]}
+        for campo in campos:
+            v = item.get(campo)
+            limpio[campo] = [str(x).strip() for x in v if str(x).strip()] if isinstance(v, list) else str(v or "").strip()[:600]
+        salida.append(limpio)
+    faltan = {a["clave"] for a in anteriores} - vistas
+    if faltan:
+        raise ValueError(f"En «{nombre}» no se pueden quitar elementos que ya existen: {', '.join(sorted(faltan))}")
+    return salida
+
+
+def guardar(db: Database, cambios: Dict[str, Any], usuario_id: str) -> Dict[str, Any]:
+    """Valida y guarda lo que el admin cambió. Lo no editable desde el panel se ignora."""
+    actuales = leer(db)
+    limpios: Dict[str, Any] = {}
+    for clave, valor in cambios.items():
+        if clave not in EDITABLES or valor is None:
+            continue
+        if clave in RANGOS:
+            minimo, maximo = RANGOS[clave]
+            try:
+                valor = int(valor)
+            except (TypeError, ValueError):
+                raise ValueError(f"«{clave}» tiene que ser un número")
+            if not minimo <= valor <= maximo:
+                raise ValueError(f"«{clave}» debe estar entre {minimo} y {maximo}")
+        elif clave in LISTAS_TEXTO:
+            if not isinstance(valor, list):
+                raise ValueError(f"«{clave}» tiene que ser una lista")
+            valor = list(dict.fromkeys(str(v).strip()[:80] for v in valor if str(v).strip()))
+            if not valor:
+                raise ValueError(f"«{clave}» no puede quedar vacío")
+        elif clave == "tipos_encargo":
+            valor = _lista_con_clave(valor, clave, ("descripcion",), actuales[clave])
+        elif clave == "ruta_legal":
+            valor = _lista_con_clave(valor, clave, ("descripcion", "enlace", "categorias"), actuales[clave])
+            for paso in valor:
+                if paso["enlace"] and not paso["enlace"].startswith(("https://", "http://")):
+                    raise ValueError(f"El enlace de «{paso['nombre']}» tiene que empezar por https://")
+        else:  # categorias, personalizaciones
+            valor = _lista_con_clave(valor, clave, (), actuales[clave])
+        limpios[clave] = valor
+    db.configuracion.update_one({"_id": "parametros"},
+                                {"$set": {**limpios, "actualizado_por": usuario_id, "actualizado_en": datetime.utcnow()}},
+                                upsert=True)
+    return leer(db)
+
+
+def ruta_para(db: Database, categoria: str | None) -> List[Dict]:
+    """Pasos de la ruta legal que aplican a una categoría (sin categoría, solo los generales)."""
+    return [p for p in leer(db)["ruta_legal"] if not p.get("categorias") or (categoria and categoria in p["categorias"])]
 
 
 def claves_categorias(db: Database) -> set:
@@ -147,7 +272,8 @@ def publicos(db: Database) -> Dict[str, Any]:
     return {k: p[k] for k in ("categorias", "procesos", "certificaciones", "fotos_galeria_max",
                               "certificados_max", "mb_max_foto", "mb_max_documento", "mb_max_video",
                               "plantillas", "etapas", "hitos", "hitos_por_defecto", "personalizaciones",
-                              "productos_max", "fotos_producto_max", "criterios_calidad")}
+                              "productos_max", "fotos_producto_max", "criterios_calidad", "marcas_max", "paleta_max",
+                              "archivos_marca_max", "tipos_encargo", "ruta_legal")}
 
 
 def plantilla(db: Database, categoria: str) -> list:
