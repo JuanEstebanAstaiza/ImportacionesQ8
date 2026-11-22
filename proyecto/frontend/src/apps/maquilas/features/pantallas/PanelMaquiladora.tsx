@@ -1,20 +1,32 @@
-import { ArrowRight, BadgeCheck, CheckCircle2, Circle, ClipboardList, Factory, Loader2, MessageSquare, Package } from "lucide-react";
+import { ArrowRight, BadgeCheck, CheckCircle2, Circle, ClipboardList, Factory, Inbox, Loader2, Package } from "lucide-react";
 
+import type { Screen } from "@/app/rutas";
 import { Button, Card } from "@shared/ui/design-system";
 import { mensajeDeError } from "@apps/maquilas/features/errores";
-import { useMiMaquiladora, useParametrosMaquilas } from "@apps/maquilas/features/useMaquilas";
+import { useMiMaquiladora, useParametrosMaquilas, usePedidos, useRecibidas } from "@apps/maquilas/features/useMaquilas";
 import { EstadoMaquiladoraBadge } from "@apps/maquilas/features/componentes/EstadoMaquiladora";
 
-const PROXIMAMENTE = [
-  { Icono: ClipboardList, titulo: "Solicitudes de fabricación", texto: "Briefs de clientes que buscan exactamente lo que tú fabricas." },
-  { Icono: Package, titulo: "Pedidos por etapas", texto: "Muestras, producción, control de calidad y pagos por hitos." },
-  { Icono: MessageSquare, titulo: "Chat con el cliente", texto: "Cada pedido con su conversación y sus archivos." },
-];
+function Atajo({ Icono, titulo, valor, texto, onClick }: { Icono: typeof Inbox; titulo: string; valor: number; texto: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left transition hover:border-primary/40 dark:hover:border-accent/50">
+      <Icono className="h-8 w-8 flex-shrink-0 text-primary dark:text-accent" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-muted-foreground">{titulo}</p>
+        <p className="text-2xl font-semibold">{valor}</p>
+        <p className="text-xs text-muted-foreground">{texto}</p>
+      </div>
+      <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    </button>
+  );
+}
 
-/** Inicio de la maquiladora: en qué va su verificación y qué hacer ahora. */
-export function PanelMaquiladora({ onIrAPerfil }: { onIrAPerfil: () => void }) {
+/** Inicio de la maquiladora: su verificación y, ya verificada, lo que tiene pendiente. */
+export function PanelMaquiladora({ onIrAPerfil, onIr }: { onIrAPerfil: () => void; onIr: (screen: Screen) => void }) {
   const { data: m, isLoading, error } = useMiMaquiladora();
   const { data: parametros } = useParametrosMaquilas();
+  const verificada = m?.estado === "verificada";
+  const { data: recibidas } = useRecibidas();
+  const { data: pedidos } = usePedidos();
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando…</div>;
@@ -77,20 +89,25 @@ export function PanelMaquiladora({ onIrAPerfil }: { onIrAPerfil: () => void }) {
           )}
         </Card>
 
-        <Card padding="lg">
-          <h3 className="font-semibold">Muy pronto en tu panel</h3>
-          <ul className="mt-4 space-y-4">
-            {PROXIMAMENTE.map(({ Icono, titulo, texto }) => (
-              <li key={titulo} className="flex items-start gap-3">
-                <Icono className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div>
-                  <p className="text-sm font-medium">{titulo}</p>
-                  <p className="text-xs text-muted-foreground">{texto}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        {verificada ? (
+          <div className="grid gap-4">
+            <Atajo Icono={Inbox} titulo="Solicitudes por responder" onClick={() => onIr("maq-recibidas")}
+              valor={(recibidas ?? []).filter((s) => ["abierta", "con_propuestas"].includes(s.estado) && s.mi_destino?.estado === "pendiente").length}
+              texto={`${recibidas?.length ?? 0} en total`} />
+            <Atajo Icono={Package} titulo="Pedidos que esperan algo de ti" onClick={() => onIr("maq-produccion")}
+              valor={(pedidos ?? []).filter((p) => p.pendiente_de_mi).length}
+              texto={`${(pedidos ?? []).filter((p) => ["muestra", "produccion"].includes(p.estado)).length} activos`} />
+          </div>
+        ) : (
+          <Card padding="lg">
+            <ClipboardList className="mb-2 h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <h3 className="font-semibold">Cuando te verifiquemos</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Apareces en el directorio, te llegan solicitudes de clientes que buscan lo que fabricas y manejas tus pedidos
+              (muestras, producción por etapas y pagos) desde aquí.
+            </p>
+          </Card>
+        )}
       </div>
     </div>
   );

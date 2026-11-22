@@ -121,7 +121,7 @@ export function adminTabFromPath(pathname: string): AdminTab | null {
 }
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
-export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia" | "lote" | "operacion" | "maquiladora";
+export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia" | "lote" | "operacion" | "maquiladora" | "solicitud" | "pedido";
 
 export interface Ruta {
   screen: Screen;

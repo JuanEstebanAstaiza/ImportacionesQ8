@@ -37,6 +37,58 @@ POR_DEFECTO: Dict[str, Any] = {
     "certificados_max": 10,
     "mb_max_foto": 10,
     "mb_max_documento": 15,
+    "mb_max_video": 200,
+    # Brief guiado: lo que se le pregunta al cliente según la categoría (además de lo común).
+    # Tipos: "texto" (una línea) o "texto_largo".
+    "plantillas": {
+        "textil": [
+            {"clave": "tallas", "etiqueta": "Tallas y curva", "tipo": "texto", "ayuda": "Ej.: S 20 %, M 40 %, L 30 %, XL 10 %"},
+            {"clave": "tela", "etiqueta": "Tela o material", "tipo": "texto", "ayuda": "Ej.: algodón peinado 180 g"},
+            {"clave": "colores", "etiqueta": "Colores", "tipo": "texto", "ayuda": "Nombre o código Pantone"},
+            {"clave": "marcacion", "etiqueta": "Estampado, bordado o etiquetas", "tipo": "texto_largo", "ayuda": "Qué va marcado, dónde y con qué técnica"},
+        ],
+        "calzado": [
+            {"clave": "tallas", "etiqueta": "Tallas", "tipo": "texto", "ayuda": "Ej.: 35 a 40"},
+            {"clave": "materiales", "etiqueta": "Materiales", "tipo": "texto", "ayuda": "Capellada, suela, forro"},
+            {"clave": "colores", "etiqueta": "Colores", "tipo": "texto"},
+        ],
+        "cosmetica": [
+            {"clave": "tipo_producto", "etiqueta": "Tipo de producto", "tipo": "texto", "ayuda": "Ej.: crema hidratante, shampoo"},
+            {"clave": "presentacion", "etiqueta": "Presentación y envase", "tipo": "texto", "ayuda": "Ej.: frasco 250 ml con dispensador"},
+            {"clave": "formula", "etiqueta": "Fórmula", "tipo": "texto_largo", "ayuda": "¿Tienes fórmula propia o usas una de la maquila? Ingredientes clave"},
+            {"clave": "registro_sanitario", "etiqueta": "Registro sanitario", "tipo": "texto", "ayuda": "¿Ya lo tienes o lo tramita la maquila?"},
+        ],
+        "alimentos": [
+            {"clave": "tipo_producto", "etiqueta": "Producto", "tipo": "texto"},
+            {"clave": "presentacion", "etiqueta": "Presentación y empaque", "tipo": "texto"},
+            {"clave": "vida_util", "etiqueta": "Vida útil esperada", "tipo": "texto"},
+            {"clave": "registro_sanitario", "etiqueta": "Registro sanitario", "tipo": "texto"},
+        ],
+        "otros": [
+            {"clave": "materiales", "etiqueta": "Materiales", "tipo": "texto"},
+            {"clave": "medidas", "etiqueta": "Medidas", "tipo": "texto"},
+            {"clave": "colores", "etiqueta": "Colores y acabados", "tipo": "texto"},
+        ],
+    },
+    # Solicitud abierta: a cuántas maquiladoras compatibles se reparte.
+    "cupo_abierta": 5,
+    # Pedido: etapas de producción, en orden.
+    "etapas": [
+        {"clave": "insumos", "nombre": "Compra de insumos"},
+        {"clave": "preparacion", "nombre": "Corte o preparación"},
+        {"clave": "fabricacion", "nombre": "Fabricación"},
+        {"clave": "acabado", "nombre": "Acabado"},
+        {"clave": "control_calidad", "nombre": "Control de calidad"},
+        {"clave": "empaque", "nombre": "Empaque"},
+        {"clave": "despacho", "nombre": "Despacho"},
+    ],
+    # Hitos de pago posibles y el reparto que se propone por defecto.
+    "hitos": [
+        {"clave": "anticipo", "nombre": "Anticipo"},
+        {"clave": "contra_muestra", "nombre": "Contra muestra aprobada"},
+        {"clave": "contra_entrega", "nombre": "Contra entrega"},
+    ],
+    "hitos_por_defecto": {"anticipo": 50, "contra_muestra": 0, "contra_entrega": 50},
 }
 
 
@@ -55,4 +107,10 @@ def publicos(db: Database) -> Dict[str, Any]:
     """Lo que necesitan los formularios (registro y perfil), sin sesión."""
     p = leer(db)
     return {k: p[k] for k in ("categorias", "procesos", "certificaciones", "fotos_galeria_max",
-                              "certificados_max", "mb_max_foto", "mb_max_documento")}
+                              "certificados_max", "mb_max_foto", "mb_max_documento", "mb_max_video",
+                              "plantillas", "etapas", "hitos", "hitos_por_defecto")}
+
+
+def plantilla(db: Database, categoria: str) -> list:
+    plantillas = leer(db)["plantillas"]
+    return plantillas.get(categoria) or plantillas.get("otros") or []

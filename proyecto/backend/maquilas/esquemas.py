@@ -1,7 +1,8 @@
 """Entradas de la API del módulo (las salidas las arma `servicio.a_*`)."""
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from datetime import date
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -107,3 +108,83 @@ class DocumentosEntrada(BaseModel):
 
 class MotivoEntrada(BaseModel):
     motivo: str = Field(..., min_length=5, max_length=500)
+
+
+# ── Fase 2: solicitudes, propuestas, pedidos y chat ──────────────────────────
+
+class SolicitudEntrada(BaseModel):
+    """Brief de fabricación. `campos` lleva las respuestas de la plantilla de la categoría."""
+    modalidad: Literal["dirigida", "abierta"]
+    maquiladora_id: Optional[str] = Field(None, max_length=40)
+    categoria: str = Field(..., min_length=2, max_length=40)
+    titulo: str = Field(..., min_length=3, max_length=160)
+    descripcion: str = Field(..., min_length=10, max_length=4000)
+    cantidad: int = Field(..., ge=1, le=10_000_000)
+    presupuesto_unitario: Optional[int] = Field(None, ge=0, le=1_000_000_000)
+    fecha_objetivo: Optional[date] = None
+    ciudad_entrega: str = Field(..., min_length=2, max_length=80)
+    campos: Dict[str, str] = Field(default_factory=dict)
+    referencias: List[str] = Field(default_factory=list, max_length=10)
+    ficha_tecnica: Optional[str] = Field(None, max_length=40)
+    confidencial: bool = False
+
+    @field_validator("campos")
+    @classmethod
+    def campos_acotados(cls, v: Dict[str, str]) -> Dict[str, str]:
+        if len(v) > 20:
+            raise ValueError("Demasiados campos en el brief")
+        return {k[:40]: (valor or "").strip()[:1000] for k, valor in v.items() if (valor or "").strip()}
+
+
+class TramoEntrada(BaseModel):
+    cantidad_min: int = Field(..., ge=1, le=10_000_000)
+    precio_unitario: int = Field(..., ge=1, le=1_000_000_000)
+
+
+class PropuestaEntrada(BaseModel):
+    """Precio por unidad según la cantidad (tramos), muestra, tiempos y cómo se paga."""
+    tramos: List[TramoEntrada] = Field(..., min_length=1, max_length=5)
+    costo_muestra: int = Field(0, ge=0, le=1_000_000_000)
+    dias_muestra: int = Field(..., ge=1, le=120)
+    dias_produccion: int = Field(..., ge=1, le=365)
+    hitos: Dict[str, int]
+    condiciones: str = Field("", max_length=2000)
+    validez_dias: int = Field(15, ge=1, le=60)
+
+    @field_validator("hitos")
+    @classmethod
+    def hitos_suman_cien(cls, v: Dict[str, int]) -> Dict[str, int]:
+        if any(p < 0 or p > 100 for p in v.values()):
+            raise ValueError("Cada hito va de 0 % a 100 %")
+        if sum(v.values()) != 100:
+            raise ValueError("Los hitos de pago deben sumar 100 %")
+        return {k: p for k, p in v.items() if p > 0}
+
+
+class AceptarPropuestaEntrada(BaseModel):
+    motivo: Optional[str] = Field(None, max_length=300)
+
+
+class MuestraEntrada(BaseModel):
+    archivos: List[str] = Field(..., min_length=1, max_length=8)
+    nota: str = Field("", max_length=1000)
+
+
+class RespuestaMuestraEntrada(BaseModel):
+    aprobada: bool
+    comentario: str = Field("", max_length=1000)
+
+
+class EtapaEntrada(BaseModel):
+    nota: str = Field("", max_length=1000)
+    fotos: List[str] = Field(default_factory=list, max_length=8)
+
+
+class ComprobanteEntrada(BaseModel):
+    archivo_id: str = Field(..., max_length=40)
+    nota: str = Field("", max_length=500)
+
+
+class MensajeEntrada(BaseModel):
+    contenido: str = Field("", max_length=4000)
+    archivo_id: Optional[str] = Field(None, max_length=40)

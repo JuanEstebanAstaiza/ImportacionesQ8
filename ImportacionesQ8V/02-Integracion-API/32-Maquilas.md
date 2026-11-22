@@ -2,7 +2,10 @@
 
 Módulo de la suite Zarpi que conecta a **clientes** (emprendedores y marcas) con **maquiladoras** (talleres y plantas) para fabricar productos personalizados y crear su propia marca. Sigue el flujo de Importaciones (solicitud → propuestas → pedido → seguimiento) y le suma lo propio de fabricar: muestra, producción por etapas, control de calidad y herramientas de marca.
 
-Se construye por fases. **Fase 1 (esta nota):** la cuenta de la maquiladora, su registro, su expediente y la verificación del equipo. Las fases siguientes traen el directorio, las solicitudes y los pedidos (fase 2), marca blanca, ficha técnica, calculadora, calidad y reseñas (fase 3), y estudio de marca, ruta legal y el admin completo (fase 4).
+Se construye por fases:
+- **Fase 1:** la cuenta de la maquiladora, su registro, su expediente y la verificación del equipo.
+- **Fase 2:** directorio, solicitudes de fabricación (dirigidas y abiertas), confidencialidad, propuestas comparables, pedido con muestra, producción por etapas, pagos por hitos y chat.
+- Siguientes: marca blanca, ficha técnica, calculadora, calidad y reseñas (fase 3); estudio de marca, ruta legal y el admin completo (fase 4).
 
 ## Arquitectura
 
@@ -57,6 +60,79 @@ Se construye por fases. **Fase 1 (esta nota):** la cuenta de la maquiladora, su 
 - Maquiladora: `maq-panel` (estado y pasos de la verificación) y `maq-perfil` (perfil, documentos y galería). Inicia sesión eligiendo «Maquila» en el login.
 - Admin: grupo «Maquilas» › Verificación (`/admin/maquilas/verificacion[/<id>]`), también para soporte.
 - Registro de la suite: `MAQUILAS` en `shared/suite/suite.ts`.
+
+## Fase 2: del brief al pedido
+
+**Clientes:** cotizante y empresa importadora (dueña y asesores comparten las solicitudes de la empresa). Entran a Maquilas desde la rueda; su inicio es el directorio.
+
+### Solicitud de fabricación
+
+| Estado | Qué significa |
+|---|---|
+| `abierta` | Publicada; esperando propuestas |
+| `con_propuestas` | Al menos una maquila propuso |
+| `aceptada` | El cliente eligió una propuesta y se abrió el pedido |
+| `cancelada` | El cliente la retiró antes de elegir |
+
+- **Brief guiado:** categoría, nombre, descripción, cantidad, presupuesto por unidad, fecha objetivo, ciudad de entrega, referencias (fotos) y ficha técnica (PDF). Cada categoría añade sus preguntas (plantillas en los parámetros: tallas y tela en textil, presentación y fórmula en cosmética…).
+- **Dirigida:** le llega a una maquila verificada; valida que la cantidad alcance su pedido mínimo.
+- **Abierta:** se reparte a las `cupo_abierta` (5) maquilas verificadas de esa categoría cuyo pedido mínimo quepa en la cantidad; primero las de la misma ciudad, luego las que tienen capacidad para el volumen y más certificaciones. Sin ninguna compatible, no se publica (409).
+- **Confidencialidad:** si el cliente la pide, la maquila ve solo nombre, categoría, cantidad, ciudad y fecha hasta aceptar el acuerdo (queda registrado quién y cuándo). Antes no ve descripción, referencias ni ficha, no chatea y no propone.
+- Cada maquila destino tiene su estado: `pendiente`, `propuesta` o `rechazada` (con motivo, que le llega al cliente).
+
+### Propuestas
+
+- Una por maquila y solicitud (índice único); se edita mientras está `enviada`.
+- **Tramos de precio por cantidad** (el primero debe cubrir la cantidad pedida), costo de la muestra, días de muestra y de producción, condiciones y validez (1 a 60 días).
+- **Hitos de pago** que suman 100 %: `anticipo`, `contra_muestra`, `contra_entrega` (por defecto 50 / 0 / 50).
+- El cliente las compara lado a lado (precio aplicado a su cantidad, total, tiempos, pagos) y elige una con un motivo opcional. Al elegir, la solicitud se cierra con una actualización condicional (dos clics no crean dos pedidos), la elegida queda `aceptada` y las demás `descartada`. Una propuesta vencida no se puede aceptar.
+
+### Pedido
+
+| Estado | Qué pasa |
+|---|---|
+| `muestra` | La maquila envía la muestra por rondas; el cliente la aprueba o pide ajustes |
+| `produccion` | La maquila completa las etapas en orden, con nota y fotos |
+| `despachado` | Se completó el despacho; el cliente confirma que lo recibió |
+| `entregado` | Cerrado |
+| `cancelado` | Cualquiera de las partes, mientras está en la muestra, con motivo |
+
+- **Total:** precio por unidad × cantidad + costo de la muestra. La fecha comprometida es la de aceptación + días de muestra + días de producción; pasada sin entregar, el pedido sale como «Retrasado».
+- **Etapas** (parámetros): compra de insumos, corte o preparación, fabricación, acabado, control de calidad, empaque y despacho.
+- **Pagos:** Zarpi no recibe el dinero. Cada hito va `pendiente` → `enviado` (el cliente subió el comprobante) → `confirmado` o `rechazado` (con motivo; el cliente puede subir otro). Lo revisa la maquila.
+- **Compuertas:**
+  - La muestra se envía cuando el anticipo está confirmado (si lo hay).
+  - La producción avanza cuando la muestra está aprobada y el pago contra muestra confirmado (si lo hay).
+  - El despacho exige confirmados todos los pagos menos el de contra entrega, que se puede pagar después de recibir.
+- Cada lado ve un aviso con lo que le toca hacer o a quién espera, y la lista marca los pedidos que esperan algo de quien mira.
+
+### Chat y avisos
+
+- Un hilo por pareja solicitud–maquila (`<solicitud_id>:<maquiladora_id>`): empieza en la negociación y sigue en el pedido. Texto y adjuntos (PDF o imagen). Los eventos (propuesta, aceptación, muestra, pagos, etapas, cancelación) dejan un mensaje de sistema. El equipo de Zarpi lo lee pero no escribe.
+- Avisos en la campana (y por correo los importantes: nueva solicitud, propuesta, muestra, comprobantes, despacho, cancelación) para la otra parte. Al abrir un aviso se va a la solicitud o al pedido.
+- «Reportar un problema» en el pedido abre un ticket de la mesa de ayuda con `modulo=maquilas` y `referencia=pedido:<id>`.
+
+### Endpoints de la fase 2 (`/maquilas`)
+
+| Método | Ruta | Quién |
+|---|---|---|
+| GET | `/directorio?categoria=&proceso=&ciudad=&q=&cantidad=` · `/directorio/{id}` | Cualquier rol del módulo |
+| POST · GET | `/solicitudes` | Cliente (crea · las suyas) |
+| GET | `/recibidas` | Maquiladora |
+| GET | `/solicitudes/{id}` | Cliente dueño, maquila destino, equipo |
+| POST | `/solicitudes/{id}/cancelar` | Cliente |
+| POST | `/solicitudes/{id}/acuerdo` · `/rechazar` | Maquiladora |
+| PUT | `/solicitudes/{id}/propuesta` | Maquiladora (crea o edita) |
+| POST | `/propuestas/{id}/aceptar` | Cliente |
+| GET | `/pedidos` · `/pedidos/{id}` | Las dos partes (el equipo puede ver el detalle) |
+| POST | `/pedidos/{id}/muestras` · `/etapas/{clave}` · `/hitos/{clave}/confirmar` · `/hitos/{clave}/rechazar` | Maquiladora |
+| POST | `/pedidos/{id}/muestras/responder` · `/hitos/{clave}/comprobante` · `/recibido` | Cliente |
+| POST | `/pedidos/{id}/cancelar` | Cualquiera de las partes |
+| GET · POST | `/hilos/{hilo}/mensajes` | Las partes (el equipo solo lee) |
+
+Archivos nuevos (`POST /archivos/{bucket}`): el cliente sube `referencia`, `ficha_tecnica`, `comprobante` y `adjunto`; la maquila, `muestra` (foto o video), `evidencia` y `adjunto`. Quedan ligados a la solicitud, al pedido o al hilo, y solo los ven sus partes (las referencias de una solicitud confidencial, después del acuerdo).
+
+Frontend: cliente `maq-directorio`, `maq-maquiladora/<id>`, `maq-solicitar[/<maquila>]`, `maq-solicitudes[/<id>]`, `maq-pedidos[/<id>]`; maquila `maq-recibidas[/<id>]` y `maq-produccion[/<id>]`. Pruebas: `tests/test_maquilas_fase2.py`.
 
 ## Operación
 

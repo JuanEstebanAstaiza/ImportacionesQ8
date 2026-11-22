@@ -21,6 +21,15 @@ def usuarios_de_maquiladora(db: Database, maquiladora_id: str) -> List[str]:
     return [str(f["_id"]) for f in db.miembros.find({"maquiladora_id": maquiladora_id}, {"_id": 1})]
 
 
+def usuarios_de_cliente(sql: Session, cuenta: str) -> List[str]:
+    """`empresa:<id>` llega a todo su equipo activo (dueña y asesores); `usuario:<id>` a esa persona."""
+    tipo, _, ident = (cuenta or "").partition(":")
+    if tipo == "empresa":
+        filas = sql.query(Usuario.id).filter(Usuario.importador_id == ident, Usuario.activo.is_(True)).all()
+        return [str(f.id) for f in filas]
+    return [ident] if ident else []
+
+
 def usuarios_del_equipo(sql: Session, roles: Iterable[str] = ("admin",)) -> List[str]:
     filas = sql.query(Usuario.id).filter(Usuario.rol.in_(tuple(roles)), Usuario.activo.is_(True)).all()
     return [str(f.id) for f in filas]

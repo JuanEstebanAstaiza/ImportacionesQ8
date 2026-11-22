@@ -2,7 +2,8 @@ import { apiRequest, getStoredToken, resolveApiUrl } from "@/services/api-client
 import type { RegisterResponse } from "@/types/auth";
 import type {
   ArchivoMaquila, BucketMaquilas, DocumentosEntrada, EmpresaEntrada, FabricacionEntrada, ListadoMaquiladoras,
-  Maquiladora, ParametrosMaquilas, PerfilEntrada, RegistroMaquilaEntrada, RepresentanteEntrada, TipoArchivoMaquila,
+  Maquiladora, MensajeHilo, ParametrosMaquilas, Pedido, PedidoResumen, PerfilEntrada, PropuestaEntrada,
+  RegistroMaquilaEntrada, RepresentanteEntrada, Solicitud, SolicitudEntrada, SolicitudResumen, TipoArchivoMaquila,
 } from "@apps/maquilas/features/tipos";
 
 /**
@@ -10,10 +11,10 @@ import type {
  * base (MongoDB); la sesión es la misma de toda la suite.
  */
 
-function query(params: Record<string, string | undefined | null>): string {
+function query(params: Record<string, string | number | undefined | null>): string {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([clave, valor]) => {
-    if (valor) q.set(clave, valor);
+    if (valor !== undefined && valor !== null && valor !== "") q.set(clave, String(valor));
   });
   const texto = q.toString();
   return texto ? `?${texto}` : "";
@@ -21,7 +22,11 @@ function query(params: Record<string, string | undefined | null>): string {
 
 const BUCKET_POR_TIPO: Record<TipoArchivoMaquila, BucketMaquilas> = {
   foto: "medios", rut: "documentos", camara_comercio: "documentos", certificado: "documentos",
+  referencia: "medios", ficha_tecnica: "documentos", muestra: "medios", evidencia: "medios",
+  comprobante: "documentos", adjunto: "documentos",
 };
+
+const id = (valor: string) => encodeURIComponent(valor);
 
 /** Sube a GridFS con progreso (XMLHttpRequest: `fetch` no informa del avance de la subida). */
 function subirArchivo(tipo: TipoArchivoMaquila, archivo: File, alAvanzar?: (porcentaje: number) => void): Promise<ArchivoMaquila> {
@@ -61,6 +66,49 @@ export const maquilasService = {
   actualizarDocumentos: (datos: DocumentosEntrada) =>
     apiRequest<Maquiladora>("/maquilas/mi-maquiladora/documentos", { method: "PUT", body: datos }),
   enviarAVerificacion: () => apiRequest<Maquiladora>("/maquilas/mi-maquiladora/enviar-verificacion", { method: "POST" }),
+
+  // Directorio (clientes)
+  directorio: (filtros: { categoria?: string; proceso?: string; ciudad?: string; q?: string; cantidad?: number }) =>
+    apiRequest<Maquiladora[]>(`/maquilas/directorio${query(filtros)}`),
+  perfilPublico: (maquiladoraId: string) => apiRequest<Maquiladora>(`/maquilas/directorio/${id(maquiladoraId)}`),
+
+  // Solicitudes y propuestas
+  crearSolicitud: (datos: SolicitudEntrada) => apiRequest<Solicitud>("/maquilas/solicitudes", { method: "POST", body: datos }),
+  misSolicitudes: () => apiRequest<SolicitudResumen[]>("/maquilas/solicitudes"),
+  recibidas: () => apiRequest<SolicitudResumen[]>("/maquilas/recibidas"),
+  solicitud: (solicitudId: string) => apiRequest<Solicitud>(`/maquilas/solicitudes/${id(solicitudId)}`),
+  cancelarSolicitud: (solicitudId: string) => apiRequest<Solicitud>(`/maquilas/solicitudes/${id(solicitudId)}/cancelar`, { method: "POST" }),
+  aceptarAcuerdo: (solicitudId: string) => apiRequest<Solicitud>(`/maquilas/solicitudes/${id(solicitudId)}/acuerdo`, { method: "POST" }),
+  rechazarSolicitud: (solicitudId: string, motivo: string) =>
+    apiRequest<Solicitud>(`/maquilas/solicitudes/${id(solicitudId)}/rechazar`, { method: "POST", body: { motivo } }),
+  guardarPropuesta: (solicitudId: string, datos: PropuestaEntrada) =>
+    apiRequest<Solicitud>(`/maquilas/solicitudes/${id(solicitudId)}/propuesta`, { method: "PUT", body: datos }),
+  aceptarPropuesta: (propuestaId: string, motivo?: string) =>
+    apiRequest<Pedido>(`/maquilas/propuestas/${id(propuestaId)}/aceptar`, { method: "POST", body: { motivo: motivo || null } }),
+
+  // Pedidos
+  pedidos: () => apiRequest<PedidoResumen[]>("/maquilas/pedidos"),
+  pedido: (pedidoId: string) => apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}`),
+  enviarMuestra: (pedidoId: string, archivos: string[], nota: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/muestras`, { method: "POST", body: { archivos, nota } }),
+  responderMuestra: (pedidoId: string, aprobada: boolean, comentario: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/muestras/responder`, { method: "POST", body: { aprobada, comentario } }),
+  completarEtapa: (pedidoId: string, clave: string, nota: string, fotos: string[]) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/etapas/${id(clave)}`, { method: "POST", body: { nota, fotos } }),
+  subirComprobante: (pedidoId: string, clave: string, archivoId: string, nota: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/hitos/${id(clave)}/comprobante`, { method: "POST", body: { archivo_id: archivoId, nota } }),
+  confirmarPago: (pedidoId: string, clave: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/hitos/${id(clave)}/confirmar`, { method: "POST" }),
+  rechazarPago: (pedidoId: string, clave: string, motivo: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/hitos/${id(clave)}/rechazar`, { method: "POST", body: { motivo } }),
+  marcarRecibido: (pedidoId: string) => apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/recibido`, { method: "POST" }),
+  cancelarPedido: (pedidoId: string, motivo: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/cancelar`, { method: "POST", body: { motivo } }),
+
+  // Chat
+  mensajes: (hilo: string) => apiRequest<MensajeHilo[]>(`/maquilas/hilos/${id(hilo)}/mensajes`),
+  enviarMensaje: (hilo: string, contenido: string, archivoId?: string) =>
+    apiRequest<MensajeHilo>(`/maquilas/hilos/${id(hilo)}/mensajes`, { method: "POST", body: { contenido, archivo_id: archivoId || null } }),
 
   // Equipo de Zarpi (panel admin)
   crearPorEquipo: (datos: { empresa: EmpresaEntrada; representante: RepresentanteEntrada; fabricacion: FabricacionEntrada }) =>

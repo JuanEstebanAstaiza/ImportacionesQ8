@@ -2,6 +2,7 @@
 
 Colecciones:
 - `maquiladoras`: la empresa, su expediente y su estado de verificación.
+- `solicitudes`, `propuestas`, `pedidos` y `mensajes`: el flujo de fabricación.
 - `miembros`: qué usuarios (dueño y colaboradores) atienden cada maquiladora;
   `_id` es el id del usuario, así un usuario pertenece a una sola.
 - `configuracion`: parámetros del módulo que edita el admin.
@@ -51,3 +52,12 @@ def asegurar_indices(db: Optional[Database] = None) -> None:
     db.maquiladoras.create_index(
         [("razon_social", TEXT), ("nombre_comercial", TEXT), ("descripcion", TEXT)], default_language="spanish")
     db.miembros.create_index([("maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])
+    # Fase 2: solicitudes, propuestas, pedidos y chat.
+    db.solicitudes.create_index([("cuenta_cliente", ASCENDING), ("creado_en", DESCENDING)])
+    db.solicitudes.create_index([("destinos.maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])
+    # Una propuesta por maquiladora y solicitud (se edita, no se duplica).
+    db.propuestas.create_index([("solicitud_id", ASCENDING), ("maquiladora_id", ASCENDING)], unique=True,
+                               name="una_propuesta_por_maquiladora")
+    db.pedidos.create_index([("cuenta_cliente", ASCENDING), ("creado_en", DESCENDING)])
+    db.pedidos.create_index([("maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])
+    db.mensajes.create_index([("hilo", ASCENDING), ("fecha", ASCENDING)])

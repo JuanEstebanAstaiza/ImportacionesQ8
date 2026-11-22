@@ -11,6 +11,12 @@ const ACEPTA: Record<TipoArchivoMaquila, string> = {
   rut: "application/pdf,image/jpeg,image/png",
   camara_comercio: "application/pdf,image/jpeg,image/png",
   certificado: "application/pdf,image/jpeg,image/png",
+  referencia: "image/jpeg,image/png,image/webp",
+  ficha_tecnica: "application/pdf",
+  muestra: "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
+  evidencia: "image/jpeg,image/png,image/webp",
+  comprobante: "application/pdf,image/jpeg,image/png",
+  adjunto: "application/pdf,image/jpeg,image/png",
 };
 
 /**
@@ -24,6 +30,7 @@ export function SubirArchivoMaquila({
   multiple = false,
   maxArchivos = 1,
   disabled,
+  compacto = false,
   onSubido,
 }: {
   tipo: TipoArchivoMaquila;
@@ -32,6 +39,8 @@ export function SubirArchivoMaquila({
   multiple?: boolean;
   maxArchivos?: number;
   disabled?: boolean;
+  /** Solo el icono (p. ej. el clip del chat). */
+  compacto?: boolean;
   onSubido: (archivo: ArchivoMaquila) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -66,8 +75,10 @@ export function SubirArchivoMaquila({
         disabled={disabled || progreso !== null}
         icon={progreso !== null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
         onClick={() => input.current?.click()}
+        aria-label={compacto ? etiqueta : undefined}
+        title={compacto ? etiqueta : undefined}
       >
-        {progreso !== null ? `Subiendo… ${progreso}%` : etiqueta}
+        {compacto ? (progreso !== null ? `${progreso}%` : null) : progreso !== null ? `Subiendo… ${progreso}%` : etiqueta}
       </Button>
     </>
   );

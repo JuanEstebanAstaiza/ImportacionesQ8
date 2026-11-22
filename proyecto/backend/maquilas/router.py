@@ -13,15 +13,17 @@ from pymongo.database import Database
 from sqlalchemy.orm import Session
 
 from config import RATE_LIMIT_REGISTER
-from maquilas import archivos, parametros, servicio
+from maquilas import archivos, chat, directorio, parametros, pedidos, servicio, solicitudes
 from maquilas.db import BUCKETS, get_mongo
 from maquilas.esquemas import (
-    AdminCrearMaquilaEntrada, DocumentosEntrada, MotivoEntrada, PerfilEntrada, RegistroMaquilaEntrada,
+    AceptarPropuestaEntrada, AdminCrearMaquilaEntrada, ComprobanteEntrada, DocumentosEntrada, EtapaEntrada,
+    MensajeEntrada, MotivoEntrada, MuestraEntrada, PerfilEntrada, PropuestaEntrada, RegistroMaquilaEntrada,
+    RespuestaMuestraEntrada, SolicitudEntrada,
 )
-from maquilas.identidad import ROLES_EQUIPO, ROLES_MAQUILADORA
+from maquilas.identidad import ROLES_CLIENTE, ROLES_EQUIPO, ROLES_MAQUILADORA, ROLES_MODULO, es_maquiladora, maquiladora_id_de
 from schemas.auth import RegistroPendienteResponse
 from utils.dependencies import get_db, get_optional_current_user, require_rol, require_rol_in
-from utils.limiter import RATE_LIMIT_PUBLIC_READ, limiter
+from utils.limiter import RATE_LIMIT_CHAT_MESSAGE, RATE_LIMIT_PUBLIC_READ, RATE_LIMIT_PUBLIC_WRITE, limiter
 
 
 def _modulo_activo(db: Session = Depends(get_db)) -> None:
@@ -36,6 +38,10 @@ def _modulo_activo(db: Session = Depends(get_db)) -> None:
 router = APIRouter(prefix="/maquilas", tags=["Maquilas"], dependencies=[Depends(_modulo_activo)])
 
 require_maquiladora = require_rol_in(*ROLES_MAQUILADORA)
+require_cliente = require_rol_in(*ROLES_CLIENTE)
+require_modulo = require_rol_in(*ROLES_MODULO)
+# Cliente o maquiladora: las dos partes de un pedido o de un chat.
+require_parte = require_rol_in(*(ROLES_CLIENTE + ROLES_MAQUILADORA))
 require_equipo = require_rol_in(*ROLES_EQUIPO)
 require_admin = require_rol("admin")
 
@@ -104,9 +110,12 @@ def subir_archivo(
     tipo: str = Form(...),
     archivo: UploadFile = File(...),
     mongo: Database = Depends(get_mongo),
-    usuario: dict = Depends(require_maquiladora),
+    usuario: dict = Depends(require_parte),
 ):
-    if tipo not in archivos.TIPOS_EXPEDIENTE or archivos.TIPOS[tipo][0] != bucket:
+    """La maquiladora sube su expediente, muestras y evidencias; el cliente, referencias,
+    ficha técnica y comprobantes. Los dos, adjuntos del chat."""
+    permitidos = archivos.TIPOS_MAQUILADORA if es_maquiladora(usuario) else archivos.TIPOS_CLIENTE
+    if tipo not in permitidos or archivos.TIPOS[tipo][0] != bucket:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tipo de archivo no admitido aquí")
     try:
         return archivos.subir(mongo, tipo=tipo, nombre_original=archivo.filename or "", contenido=archivo.file,
@@ -141,6 +150,165 @@ def actualizar_documentos(datos: DocumentosEntrada, mongo: Database = Depends(ge
 def enviar_a_verificacion(mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
                           usuario: dict = Depends(require_maquiladora)):
     return servicio.enviar_a_verificacion(mongo, db, usuario)
+
+
+# ==================== Directorio (clientes) ====================
+
+@router.get("/directorio")
+def ver_directorio(
+    categoria: Optional[str] = Query(None, max_length=40),
+    proceso: Optional[str] = Query(None, max_length=60),
+    ciudad: Optional[str] = Query(None, max_length=80),
+    q: Optional[str] = Query(None, max_length=80),
+    cantidad: Optional[int] = Query(None, ge=1, le=10_000_000),
+    mongo: Database = Depends(get_mongo),
+    usuario: dict = Depends(require_modulo),
+):
+    return directorio.listar(mongo, categoria=categoria, proceso=proceso, ciudad=ciudad, q=q, cantidad=cantidad)
+
+
+@router.get("/directorio/{maquiladora_id}")
+def ver_maquiladora_publica(maquiladora_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
+    return directorio.perfil(mongo, maquiladora_id)
+
+
+# ==================== Solicitudes y propuestas ====================
+
+@router.post("/solicitudes", status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT_PUBLIC_WRITE)
+def crear_solicitud(request: Request, datos: SolicitudEntrada, mongo: Database = Depends(get_mongo),
+                    db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    return solicitudes.crear(mongo, db, usuario, datos)
+
+
+@router.get("/solicitudes")
+def mis_solicitudes(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_cliente)):
+    return solicitudes.mis_solicitudes(mongo, usuario)
+
+
+@router.get("/recibidas")
+def solicitudes_recibidas(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_maquiladora)):
+    return solicitudes.recibidas(mongo, usuario)
+
+
+@router.get("/solicitudes/{solicitud_id}")
+def ver_solicitud(solicitud_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
+    return solicitudes.detalle(mongo, usuario, solicitud_id)
+
+
+@router.post("/solicitudes/{solicitud_id}/cancelar")
+def cancelar_solicitud(solicitud_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                       usuario: dict = Depends(require_cliente)):
+    return solicitudes.cancelar(mongo, db, usuario, solicitud_id)
+
+
+@router.post("/solicitudes/{solicitud_id}/acuerdo")
+def aceptar_acuerdo(solicitud_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_maquiladora)):
+    """La maquiladora acepta el acuerdo de confidencialidad y ve el detalle."""
+    return solicitudes.aceptar_acuerdo(mongo, usuario, solicitud_id)
+
+
+@router.post("/solicitudes/{solicitud_id}/rechazar")
+def rechazar_solicitud(solicitud_id: str, datos: MotivoEntrada, mongo: Database = Depends(get_mongo),
+                       db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return solicitudes.rechazar(mongo, db, usuario, solicitud_id, datos.motivo)
+
+
+@router.put("/solicitudes/{solicitud_id}/propuesta")
+def guardar_propuesta(solicitud_id: str, datos: PropuestaEntrada, mongo: Database = Depends(get_mongo),
+                      db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return solicitudes.guardar_propuesta(mongo, db, usuario, solicitud_id, datos)
+
+
+@router.post("/propuestas/{propuesta_id}/aceptar")
+def aceptar_propuesta(propuesta_id: str, datos: AceptarPropuestaEntrada, mongo: Database = Depends(get_mongo),
+                      db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    """El cliente elige: se cierra la solicitud y se abre el pedido."""
+    return solicitudes.aceptar_propuesta(mongo, db, usuario, propuesta_id, datos)
+
+
+# ==================== Pedidos ====================
+
+@router.get("/pedidos")
+def listar_pedidos(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_parte)):
+    return pedidos.listar(mongo, usuario)
+
+
+@router.get("/pedidos/{pedido_id}")
+def ver_pedido(pedido_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
+    return pedidos.detalle(mongo, usuario, pedido_id)
+
+
+@router.post("/pedidos/{pedido_id}/muestras")
+def enviar_muestra(pedido_id: str, datos: MuestraEntrada, mongo: Database = Depends(get_mongo),
+                   db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return pedidos.enviar_muestra(mongo, db, usuario, pedido_id, datos)
+
+
+@router.post("/pedidos/{pedido_id}/muestras/responder")
+def responder_muestra(pedido_id: str, datos: RespuestaMuestraEntrada, mongo: Database = Depends(get_mongo),
+                      db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    return pedidos.responder_muestra(mongo, db, usuario, pedido_id, datos)
+
+
+@router.post("/pedidos/{pedido_id}/etapas/{clave}")
+def completar_etapa(pedido_id: str, clave: str, datos: EtapaEntrada, mongo: Database = Depends(get_mongo),
+                    db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return pedidos.completar_etapa(mongo, db, usuario, pedido_id, clave, datos)
+
+
+@router.post("/pedidos/{pedido_id}/hitos/{clave}/comprobante")
+def subir_comprobante(pedido_id: str, clave: str, datos: ComprobanteEntrada, mongo: Database = Depends(get_mongo),
+                      db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    return pedidos.subir_comprobante(mongo, db, usuario, pedido_id, clave, datos)
+
+
+@router.post("/pedidos/{pedido_id}/hitos/{clave}/confirmar")
+def confirmar_pago(pedido_id: str, clave: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                   usuario: dict = Depends(require_maquiladora)):
+    return pedidos.revisar_comprobante(mongo, db, usuario, pedido_id, clave, confirmado=True)
+
+
+@router.post("/pedidos/{pedido_id}/hitos/{clave}/rechazar")
+def rechazar_pago(pedido_id: str, clave: str, datos: MotivoEntrada, mongo: Database = Depends(get_mongo),
+                  db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return pedidos.revisar_comprobante(mongo, db, usuario, pedido_id, clave, confirmado=False, motivo=datos.motivo)
+
+
+@router.post("/pedidos/{pedido_id}/recibido")
+def marcar_recibido(pedido_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                    usuario: dict = Depends(require_cliente)):
+    return pedidos.marcar_recibido(mongo, db, usuario, pedido_id)
+
+
+@router.post("/pedidos/{pedido_id}/cancelar")
+def cancelar_pedido(pedido_id: str, datos: MotivoEntrada, mongo: Database = Depends(get_mongo),
+                    db: Session = Depends(get_db), usuario: dict = Depends(require_parte)):
+    return pedidos.cancelar(mongo, db, usuario, pedido_id, datos.motivo)
+
+
+# ==================== Chat ====================
+
+def _nombre_para_chat(mongo: Database, db: Session, usuario: dict) -> str:
+    if es_maquiladora(usuario):
+        doc = mongo.maquiladoras.find_one({"_id": maquiladora_id_de(mongo, usuario)}, {"nombre_comercial": 1}) or {}
+        return doc.get("nombre_comercial") or "Maquila"
+    from models.usuario import Usuario
+
+    fila = db.query(Usuario.nombre, Usuario.apellido, Usuario.email).filter(Usuario.id == usuario["user_id"]).first()
+    return (" ".join(x for x in (fila[0], fila[1]) if x) or fila[2]) if fila else "Cliente"
+
+
+@router.get("/hilos/{hilo}/mensajes")
+def leer_mensajes(hilo: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
+    return chat.listar(mongo, hilo, usuario)
+
+
+@router.post("/hilos/{hilo}/mensajes", status_code=status.HTTP_201_CREATED)
+@limiter.limit(RATE_LIMIT_CHAT_MESSAGE)
+def enviar_mensaje(request: Request, hilo: str, datos: MensajeEntrada, mongo: Database = Depends(get_mongo),
+                   db: Session = Depends(get_db), usuario: dict = Depends(require_parte)):
+    return chat.enviar(mongo, db, hilo, usuario, datos, _nombre_para_chat(mongo, db, usuario))
 
 
 # ==================== Equipo Zarpi ====================

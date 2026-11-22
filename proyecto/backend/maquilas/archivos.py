@@ -9,6 +9,9 @@ Quién ve qué:
 - La cuenta dueña, lo suyo.
 - La galería de trabajos de una maquiladora verificada es pública (vitrina).
 - RUT, cámara de comercio y certificados: solo la maquiladora y el equipo.
+- Lo de una solicitud (referencias, ficha técnica): el cliente y las maquiladoras a las que
+  llegó (si es confidencial, solo las que aceptaron el acuerdo).
+- Lo de un pedido o de un chat (muestras, evidencias, comprobantes, adjuntos): las dos partes.
 """
 from __future__ import annotations
 
@@ -28,13 +31,28 @@ from utils import gridfs_archivos
 from utils.gridfs_archivos import MIME_POR_EXTENSION, TROZO, rango  # noqa: F401 - el router usa `rango`
 
 # tipo de archivo → (bucket, extensiones admitidas)
+_IMAGENES = ("jpg", "jpeg", "png", "webp")
+_DOCUMENTOS = ("pdf", "jpg", "jpeg", "png")
 TIPOS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
-    "foto": (mongo.BUCKET_MEDIOS, ("jpg", "jpeg", "png", "webp")),
-    "rut": (mongo.BUCKET_DOCUMENTOS, ("pdf", "jpg", "jpeg", "png")),
-    "camara_comercio": (mongo.BUCKET_DOCUMENTOS, ("pdf", "jpg", "jpeg", "png")),
-    "certificado": (mongo.BUCKET_DOCUMENTOS, ("pdf", "jpg", "jpeg", "png")),
+    # Expediente de la maquiladora
+    "foto": (mongo.BUCKET_MEDIOS, _IMAGENES),
+    "rut": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
+    "camara_comercio": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
+    "certificado": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
+    # Solicitud del cliente
+    "referencia": (mongo.BUCKET_MEDIOS, _IMAGENES),
+    "ficha_tecnica": (mongo.BUCKET_DOCUMENTOS, ("pdf",)),
+    # Pedido
+    "muestra": (mongo.BUCKET_MEDIOS, _IMAGENES + ("mp4", "webm", "mov")),
+    "evidencia": (mongo.BUCKET_MEDIOS, _IMAGENES),
+    "comprobante": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
+    # Chat
+    "adjunto": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
 }
 TIPOS_EXPEDIENTE = ("rut", "camara_comercio", "certificado", "foto")
+# Qué sube cada lado.
+TIPOS_MAQUILADORA = TIPOS_EXPEDIENTE + ("muestra", "evidencia", "adjunto")
+TIPOS_CLIENTE = ("referencia", "ficha_tecnica", "comprobante", "adjunto")
 
 HORAS_ARCHIVO_SUELTO = 24
 _ultima_limpieza: Optional[datetime] = None
@@ -48,9 +66,13 @@ class ArchivoDemasiadoGrande(ArchivoInvalido):
     pass
 
 
-def _limite_bytes(db: Database, tipo: str) -> int:
+def _limite_bytes(db: Database, tipo: str, extension: str = "") -> int:
     p = parametros.leer(db)
-    return int(p["mb_max_foto"] if tipo == "foto" else p["mb_max_documento"]) * 1024 * 1024
+    if extension in ("mp4", "webm", "mov"):
+        return int(p["mb_max_video"]) * 1024 * 1024
+    if TIPOS.get(tipo, ("",))[0] == mongo.BUCKET_MEDIOS:
+        return int(p["mb_max_foto"]) * 1024 * 1024
+    return int(p["mb_max_documento"]) * 1024 * 1024
 
 
 def subir(db: Database, *, tipo: str, nombre_original: str, contenido: BinaryIO, usuario: dict) -> Dict:
@@ -67,7 +89,7 @@ def subir(db: Database, *, tipo: str, nombre_original: str, contenido: BinaryIO,
     if extension not in extensiones:
         raise ArchivoInvalido(f"Formato no admitido. Usa: {', '.join(extensiones)}")
 
-    limite = _limite_bytes(db, tipo)
+    limite = _limite_bytes(db, tipo, extension)
     primer_trozo = contenido.read(TROZO)
     if not primer_trozo:
         raise ArchivoInvalido("El archivo está vacío")
@@ -131,11 +153,13 @@ def buscar(db: Database, nombre_bucket: str, archivo_id: str) -> Optional[Dict]:
     return db[f"{nombre_bucket}.files"].find_one({"_id": oid})
 
 
-def ligar(db: Database, *, ids: List[str], tipo: str, cuenta: str) -> List[Dict]:
+def ligar(db: Database, *, ids: List[str], tipo: str, cuenta: str, contexto: Optional[Dict] = None) -> List[Dict]:
     """Adjunta archivos sueltos de la cuenta y devuelve sus referencias.
 
     Solo acepta archivos que subió esa misma cuenta y del tipo esperado: nadie
     adjunta el archivo de otro adivinando su id. Verifica todos antes de ligar.
+    `contexto` dice a qué quedan ligados (`solicitud_id`, `pedido_id` o `hilo`), y
+    con eso se decide quién más los puede ver.
     """
     coleccion = db[f"{TIPOS[tipo][0]}.files"]
     filas = []
@@ -145,9 +169,14 @@ def ligar(db: Database, *, ids: List[str], tipo: str, cuenta: str) -> List[Dict]
         meta = (fila or {}).get("metadata") or {}
         if not fila or meta.get("cuenta") != cuenta or meta.get("tipo") != tipo:
             raise ArchivoInvalido("Uno de los archivos no existe o no es tuyo")
+        if meta.get("ligado") and contexto and meta.get("contexto") and meta.get("contexto") != contexto:
+            raise ArchivoInvalido("Uno de los archivos ya está adjunto a otra cosa")
         filas.append(fila)
     if filas:
-        coleccion.update_many({"_id": {"$in": [f["_id"] for f in filas]}}, {"$set": {"metadata.ligado": True}})
+        cambios = {"metadata.ligado": True}
+        if contexto:
+            cambios["metadata.contexto"] = contexto
+        coleccion.update_many({"_id": {"$in": [f["_id"] for f in filas]}}, {"$set": cambios})
     return [ref(TIPOS[tipo][0], f) for f in filas]
 
 
@@ -207,6 +236,19 @@ def puede_ver(db: Database, fila: Dict, usuario: Optional[dict]) -> bool:
     if meta.get("tipo") == "foto" and meta.get("ligado") and str(meta.get("cuenta", "")).startswith("maquiladora:"):
         maquiladora_id = meta["cuenta"].split(":", 1)[1]
         return db.maquiladoras.count_documents({"_id": maquiladora_id, "estado": "verificada"}, limit=1) > 0
+    contexto = meta.get("contexto") or {}
+    if not usuario or not contexto:
+        return False
+    from maquilas import acceso  # aquí para no crear un import circular
+
+    if contexto.get("solicitud_id"):
+        solicitud = db.solicitudes.find_one({"_id": contexto["solicitud_id"]})
+        return bool(solicitud) and acceso.puede_ver_detalle_solicitud(db, solicitud, usuario)
+    if contexto.get("pedido_id"):
+        pedido = db.pedidos.find_one({"_id": contexto["pedido_id"]})
+        return bool(pedido) and acceso.es_parte_del_pedido(db, pedido, usuario)
+    if contexto.get("hilo"):
+        return acceso.puede_usar_hilo(db, contexto["hilo"], usuario)
     return False
 
 

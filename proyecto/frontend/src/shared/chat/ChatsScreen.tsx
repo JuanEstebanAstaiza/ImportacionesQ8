@@ -3,8 +3,8 @@ import { MODULOS_SUITE, moduloDe, type Producto } from "@shared/suite/suite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
-import { ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
-import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline } from "@shared/ui/design-system";
+import { ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSignature, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
+import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline, openSmartContact } from "@shared/ui/design-system";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@shared/layout/AppHeader";
 import { FormatFileIcon } from "@shared/ui/files/FormatFileIcon";
@@ -14,6 +14,7 @@ import type { SidebarCtrl } from "@/types/portal";
 import type { UserRole } from "@/types/roles";
 import type { ChatConv, ChatMsg, MsgFile, MsgFileType } from "@/types/chat";
 import type { Order } from "@/types/order";
+import type { Quote } from "@/types/quote";
 import {
   initialsFromName,
   importerColorFromId,
@@ -22,7 +23,7 @@ import { nextOrderState, orderStateLabel } from "@apps/importaciones/features/or
 import { normalizeFolderName } from "@/utils/folders";
 import type { CompanyAdvisor } from "@/types/portal";
 import type { Importer } from "@/types/importer";
-import type { BackendArchivoItem, BackendChatAttachmentItem, BackendExplorerResponse, BackendMiembroEquipo, BackendOrder } from "@/services/business.service";
+import { businessService, type BackendArchivoItem, type BackendChatAttachmentItem, type BackendExplorerResponse, type BackendMiembroEquipo, type BackendOrder } from "@/services/business.service";
 import { getStoredToken, resolveApiUrl, toApiPath } from "@/services/api-client";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { formatChatTime } from "@/utils/date";
@@ -115,7 +116,7 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
 /** «operacion:<id>» → «Operación 1A2B3C4D»: la referencia que guarda un ticket abierto desde un producto. */
 function etiquetaReferencia(referencia: string): string {
   const [tipo, id = ""] = referencia.split(":");
-  const nombre = tipo === "operacion" ? "Operación" : tipo === "lote" ? "Lote" : tipo;
+  const nombre = tipo === "operacion" ? "Operación" : tipo === "lote" ? "Lote" : tipo === "pedido" ? "Pedido" : tipo === "solicitud" ? "Solicitud" : tipo;
   return `${nombre} ${id.slice(0, 8).toUpperCase()}`;
 }
 

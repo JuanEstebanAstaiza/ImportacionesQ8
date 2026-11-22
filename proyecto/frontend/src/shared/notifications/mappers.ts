@@ -12,9 +12,23 @@ function destinoLiquidaciones(tipo: string, data: Record<string, unknown>): Pick
 
 /** A qué pantalla lleva un aviso de Zarpi Maquilas (tipos `maquila_*`). */
 function destinoMaquilas(tipo: string, data: Record<string, unknown>): Pick<AppNotification, "destino" | "destinoId"> {
-  const maquiladoraId = typeof data.maquiladora_id === "string" ? data.maquiladora_id : undefined;
-  // Al equipo: el expediente que hay que revisar. A la maquiladora: su perfil.
+  const texto = (clave: string) => (typeof data[clave] === "string" ? (data[clave] as string) : undefined);
+  const maquiladoraId = texto("maquiladora_id");
+  const solicitudId = texto("solicitud_id");
+  const pedidoId = texto("pedido_id");
+  // Al equipo: el expediente que hay que revisar.
   if (tipo === "maquila_en_revision" || tipo === "maquila_registrada") return { destino: "maq-admin-verificacion", destinoId: maquiladoraId };
+  // Pedido: cada lado lo ve en su sección.
+  if (pedidoId) return { destino: texto("lado_destino") === "cliente" ? "maq-pedidos" : "maq-produccion", destinoId: pedidoId };
+  // Mensajes de la negociación: al cliente, su solicitud; a la maquila, la recibida.
+  if (tipo === "maquila_mensaje" && solicitudId) {
+    return { destino: texto("lado_destino") === "cliente" ? "maq-solicitudes" : "maq-recibidas", destinoId: solicitudId };
+  }
+  if (tipo === "maquila_solicitud" || tipo === "maquila_solicitud_cancelada" || tipo === "maquila_propuesta_descartada") {
+    return { destino: "maq-recibidas", destinoId: solicitudId };
+  }
+  if (tipo === "maquila_propuesta" || tipo === "maquila_solicitud_rechazada") return { destino: "maq-solicitudes", destinoId: solicitudId };
+  // Verificación: la maquila va a su perfil.
   return { destino: "maq-perfil" };
 }
 

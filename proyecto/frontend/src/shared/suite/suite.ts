@@ -1,6 +1,6 @@
 import {
-  Bookmark, ClipboardCheck, Factory, LayoutGrid, MessagesSquare, PackageSearch, CirclePlus, Settings2, Store, Tag,
-  UserCheck, ChartColumn, ShieldCheck,
+  Bookmark, ClipboardCheck, ClipboardList, Factory, Inbox, LayoutGrid, MessagesSquare, Package, PackageSearch, CirclePlus,
+  Search, Settings2, Store, Tag, UserCheck, ChartColumn, ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -100,12 +100,22 @@ export const LIQUIDACIONES: ModuloSuite = {
 
 const MAQ_MAQUILADORA: NavItem[] = [
   { icon: LayoutGrid, label: "Panel", key: "maq-panel" },
+  { icon: Inbox, label: "Solicitudes", key: "maq-recibidas" },
+  { icon: Package, label: "Pedidos", key: "maq-produccion" },
   { icon: Factory, label: "Mi maquila", key: "maq-perfil" },
 ];
 
+const MAQ_CLIENTE: NavItem[] = [
+  { icon: Search, label: "Directorio", key: "maq-directorio" },
+  { icon: CirclePlus, label: "Nueva solicitud", key: "maq-solicitar" },
+  { icon: ClipboardList, label: "Mis solicitudes", key: "maq-solicitudes" },
+  { icon: Package, label: "Mis pedidos", key: "maq-pedidos" },
+];
+
 /**
- * Zarpi Maquilas. Fase 1: la maquiladora (rol propio) se registra, completa su
- * expediente y el equipo la verifica; el flujo de los clientes llega en la fase 2.
+ * Zarpi Maquilas. Los clientes (cotizante y empresa) buscan maquilas verificadas,
+ * piden propuestas y siguen sus pedidos; la maquiladora (rol propio) responde y
+ * produce. El equipo verifica a las maquiladoras desde el panel admin.
  */
 export const MAQUILAS: ModuloSuite = {
   clave: "maquilas",
@@ -113,10 +123,10 @@ export const MAQUILAS: ModuloSuite = {
   descripcion: "Fabrica tu marca con maquilas verificadas",
   tituloPestana: "Zarpi Maquilas | Fabrica tu marca con maquilas verificadas",
   flag: "modulo_maquilas_habilitado",
-  roles: ["maquiladora"],
+  roles: ["solicitante", "importadora", "asesor", "maquiladora"],
   esPantalla: esPantallaMaquilas,
-  inicio: (rol) => (rol === "maquiladora" ? "maq-panel" : "maq-landing"),
-  nav: { maquiladora: MAQ_MAQUILADORA },
+  inicio: (rol) => (rol === "maquiladora" ? "maq-panel" : "maq-directorio"),
+  nav: { maquiladora: MAQ_MAQUILADORA, solicitante: MAQ_CLIENTE, importadora: MAQ_CLIENTE, asesor: MAQ_CLIENTE },
   admin: {
     grupo: { key: "maquilas", label: "Maquilas", icon: Factory },
     items: [{ icon: ShieldCheck, label: "Verificación", key: "maq-admin-verificacion" }],

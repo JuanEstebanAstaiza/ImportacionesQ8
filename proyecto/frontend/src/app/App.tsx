@@ -128,7 +128,7 @@ import {
 } from "@/config/navigation";
 import type { NavItem } from "@/types/navigation";
 import {
-  LIQUIDACIONES, PANTALLAS_COMUNES, moduloDe, modulosActivos, navAdminDeModulos, productoDe, type Producto,
+  LIQUIDACIONES, MAQUILAS, PANTALLAS_COMUNES, moduloDe, modulosActivos, navAdminDeModulos, productoDe, type Producto,
 } from "@shared/suite/suite";
 import { LiquidacionesRouter, LandingLiquidaciones } from "@apps/liquidaciones";
 import { crearDestinosSuite } from "@shared/suite/destinos";
@@ -1587,6 +1587,13 @@ export default function App() {
     // Zarpi Maquilas: la maquiladora y, en el panel, el equipo que la verifica.
     "maq-panel": ["maquiladora"],
     "maq-perfil": ["maquiladora"],
+    "maq-recibidas": ["maquiladora"],
+    "maq-produccion": ["maquiladora"],
+    "maq-directorio": ["solicitante", "importadora", "asesor"],
+    "maq-maquiladora": ["solicitante", "importadora", "asesor"],
+    "maq-solicitar": ["solicitante", "importadora", "asesor"],
+    "maq-solicitudes": ["solicitante", "importadora", "asesor"],
+    "maq-pedidos": ["solicitante", "importadora", "asesor"],
     "maq-admin-verificacion": ["admin", "soporte"],
   };
 
@@ -1698,7 +1705,9 @@ export default function App() {
     onPolicy:(page:LegalPage)=>goTo(PANTALLA_LEGAL[page]),
   };
   if(screen==="mkt-landing")return <LandingMarketplace {...propsLandingSuite}/>;
-  if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite} onRegistrarMaquila={()=>goTo("maq-registro")}/>;
+  // Con sesión, «Fabrica tu marca» lleva al inicio de Maquilas según el rol (el equipo, a su panel).
+  if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite} onRegistrarMaquila={()=>goTo("maq-registro")}
+    onEntrar={()=>navegarModulo(userRole==="admin"||userRole==="soporte"?"maq-admin-verificacion":MAQUILAS.inicio(userRole as UserRole))}/>;
   // Registro propio de las maquiladoras (las empresas importadoras las sigue creando el equipo).
   if(screen==="maq-registro"&&!registroAbierto())return <RegistroCerrado producto="maquilas" correoContacto={platformConfig.correo_contacto} onLogin={()=>goTo("login")} onLanding={()=>goTo("maq-landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="maq-registro")return <RegistroMaquila onVolver={()=>goTo("maq-landing")} onLogin={()=>goTo("login")} onRegistrada={(email)=>{setLoginPrefillEmail(email);setLoginPrefillRol("maquiladora");goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
@@ -1742,7 +1751,7 @@ export default function App() {
   const renderPrivateScreen = () => {
     // Zarpi Liquidaciones resuelve sus pantallas (las del producto y las de su panel admin) en su propio router.
     // Zarpi Maquilas, igual: la maquiladora y su verificación en el panel admin.
-    if (screen.startsWith("maq-")) return <MaquilasRouter screen={screen} sb={sb} idRuta={idModulo} navegar={navegarModulo} rol={userRole} />;
+    if (screen.startsWith("maq-")) return <MaquilasRouter screen={screen} sb={sb} idRuta={idModulo} navegar={navegarModulo} rol={userRole} onSoporte={(referencia) => abrirSoporte(referencia, "maquilas")} />;
     if (screen.startsWith("liq-")) return <LiquidacionesRouter screen={screen} sb={sb} idRuta={idModulo} navegar={navegarModulo} rol={userRole as UserRole} empresa={companyProfile?.nombre_empresa || ""} onSoporte={(referencia) => abrirSoporte(referencia, "liquidaciones")} />;
     if (IMPORTER_ROUTES.includes(screen)) return <ImporterPortalProvider value={{ quotes: importerQuotes, advisors: companyAdvisors, chats: chatConversations, companyProfile, companyName: companyProfile?.nombre_empresa || "", userRole, onSave: handleSaveCompanyProfile, onCreateAdvisor: handleCreateAdvisor, onSetAdvisorActive: handleSetAdvisorActive, openInternalChat, onRespond: id => { setSelectedQuoteId(id); goTo("create-response"); }, openChat, onAssignAdvisor: handleAssignAdvisorToQuote, proposalsByQuoteId: companyProposalsByQuoteId, onConfirmProposal: handleConfirmProposalAsCompany, onRechazada: refreshQuoteLists }}><ImporterRouter screen={screen} sb={sb} /></ImporterPortalProvider>;
     if (ADVISOR_ROUTES.includes(screen)) return <AdvisorPortalProvider value={{ available: visibleAvailableQuotes, quotes: advisorAssignedQuotes, headerUser: advisorHeaderUser, proposals: advisorProposalsByQuoteId, chats: chatConversations, availableCount: visibleAvailableQuotes.length, activeChatsCount: activeChatCount, onClaim: claimQuote, refresh: refreshQuoteLists, onRespond: id => { setSelectedQuoteId(id); goTo("create-response"); }, openChat, onOpenInternalChat: () => openInternalChat(), onRechazada: refreshQuoteLists }}><AdvisorRouter screen={screen} sb={sb} /></AdvisorPortalProvider>;
