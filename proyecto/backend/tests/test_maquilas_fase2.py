@@ -45,7 +45,7 @@ def cliente(db_session):
 
 
 def _subir(client, headers, tipo, contenido=None):
-    bucket = "medios" if tipo in ("referencia", "muestra", "evidencia", "foto") else "documentos"
+    bucket = "medios" if tipo in ("referencia", "muestra", "evidencia", "foto", "producto") else "documentos"
     nombre = f"{tipo}.png" if bucket == "medios" else f"{tipo}.pdf"
     r = client.post(f"/maquilas/archivos/{bucket}", data={"tipo": tipo},
                     files={"archivo": (nombre, contenido or (PNG if bucket == "medios" else PDF))}, headers=headers)
@@ -224,6 +224,16 @@ def _pagar(client, cliente, hm, pedido_id, clave):
     return r.json()
 
 
+def _aprobar_calidad(client, cliente, hm, pedido_id):
+    """La etapa de control de calidad se cierra con el reporte aprobado (fase 3)."""
+    r = client.post(f"/maquilas/pedidos/{pedido_id}/calidad", json={
+        "unidades_inspeccionadas": 50, "resultados": [], "fotos": [_subir(client, hm, "evidencia")]}, headers=hm)
+    assert r.status_code == 200, r.text
+    r = client.post(f"/maquilas/pedidos/{pedido_id}/calidad/responder", json={"aprobado": True}, headers=cliente)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 def test_pedido_de_punta_a_punta(client, db_session, mongo_maq, cliente):
     pedido, hm, m = _pedido(client, db_session, mongo_maq, cliente,
                             hitos={"anticipo": 40, "contra_muestra": 30, "contra_entrega": 30})
@@ -255,9 +265,11 @@ def test_pedido_de_punta_a_punta(client, db_session, mongo_maq, cliente):
     _pagar(client, cliente, hm, pid, "contra_muestra")
     # En orden.
     assert client.post(f"/maquilas/pedidos/{pid}/etapas/fabricacion", json={}, headers=hm).status_code == 409
-    for clave in ("insumos", "preparacion", "fabricacion", "acabado", "control_calidad", "empaque"):
+    for clave in ("insumos", "preparacion", "fabricacion", "acabado"):
         r = client.post(f"/maquilas/pedidos/{pid}/etapas/{clave}", json={"nota": f"Listo {clave}", "fotos": [_subir(client, hm, "evidencia")]}, headers=hm)
         assert r.status_code == 200, (clave, r.text)
+    _aprobar_calidad(client, cliente, hm, pid)
+    assert client.post(f"/maquilas/pedidos/{pid}/etapas/empaque", json={}, headers=hm).status_code == 200
     r = client.post(f"/maquilas/pedidos/{pid}/etapas/despacho", json={"nota": "Guía 123"}, headers=hm)
     assert r.json()["estado"] == "despachado"
 
@@ -283,7 +295,10 @@ def test_el_despacho_exige_los_pagos_previos(client, db_session, mongo_maq, clie
     client.post(f"/maquilas/pedidos/{pid}/muestras/responder", json={"aprobada": True}, headers=cliente)
     assert client.post(f"/maquilas/pedidos/{pid}/etapas/insumos", json={}, headers=hm).status_code == 409
     _pagar(client, cliente, hm, pid, "contra_muestra")
-    for clave in ("insumos", "preparacion", "fabricacion", "acabado", "control_calidad", "empaque", "despacho"):
+    for clave in ("insumos", "preparacion", "fabricacion", "acabado"):
+        assert client.post(f"/maquilas/pedidos/{pid}/etapas/{clave}", json={}, headers=hm).status_code == 200
+    _aprobar_calidad(client, cliente, hm, pid)
+    for clave in ("empaque", "despacho"):
         assert client.post(f"/maquilas/pedidos/{pid}/etapas/{clave}", json={}, headers=hm).status_code == 200
 
 

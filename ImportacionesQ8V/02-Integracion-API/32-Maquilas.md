@@ -5,7 +5,8 @@ Módulo de la suite Zarpi que conecta a **clientes** (emprendedores y marcas) co
 Se construye por fases:
 - **Fase 1:** la cuenta de la maquiladora, su registro, su expediente y la verificación del equipo.
 - **Fase 2:** directorio, solicitudes de fabricación (dirigidas y abiertas), confidencialidad, propuestas comparables, pedido con muestra, producción por etapas, pagos por hitos y chat.
-- Siguientes: marca blanca, ficha técnica, calculadora, calidad y reseñas (fase 3); estudio de marca, ruta legal y el admin completo (fase 4).
+- **Fase 3:** marca blanca, ficha técnica guiada con PDF, calculadora de costo y margen, checklist y reporte de calidad, reseñas con métricas públicas y repetir pedido.
+- Siguiente (fase 4): estudio de marca, ruta legal y el admin completo.
 
 ## Arquitectura
 
@@ -133,6 +134,59 @@ Se construye por fases:
 Archivos nuevos (`POST /archivos/{bucket}`): el cliente sube `referencia`, `ficha_tecnica`, `comprobante` y `adjunto`; la maquila, `muestra` (foto o video), `evidencia` y `adjunto`. Quedan ligados a la solicitud, al pedido o al hilo, y solo los ven sus partes (las referencias de una solicitud confidencial, después del acuerdo).
 
 Frontend: cliente `maq-directorio`, `maq-maquiladora/<id>`, `maq-solicitar[/<maquila>]`, `maq-solicitudes[/<id>]`, `maq-pedidos[/<id>]`; maquila `maq-recibidas[/<id>]` y `maq-produccion[/<id>]`. Pruebas: `tests/test_maquilas_fase2.py`.
+
+## Fase 3: marca, calidad y confianza
+
+### Marca blanca (`productos_mb`)
+
+- La maquila publica productos que ya fabrica: nombre, categoría (una de las suyas), descripción, fotos (`producto`, vitrina pública como la galería; máximo `fotos_producto_max`), pedido mínimo, precio por cantidad, qué personaliza el cliente (`personalizaciones`: logo, etiqueta, empaque, color, aroma o sabor), costo y días de la muestra, días de producción. Hasta `productos_max` (30) por maquila.
+- Se guarda como borrador o publicado (`activo`). Publicar exige la maquila verificada y al menos una foto. El catálogo muestra solo lo publicado, de maquilas verificadas y no oculto por el equipo; ordena por pedidos.
+- El cliente lo pide con una solicitud `marca_blanca`: le llega a esa maquila, la categoría es la del producto, la cantidad mínima es la del producto (no la de la maquila) y la personalización tiene que estar entre las que ofrece. La solicitud guarda una copia del producto (nombre, tramos, foto). La propuesta de la maquila arranca con su precio de catálogo.
+- Cada pedido aceptado suma al contador `pedidos` del producto. Las fotos que la maquila saca de un producto no se borran (las solicitudes las siguen mostrando).
+- El equipo oculta un producto con motivo (le llega por correo a la maquila) y lo vuelve a mostrar desde *Maquilas › Moderación*.
+
+### Ficha técnica guiada
+
+- En la solicitud, el cliente llena por secciones: medidas y tallas, materiales, colores (Pantone), acabados, empaque, etiquetado y notas. Se guarda estructurada (`ficha_guiada`) y, si no subió un PDF propio, se genera el PDF (`maquilas/pdf.py`, sin dependencias, con tildes) y queda como la ficha técnica adjunta.
+- `POST /fichas/vista-previa` devuelve el PDF para descargarlo antes de enviar.
+
+### Calculadora de costo y margen
+
+Solo en el frontend (`features/calculadora.ts`, función pura). Costo por unidad = fabricación + empaque + etiquetas + (envío + costos del lote) / cantidad. Precio sugerido antes de IVA = costo / (1 − comisión − margen); con IVA encima. Con un precio propio calcula la ganancia y el margen real. Punto de equilibrio = inversión del lote / (precio × (1 − comisión)). Se abre sola (`maq-calculadora`) o desde el comparador, el producto de marca blanca o el pedido, con el precio y la cantidad puestos.
+
+### Calidad
+
+- La propuesta lleva un checklist (`criterios_calidad`: criterio y tolerancia, hasta 15). La maquila parte de los sugeridos por categoría (`criterios_calidad` en parámetros).
+- La etapa `control_calidad` ya no se cierra a mano: la maquila sube un **reporte de inspección** (unidades inspeccionadas, cumple / no cumple por criterio con observación, fotos y nota) y el cliente lo **aprueba** (se cierra la etapa con sus fotos y sigue el empaque) u **objeta** con motivo (la maquila sube otra ronda). Mientras uno espera respuesta no se sube otro.
+- Como las etapas van en orden, sin calidad aprobada no hay empaque ni despacho. Si el admin quita `control_calidad` de las etapas, no hay reporte. Los pedidos de antes de la fase 3 suben el reporte sin criterios.
+
+### Reseñas y métricas (`resenas`)
+
+- Una por pedido entregado (índice único), del cliente: general, puntualidad, calidad y comunicación (1 a 5) y comentario. Firma con la empresa o el nombre de pila.
+- La maquila responde una vez. El equipo oculta (con motivo) o vuelve a mostrar; oculta no se ve ni cuenta.
+- `maquiladoras.metricas` se recalcula al entregar un pedido y al cambiar una reseña: calificación promedio y por dimensión, número de reseñas, pedidos entregados y cumplimiento (% entregados con la confirmación del cliente antes de la fecha comprometida). El directorio ordena por calificación y el reparto de solicitudes abiertas la usa como desempate.
+
+### Repetir pedido
+
+Con el pedido entregado, el cliente elige cantidad y fecha y se crea una solicitud dirigida a la misma maquila con el mismo brief, referencias y ficha (`repite_de`). Si la original era confidencial, el acuerdo que la maquila ya aceptó sigue valiendo. Si salió de marca blanca y el producto sigue publicado, es otra vez `marca_blanca` con sus precios actuales. La maquila ve su propuesta anterior para partir de ella.
+
+### Endpoints de la fase 3 (`/maquilas`)
+
+| Método | Ruta | Quién |
+|---|---|---|
+| GET · POST | `/mi-maquiladora/productos` · PUT `/mi-maquiladora/productos/{id}` | Maquiladora |
+| GET | `/catalogo?categoria=&q=&cantidad=&maquiladora=` · `/catalogo/{id}` | Cualquier rol del módulo |
+| POST | `/fichas/vista-previa` | Cliente |
+| POST | `/pedidos/{id}/calidad` | Maquiladora |
+| POST | `/pedidos/{id}/calidad/responder` · `/resena` · `/repetir` | Cliente |
+| GET | `/mi-maquiladora/resenas` · POST `/resenas/{id}/respuesta` | Maquiladora |
+| GET | `/directorio/{id}/resenas` | Cualquier rol del módulo |
+| GET · POST | `/admin/productos` · `/admin/productos/{id}/ocultar` · `/mostrar` | Equipo |
+| GET · POST | `/admin/resenas?ocultas=&maximo=` · `/admin/resenas/{id}/ocultar` · `/mostrar` | Equipo |
+
+Frontend: maquila `maq-catalogo` y `maq-resenas`; cliente `maq-marca-blanca[/<producto>]` y `maq-calculadora`; admin `maq-admin-moderacion`. Pruebas: `tests/test_maquilas_fase3.py`.
+
+Las descargas de GridFS (Maquilas y Liquidaciones) mandan el nombre del archivo con `filename*` (UTF-8): un nombre con tildes rompía la cabecera.
 
 ## Operación
 

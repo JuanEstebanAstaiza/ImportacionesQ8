@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardList, Clock, Loader2, Lock, Package, Plus, XCircle } from "lucide-react";
+import { ArrowLeft, Calculator, CheckCircle2, ClipboardList, Clock, Loader2, Lock, Package, Plus, Repeat, Tag, XCircle } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
 
 import { Button, Card } from "@shared/ui/design-system";
+import { Modal } from "@shared/ui/kit/Modal";
 import { maquilasService } from "@/services/maquilas.service";
 import { mensajeDeError } from "@apps/maquilas/features/errores";
 import { fecha, pesos, unidades } from "@apps/maquilas/features/formato";
 import { useInvalidarMaquilas, useMisSolicitudes, useSolicitud } from "@apps/maquilas/features/useMaquilas";
 import { ArchivosVista } from "@apps/maquilas/features/componentes/ArchivosVista";
+import { CalculadoraMargen } from "@apps/maquilas/features/componentes/CalculadoraMargen";
 import { ChatHilo } from "@apps/maquilas/features/componentes/ChatHilo";
 import { MotivoModal } from "@apps/maquilas/features/componentes/MotivoModal";
 import type { Propuesta, Solicitud } from "@apps/maquilas/features/tipos";
@@ -28,6 +30,21 @@ export function EstadoSolicitudChip({ estado, etiqueta }: { estado: string; etiq
 export function BriefSolicitud({ s }: { s: Solicitud }) {
   return (
     <Card padding="lg" className="space-y-4">
+      {(s.producto || s.repite_de) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/50 p-3">
+          {s.producto?.foto && <ArchivosVista archivos={[s.producto.foto]} tamano="sm" />}
+          {s.producto && (
+            <p className="flex items-center gap-2 text-sm">
+              <Tag className="h-4 w-4 text-primary dark:text-accent" aria-hidden="true" />
+              Marca blanca: <span className="font-medium">{s.producto.nombre}</span>
+              {s.personalizacion.length > 0 && <span className="text-muted-foreground">· con {s.personalizacion.map((x) => x.nombre.toLowerCase()).join(", ")} del cliente</span>}
+            </p>
+          )}
+          {s.repite_de && (
+            <p className="flex items-center gap-2 text-sm"><Repeat className="h-4 w-4 text-primary dark:text-accent" aria-hidden="true" />Repite el pedido {s.repite_de.codigo}</p>
+          )}
+        </div>
+      )}
       <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div><p className="text-xs text-muted-foreground">Categoría</p><p className="font-medium">{s.categoria_nombre}</p></div>
         <div><p className="text-xs text-muted-foreground">Cantidad</p><p className="font-medium">{unidades(s.cantidad)}</p></div>
@@ -47,6 +64,19 @@ export function BriefSolicitud({ s }: { s: Solicitud }) {
               ))}
             </dl>
           )}
+          {!!s.ficha_guiada?.length && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Ficha técnica</h4>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                {s.ficha_guiada.map((c) => (
+                  <div key={c.clave} className="rounded-xl border border-border p-3">
+                    <dt className="text-xs text-muted-foreground">{c.etiqueta}</dt>
+                    <dd className="whitespace-pre-line text-sm">{c.valor}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           <ArchivosVista archivos={[...(s.referencias ?? []), ...(s.ficha_tecnica ? [s.ficha_tecnica] : [])]} />
         </>
       ) : (
@@ -58,7 +88,7 @@ export function BriefSolicitud({ s }: { s: Solicitud }) {
   );
 }
 
-function Comparador({ s, onAceptar }: { s: Solicitud; onAceptar: (p: Propuesta) => void }) {
+function Comparador({ s, onAceptar, onCalcular }: { s: Solicitud; onAceptar: (p: Propuesta) => void; onCalcular: (p: Propuesta) => void }) {
   const propuestas = s.propuestas ?? [];
   if (!propuestas.length) {
     return (
@@ -79,6 +109,9 @@ function Comparador({ s, onAceptar }: { s: Solicitud; onAceptar: (p: Propuesta) 
     { etiqueta: "Pagos", valor: (p) => p.hitos.map((h) => `${h.porcentaje} % ${h.nombre.toLowerCase()}`).join(" · ") },
     { etiqueta: "Precios por cantidad", valor: (p) => p.tramos.map((t) => `desde ${t.cantidad_min.toLocaleString("es-CO")}: ${pesos(t.precio_unitario)}`).join(" · ") },
     { etiqueta: "Condiciones", valor: (p) => p.condiciones || "—" },
+    { etiqueta: "Checklist de calidad", valor: (p) => (p.criterios_calidad.length
+      ? <ul className="space-y-0.5">{p.criterios_calidad.map((c) => <li key={c.criterio}>{c.criterio}{c.tolerancia ? ` (${c.tolerancia})` : ""}</li>)}</ul>
+      : <span className="text-muted-foreground">Sin criterios</span>) },
     { etiqueta: "Válida hasta", valor: (p) => (p.vencida ? <span className="text-destructive">Vencida</span> : fecha(p.valida_hasta)) },
   ];
   return (
@@ -102,9 +135,14 @@ function Comparador({ s, onAceptar }: { s: Solicitud; onAceptar: (p: Propuesta) 
             <td />
             {propuestas.map((p) => (
               <td key={p.id} className="px-4 py-3">
-                {p.estado === "aceptada" ? <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600"><CheckCircle2 className="h-4 w-4" />Elegida</span>
-                  : p.estado === "descartada" ? <span className="text-xs text-muted-foreground">No elegida</span>
-                  : <Button size="sm" disabled={p.vencida || !["abierta", "con_propuestas"].includes(s.estado)} onClick={() => onAceptar(p)}>Elegir esta</Button>}
+                <div className="flex flex-col items-start gap-1">
+                  {p.estado === "aceptada" ? <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600"><CheckCircle2 className="h-4 w-4" />Elegida</span>
+                    : p.estado === "descartada" ? <span className="text-xs text-muted-foreground">No elegida</span>
+                    : <Button size="sm" disabled={p.vencida || !["abierta", "con_propuestas"].includes(s.estado)} onClick={() => onAceptar(p)}>Elegir esta</Button>}
+                  <button type="button" onClick={() => onCalcular(p)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline dark:text-accent">
+                    <Calculator className="h-3.5 w-3.5" aria-hidden="true" />Calcular mi margen
+                  </button>
+                </div>
               </td>
             ))}
           </tr>
@@ -121,6 +159,7 @@ function DetalleSolicitud({ id, onVolver, onVerPedido }: { id: string; onVolver:
   const [cancelando, setCancelando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [hilo, setHilo] = useState<string | null>(null);
+  const [calculando, setCalculando] = useState<Propuesta | null>(null);
 
   if (isLoading) return <div className="flex items-center justify-center py-16 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando…</div>;
   if (error || !s) return <Card padding="lg"><p className="text-sm text-destructive">{mensajeDeError(error)}</p></Card>;
@@ -170,7 +209,7 @@ function DetalleSolicitud({ id, onVolver, onVerPedido }: { id: string; onVolver:
             <EstadoSolicitudChip estado={s.estado} etiqueta={s.estado_etiqueta} />
             {s.confidencial && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Lock className="h-3.5 w-3.5" />Confidencial</span>}
           </div>
-          <p className="text-sm text-muted-foreground">{s.codigo} · {s.modalidad === "dirigida" ? "Dirigida" : "Abierta"} · {fecha(s.creado_en)}</p>
+          <p className="text-sm text-muted-foreground">{s.codigo} · {s.modalidad === "marca_blanca" ? "Marca blanca" : s.modalidad === "dirigida" ? "Dirigida" : "Abierta"} · {fecha(s.creado_en)}</p>
         </div>
         <div className="flex gap-2">
           {s.pedido_id && <Button icon={<Package className="h-4 w-4" />} onClick={() => onVerPedido(s.pedido_id!)}>Ver el pedido</Button>}
@@ -193,7 +232,10 @@ function DetalleSolicitud({ id, onVolver, onVerPedido }: { id: string; onVolver:
         </ul>
       </Card>
 
-      <Comparador s={s} onAceptar={setEligiendo} />
+      <Comparador s={s} onAceptar={setEligiendo} onCalcular={setCalculando} />
+      <Modal open={calculando !== null} onClose={() => setCalculando(null)} title={`¿A cuánto lo vendo? · ${calculando?.maquiladora.nombre_comercial ?? ""}`} width="max-w-5xl">
+        {calculando && <CalculadoraMargen precio={calculando.precio_unitario} cantidad={s.cantidad} costosFijos={calculando.costo_muestra || undefined} />}
+      </Modal>
 
       {conversaciones.length > 0 && (
         <div className="space-y-2">

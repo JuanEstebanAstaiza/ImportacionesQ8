@@ -8,17 +8,20 @@ los corre en su pool de hilos, igual que hace con SQLAlchemy en el resto de la A
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pymongo.database import Database
 from sqlalchemy.orm import Session
 
 from config import RATE_LIMIT_REGISTER
-from maquilas import archivos, chat, directorio, parametros, pedidos, servicio, solicitudes
+from maquilas import archivos, chat, directorio, marca_blanca, parametros, pedidos, resenas, servicio, solicitudes
+from maquilas import ficha as fichas
 from maquilas.db import BUCKETS, get_mongo
+from utils import gridfs_archivos
 from maquilas.esquemas import (
     AceptarPropuestaEntrada, AdminCrearMaquilaEntrada, ComprobanteEntrada, DocumentosEntrada, EtapaEntrada,
-    MensajeEntrada, MotivoEntrada, MuestraEntrada, PerfilEntrada, PropuestaEntrada, RegistroMaquilaEntrada,
-    RespuestaMuestraEntrada, SolicitudEntrada,
+    FichaVistaPreviaEntrada, MensajeEntrada, MotivoEntrada, MuestraEntrada, PerfilEntrada, ProductoEntrada,
+    PropuestaEntrada, RegistroMaquilaEntrada, RepetirEntrada, ReporteCalidadEntrada, ResenaEntrada,
+    RespuestaCalidadEntrada, RespuestaMuestraEntrada, RespuestaResenaEntrada, SolicitudEntrada,
 )
 from maquilas.identidad import ROLES_CLIENTE, ROLES_EQUIPO, ROLES_MAQUILADORA, ROLES_MODULO, es_maquiladora, maquiladora_id_de
 from schemas.auth import RegistroPendienteResponse
@@ -82,10 +85,9 @@ def descargar(
 
     meta = fila.get("metadata") or {}
     tamano = int(fila.get("length", 0))
-    nombre = (meta.get("nombre_original") or "archivo").replace('"', "")
     cabeceras = {
         "Accept-Ranges": "bytes",
-        "Content-Disposition": f'inline; filename="{nombre}"',
+        "Content-Disposition": gridfs_archivos.disposicion(meta.get("nombre_original") or "archivo"),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
     }
@@ -152,6 +154,33 @@ def enviar_a_verificacion(mongo: Database = Depends(get_mongo), db: Session = De
     return servicio.enviar_a_verificacion(mongo, db, usuario)
 
 
+@router.get("/mi-maquiladora/productos")
+def mis_productos(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_maquiladora)):
+    return marca_blanca.mis_productos(mongo, usuario)
+
+
+@router.post("/mi-maquiladora/productos", status_code=status.HTTP_201_CREATED)
+def crear_producto(datos: ProductoEntrada, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_maquiladora)):
+    return marca_blanca.crear(mongo, usuario, datos)
+
+
+@router.put("/mi-maquiladora/productos/{producto_id}")
+def actualizar_producto(producto_id: str, datos: ProductoEntrada, mongo: Database = Depends(get_mongo),
+                        usuario: dict = Depends(require_maquiladora)):
+    return marca_blanca.actualizar(mongo, usuario, producto_id, datos)
+
+
+@router.get("/mi-maquiladora/resenas")
+def mis_resenas(mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_maquiladora)):
+    return resenas.de_mi_maquiladora(mongo, usuario)
+
+
+@router.post("/resenas/{resena_id}/respuesta")
+def responder_resena(resena_id: str, datos: RespuestaResenaEntrada, mongo: Database = Depends(get_mongo),
+                     db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return resenas.responder(mongo, db, usuario, resena_id, datos.respuesta)
+
+
 # ==================== Directorio (clientes) ====================
 
 @router.get("/directorio")
@@ -170,6 +199,40 @@ def ver_directorio(
 @router.get("/directorio/{maquiladora_id}")
 def ver_maquiladora_publica(maquiladora_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
     return directorio.perfil(mongo, maquiladora_id)
+
+
+@router.get("/directorio/{maquiladora_id}/resenas")
+def resenas_publicas(maquiladora_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
+    return resenas.publicas(mongo, maquiladora_id)
+
+
+# ==================== Marca blanca (clientes) ====================
+
+@router.get("/catalogo")
+def ver_catalogo(
+    categoria: Optional[str] = Query(None, max_length=40),
+    q: Optional[str] = Query(None, max_length=80),
+    cantidad: Optional[int] = Query(None, ge=1, le=10_000_000),
+    maquiladora: Optional[str] = Query(None, max_length=40),
+    mongo: Database = Depends(get_mongo),
+    usuario: dict = Depends(require_modulo),
+):
+    return marca_blanca.catalogo(mongo, categoria=categoria, q=q, cantidad=cantidad, maquiladora_id=maquiladora)
+
+
+@router.get("/catalogo/{producto_id}")
+def ver_producto(producto_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_modulo)):
+    return marca_blanca.detalle(mongo, producto_id)
+
+
+@router.post("/fichas/vista-previa")
+def vista_previa_ficha(datos: FichaVistaPreviaEntrada, mongo: Database = Depends(get_mongo),
+                       usuario: dict = Depends(require_cliente)):
+    """El PDF de la ficha técnica guiada, para revisarlo antes de enviar la solicitud."""
+    contenido = fichas.generar_pdf(mongo, fichas.limpiar(datos.ficha.model_dump()), titulo=datos.titulo.strip(),
+                                   categoria=datos.categoria, cantidad=datos.cantidad)
+    return Response(content=contenido, media_type="application/pdf",
+                    headers={"Content-Disposition": 'inline; filename="ficha-tecnica.pdf"', "Cache-Control": "no-store"})
 
 
 # ==================== Solicitudes y propuestas ====================
@@ -255,6 +318,31 @@ def responder_muestra(pedido_id: str, datos: RespuestaMuestraEntrada, mongo: Dat
 def completar_etapa(pedido_id: str, clave: str, datos: EtapaEntrada, mongo: Database = Depends(get_mongo),
                     db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
     return pedidos.completar_etapa(mongo, db, usuario, pedido_id, clave, datos)
+
+
+@router.post("/pedidos/{pedido_id}/calidad")
+def enviar_reporte_calidad(pedido_id: str, datos: ReporteCalidadEntrada, mongo: Database = Depends(get_mongo),
+                           db: Session = Depends(get_db), usuario: dict = Depends(require_maquiladora)):
+    return pedidos.enviar_reporte_calidad(mongo, db, usuario, pedido_id, datos)
+
+
+@router.post("/pedidos/{pedido_id}/calidad/responder")
+def responder_calidad(pedido_id: str, datos: RespuestaCalidadEntrada, mongo: Database = Depends(get_mongo),
+                      db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    return pedidos.responder_calidad(mongo, db, usuario, pedido_id, datos)
+
+
+@router.post("/pedidos/{pedido_id}/resena", status_code=status.HTTP_201_CREATED)
+def calificar_pedido(pedido_id: str, datos: ResenaEntrada, mongo: Database = Depends(get_mongo),
+                     db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    return resenas.crear(mongo, db, usuario, pedido_id, datos)
+
+
+@router.post("/pedidos/{pedido_id}/repetir", status_code=status.HTTP_201_CREATED)
+def repetir_pedido(pedido_id: str, datos: RepetirEntrada, mongo: Database = Depends(get_mongo),
+                   db: Session = Depends(get_db), usuario: dict = Depends(require_cliente)):
+    """Crea una solicitud nueva a la misma maquila con el mismo brief."""
+    return solicitudes.repetir_pedido(mongo, db, usuario, pedido_id, datos)
 
 
 @router.post("/pedidos/{pedido_id}/hitos/{clave}/comprobante")
@@ -357,3 +445,46 @@ def suspender(maquiladora_id: str, datos: MotivoEntrada, mongo: Database = Depen
 def reactivar(maquiladora_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
               usuario: dict = Depends(require_admin)):
     return servicio.reactivar(mongo, db, usuario, maquiladora_id)
+
+
+@router.get("/admin/productos")
+def listar_productos(
+    q: Optional[str] = Query(None, max_length=80),
+    ocultos: Optional[bool] = Query(None),
+    mongo: Database = Depends(get_mongo),
+    usuario: dict = Depends(require_equipo),
+):
+    return marca_blanca.listar_para_equipo(mongo, q=q, ocultos=ocultos)
+
+
+@router.post("/admin/productos/{producto_id}/ocultar")
+def ocultar_producto(producto_id: str, datos: MotivoEntrada, mongo: Database = Depends(get_mongo),
+                     db: Session = Depends(get_db), usuario: dict = Depends(require_equipo)):
+    return marca_blanca.ocultar(mongo, db, usuario, producto_id, datos.motivo)
+
+
+@router.post("/admin/productos/{producto_id}/mostrar")
+def mostrar_producto(producto_id: str, mongo: Database = Depends(get_mongo), db: Session = Depends(get_db),
+                     usuario: dict = Depends(require_equipo)):
+    return marca_blanca.ocultar(mongo, db, usuario, producto_id, None)
+
+
+@router.get("/admin/resenas")
+def listar_resenas(
+    ocultas: Optional[bool] = Query(None),
+    maximo: Optional[int] = Query(None, ge=1, le=5),
+    mongo: Database = Depends(get_mongo),
+    usuario: dict = Depends(require_equipo),
+):
+    return resenas.listar_para_equipo(mongo, ocultas=ocultas, maximo=maximo)
+
+
+@router.post("/admin/resenas/{resena_id}/ocultar")
+def ocultar_resena(resena_id: str, datos: MotivoEntrada, mongo: Database = Depends(get_mongo),
+                   usuario: dict = Depends(require_equipo)):
+    return resenas.moderar(mongo, usuario, resena_id, datos.motivo)
+
+
+@router.post("/admin/resenas/{resena_id}/mostrar")
+def mostrar_resena(resena_id: str, mongo: Database = Depends(get_mongo), usuario: dict = Depends(require_equipo)):
+    return resenas.moderar(mongo, usuario, resena_id, None)

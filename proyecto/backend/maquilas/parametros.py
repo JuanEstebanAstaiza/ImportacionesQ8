@@ -89,6 +89,44 @@ POR_DEFECTO: Dict[str, Any] = {
         {"clave": "contra_entrega", "nombre": "Contra entrega"},
     ],
     "hitos_por_defecto": {"anticipo": 50, "contra_muestra": 0, "contra_entrega": 50},
+    # Fase 3. Marca blanca: qué puede personalizar el cliente en un producto del catálogo.
+    "personalizaciones": [
+        {"clave": "logo", "nombre": "Logo"},
+        {"clave": "etiqueta", "nombre": "Etiqueta"},
+        {"clave": "empaque", "nombre": "Empaque"},
+        {"clave": "color", "nombre": "Color"},
+        {"clave": "aroma_sabor", "nombre": "Aroma o sabor"},
+    ],
+    "productos_max": 30,
+    "fotos_producto_max": 6,
+    # Checklist de calidad que se le sugiere a la maquila al proponer (lo puede editar).
+    "criterios_calidad": {
+        "textil": [
+            {"criterio": "Medidas según la tabla de tallas", "tolerancia": "± 1 cm"},
+            {"criterio": "Costuras firmes, sin hilos sueltos ni saltos", "tolerancia": ""},
+            {"criterio": "Color igual a la muestra aprobada", "tolerancia": ""},
+            {"criterio": "Estampado o bordado centrado y sin desprendimientos", "tolerancia": "± 0,5 cm"},
+            {"criterio": "Etiquetas y empaque según lo acordado", "tolerancia": ""},
+        ],
+        "cosmetica": [
+            {"criterio": "Llenado al volumen declarado", "tolerancia": "± 2 %"},
+            {"criterio": "Olor, color y textura iguales a la muestra", "tolerancia": ""},
+            {"criterio": "Envase sin fugas, golpes ni rayones", "tolerancia": ""},
+            {"criterio": "Etiqueta con lote y fecha de vencimiento", "tolerancia": ""},
+        ],
+        "alimentos": [
+            {"criterio": "Peso neto según lo declarado", "tolerancia": "± 2 %"},
+            {"criterio": "Sabor, color y textura iguales a la muestra", "tolerancia": ""},
+            {"criterio": "Empaque sellado y sin daños", "tolerancia": ""},
+            {"criterio": "Etiqueta con lote, fecha de vencimiento y registro", "tolerancia": ""},
+        ],
+        "otros": [
+            {"criterio": "Medidas y acabados según la ficha técnica", "tolerancia": ""},
+            {"criterio": "Igual a la muestra aprobada", "tolerancia": ""},
+            {"criterio": "Sin defectos visibles", "tolerancia": ""},
+            {"criterio": "Empaque y etiquetado según lo acordado", "tolerancia": ""},
+        ],
+    },
 }
 
 
@@ -108,7 +146,8 @@ def publicos(db: Database) -> Dict[str, Any]:
     p = leer(db)
     return {k: p[k] for k in ("categorias", "procesos", "certificaciones", "fotos_galeria_max",
                               "certificados_max", "mb_max_foto", "mb_max_documento", "mb_max_video",
-                              "plantillas", "etapas", "hitos", "hitos_por_defecto")}
+                              "plantillas", "etapas", "hitos", "hitos_por_defecto", "personalizaciones",
+                              "productos_max", "fotos_producto_max", "criterios_calidad")}
 
 
 def plantilla(db: Database, categoria: str) -> list:

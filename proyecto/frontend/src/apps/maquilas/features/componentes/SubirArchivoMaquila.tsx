@@ -17,6 +17,7 @@ const ACEPTA: Record<TipoArchivoMaquila, string> = {
   evidencia: "image/jpeg,image/png,image/webp",
   comprobante: "application/pdf,image/jpeg,image/png",
   adjunto: "application/pdf,image/jpeg,image/png",
+  producto: "image/jpeg,image/png,image/webp",
 };
 
 /**

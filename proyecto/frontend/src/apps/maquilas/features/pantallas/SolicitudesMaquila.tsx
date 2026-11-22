@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Inbox, Loader2, Lock, Package, Plus, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Inbox, Loader2, Lock, Package, Plus, Repeat, ShieldCheck, Tag, Trash2, XCircle } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
 
@@ -11,7 +11,7 @@ import { useInvalidarMaquilas, useParametrosMaquilas, useRecibidas, useSolicitud
 import { ChatHilo } from "@apps/maquilas/features/componentes/ChatHilo";
 import { MotivoModal } from "@apps/maquilas/features/componentes/MotivoModal";
 import { BriefSolicitud, EstadoSolicitudChip } from "@apps/maquilas/features/pantallas/SolicitudesCliente";
-import type { Propuesta, Solicitud } from "@apps/maquilas/features/tipos";
+import type { CriterioCalidad, Propuesta, Solicitud } from "@apps/maquilas/features/tipos";
 
 type Borrador = {
   tramos: { cantidad_min: string; precio_unitario: string }[];
@@ -21,23 +21,33 @@ type Borrador = {
   hitos: Record<string, string>;
   condiciones: string;
   validez_dias: string;
+  criterios: CriterioCalidad[];
 };
 
-function borradorDe(s: Solicitud, p: Propuesta | null | undefined, porDefecto: Record<string, number>): Borrador {
-  if (p) {
+/** Arranca de la propuesta ya enviada, de la del pedido que se repite o del producto de catálogo. */
+function borradorDe(s: Solicitud, p: Propuesta | null | undefined, porDefecto: Record<string, number>, sugeridos: CriterioCalidad[]): Borrador {
+  const base = p ?? s.propuesta_anterior;
+  const hitosPorDefecto = Object.fromEntries(Object.entries(porDefecto).map(([k, v]) => [k, String(v)]));
+  if (base) {
     const hitos: Record<string, string> = {};
-    p.hitos.forEach((h) => { hitos[h.clave] = String(h.porcentaje); });
+    base.hitos.forEach((h) => { hitos[h.clave] = String(h.porcentaje); });
     return {
-      tramos: p.tramos.map((t) => ({ cantidad_min: String(t.cantidad_min), precio_unitario: String(t.precio_unitario) })),
-      costo_muestra: String(p.costo_muestra), dias_muestra: String(p.dias_muestra), dias_produccion: String(p.dias_produccion),
-      hitos, condiciones: p.condiciones, validez_dias: "15",
+      tramos: base.tramos.map((t) => ({ cantidad_min: String(t.cantidad_min), precio_unitario: String(t.precio_unitario) })),
+      costo_muestra: String(base.costo_muestra), dias_muestra: String(base.dias_muestra), dias_produccion: String(base.dias_produccion),
+      hitos, condiciones: base.condiciones, validez_dias: "15", criterios: base.criterios_calidad ?? [],
+    };
+  }
+  if (s.producto) {
+    return {
+      tramos: s.producto.tramos.map((t) => ({ cantidad_min: String(t.cantidad_min), precio_unitario: String(t.precio_unitario) })),
+      costo_muestra: String(s.producto.costo_muestra), dias_muestra: String(s.producto.dias_muestra ?? ""),
+      dias_produccion: String(s.producto.dias_produccion ?? ""), hitos: hitosPorDefecto, condiciones: "", validez_dias: "15", criterios: sugeridos,
     };
   }
   return {
     tramos: [{ cantidad_min: String(s.cantidad), precio_unitario: "" }],
     costo_muestra: "0", dias_muestra: "", dias_produccion: "",
-    hitos: Object.fromEntries(Object.entries(porDefecto).map(([k, v]) => [k, String(v)])),
-    condiciones: "", validez_dias: "15",
+    hitos: hitosPorDefecto, condiciones: "", validez_dias: "15", criterios: sugeridos,
   };
 }
 
@@ -45,9 +55,11 @@ const n = (v: string) => Number.parseInt(v, 10) || 0;
 
 function FormularioPropuesta({ s, onGuardada }: { s: Solicitud; onGuardada: () => void }) {
   const { data: parametros } = useParametrosMaquilas();
-  const [b, setB] = useState<Borrador>(() => borradorDe(s, s.mi_propuesta, parametros?.hitos_por_defecto ?? { anticipo: 50, contra_entrega: 50 }));
+  const sugeridos = parametros?.criterios_calidad[s.categoria] ?? parametros?.criterios_calidad.otros ?? [];
+  const porDefecto = parametros?.hitos_por_defecto ?? { anticipo: 50, contra_entrega: 50 };
+  const [b, setB] = useState<Borrador>(() => borradorDe(s, s.mi_propuesta, porDefecto, sugeridos));
   const [guardando, setGuardando] = useState(false);
-  useEffect(() => { setB(borradorDe(s, s.mi_propuesta, parametros?.hitos_por_defecto ?? { anticipo: 50, contra_entrega: 50 })); },
+  useEffect(() => { setB(borradorDe(s, s.mi_propuesta, porDefecto, sugeridos)); },
     // Solo al cambiar de solicitud o al llegar los parámetros (no en cada refresco).
     [s.id, parametros?.hitos_por_defecto]);
 
@@ -62,6 +74,7 @@ function FormularioPropuesta({ s, onGuardada }: { s: Solicitud; onGuardada: () =
     !(n(b.dias_muestra) >= 1) && "¿En cuántos días tienes la muestra?",
     !(n(b.dias_produccion) >= 1) && "¿En cuántos días produces el lote?",
     sumaHitos !== 100 && `Los pagos suman ${sumaHitos} %; deben sumar 100 %`,
+    b.criterios.some((c) => c.criterio.trim().length < 3) && "Cada criterio de calidad necesita al menos 3 caracteres (o quítalo)",
   ].filter(Boolean) as string[];
   const editable = s.mi_propuesta?.estado !== "aceptada" && s.mi_propuesta?.estado !== "descartada";
 
@@ -73,6 +86,7 @@ function FormularioPropuesta({ s, onGuardada }: { s: Solicitud; onGuardada: () =
         tramos, costo_muestra: n(b.costo_muestra), dias_muestra: n(b.dias_muestra), dias_produccion: n(b.dias_produccion),
         hitos: Object.fromEntries(Object.entries(b.hitos).map(([k, v]) => [k, n(v)])),
         condiciones: b.condiciones.trim(), validez_dias: n(b.validez_dias) || 15,
+        criterios_calidad: b.criterios.map((c) => ({ criterio: c.criterio.trim(), tolerancia: c.tolerancia.trim() })),
       });
       toast.success(s.mi_propuesta ? "Actualizaste tu propuesta" : "Enviaste tu propuesta");
       onGuardada();
@@ -87,7 +101,11 @@ function FormularioPropuesta({ s, onGuardada }: { s: Solicitud; onGuardada: () =
     <Card padding="lg" className="space-y-5">
       <div>
         <h3 className="font-semibold">{s.mi_propuesta ? "Tu propuesta" : "Haz tu propuesta"}</h3>
-        <p className="text-sm text-muted-foreground">El cliente la compara lado a lado con las de otras maquilas.</p>
+        <p className="text-sm text-muted-foreground">
+          {s.propuesta_anterior && !s.mi_propuesta ? "Partimos de tu propuesta del pedido anterior: ajústala si algo cambió."
+            : s.producto && !s.mi_propuesta ? "Partimos de tu precio de catálogo: ajústalo a lo que pidió el cliente."
+            : "El cliente la compara lado a lado con las de otras maquilas."}
+        </p>
       </div>
       <fieldset className="space-y-2" disabled={!editable}>
         <legend className="text-sm font-medium">Precio por unidad según la cantidad</legend>
@@ -122,6 +140,28 @@ function FormularioPropuesta({ s, onGuardada }: { s: Solicitud; onGuardada: () =
               onChange={(e) => setB({ ...b, hitos: { ...b.hitos, [h.clave]: e.target.value } })} />
           ))}
         </div>
+      </fieldset>
+      <fieldset className="space-y-2" disabled={!editable}>
+        <legend className="flex items-center gap-1 text-sm font-medium"><ClipboardCheck className="h-4 w-4" aria-hidden="true" />Checklist de calidad</legend>
+        <p className="text-xs text-muted-foreground">Con esto inspeccionas el lote antes de empacar y el cliente aprueba el reporte. Sugerimos unos según la categoría.</p>
+        {b.criterios.map((c, i) => (
+          <div key={i} className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input label={i === 0 ? "Criterio" : undefined} aria-label="Criterio" value={c.criterio} maxLength={200}
+                onChange={(e) => setB({ ...b, criterios: b.criterios.map((x, j) => (j === i ? { ...x, criterio: e.target.value } : x)) })} />
+            </div>
+            <div className="w-32">
+              <Input label={i === 0 ? "Tolerancia" : undefined} aria-label="Tolerancia" value={c.tolerancia} maxLength={120} placeholder="Opcional"
+                onChange={(e) => setB({ ...b, criterios: b.criterios.map((x, j) => (j === i ? { ...x, tolerancia: e.target.value } : x)) })} />
+            </div>
+            <button type="button" aria-label="Quitar criterio" className="mb-2 text-muted-foreground hover:text-destructive"
+              onClick={() => setB({ ...b, criterios: b.criterios.filter((_, j) => j !== i) })}><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        {b.criterios.length < 15 && (
+          <Button variant="ghost" size="sm" icon={<Plus className="h-3.5 w-3.5" />}
+            onClick={() => setB({ ...b, criterios: [...b.criterios, { criterio: "", tolerancia: "" }] })}>Agregar criterio</Button>
+        )}
       </fieldset>
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="sm:col-span-2">
@@ -192,7 +232,8 @@ function DetalleRecibida({ id, onVolver, onVerPedido }: { id: string; onVolver: 
             <h2 className="text-xl font-semibold">{s.titulo}</h2>
             <EstadoSolicitudChip estado={s.estado} etiqueta={s.estado_etiqueta} />
           </div>
-          <p className="text-sm text-muted-foreground">{s.codigo} · {s.cliente.empresa || s.cliente.nombre} · {s.modalidad === "dirigida" ? "Te la enviaron a ti" : "Abierta a varias maquilas"}</p>
+          <p className="text-sm text-muted-foreground">{s.codigo} · {s.cliente.empresa || s.cliente.nombre} · {s.repite_de ? `Repite el pedido ${s.repite_de.codigo}`
+            : s.modalidad === "marca_blanca" ? "Producto de tu catálogo" : s.modalidad === "dirigida" ? "Te la enviaron a ti" : "Abierta a varias maquilas"}</p>
         </div>
         <div className="flex gap-2">
           {s.pedido_id && <Button icon={<Package className="h-4 w-4" />} onClick={() => onVerPedido(s.pedido_id!)}>Ver el pedido</Button>}
@@ -269,6 +310,8 @@ export function SolicitudesMaquila({ solicitudId, onAbrir, onVerPedido }: {
                   <p className={clsx("truncate", pendiente ? "font-semibold" : "font-medium")}>
                     {pendiente && <span className="mr-2 inline-block h-2 w-2 rounded-full bg-primary dark:bg-accent" aria-label="Por responder" />}
                     {s.titulo}
+                    {s.repite_de && <Repeat className="ml-2 inline h-3.5 w-3.5 text-muted-foreground" aria-label="Repetición" />}
+                    {s.modalidad === "marca_blanca" && <Tag className="ml-2 inline h-3.5 w-3.5 text-muted-foreground" aria-label="Marca blanca" />}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {s.codigo} · {s.categoria_nombre} · {unidades(s.cantidad)} · {s.ciudad_entrega}{s.fecha_objetivo ? ` · para ${fecha(s.fecha_objetivo)}` : ""}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Lock, Send, Users } from "lucide-react";
+import { FileText, Lock, Send, Users } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
 
@@ -10,7 +10,18 @@ import { unidades } from "@apps/maquilas/features/formato";
 import { useInvalidarMaquilas, useParametrosMaquilas, usePerfilPublico } from "@apps/maquilas/features/useMaquilas";
 import { ArchivosVista } from "@apps/maquilas/features/componentes/ArchivosVista";
 import { SubirArchivoMaquila } from "@apps/maquilas/features/componentes/SubirArchivoMaquila";
-import type { ArchivoMaquila } from "@apps/maquilas/features/tipos";
+import type { ArchivoMaquila, FichaGuiada } from "@apps/maquilas/features/tipos";
+
+const SECCIONES_FICHA: { clave: keyof FichaGuiada; etiqueta: string; ayuda: string }[] = [
+  { clave: "medidas", etiqueta: "Medidas y tallas", ayuda: "Tabla de medidas por talla o dimensiones del producto" },
+  { clave: "materiales", etiqueta: "Materiales", ayuda: "Tela, gramaje, composición, insumos" },
+  { clave: "colores", etiqueta: "Colores", ayuda: "Nombre y código Pantone de cada color" },
+  { clave: "acabados", etiqueta: "Acabados", ayuda: "Costuras, estampado, bordado, texturas" },
+  { clave: "empaque", etiqueta: "Empaque", ayuda: "Bolsa, caja, unidades por paquete" },
+  { clave: "etiquetado", etiqueta: "Etiquetado", ayuda: "Etiqueta de marca, de composición, código de barras" },
+  { clave: "notas", etiqueta: "Notas para la maquila", ayuda: "Lo que no puede faltar" },
+];
+const FICHA_VACIA: FichaGuiada = { medidas: "", materiales: "", colores: "", acabados: "", empaque: "", etiquetado: "", notas: "" };
 
 const manana = () => {
   const d = new Date();
@@ -41,6 +52,10 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
   const [referencias, setReferencias] = useState<ArchivoMaquila[]>([]);
   const [ficha, setFicha] = useState<ArchivoMaquila | null>(null);
   const [confidencial, setConfidencial] = useState(false);
+  const [conFicha, setConFicha] = useState(false);
+  const [fichaGuiada, setFichaGuiada] = useState<FichaGuiada>(FICHA_VACIA);
+  const [generando, setGenerando] = useState(false);
+  const fichaLlena = conFicha && Object.values(fichaGuiada).some((v) => v.trim());
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [enviando, setEnviando] = useState(false);
 
@@ -82,6 +97,7 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
         campos,
         referencias: referencias.map((r) => r.id),
         ficha_tecnica: ficha?.id ?? null,
+        ficha_guiada: fichaLlena ? fichaGuiada : null,
         confidencial,
       });
       await invalidar();
@@ -91,6 +107,29 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
       toast.error(mensajeDeError(e));
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function verFicha() {
+    setGenerando(true);
+    try {
+      const pdf = await maquilasService.vistaPreviaFicha({
+        titulo: titulo.trim() || "Mi producto", categoria: categoria || "otros",
+        cantidad: Number.parseInt(cantidad, 10) || undefined, ficha: fichaGuiada,
+      });
+      // Se descarga: abrir un blob en otra pestaña depende del bloqueador de ventanas.
+      const url = URL.createObjectURL(pdf);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = `Ficha técnica - ${titulo.trim() || "mi producto"}.pdf`;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      toast.error(mensajeDeError(e));
+    } finally {
+      setGenerando(false);
     }
   }
 
@@ -160,6 +199,30 @@ export function NuevaSolicitud({ maquiladoraId, onCreada, onIrDirectorio }: {
         </div>
         <ArchivosVista archivos={[...referencias, ...(ficha ? [ficha] : [])]}
           onQuitar={(id) => (ficha?.id === id ? setFicha(null) : setReferencias((r) => r.filter((x) => x.id !== id)))} />
+        <div className="rounded-xl border border-border p-3">
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" checked={conFicha} onChange={(e) => setConFicha(e.target.checked)} className="mt-1" />
+            <span>
+              <span className="flex items-center gap-1 font-medium"><FileText className="h-4 w-4" aria-hidden="true" />¿No tienes ficha técnica? Ármala aquí</span>
+              <span className="block text-muted-foreground">Llena lo que sepas por secciones y generamos el PDF. Es la referencia para la muestra y la inspección de calidad.</span>
+            </span>
+          </label>
+          {conFicha && (
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                {SECCIONES_FICHA.map((sec) => (
+                  <Textarea key={sec.clave} label={sec.etiqueta} hint={sec.ayuda} rows={2} maxLength={1500} value={fichaGuiada[sec.clave]}
+                    onChange={(e) => setFichaGuiada((f) => ({ ...f, [sec.clave]: e.target.value }))} />
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">{ficha ? "Como también subiste un PDF, la maquila recibe ese PDF y estas secciones." : "Al enviar la solicitud adjuntamos el PDF generado."}</p>
+                <Button size="sm" variant="secondary" icon={<FileText className="h-3.5 w-3.5" />} loading={generando} disabled={!fichaLlena}
+                  onClick={() => void verFicha()}>Descargar el PDF</Button>
+              </div>
+            </div>
+          )}
+        </div>
         <label className="flex items-start gap-3 rounded-xl border border-border p-3 text-sm">
           <input type="checkbox" checked={confidencial} onChange={(e) => setConfidencial(e.target.checked)} className="mt-1" />
           <span>

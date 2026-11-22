@@ -1,9 +1,10 @@
 import { apiRequest, getStoredToken, resolveApiUrl } from "@/services/api-client";
 import type { RegisterResponse } from "@/types/auth";
 import type {
-  ArchivoMaquila, BucketMaquilas, DocumentosEntrada, EmpresaEntrada, FabricacionEntrada, ListadoMaquiladoras,
-  Maquiladora, MensajeHilo, ParametrosMaquilas, Pedido, PedidoResumen, PerfilEntrada, PropuestaEntrada,
-  RegistroMaquilaEntrada, RepresentanteEntrada, Solicitud, SolicitudEntrada, SolicitudResumen, TipoArchivoMaquila,
+  ArchivoMaquila, BucketMaquilas, DocumentosEntrada, EmpresaEntrada, FabricacionEntrada, FichaGuiada, ListadoMaquiladoras,
+  Maquiladora, MensajeHilo, MetricasMaquila, ParametrosMaquilas, Pedido, PedidoResumen, PerfilEntrada, Producto, ProductoEntrada,
+  PropuestaEntrada, RegistroMaquilaEntrada, RepresentanteEntrada, Resena, ResenaEntrada, Solicitud, SolicitudEntrada,
+  SolicitudResumen, TipoArchivoMaquila,
 } from "@apps/maquilas/features/tipos";
 
 /**
@@ -11,7 +12,7 @@ import type {
  * base (MongoDB); la sesión es la misma de toda la suite.
  */
 
-function query(params: Record<string, string | number | undefined | null>): string {
+function query(params: Record<string, string | number | boolean | undefined | null>): string {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([clave, valor]) => {
     if (valor !== undefined && valor !== null && valor !== "") q.set(clave, String(valor));
@@ -23,7 +24,7 @@ function query(params: Record<string, string | number | undefined | null>): stri
 const BUCKET_POR_TIPO: Record<TipoArchivoMaquila, BucketMaquilas> = {
   foto: "medios", rut: "documentos", camara_comercio: "documentos", certificado: "documentos",
   referencia: "medios", ficha_tecnica: "documentos", muestra: "medios", evidencia: "medios",
-  comprobante: "documentos", adjunto: "documentos",
+  comprobante: "documentos", adjunto: "documentos", producto: "medios",
 };
 
 const id = (valor: string) => encodeURIComponent(valor);
@@ -51,6 +52,18 @@ function subirArchivo(tipo: TipoArchivoMaquila, archivo: File, alAvanzar?: (porc
     xhr.onerror = () => rechazar(new Error("No se pudo subir el archivo. Revisa tu conexión."));
     xhr.send(datos);
   });
+}
+
+/** PDF de la ficha guiada para revisarlo antes de enviar (se abre en otra pestaña). */
+async function vistaPreviaFicha(datos: { titulo: string; categoria: string; cantidad?: number; ficha: FichaGuiada }): Promise<Blob> {
+  const token = getStoredToken();
+  const respuesta = await fetch(resolveApiUrl("/maquilas/fichas/vista-previa"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(datos),
+  });
+  if (!respuesta.ok) throw new Error("No pudimos generar la ficha. Revisa que tenga al menos una sección llena.");
+  return respuesta.blob();
 }
 
 export const maquilasService = {
@@ -105,6 +118,28 @@ export const maquilasService = {
   cancelarPedido: (pedidoId: string, motivo: string) =>
     apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/cancelar`, { method: "POST", body: { motivo } }),
 
+  // Fase 3: marca blanca, ficha guiada, calidad, reseñas y repetir
+  vistaPreviaFicha,
+  catalogo: (filtros: { categoria?: string; q?: string; cantidad?: number; maquiladora?: string }) =>
+    apiRequest<Producto[]>(`/maquilas/catalogo${query(filtros)}`),
+  producto: (productoId: string) => apiRequest<Producto>(`/maquilas/catalogo/${id(productoId)}`),
+  misProductos: () => apiRequest<Producto[]>("/maquilas/mi-maquiladora/productos"),
+  crearProducto: (datos: ProductoEntrada) => apiRequest<Producto>("/maquilas/mi-maquiladora/productos", { method: "POST", body: datos }),
+  actualizarProducto: (productoId: string, datos: ProductoEntrada) =>
+    apiRequest<Producto>(`/maquilas/mi-maquiladora/productos/${id(productoId)}`, { method: "PUT", body: datos }),
+  enviarReporteCalidad: (pedidoId: string, datos: { unidades_inspeccionadas: number; resultados: { cumple: boolean; observacion: string }[]; fotos: string[]; nota: string }) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/calidad`, { method: "POST", body: datos }),
+  responderCalidad: (pedidoId: string, aprobado: boolean, comentario: string) =>
+    apiRequest<Pedido>(`/maquilas/pedidos/${id(pedidoId)}/calidad/responder`, { method: "POST", body: { aprobado, comentario } }),
+  calificar: (pedidoId: string, datos: ResenaEntrada) =>
+    apiRequest<Resena>(`/maquilas/pedidos/${id(pedidoId)}/resena`, { method: "POST", body: datos }),
+  responderResena: (resenaId: string, respuesta: string) =>
+    apiRequest<Resena>(`/maquilas/resenas/${id(resenaId)}/respuesta`, { method: "POST", body: { respuesta } }),
+  misResenas: () => apiRequest<{ metricas: MetricasMaquila; resenas: Resena[] }>("/maquilas/mi-maquiladora/resenas"),
+  resenasPublicas: (maquiladoraId: string) => apiRequest<Resena[]>(`/maquilas/directorio/${id(maquiladoraId)}/resenas`),
+  repetirPedido: (pedidoId: string, cantidad: number, fechaObjetivo?: string | null) =>
+    apiRequest<Solicitud>(`/maquilas/pedidos/${id(pedidoId)}/repetir`, { method: "POST", body: { cantidad, fecha_objetivo: fechaObjetivo || null } }),
+
   // Chat
   mensajes: (hilo: string) => apiRequest<MensajeHilo[]>(`/maquilas/hilos/${id(hilo)}/mensajes`),
   enviarMensaje: (hilo: string, contenido: string, archivoId?: string) =>
@@ -122,4 +157,12 @@ export const maquilasService = {
   suspender: (id: string, motivo: string) =>
     apiRequest<Maquiladora>(`/maquilas/admin/maquiladoras/${encodeURIComponent(id)}/suspender`, { method: "POST", body: { motivo } }),
   reactivar: (id: string) => apiRequest<Maquiladora>(`/maquilas/admin/maquiladoras/${encodeURIComponent(id)}/reactivar`, { method: "POST" }),
+  productosAdmin: (params: { q?: string; ocultos?: boolean }) => apiRequest<Producto[]>(`/maquilas/admin/productos${query(params)}`),
+  ocultarProducto: (productoId: string, motivo: string) =>
+    apiRequest<Producto>(`/maquilas/admin/productos/${id(productoId)}/ocultar`, { method: "POST", body: { motivo } }),
+  mostrarProducto: (productoId: string) => apiRequest<Producto>(`/maquilas/admin/productos/${id(productoId)}/mostrar`, { method: "POST" }),
+  resenasAdmin: (params: { ocultas?: boolean; maximo?: number }) => apiRequest<Resena[]>(`/maquilas/admin/resenas${query(params)}`),
+  ocultarResena: (resenaId: string, motivo: string) =>
+    apiRequest<Resena>(`/maquilas/admin/resenas/${id(resenaId)}/ocultar`, { method: "POST", body: { motivo } }),
+  mostrarResena: (resenaId: string) => apiRequest<Resena>(`/maquilas/admin/resenas/${id(resenaId)}/mostrar`, { method: "POST" }),
 };

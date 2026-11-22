@@ -6,6 +6,7 @@ import { ImagenArchivo } from "@shared/ui/files/ImagenArchivo";
 import { mensajeDeError } from "@apps/maquilas/features/errores";
 import { unidades } from "@apps/maquilas/features/formato";
 import { useDirectorio, useParametrosMaquilas } from "@apps/maquilas/features/useMaquilas";
+import { MetricasMaquila } from "@apps/maquilas/features/componentes/MetricasMaquila";
 
 /** Directorio de maquilas verificadas: el cliente filtra, compara y elige a quién pedirle. */
 export function DirectorioMaquilas({ onAbrir, onSolicitarAbierta }: { onAbrir: (id: string) => void; onSolicitarAbierta: () => void }) {
@@ -74,6 +75,7 @@ export function DirectorioMaquilas({ onAbrir, onSolicitarAbierta }: { onAbrir: (
                     <BadgeCheck className="h-5 w-5 flex-shrink-0 text-emerald-500" aria-label="Verificada por Zarpi" />
                   </div>
                   <p className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{m.ciudad}</p>
+                  <MetricasMaquila metricas={m.metricas} compacto />
                   <p className="line-clamp-2 text-sm text-muted-foreground">{m.descripcion}</p>
                   <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
                     {m.categorias.map((c) => <span key={c} className="rounded-full bg-muted px-2 py-0.5 text-[11px]">{nombres.get(c) ?? c}</span>)}

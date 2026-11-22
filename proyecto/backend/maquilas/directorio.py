@@ -33,7 +33,9 @@ def _filtro(categoria: Optional[str], proceso: Optional[str], ciudad: Optional[s
 
 def listar(db: Database, *, categoria: Optional[str] = None, proceso: Optional[str] = None,
            ciudad: Optional[str] = None, q: Optional[str] = None, cantidad: Optional[int] = None) -> List[Dict]:
-    filas = db.maquiladoras.find(_filtro(categoria, proceso, ciudad, q, cantidad)).sort("verificada_en", -1).limit(200)
+    # Primero las mejor calificadas; las que aún no tienen reseñas, por antigüedad de verificación.
+    filas = db.maquiladoras.find(_filtro(categoria, proceso, ciudad, q, cantidad)).sort(
+        [("metricas.calificacion", -1), ("verificada_en", -1)]).limit(200)
     return [a_maquiladora(doc, privado=False) for doc in filas]
 
 
@@ -49,7 +51,7 @@ def candidatas_para(db: Database, *, categoria: str, cantidad: int, ciudad: str,
 
     Verificadas, de esa categoría y con un pedido mínimo que quepa en la
     cantidad. Primero las de la misma ciudad, luego las que tienen capacidad
-    para el volumen y las que tienen más certificaciones.
+    para el volumen, las mejor calificadas y las que tienen más certificaciones.
     """
     cupo = cupo or int(parametros.leer(db)["cupo_abierta"])
     filas = list(db.maquiladoras.find(_filtro(categoria, None, None, None, cantidad)).limit(500))
@@ -58,7 +60,8 @@ def candidatas_para(db: Database, *, categoria: str, cantidad: int, ciudad: str,
     def puntaje(doc: Dict) -> tuple:
         misma_ciudad = (doc.get("ciudad") or "").strip().lower() == ciudad_n
         con_capacidad = not doc.get("capacidad_mensual") or doc["capacidad_mensual"] >= cantidad
-        return (misma_ciudad, con_capacidad, len(doc.get("certificaciones") or []), str(doc.get("verificada_en") or ""))
+        calificacion = (doc.get("metricas") or {}).get("calificacion") or 0
+        return (misma_ciudad, con_capacidad, calificacion, len(doc.get("certificaciones") or []), str(doc.get("verificada_en") or ""))
 
     filas.sort(key=puntaje, reverse=True)
     return filas[:cupo]

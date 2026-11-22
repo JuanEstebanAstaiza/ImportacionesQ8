@@ -4,7 +4,7 @@ export type EstadoMaquiladora = "registrada" | "en_revision" | "verificada" | "r
 export type BucketMaquilas = "medios" | "documentos";
 export type TipoArchivoMaquila =
   | "foto" | "rut" | "camara_comercio" | "certificado"
-  | "referencia" | "ficha_tecnica" | "muestra" | "evidencia" | "comprobante" | "adjunto";
+  | "referencia" | "ficha_tecnica" | "muestra" | "evidencia" | "comprobante" | "adjunto" | "producto";
 export type TipoDocumento = "CC" | "CE" | "PPT" | "Pasaporte" | "NIT" | "DNI";
 
 export interface ArchivoMaquila {
@@ -50,6 +50,7 @@ export interface Maquiladora {
   sitio_web: string | null;
   galeria: ArchivoMaquila[];
   verificada_en: string | null;
+  metricas: MetricasMaquila;
   // Solo para la maquiladora y el equipo de Zarpi.
   nit?: string;
   direccion?: string | null;
@@ -135,6 +136,10 @@ export interface ParametrosFabricacion {
   hitos: { clave: string; nombre: string }[];
   hitos_por_defecto: Record<string, number>;
   mb_max_video: number;
+  personalizaciones: { clave: string; nombre: string }[];
+  productos_max: number;
+  fotos_producto_max: number;
+  criterios_calidad: Record<string, CriterioCalidad[]>;
 }
 
 export type EstadoSolicitud = "abierta" | "con_propuestas" | "aceptada" | "cancelada";
@@ -162,6 +167,7 @@ export interface Propuesta {
   dias_produccion: number;
   hitos: HitoMonto[];
   condiciones: string;
+  criterios_calidad: CriterioCalidad[];
   valida_hasta: string | null;
   vencida: boolean;
   estado: "enviada" | "aceptada" | "descartada" | "retirada";
@@ -169,10 +175,12 @@ export interface Propuesta {
   hilo: string;
 }
 
+export type ModalidadSolicitud = "dirigida" | "abierta" | "marca_blanca";
+
 export interface Solicitud {
   id: string;
   codigo: string;
-  modalidad: "dirigida" | "abierta";
+  modalidad: ModalidadSolicitud;
   estado: EstadoSolicitud;
   estado_etiqueta: string;
   categoria: string;
@@ -191,19 +199,24 @@ export interface Solicitud {
   campos?: { clave: string; etiqueta: string; valor: string }[];
   referencias?: ArchivoMaquila[];
   ficha_tecnica?: ArchivoMaquila | null;
+  ficha_guiada?: { clave: string; etiqueta: string; valor: string }[];
+  producto: ProductoEnSolicitud | null;
+  personalizacion: { clave: string; nombre: string }[];
+  repite_de: { pedido_id: string; codigo: string } | null;
   // Vista del cliente
   destinos?: { maquiladora_id: string; nombre_comercial: string; estado: "pendiente" | "propuesta" | "rechazada"; motivo?: string | null; hilo: string }[];
   propuestas?: Propuesta[];
   // Vista de la maquiladora
   mi_destino?: { estado: "pendiente" | "propuesta" | "rechazada"; motivo?: string | null; acuerdo_pendiente: boolean; nda_aceptado_en: string | null };
   mi_propuesta?: Propuesta | null;
+  propuesta_anterior?: Propuesta | null;
   hilo?: string;
 }
 
 export interface SolicitudResumen {
   id: string;
   codigo: string;
-  modalidad: "dirigida" | "abierta";
+  modalidad: ModalidadSolicitud;
   estado: EstadoSolicitud;
   estado_etiqueta: string;
   categoria_nombre: string;
@@ -218,11 +231,15 @@ export interface SolicitudResumen {
   confidencial?: boolean;
   mi_destino?: Solicitud["mi_destino"];
   mi_propuesta_estado?: Propuesta["estado"] | null;
+  repite_de?: { pedido_id: string; codigo: string } | null;
 }
 
 export interface SolicitudEntrada {
-  modalidad: "dirigida" | "abierta";
+  modalidad: ModalidadSolicitud;
   maquiladora_id?: string;
+  producto_id?: string;
+  personalizacion?: string[];
+  ficha_guiada?: FichaGuiada | null;
   categoria: string;
   titulo: string;
   descripcion: string;
@@ -244,6 +261,7 @@ export interface PropuestaEntrada {
   hitos: Record<string, number>;
   condiciones: string;
   validez_dias: number;
+  criterios_calidad: CriterioCalidad[];
 }
 
 export type EstadoPedido = "muestra" | "produccion" | "despachado" | "entregado" | "cancelado";
@@ -275,13 +293,21 @@ export interface Pedido {
   etapa_siguiente: string | null;
   hitos: (HitoMonto & { estado: "pendiente" | "enviado" | "confirmado" | "rechazado"; motivo_rechazo: string | null; confirmado_en: string | null;
     comprobantes: { archivo: ArchivoMaquila; nota: string; subido_en: string | null }[] })[];
+  calidad: { criterios: CriterioCalidad[]; reportes: ReporteCalidad[]; etapa: boolean };
+  resena: Resena | null;
+  producto_mb_id: string | null;
   acciones: {
     enviar_muestra?: boolean;
     completar_etapa?: string | null;
+    enviar_reporte_calidad?: boolean;
     revisar_comprobantes?: string[];
+    responder_resena?: boolean;
     responder_muestra?: boolean;
+    responder_calidad?: boolean;
     subir_comprobante?: string[];
     marcar_recibido?: boolean;
+    resenar?: boolean;
+    repetir?: boolean;
     cancelar?: boolean;
   };
   bloqueo: string | null;
@@ -320,4 +346,117 @@ export interface MensajeHilo {
   remitente_id?: string | null;
   archivo: ArchivoMaquila | null;
   fecha: string | null;
+}
+
+// ── Fase 3: marca blanca, ficha guiada, calidad, reseñas ────────────────────
+
+export interface MetricasMaquila {
+  calificacion: number | null;
+  resenas: number;
+  pedidos_entregados: number;
+  /** % de pedidos entregados a tiempo. */
+  cumplimiento: number | null;
+  puntualidad: number | null;
+  calidad: number | null;
+  comunicacion: number | null;
+}
+
+export interface CriterioCalidad {
+  criterio: string;
+  tolerancia: string;
+}
+
+export interface ReporteCalidad {
+  ronda: number;
+  unidades_inspeccionadas: number;
+  resultados: (CriterioCalidad & { cumple: boolean; observacion: string })[];
+  fotos: ArchivoMaquila[];
+  nota: string;
+  estado: "enviado" | "aprobado" | "objetado";
+  comentario: string;
+  enviado_en: string | null;
+  respondido_en: string | null;
+}
+
+export interface FichaGuiada {
+  medidas: string;
+  materiales: string;
+  colores: string;
+  acabados: string;
+  empaque: string;
+  etiquetado: string;
+  notas: string;
+}
+
+export interface Producto {
+  id: string;
+  nombre: string;
+  categoria: string;
+  categoria_nombre: string;
+  descripcion: string;
+  fotos: ArchivoMaquila[];
+  tramos: Tramo[];
+  precio_desde: number | null;
+  pedido_minimo: number;
+  personalizable: { clave: string; nombre: string }[];
+  costo_muestra: number;
+  dias_muestra: number | null;
+  dias_produccion: number | null;
+  pedidos: number;
+  maquiladora: { id: string; nombre_comercial?: string; ciudad?: string; metricas?: MetricasMaquila | null };
+  actualizado_en: string | null;
+  // Solo la maquiladora y el equipo.
+  activo?: boolean;
+  oculto?: { motivo: string; en: string | null } | null;
+  visible?: boolean;
+}
+
+export interface ProductoEntrada {
+  nombre: string;
+  categoria: string;
+  descripcion: string;
+  fotos: string[];
+  tramos: Tramo[];
+  pedido_minimo: number;
+  personalizable: string[];
+  costo_muestra: number;
+  dias_muestra: number;
+  dias_produccion: number;
+  activo: boolean;
+}
+
+export interface ProductoEnSolicitud {
+  id: string;
+  nombre: string;
+  tramos: Tramo[];
+  pedido_minimo: number;
+  costo_muestra: number;
+  dias_muestra: number | null;
+  dias_produccion: number | null;
+  foto: ArchivoMaquila | null;
+}
+
+export interface Resena {
+  id: string;
+  pedido_id: string;
+  producto: string | null;
+  autor: string;
+  calificacion: number;
+  puntualidad: number;
+  calidad: number;
+  comunicacion: number;
+  comentario: string;
+  creado_en: string | null;
+  respuesta: { texto: string; en: string | null } | null;
+  // Maquiladora y equipo
+  oculta?: { motivo: string; en: string | null } | null;
+  maquiladora?: string | null;
+}
+
+export interface ResenaEntrada {
+  calificacion: number;
+  puntualidad: number;
+  calidad: number;
+  comunicacion: number;
+  comentario: string;
 }

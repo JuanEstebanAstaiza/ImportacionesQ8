@@ -1589,12 +1589,17 @@ export default function App() {
     "maq-perfil": ["maquiladora"],
     "maq-recibidas": ["maquiladora"],
     "maq-produccion": ["maquiladora"],
+    "maq-catalogo": ["maquiladora"],
+    "maq-resenas": ["maquiladora"],
     "maq-directorio": ["solicitante", "importadora", "asesor"],
     "maq-maquiladora": ["solicitante", "importadora", "asesor"],
     "maq-solicitar": ["solicitante", "importadora", "asesor"],
     "maq-solicitudes": ["solicitante", "importadora", "asesor"],
     "maq-pedidos": ["solicitante", "importadora", "asesor"],
+    "maq-marca-blanca": ["solicitante", "importadora", "asesor"],
+    "maq-calculadora": ["solicitante", "importadora", "asesor"],
     "maq-admin-verificacion": ["admin", "soporte"],
+    "maq-admin-moderacion": ["admin", "soporte"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];

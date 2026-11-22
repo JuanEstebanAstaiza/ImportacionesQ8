@@ -3,6 +3,8 @@
 Colecciones:
 - `maquiladoras`: la empresa, su expediente y su estado de verificación.
 - `solicitudes`, `propuestas`, `pedidos` y `mensajes`: el flujo de fabricación.
+- `productos_mb`: catálogo de marca blanca de cada maquiladora.
+- `resenas`: una por pedido entregado (alimenta `maquiladoras.metricas`).
 - `miembros`: qué usuarios (dueño y colaboradores) atienden cada maquiladora;
   `_id` es el id del usuario, así un usuario pertenece a una sola.
 - `configuracion`: parámetros del módulo que edita el admin.
@@ -61,3 +63,8 @@ def asegurar_indices(db: Optional[Database] = None) -> None:
     db.pedidos.create_index([("cuenta_cliente", ASCENDING), ("creado_en", DESCENDING)])
     db.pedidos.create_index([("maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])
     db.mensajes.create_index([("hilo", ASCENDING), ("fecha", ASCENDING)])
+    # Fase 3: marca blanca y reseñas.
+    db.productos_mb.create_index([("maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])
+    db.productos_mb.create_index([("activo", ASCENDING), ("categoria", ASCENDING), ("pedidos", DESCENDING)])
+    db.resenas.create_index([("pedido_id", ASCENDING)], unique=True, name="una_resena_por_pedido")
+    db.resenas.create_index([("maquiladora_id", ASCENDING), ("creado_en", DESCENDING)])

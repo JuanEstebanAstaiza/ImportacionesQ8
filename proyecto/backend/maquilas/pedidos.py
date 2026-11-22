@@ -4,9 +4,12 @@ Ciclo:
 - `muestra`: la maquiladora envía la muestra (si hay anticipo, después de que se
   confirme); el cliente la aprueba o pide ajustes, y cada ajuste es una ronda nueva.
 - `produccion`: con la muestra aprobada (y el pago contra muestra confirmado, si lo
-  hay), la maquiladora completa las etapas en orden, con nota y fotos. El despacho
-  exige confirmados todos los pagos menos el de contra entrega.
-- `despachado` → `entregado`: el cliente confirma que lo recibió.
+  hay), la maquiladora completa las etapas en orden, con nota y fotos. La etapa de
+  control de calidad se cierra con un reporte de inspección (contra el checklist
+  acordado en la propuesta) que el cliente aprueba u objeta. El despacho exige
+  confirmados todos los pagos menos el de contra entrega.
+- `despachado` → `entregado`: el cliente confirma que lo recibió; ahí puede calificar
+  a la maquila (`resenas.py`) y repetir el pedido.
 - `cancelado`: cualquiera de las partes, mientras el pedido está en la muestra.
 
 Pagos: Zarpi no recibe el dinero. Cada hito pasa por `pendiente` → `enviado` (el
@@ -22,9 +25,11 @@ from pymongo import ReturnDocument
 from pymongo.database import Database
 from sqlalchemy.orm import Session
 
-from maquilas import acceso, archivos, avisos, chat, parametros
+from maquilas import acceso, archivos, avisos, chat, parametros, resenas
 from maquilas.comun import ahora, codigo, error, iso, nuevo_id
-from maquilas.esquemas import ComprobanteEntrada, EtapaEntrada, MuestraEntrada, RespuestaMuestraEntrada
+from maquilas.esquemas import (
+    ComprobanteEntrada, EtapaEntrada, MuestraEntrada, ReporteCalidadEntrada, RespuestaCalidadEntrada, RespuestaMuestraEntrada,
+)
 from maquilas.identidad import es_maquiladora, maquiladora_id_de
 
 ETIQUETAS = {
@@ -35,6 +40,8 @@ ETIQUETAS = {
     "cancelado": "Cancelado",
 }
 ESTADOS_ACTIVOS = ("muestra", "produccion")
+# La etapa que se cierra con el reporte de calidad aprobado (si el admin la deja en las etapas).
+ETAPA_CALIDAD = "control_calidad"
 
 
 # ── Creación (al aceptar una propuesta) ─────────────────────────────────────
@@ -73,11 +80,15 @@ def crear(db: Database, sql: Session, solicitud: Dict, propuesta: Dict, usuario:
                     "nota": "", "fotos": []} for e in parametros.leer(db)["etapas"]],
         "hitos": [{**h, "estado": "pendiente", "comprobantes": [], "motivo_rechazo": None, "confirmado_en": None}
                   for h in montos_hitos(propuesta["hitos"], total, db)],
+        "calidad": {"criterios": propuesta.get("criterios_calidad") or [], "reportes": []},
+        "producto_mb_id": (solicitud.get("producto") or {}).get("id"),
         "creado_por": usuario["user_id"],
         "creado_en": momento,
         "actualizado_en": momento,
     }
     db.pedidos.insert_one(doc)
+    if doc["producto_mb_id"]:
+        db.productos_mb.update_one({"_id": doc["producto_mb_id"]}, {"$inc": {"pedidos": 1}})
     return doc
 
 
@@ -98,6 +109,15 @@ def _muestra_vigente(pedido: Dict) -> Optional[Dict]:
 
 def _siguiente_etapa(pedido: Dict) -> Optional[Dict]:
     return next((e for e in pedido["etapas"] if e["estado"] != "hecha"), None)
+
+
+def _reporte_vigente(pedido: Dict) -> Optional[Dict]:
+    return ((pedido.get("calidad") or {}).get("reportes") or [None])[-1]
+
+
+def _en_calidad(pedido: Dict) -> bool:
+    siguiente = _siguiente_etapa(pedido)
+    return pedido["estado"] == "produccion" and bool(siguiente) and siguiente["clave"] == ETAPA_CALIDAD
 
 
 def bloqueo_muestra(pedido: Dict) -> Optional[str]:
@@ -126,6 +146,19 @@ def bloqueo_etapa(pedido: Dict) -> Optional[str]:
     return None
 
 
+def bloqueo_calidad(pedido: Dict) -> Optional[str]:
+    """Por qué la maquila no puede subir el reporte de calidad ahora (None si puede)."""
+    if not _en_calidad(pedido):
+        return "El reporte de calidad se sube cuando el pedido llega a esa etapa"
+    motivo = bloqueo_etapa(pedido)
+    if motivo:
+        return motivo
+    vigente = _reporte_vigente(pedido)
+    if vigente and vigente["estado"] == "enviado":
+        return "El cliente todavía está revisando el reporte de calidad"
+    return None
+
+
 def aviso_para(pedido: Dict, lado: str) -> Optional[str]:
     """Qué está frenando el pedido, dicho a quien mira: qué le toca hacer o a quién espera."""
     def pago(clave: str) -> Optional[str]:
@@ -150,6 +183,15 @@ def aviso_para(pedido: Dict, lado: str) -> Optional[str]:
     if pedido["estado"] == "produccion":
         if pago("contra_muestra"):
             return pago("contra_muestra")
+        if _en_calidad(pedido):
+            vigente = _reporte_vigente(pedido)
+            if vigente and vigente["estado"] == "enviado":
+                return ("Revisa el reporte de calidad y apruébalo u objétalo." if lado == "cliente"
+                        else "El cliente está revisando el reporte de calidad.")
+            if lado == "cliente":
+                return "La maquila está inspeccionando el lote para enviarte el reporte de calidad."
+            return ("Corrige lo que objetó el cliente y sube un nuevo reporte de calidad." if vigente
+                    else "Inspecciona el lote y sube el reporte de calidad.")
         siguiente = _siguiente_etapa(pedido)
         if siguiente and siguiente["clave"] == "despacho":
             for h in pedido["hitos"]:
@@ -169,22 +211,31 @@ def a_pedido(db: Database, doc: Dict, usuario: dict) -> Dict:
     activo = doc["estado"] in ESTADOS_ACTIVOS
     retrasado = activo and doc.get("fecha_compromiso") and doc["fecha_compromiso"] < ahora()
     vigente = _muestra_vigente(doc)
+    reporte = _reporte_vigente(doc)
+    resena = resenas.de_pedido(db, doc["_id"])
     acciones: Dict[str, Any] = {}
     if lado == "maquiladora":
         acciones = {
             "enviar_muestra": bloqueo_muestra(doc) is None,
-            "completar_etapa": siguiente["clave"] if siguiente and doc["estado"] == "produccion" and bloqueo_etapa(doc) is None else None,
+            "completar_etapa": (siguiente["clave"] if siguiente and siguiente["clave"] != ETAPA_CALIDAD
+                                and doc["estado"] == "produccion" and bloqueo_etapa(doc) is None else None),
+            "enviar_reporte_calidad": bloqueo_calidad(doc) is None,
             "revisar_comprobantes": [h["clave"] for h in doc["hitos"] if h["estado"] == "enviado"],
+            "responder_resena": bool(resena) and not resena.get("respuesta"),
             "cancelar": doc["estado"] == "muestra",
         }
     elif lado == "cliente":
         acciones = {
             "responder_muestra": bool(vigente) and vigente["estado"] == "enviada" and doc["estado"] == "muestra",
+            "responder_calidad": _en_calidad(doc) and bool(reporte) and reporte["estado"] == "enviado",
             "subir_comprobante": [h["clave"] for h in doc["hitos"] if h["estado"] in ("pendiente", "rechazado")
                                   and doc["estado"] != "cancelado"],
             "marcar_recibido": doc["estado"] == "despachado",
+            "resenar": doc["estado"] == "entregado" and not resena,
+            "repetir": doc["estado"] == "entregado",
             "cancelar": doc["estado"] == "muestra",
         }
+    calidad = doc.get("calidad") or {"criterios": [], "reportes": []}
     pagado = sum(h["monto"] for h in doc["hitos"] if h["estado"] == "confirmado")
     return {
         "id": doc["_id"],
@@ -217,6 +268,14 @@ def a_pedido(db: Database, doc: Dict, usuario: dict) -> Dict:
         "hitos": [{**h, "comprobantes": [{**c, "archivo": archivos.con_url(c.get("archivo")), "subido_en": iso(c.get("subido_en"))}
                                          for c in h.get("comprobantes") or []],
                    "confirmado_en": iso(h.get("confirmado_en"))} for h in doc["hitos"]],
+        "calidad": {
+            "criterios": calidad.get("criterios") or [],
+            "reportes": [{**r, "fotos": [archivos.con_url(f) for f in r.get("fotos") or []], "enviado_en": iso(r.get("enviado_en")),
+                          "respondido_en": iso(r.get("respondido_en"))} for r in calidad.get("reportes") or []],
+            "etapa": any(e["clave"] == ETAPA_CALIDAD for e in doc["etapas"]),
+        },
+        "resena": resenas.a_resena(resena) if resena else None,
+        "producto_mb_id": doc.get("producto_mb_id"),
         "acciones": acciones,
         "bloqueo": aviso_para(doc, lado) if lado in ("cliente", "maquiladora") else None,
         "creado_en": iso(doc.get("creado_en")),
@@ -342,6 +401,8 @@ def completar_etapa(db: Database, sql: Session, usuario: dict, pedido_id: str, c
     siguiente = _siguiente_etapa(pedido)
     if not siguiente or siguiente["clave"] != clave:
         raise error(status.HTTP_409_CONFLICT, "Las etapas se completan en orden")
+    if clave == ETAPA_CALIDAD:
+        raise error(status.HTTP_409_CONFLICT, "Esta etapa se cierra cuando el cliente aprueba el reporte de calidad")
     try:
         fotos = archivos.ligar(db, ids=datos.fotos, tipo="evidencia", cuenta=f"maquiladora:{pedido['maquiladora_id']}",
                                contexto={"pedido_id": pedido_id})
@@ -361,6 +422,75 @@ def completar_etapa(db: Database, sql: Session, usuario: dict, pedido_id: str, c
                       tipo="maquila_despachado" if ultima else "maquila_etapa",
                       titulo="Tu pedido va en camino" if ultima else f"Avanzó tu pedido: {siguiente['nombre']}",
                       mensaje=f"{pedido['producto']} ({pedido['codigo']})", correo=ultima)
+    return a_pedido(db, actualizado, usuario)
+
+
+def enviar_reporte_calidad(db: Database, sql: Session, usuario: dict, pedido_id: str, datos: ReporteCalidadEntrada) -> Dict:
+    _solo("maquiladora", usuario)
+    pedido = _pedido(db, usuario, pedido_id, incluir_equipo=False)
+    motivo = bloqueo_calidad(pedido)
+    if motivo:
+        raise error(status.HTTP_409_CONFLICT, motivo)
+    criterios = (pedido.get("calidad") or {}).get("criterios") or []
+    if len(datos.resultados) != len(criterios):
+        raise error(status.HTTP_400_BAD_REQUEST, "Marca el resultado de cada criterio del checklist")
+    if datos.unidades_inspeccionadas > pedido["cantidad"]:
+        raise error(status.HTTP_400_BAD_REQUEST, "No puedes inspeccionar más unidades de las del pedido")
+    try:
+        fotos = archivos.ligar(db, ids=datos.fotos, tipo="evidencia", cuenta=f"maquiladora:{pedido['maquiladora_id']}",
+                               contexto={"pedido_id": pedido_id})
+    except archivos.ArchivoInvalido as exc:
+        raise error(status.HTTP_400_BAD_REQUEST, str(exc))
+    reportes = (pedido.get("calidad") or {}).get("reportes") or []
+    ronda = len(reportes) + 1
+    resultados = [{"criterio": c["criterio"], "tolerancia": c.get("tolerancia") or "", "cumple": r.cumple,
+                   "observacion": r.observacion.strip()} for c, r in zip(criterios, datos.resultados)]
+    reporte = {"ronda": ronda, "unidades_inspeccionadas": datos.unidades_inspeccionadas, "resultados": resultados,
+               "fotos": fotos, "nota": datos.nota.strip(), "estado": "enviado", "enviado_en": ahora(),
+               "comentario": "", "respondido_en": None}
+    filtro = {"estado": "produccion", "calidad.reportes": {"$size": ronda - 1}} if pedido.get("calidad") else {"estado": "produccion"}
+    cambios = {"$push": {"calidad.reportes": reporte}}
+    if not pedido.get("calidad"):  # pedidos de antes de la fase 3
+        cambios = {"$set": {"calidad": {"criterios": [], "reportes": [reporte]}}}
+    actualizado = _guardar(db, pedido_id, filtro, cambios)
+    no_cumplen = sum(1 for r in resultados if not r["cumple"])
+    chat.sistema(db, pedido["hilo"], f"La maquila envió el reporte de calidad (ronda {ronda}): "
+                 f"{datos.unidades_inspeccionadas} unidades inspeccionadas" + (f", {no_cumplen} criterio(s) sin cumplir." if no_cumplen else "."))
+    _avisar_otro_lado(db, sql, pedido, "cliente", tipo="maquila_calidad", titulo="Revisa el reporte de calidad",
+                      mensaje=f"{pedido['producto']}: apruébalo para que la maquila empaque y despache.", correo=True)
+    return a_pedido(db, actualizado, usuario)
+
+
+def responder_calidad(db: Database, sql: Session, usuario: dict, pedido_id: str, datos: RespuestaCalidadEntrada) -> Dict:
+    _solo("cliente", usuario)
+    pedido = _pedido(db, usuario, pedido_id, incluir_equipo=False)
+    reporte = _reporte_vigente(pedido)
+    if not _en_calidad(pedido) or not reporte or reporte["estado"] != "enviado":
+        raise error(status.HTTP_409_CONFLICT, "No hay un reporte de calidad esperando tu respuesta")
+    comentario = datos.comentario.strip()
+    if not datos.aprobado and len(comentario) < 5:
+        raise error(status.HTTP_400_BAD_REQUEST, "Cuéntale a la maquila qué no cumple")
+    i = len(pedido["calidad"]["reportes"]) - 1
+    cambios: Dict[str, Any] = {f"calidad.reportes.{i}.estado": "aprobado" if datos.aprobado else "objetado",
+                               f"calidad.reportes.{i}.comentario": comentario, f"calidad.reportes.{i}.respondido_en": ahora()}
+    if datos.aprobado:
+        indice = next(j for j, e in enumerate(pedido["etapas"]) if e["clave"] == ETAPA_CALIDAD)
+        cambios.update({f"etapas.{indice}.estado": "hecha", f"etapas.{indice}.completada_en": ahora(),
+                        f"etapas.{indice}.nota": f"Reporte de calidad aprobado (ronda {reporte['ronda']})",
+                        f"etapas.{indice}.fotos": reporte.get("fotos") or []})
+        if indice == len(pedido["etapas"]) - 1:
+            cambios["estado"] = "despachado"
+        else:
+            cambios[f"etapas.{indice + 1}.estado"] = "en_curso"
+    actualizado = _guardar(db, pedido_id, {"estado": "produccion", f"calidad.reportes.{i}.estado": "enviado"}, {"$set": cambios})
+    if datos.aprobado:
+        chat.sistema(db, pedido["hilo"], f"El cliente aprobó el reporte de calidad (ronda {reporte['ronda']}).")
+        _avisar_otro_lado(db, sql, pedido, "maquiladora", tipo="maquila_calidad_aprobada", titulo="Aprobaron el reporte de calidad",
+                          mensaje=f"{pedido['producto']}: sigue con el empaque y el despacho.", correo=True)
+    else:
+        chat.sistema(db, pedido["hilo"], f"El cliente objetó el reporte de calidad (ronda {reporte['ronda']}): {comentario}")
+        _avisar_otro_lado(db, sql, pedido, "maquiladora", tipo="maquila_calidad_objetada", titulo="El cliente objetó el reporte de calidad",
+                          mensaje=f"{pedido['producto']}: {comentario}", correo=True)
     return a_pedido(db, actualizado, usuario)
 
 
@@ -416,6 +546,7 @@ def marcar_recibido(db: Database, sql: Session, usuario: dict, pedido_id: str) -
     _solo("cliente", usuario)
     pedido = _pedido(db, usuario, pedido_id, incluir_equipo=False)
     actualizado = _guardar(db, pedido_id, {"estado": "despachado"}, {"$set": {"estado": "entregado", "entregado_en": ahora()}})
+    resenas.recalcular_metricas(db, pedido["maquiladora_id"])
     chat.sistema(db, pedido["hilo"], "El cliente confirmó que recibió el pedido.")
     _avisar_otro_lado(db, sql, pedido, "maquiladora", tipo="maquila_entregado", titulo="Entregaste un pedido",
                       mensaje=f"El cliente confirmó que recibió {pedido['producto']} ({pedido['codigo']}).")

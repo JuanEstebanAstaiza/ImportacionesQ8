@@ -7,7 +7,9 @@ cambia entre módulos: reconocer el formato por sus primeros bytes, interpretar
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Iterator, Optional, Tuple
+from urllib.parse import quote
 
 from gridfs import GridFSBucket
 from gridfs.errors import NoFile
@@ -18,6 +20,15 @@ MIME_POR_EXTENSION = {
 }
 
 TROZO = 1024 * 1024
+
+
+def disposicion(nombre: str, modo: str = "inline") -> str:
+    """`Content-Disposition` que aguanta tildes y eñes (RFC 6266): las cabeceras HTTP
+    van en latin-1, así que el nombre real viaja aparte en `filename*` (UTF-8) y
+    `filename` lleva una versión ASCII para clientes viejos."""
+    limpio = " ".join((nombre or "archivo").replace('"', "").replace("\\", "").split())
+    ascii_ = unicodedata.normalize("NFKD", limpio).encode("ascii", "ignore").decode("ascii") or "archivo"
+    return f"{modo}; filename=\"{ascii_}\"; filename*=UTF-8''{quote(limpio, safe='')}"
 
 
 def firma_valida(extension: str, cabecera: bytes) -> bool:

@@ -21,6 +21,13 @@ export const claves = {
   pedidos: ["maquilas", "pedidos"] as const,
   pedido: (id: string) => ["maquilas", "pedido", id] as const,
   mensajes: (hilo: string) => ["maquilas", "mensajes", hilo] as const,
+  catalogo: (filtros: object) => ["maquilas", "catalogo", filtros] as const,
+  producto: (id: string) => ["maquilas", "catalogo", "producto", id] as const,
+  misProductos: ["maquilas", "mis-productos"] as const,
+  misResenas: ["maquilas", "mis-resenas"] as const,
+  resenasPublicas: (id: string) => ["maquilas", "resenas", id] as const,
+  productosAdmin: (filtros: object) => ["maquilas", "admin", "productos", filtros] as const,
+  resenasAdmin: (filtros: object) => ["maquilas", "admin", "resenas", filtros] as const,
 };
 
 export function useParametrosMaquilas() {
@@ -80,4 +87,34 @@ export function usePedido(id: string | undefined) {
 export function useMensajes(hilo: string | undefined) {
   return useQuery({ queryKey: claves.mensajes(hilo ?? ""), queryFn: () => maquilasService.mensajes(hilo!), enabled: Boolean(hilo),
     refetchInterval: 10_000 });
+}
+
+// ── Fase 3 ──────────────────────────────────────────────────────────────────
+
+export function useCatalogo(filtros: { categoria?: string; q?: string; cantidad?: number; maquiladora?: string }, enabled = true) {
+  return useQuery({ queryKey: claves.catalogo(filtros), queryFn: () => maquilasService.catalogo(filtros), enabled });
+}
+
+export function useProducto(id: string | undefined) {
+  return useQuery({ queryKey: claves.producto(id ?? ""), queryFn: () => maquilasService.producto(id!), enabled: Boolean(id) });
+}
+
+export function useMisProductos() {
+  return useQuery({ queryKey: claves.misProductos, queryFn: maquilasService.misProductos });
+}
+
+export function useMisResenas() {
+  return useQuery({ queryKey: claves.misResenas, queryFn: maquilasService.misResenas });
+}
+
+export function useResenasPublicas(id: string | undefined) {
+  return useQuery({ queryKey: claves.resenasPublicas(id ?? ""), queryFn: () => maquilasService.resenasPublicas(id!), enabled: Boolean(id) });
+}
+
+export function useProductosAdmin(filtros: { q?: string; ocultos?: boolean }) {
+  return useQuery({ queryKey: claves.productosAdmin(filtros), queryFn: () => maquilasService.productosAdmin(filtros) });
+}
+
+export function useResenasAdmin(filtros: { ocultas?: boolean; maximo?: number }) {
+  return useQuery({ queryKey: claves.resenasAdmin(filtros), queryFn: () => maquilasService.resenasAdmin(filtros) });
 }

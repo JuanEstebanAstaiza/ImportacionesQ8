@@ -7,7 +7,8 @@ suelto que nadie adjunta en 24 h se borra (`limpiar_huerfanos`).
 Quién ve qué:
 - El equipo de Zarpi, todo.
 - La cuenta dueña, lo suyo.
-- La galería de trabajos de una maquiladora verificada es pública (vitrina).
+- La galería de trabajos y las fotos de los productos de marca blanca de una
+  maquiladora verificada son públicas (vitrina).
 - RUT, cámara de comercio y certificados: solo la maquiladora y el equipo.
 - Lo de una solicitud (referencias, ficha técnica): el cliente y las maquiladoras a las que
   llegó (si es confidencial, solo las que aceptaron el acuerdo).
@@ -48,10 +49,14 @@ TIPOS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "comprobante": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
     # Chat
     "adjunto": (mongo.BUCKET_DOCUMENTOS, _DOCUMENTOS),
+    # Catálogo de marca blanca
+    "producto": (mongo.BUCKET_MEDIOS, _IMAGENES),
 }
 TIPOS_EXPEDIENTE = ("rut", "camara_comercio", "certificado", "foto")
 # Qué sube cada lado.
-TIPOS_MAQUILADORA = TIPOS_EXPEDIENTE + ("muestra", "evidencia", "adjunto")
+TIPOS_MAQUILADORA = TIPOS_EXPEDIENTE + ("muestra", "evidencia", "adjunto", "producto")
+# Vitrina: públicos si la maquiladora está verificada.
+TIPOS_VITRINA = ("foto", "producto")
 TIPOS_CLIENTE = ("referencia", "ficha_tecnica", "comprobante", "adjunto")
 
 HORAS_ARCHIVO_SUELTO = 24
@@ -121,6 +126,26 @@ def subir(db: Database, *, tipo: str, nombre_original: str, contenido: BinaryIO,
         flujo.abort()
         raise
     return a_dict(nombre_bucket, flujo._id, metadata, tamano)
+
+
+def guardar_generado(db: Database, *, tipo: str, nombre: str, contenido: bytes, usuario: dict, cuenta: str,
+                     contexto: Dict) -> Dict:
+    """Guarda un archivo que genera el sistema (p. ej. el PDF de la ficha técnica), ya ligado."""
+    nombre_bucket = TIPOS[tipo][0]
+    extension = nombre.rsplit(".", 1)[-1].lower()
+    metadata = {
+        "cuenta": cuenta,
+        "subido_por": usuario["user_id"],
+        "tipo": tipo,
+        "nombre_original": nombre[:200],
+        "content_type": MIME_POR_EXTENSION[extension],
+        "ligado": True,
+        "contexto": contexto,
+        "generado": True,
+        "subido_en": datetime.utcnow(),
+    }
+    archivo_id = mongo.bucket(db, nombre_bucket).upload_from_stream(nombre[:200], contenido, metadata=metadata)
+    return ref(nombre_bucket, {"_id": archivo_id, "metadata": metadata, "length": len(contenido)})
 
 
 def url_de(nombre_bucket: str, archivo_id) -> str:
@@ -232,8 +257,8 @@ def puede_ver(db: Database, fila: Dict, usuario: Optional[dict]) -> bool:
                 return True
         except Exception:  # noqa: BLE001 - una maquiladora sin vínculo simplemente no es dueña
             pass
-    # La galería de una maquiladora verificada es su vitrina pública.
-    if meta.get("tipo") == "foto" and meta.get("ligado") and str(meta.get("cuenta", "")).startswith("maquiladora:"):
+    # La galería y el catálogo de una maquiladora verificada son su vitrina pública.
+    if meta.get("tipo") in TIPOS_VITRINA and meta.get("ligado") and str(meta.get("cuenta", "")).startswith("maquiladora:"):
         maquiladora_id = meta["cuenta"].split(":", 1)[1]
         return db.maquiladoras.count_documents({"_id": maquiladora_id, "estado": "verificada"}, limit=1) > 0
     contexto = meta.get("contexto") or {}

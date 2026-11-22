@@ -1,10 +1,13 @@
-import { BadgeCheck, Loader2, MapPin, Send } from "lucide-react";
+import { BadgeCheck, Loader2, MapPin, Send, Star } from "lucide-react";
 
 import { Button, Card } from "@shared/ui/design-system";
 import { mensajeDeError } from "@apps/maquilas/features/errores";
 import { fecha, unidades } from "@apps/maquilas/features/formato";
-import { useParametrosMaquilas, usePerfilPublico } from "@apps/maquilas/features/useMaquilas";
+import { useCatalogo, useParametrosMaquilas, usePerfilPublico, useResenasPublicas } from "@apps/maquilas/features/useMaquilas";
 import { ArchivosVista } from "@apps/maquilas/features/componentes/ArchivosVista";
+import { MetricasMaquila } from "@apps/maquilas/features/componentes/MetricasMaquila";
+import { TarjetaProducto } from "@apps/maquilas/features/pantallas/MarcaBlanca";
+import { TarjetaResena } from "@apps/maquilas/features/pantallas/ResenasMaquila";
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
@@ -16,9 +19,13 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
 }
 
 /** Perfil de una maquila verificada, como lo ve un cliente. */
-export function PerfilMaquilaPublico({ maquiladoraId, onSolicitar }: { maquiladoraId: string; onSolicitar: (id: string) => void }) {
+export function PerfilMaquilaPublico({ maquiladoraId, onSolicitar, onVerProducto }: {
+  maquiladoraId: string; onSolicitar: (id: string) => void; onVerProducto?: (productoId: string) => void;
+}) {
   const { data: m, isLoading, error } = usePerfilPublico(maquiladoraId);
   const { data: parametros } = useParametrosMaquilas();
+  const { data: productos } = useCatalogo({ maquiladora: maquiladoraId });
+  const { data: resenas } = useResenasPublicas(maquiladoraId);
   if (isLoading) return <div className="flex items-center justify-center py-16 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cargando…</div>;
   if (error || !m) return <Card padding="lg"><p className="text-sm text-destructive">{mensajeDeError(error, "Esa maquila no está disponible.")}</p></Card>;
   const nombres = new Map((parametros?.categorias ?? []).map((c) => [c.clave, c.nombre]));
@@ -34,6 +41,7 @@ export function PerfilMaquilaPublico({ maquiladoraId, onSolicitar }: { maquilado
             </span>
           </div>
           <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-4 w-4" />{m.ciudad} · verificada desde {fecha(m.verificada_en)}</p>
+          <div className="mt-2"><MetricasMaquila metricas={m.metricas} /></div>
           <p className="mt-3 max-w-3xl whitespace-pre-line text-sm">{m.descripcion}</p>
         </div>
         <Button icon={<Send className="h-4 w-4" />} onClick={() => onSolicitar(m.id)}>Pedirle una cotización</Button>
@@ -63,12 +71,30 @@ export function PerfilMaquilaPublico({ maquiladoraId, onSolicitar }: { maquilado
         )}
       </Card>
 
+      {!!productos?.length && onVerProducto && (
+        <Card padding="lg" className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold">Listos para tu marca</h3>
+            <p className="text-xs text-muted-foreground">Productos que ya fabrica: los pides con tu logo y empiezas con poco volumen.</p>
+          </div>
+          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {productos.map((p) => <li key={p.id}><TarjetaProducto p={p} onAbrir={onVerProducto} /></li>)}
+          </ul>
+        </Card>
+      )}
+
       {m.galeria.length > 0 && (
         <Card padding="lg" className="space-y-3">
           <h3 className="text-sm font-semibold">Trabajos y planta</h3>
           <ArchivosVista archivos={m.galeria} />
         </Card>
       )}
+
+      <Card padding="lg" className="space-y-3">
+        <h3 className="flex items-center gap-1 text-sm font-semibold"><Star className="h-4 w-4 text-amber-400" aria-hidden="true" />Lo que dicen sus clientes</h3>
+        {!resenas?.length ? <p className="text-sm text-muted-foreground">Todavía no tiene reseñas en Zarpi.</p>
+          : <div className="space-y-3">{resenas.map((r) => <TarjetaResena key={r.id} r={r} />)}</div>}
+      </Card>
     </div>
   );
 }

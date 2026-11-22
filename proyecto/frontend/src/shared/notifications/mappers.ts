@@ -28,6 +28,8 @@ function destinoMaquilas(tipo: string, data: Record<string, unknown>): Pick<AppN
     return { destino: "maq-recibidas", destinoId: solicitudId };
   }
   if (tipo === "maquila_propuesta" || tipo === "maquila_solicitud_rechazada") return { destino: "maq-solicitudes", destinoId: solicitudId };
+  if (tipo === "maquila_resena") return { destino: "maq-resenas" };
+  if (tipo === "maquila_producto_oculto") return { destino: "maq-catalogo" };
   // Verificación: la maquila va a su perfil.
   return { destino: "maq-perfil" };
 }

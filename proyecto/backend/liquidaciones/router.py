@@ -19,6 +19,7 @@ from liquidaciones.esquemas import (
     MotivoEntrada, ParametrosEntrada, RechazoEntrada, SuspensionEntrada,
 )
 from liquidaciones.identidad import ROLES_CLIENTE, ROLES_EMPRESA, ROLES_EQUIPO, ROLES_MODULO, cuenta_de
+from utils import gridfs_archivos
 from utils.dependencies import get_db, get_optional_current_user, require_rol, require_rol_in
 from utils.limiter import RATE_LIMIT_PUBLIC_READ, limiter
 
@@ -66,10 +67,9 @@ def descargar(
 
     meta = fila.get("metadata") or {}
     tamano = int(fila.get("length", 0))
-    nombre = (meta.get("nombre_original") or "archivo").replace('"', "")
     cabeceras = {
         "Accept-Ranges": "bytes",
-        "Content-Disposition": f'inline; filename="{nombre}"',
+        "Content-Disposition": gridfs_archivos.disposicion(meta.get("nombre_original") or "archivo"),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
     }

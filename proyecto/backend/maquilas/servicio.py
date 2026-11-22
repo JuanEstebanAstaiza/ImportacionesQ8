@@ -103,6 +103,7 @@ def a_maquiladora(doc: Dict, *, privado: bool = True) -> Dict[str, Any]:
         "sitio_web": doc.get("sitio_web"),
         "galeria": [archivos.con_url(f) for f in doc.get("galeria") or []],
         "verificada_en": _iso(doc.get("verificada_en")),
+        "metricas": doc.get("metricas") or METRICAS_VACIAS,
     }
     if privado:
         documentos = doc.get("documentos") or {}
@@ -123,6 +124,11 @@ def a_maquiladora(doc: Dict, *, privado: bool = True) -> Dict[str, Any]:
             "pendientes": pendientes_para_verificar(doc),
         })
     return salida
+
+
+# Lo calcula `resenas.recalcular_metricas`; mientras no haya pedidos entregados, vacío.
+METRICAS_VACIAS = {"calificacion": None, "resenas": 0, "pedidos_entregados": 0, "cumplimiento": None,
+                   "puntualidad": None, "calidad": None, "comunicacion": None}
 
 
 def pendientes_para_verificar(doc: Dict) -> List[str]:

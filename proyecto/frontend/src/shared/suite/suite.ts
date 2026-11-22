@@ -1,6 +1,6 @@
 import {
   Bookmark, ClipboardCheck, ClipboardList, Factory, Inbox, LayoutGrid, MessagesSquare, Package, PackageSearch, CirclePlus,
-  Search, Settings2, Store, Tag, UserCheck, ChartColumn, ShieldCheck,
+  Search, Settings2, Store, Tag, UserCheck, ChartColumn, ShieldCheck, Star, Calculator, Flag,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -102,14 +102,18 @@ const MAQ_MAQUILADORA: NavItem[] = [
   { icon: LayoutGrid, label: "Panel", key: "maq-panel" },
   { icon: Inbox, label: "Solicitudes", key: "maq-recibidas" },
   { icon: Package, label: "Pedidos", key: "maq-produccion" },
+  { icon: Tag, label: "Marca blanca", key: "maq-catalogo" },
+  { icon: Star, label: "Reseñas", key: "maq-resenas" },
   { icon: Factory, label: "Mi maquila", key: "maq-perfil" },
 ];
 
 const MAQ_CLIENTE: NavItem[] = [
   { icon: Search, label: "Directorio", key: "maq-directorio" },
+  { icon: Tag, label: "Marca blanca", key: "maq-marca-blanca" },
   { icon: CirclePlus, label: "Nueva solicitud", key: "maq-solicitar" },
   { icon: ClipboardList, label: "Mis solicitudes", key: "maq-solicitudes" },
   { icon: Package, label: "Mis pedidos", key: "maq-pedidos" },
+  { icon: Calculator, label: "Calculadora", key: "maq-calculadora" },
 ];
 
 /**
@@ -129,8 +133,14 @@ export const MAQUILAS: ModuloSuite = {
   nav: { maquiladora: MAQ_MAQUILADORA, solicitante: MAQ_CLIENTE, importadora: MAQ_CLIENTE, asesor: MAQ_CLIENTE },
   admin: {
     grupo: { key: "maquilas", label: "Maquilas", icon: Factory },
-    items: [{ icon: ShieldCheck, label: "Verificación", key: "maq-admin-verificacion" }],
-    soporte: [{ icon: ShieldCheck, label: "Verificación de maquilas", key: "maq-admin-verificacion" }],
+    items: [
+      { icon: ShieldCheck, label: "Verificación", key: "maq-admin-verificacion" },
+      { icon: Flag, label: "Moderación", key: "maq-admin-moderacion" },
+    ],
+    soporte: [
+      { icon: ShieldCheck, label: "Verificación de maquilas", key: "maq-admin-verificacion" },
+      { icon: Flag, label: "Moderación de maquilas", key: "maq-admin-moderacion" },
+    ],
   },
 };
 

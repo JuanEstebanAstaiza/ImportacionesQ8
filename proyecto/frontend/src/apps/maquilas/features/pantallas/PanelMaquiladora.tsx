@@ -1,10 +1,11 @@
-import { ArrowRight, BadgeCheck, CheckCircle2, Circle, ClipboardList, Factory, Inbox, Loader2, Package } from "lucide-react";
+import { ArrowRight, BadgeCheck, CheckCircle2, Circle, ClipboardList, Factory, Inbox, Loader2, Package, Star, Tag } from "lucide-react";
 
 import type { Screen } from "@/app/rutas";
 import { Button, Card } from "@shared/ui/design-system";
 import { mensajeDeError } from "@apps/maquilas/features/errores";
 import { useMiMaquiladora, useParametrosMaquilas, usePedidos, useRecibidas } from "@apps/maquilas/features/useMaquilas";
 import { EstadoMaquiladoraBadge } from "@apps/maquilas/features/componentes/EstadoMaquiladora";
+import { MetricasMaquila } from "@apps/maquilas/features/componentes/MetricasMaquila";
 
 function Atajo({ Icono, titulo, valor, texto, onClick }: { Icono: typeof Inbox; titulo: string; valor: number; texto: string; onClick: () => void }) {
   return (
@@ -59,6 +60,7 @@ export function PanelMaquiladora({ onIrAPerfil, onIr }: { onIrAPerfil: () => voi
               {m.ciudad} · {m.categorias.map((c) => nombresCategorias.get(c) ?? c).join(", ") || "Sin categorías"}
               {m.pedido_minimo ? ` · pedido mínimo ${m.pedido_minimo.toLocaleString("es-CO")} und.` : ""}
             </p>
+            {verificada && <div className="mt-2"><MetricasMaquila metricas={m.metricas} compacto /></div>}
             {m.motivo && (
               <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
                 <span className="font-medium">Nota de Zarpi:</span> {m.motivo}
@@ -97,6 +99,14 @@ export function PanelMaquiladora({ onIrAPerfil, onIr }: { onIrAPerfil: () => voi
             <Atajo Icono={Package} titulo="Pedidos que esperan algo de ti" onClick={() => onIr("maq-produccion")}
               valor={(pedidos ?? []).filter((p) => p.pendiente_de_mi).length}
               texto={`${(pedidos ?? []).filter((p) => ["muestra", "produccion"].includes(p.estado)).length} activos`} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <button type="button" onClick={() => onIr("maq-catalogo")} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left text-sm transition hover:border-primary/40 dark:hover:border-accent/50">
+                <Tag className="h-5 w-5 text-primary dark:text-accent" aria-hidden="true" /><span><span className="block font-medium">Marca blanca</span><span className="text-xs text-muted-foreground">Publica productos listos</span></span>
+              </button>
+              <button type="button" onClick={() => onIr("maq-resenas")} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left text-sm transition hover:border-primary/40 dark:hover:border-accent/50">
+                <Star className="h-5 w-5 text-amber-400" aria-hidden="true" /><span><span className="block font-medium">Reseñas</span><span className="text-xs text-muted-foreground">{m.metricas?.resenas ?? 0} de tus clientes</span></span>
+              </button>
+            </div>
           </div>
         ) : (
           <Card padding="lg">
