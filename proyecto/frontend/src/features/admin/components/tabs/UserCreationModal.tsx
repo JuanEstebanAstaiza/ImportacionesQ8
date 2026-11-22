@@ -1,4 +1,5 @@
 import { CATEGORIAS_PRODUCTO } from "@/utils/categorias";
+import { useParametrosMaquilas } from "@apps/maquilas/features/useMaquilas";
 import { textoCategoria } from "@/features/admin/CategoriasCotizante";
 import type { CategoriaCotizante } from "@/services/admin.service";
 import {
@@ -13,6 +14,9 @@ type Props = {
 };
 
 export function UserCreationModal({ form, categorias, submitting, onChange, onClose, onSubmit }: Props) {
+  // Categorías y procesos de Zarpi Maquilas (solo se piden si se elige ese tipo de cuenta).
+  const { data: parametrosMaquilas } = useParametrosMaquilas();
+  const esEmpresa = form.rol === "importador" || form.rol === "maquiladora";
   return (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
     <div className="w-full max-w-2xl rounded-xl border border-border bg-white p-5 shadow-2xl">
@@ -38,6 +42,7 @@ export function UserCreationModal({ form, categorias, submitting, onChange, onCl
             >
               <option value="solicitante">Cotizante</option>
               <option value="importador">Empresa importadora (crea también su empresa)</option>
+              <option value="maquiladora">Maquila · Zarpi Maquilas (crea también su empresa)</option>
               <option value="soporte">Atención al cliente</option>
               <option value="designer">Diseño (portadas de Tendencias)</option>
               <option value="asesor">Asesor</option>
@@ -105,6 +110,47 @@ export function UserCreationModal({ form, categorias, submitting, onChange, onCl
           </fieldset>
         ) : null}
 
+        {form.rol === "maquiladora" ? (
+          <fieldset className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-2">
+            <legend className="px-1 text-xs font-semibold">Maquila</legend>
+            <input value={form.companyName} onChange={(event) => onChange({ companyName: event.target.value })} placeholder="Nombre comercial" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+            <input value={form.razonSocial} onChange={(event) => onChange({ razonSocial: event.target.value })} placeholder="Razón social" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+            <input value={form.nit} onChange={(event) => onChange({ nit: event.target.value })} placeholder="NIT" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+            <input value={form.ciudad} onChange={(event) => onChange({ ciudad: event.target.value })} placeholder="Ciudad" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+            <input value={form.pedidoMinimo} onChange={(event) => onChange({ pedidoMinimo: event.target.value })} placeholder="Pedido mínimo (unidades)" type="number" min={1} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+            <div className="md:col-span-2">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Qué fabrica</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(parametrosMaquilas?.categorias ?? []).map((categoria) => {
+                  const activa = form.categoriasMaquila.includes(categoria.clave);
+                  return (
+                    <button key={categoria.clave} type="button" aria-pressed={activa}
+                      onClick={() => onChange({ categoriasMaquila: activa ? form.categoriasMaquila.filter((c) => c !== categoria.clave) : [...form.categoriasMaquila, categoria.clave] })}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${activa ? "border-primary bg-primary/5 font-medium text-primary dark:text-accent" : "border-border"}`}>
+                      {categoria.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Procesos</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(parametrosMaquilas?.procesos ?? []).map((proceso) => {
+                  const activo = form.procesosMaquila.includes(proceso);
+                  return (
+                    <button key={proceso} type="button" aria-pressed={activo}
+                      onClick={() => onChange({ procesosMaquila: activo ? form.procesosMaquila.filter((p) => p !== proceso) : [...form.procesosMaquila, proceso] })}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${activo ? "border-primary bg-primary/5 font-medium text-primary dark:text-accent" : "border-border"}`}>
+                      {proceso}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </fieldset>
+        ) : null}
+
         {form.rol === "solicitante" && form.tipoPersona === "juridica" ? (
           <fieldset className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-2">
             <legend className="px-1 text-xs font-semibold">Empresa del cotizante</legend>
@@ -115,17 +161,17 @@ export function UserCreationModal({ form, categorias, submitting, onChange, onCl
 
         <fieldset className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-2">
           <legend className="px-1 text-xs font-semibold">
-            {form.rol === "importador" ? "Representante legal (cuenta dueña)" : form.rol === "solicitante" && form.tipoPersona === "juridica" ? "Contacto y acceso" : "Datos de la persona"}
+            {esEmpresa ? "Representante legal (cuenta dueña)" : form.rol === "solicitante" && form.tipoPersona === "juridica" ? "Contacto y acceso" : "Datos de la persona"}
           </legend>
           {!(form.rol === "solicitante" && form.tipoPersona === "juridica") ? (
             <>
               <input value={form.nombre} onChange={(event) => onChange({ nombre: event.target.value })} placeholder="Nombre" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-              {form.rol === "solicitante" || form.rol === "importador" ? (
+              {form.rol === "solicitante" || esEmpresa ? (
                 <input value={form.apellido} onChange={(event) => onChange({ apellido: event.target.value })} placeholder="Apellido" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
               ) : null}
             </>
           ) : null}
-          {(form.rol === "solicitante" && form.tipoPersona === "natural") || form.rol === "importador" ? (
+          {(form.rol === "solicitante" && form.tipoPersona === "natural") || esEmpresa ? (
             <div className="flex gap-2">
               <select
                 aria-label="Tipo de documento"
@@ -213,6 +259,8 @@ export function UserCreationModal({ form, categorias, submitting, onChange, onCl
             ? "El cotizante queda verificado: entra con este correo y contraseña sin código de verificación, aunque el registro público esté cerrado. Puede cambiar la contraseña en Mi perfil."
           : form.rol === "importador"
             ? "Se crea la empresa y su cuenta dueña (el representante legal). Logo, descripción y demás datos los completa la empresa en «Mi empresa»."
+          : form.rol === "maquiladora"
+            ? "Se crea la maquila y su cuenta dueña con el correo ya verificado. La maquila sube su RUT, cámara de comercio y fotos en «Mi maquila» y después la verificas en Maquilas › Verificación."
           : form.rol === "designer"
             ? "Diseño pone portada e imágenes con la identidad de Zarpi a lo aprobado en Tendencias y lo publica. Entra al canal del equipo; no ve soporte ni clientes."
             : "Atención al cliente atiende tickets e incidentes; no administra la plataforma."}

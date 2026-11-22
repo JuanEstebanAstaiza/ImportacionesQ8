@@ -1,4 +1,4 @@
-export type AppUserRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
+export type AppUserRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora";
 
 function normalizeRole(role: string): string {
   return role
@@ -36,6 +36,8 @@ export function mapBackendRoleToAppRole(role: string | null | undefined): AppUse
     || normalizedRole === "soporte"
     // Diseño: pone portadas e imágenes a Tendencias. Interno, sin administración.
     || normalizedRole === "designer"
+    // Maquiladora de Zarpi Maquilas (dueño o colaborador).
+    || normalizedRole === "maquiladora"
   ) {
     return normalizedRole;
   }

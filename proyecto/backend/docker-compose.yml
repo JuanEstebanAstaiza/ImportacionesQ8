@@ -72,6 +72,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_q8_dev_change_me}@redis:6379/0
       MONGO_URL: mongodb://${MONGO_ROOT_USER:-zarpi}:${MONGO_ROOT_PASSWORD:-mongo_q8_dev_change_me}@mongo:27017/?authSource=admin
       MONGO_DB: ${MONGO_DB:-zarpi_liquidaciones}
+      MONGO_DB_MAQUILAS: ${MONGO_DB_MAQUILAS:-zarpi_maquilas}
       APP_ENV: ${APP_ENV:-development}
       LOAD_TEST_AUTO_VERIFY: ${LOAD_TEST_AUTO_VERIFY:-false}
       # Capacidad objetivo: ~1000 usuarios concurrentes / ~100 ops simultáneas.
@@ -165,6 +166,7 @@ services:
       # los índices únicos parciales y find_one_and_update tal cual en producción.
       MONGO_URL: mongodb://${MONGO_ROOT_USER:-zarpi}:${MONGO_ROOT_PASSWORD:-mongo_q8_dev_change_me}@mongo:27017/?authSource=admin
       MONGO_DB: zarpi_liquidaciones_test
+      MONGO_DB_MAQUILAS: zarpi_maquilas_test
     volumes:
       - ./test_data:/app/test_data
     depends_on:

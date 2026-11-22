@@ -17,6 +17,7 @@ from schemas.cotizacion import (
 from schemas.credito import SolicitarRecreacionRequest, SolicitudRecreacionResponse
 from models.cotizacion import Cotizacion, EstadoCotizacion
 from models.usuario import Usuario
+from models.usuario import ROLES_PLATAFORMA
 from models.propuesta import Propuesta, EstadoPropuesta
 from models.importador import Importador
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
@@ -157,11 +158,15 @@ async def listar_cotizaciones(
             or (str(c.id) in asignadas and _empresa_puede_responder_abierta(empresa, c))
         ]
         return [_vista_para_empresa(c, importador_id_str) for c in cotizaciones]
-    else:
-        # Admin ve todas las cotizaciones
+    elif rol in ROLES_PLATAFORMA:
+        # El equipo de la plataforma (admin y soporte) ve todas las cotizaciones.
         cotizaciones = db.query(Cotizacion).order_by(
             Cotizacion.fecha_creacion.desc()
         ).limit(50).all()
+    else:
+        # Cualquier otro rol (diseño, maquiladora...) no tiene cotizaciones: antes
+        # caía en la rama del admin y veía las últimas 50 de todos los clientes.
+        cotizaciones = []
     
     return cotizaciones
 

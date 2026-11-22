@@ -42,7 +42,8 @@ export function AdminSoporteTab({ sectionRef, isAdmin, conversations, conversati
   // Supervisión de chats de toda la suite: cada producto guarda sus chats en su
   // propia base, así que el selector cambia de fuente sin cambiar la vista.
   const { config } = usePlatformConfig();
-  const productos = modulosActivos(config);
+  // Maquilas todavía no tiene chats propios (llegan con sus pedidos, en la fase 2).
+  const productos = modulosActivos(config).filter((m) => m.clave !== "maquilas");
   const [producto, setProducto] = useState<Producto>("importaciones");
   const [operacionLiquidaciones, setOperacionLiquidaciones] = useState<string | null>(null);
   return (

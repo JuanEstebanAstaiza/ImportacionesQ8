@@ -50,3 +50,5 @@ export const NAV_DISENO: NavItem[] = [
   { icon: FolderOpen, label: "Documentos", key: "documentos" },
 ];
 export const PANTALLAS_DESIGNER: Screen[] = ["diseno", "team-channel", "user-profile", "notifications", "documentos", "tendencias", "tendencia-detalle"];
+/** La maquiladora solo usa Zarpi Maquilas: sus pantallas y las de la cuenta (perfil, avisos, ayuda). */
+export const PANTALLAS_MAQUILADORA: Screen[] = ["maq-panel", "maq-perfil", "maq-landing", "user-profile", "notifications", "chats"];

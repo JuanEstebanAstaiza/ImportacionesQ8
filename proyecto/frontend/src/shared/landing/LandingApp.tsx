@@ -38,6 +38,8 @@ export type PropsLandingApp = {
   onCrearCuenta: () => void;
   onEntrar: () => void;
   onPolicy: (page: LegalPage) => void;
+  /** Botón secundario del hero, si lleva a otro lado (p. ej. «Registra tu maquila»). Sin él, hace lo mismo que el principal. */
+  onCtaSecundario?: () => void;
 };
 
 const SECCIONES = [
@@ -46,7 +48,7 @@ const SECCIONES = [
 ] as const;
 
 /** Landing pública genérica de una app de la suite; el acento llega por `contenido.acento`. */
-export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesion, onCrearCuenta, onEntrar, onPolicy }: PropsLandingApp) {
+export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesion, onCrearCuenta, onEntrar, onPolicy, onCtaSecundario }: PropsLandingApp) {
   const acentoTexto: CSSProperties = { color: c.acento };
   const acentoFondo: CSSProperties = { backgroundColor: c.acento };
   const cta = () => (autenticado ? onEntrar() : onCrearCuenta());
@@ -78,7 +80,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">{c.texto}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <BotonAcento grande acento={c.acento} onClick={cta}>{c.ctaPrimario} <ArrowRight className="h-4 w-4" /></BotonAcento>
-              <Button variant="secondary" size="lg" className="h-11 px-6" onClick={cta}>{c.ctaSecundario}</Button>
+              <Button variant="secondary" size="lg" className="h-11 px-6" onClick={onCtaSecundario ?? cta}>{c.ctaSecundario}</Button>
             </div>
             <ul className="mt-8 space-y-2.5 text-sm text-muted-foreground">
               {c.puntos.map(({ icono: Icono, texto }) => (

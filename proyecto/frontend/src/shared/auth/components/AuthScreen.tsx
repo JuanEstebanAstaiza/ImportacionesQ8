@@ -13,7 +13,7 @@ import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import type { LegalPage } from "@shared/legal/types";
 
 type AuthView = "login" | "forgot" | "otp";
-export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
+export type PortalRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora";
 
 interface AuthScreenProps {
   onLogin: (role: PortalRole) => void;

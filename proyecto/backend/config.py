@@ -218,6 +218,9 @@ MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "zarpi_liquidaciones")
 # Encendido por defecto: el admin lo apaga en Módulos.
 MODULO_LIQUIDACIONES_HABILITADO = os.getenv("MODULO_LIQUIDACIONES_HABILITADO", "true").lower() == "true"
+# Zarpi Maquilas: otra base de la misma instancia de Mongo (ver maquilas/db.py).
+MONGO_DB_MAQUILAS = os.getenv("MONGO_DB_MAQUILAS", "zarpi_maquilas")
+MODULO_MAQUILAS_HABILITADO = os.getenv("MODULO_MAQUILAS_HABILITADO", "true").lower() == "true"
 
 COTIZACION_ABIERTA_TTL = 259200  # 72h
 # Índice Redis (SET) de cotizaciones abiertas por importador — evita KEYS O(N)

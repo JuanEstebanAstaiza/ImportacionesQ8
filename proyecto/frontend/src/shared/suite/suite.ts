@@ -1,6 +1,6 @@
 import {
-  Bookmark, ClipboardCheck, LayoutGrid, MessagesSquare, PackageSearch, CirclePlus, Settings2, Store, Tag,
-  UserCheck, ChartColumn,
+  Bookmark, ClipboardCheck, Factory, LayoutGrid, MessagesSquare, PackageSearch, CirclePlus, Settings2, Store, Tag,
+  UserCheck, ChartColumn, ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -20,7 +20,7 @@ import type { UserRole } from "@/types/roles";
  * no repartir condicionales por App.tsx, el Sidebar y la navegación.
  */
 
-export type Producto = "importaciones" | "liquidaciones";
+export type Producto = "importaciones" | "liquidaciones" | "maquilas";
 
 export interface ModuloSuite {
   clave: Producto;
@@ -45,6 +45,7 @@ export interface ModuloSuite {
 }
 
 const esPantallaLiquidaciones = (screen: Screen) => screen.startsWith("liq-");
+const esPantallaMaquilas = (screen: Screen) => screen.startsWith("maq-");
 
 const LIQ_COMPRADOR: NavItem[] = [
   { icon: Tag, label: "Liquidaciones", key: "liq-catalogo" },
@@ -70,7 +71,7 @@ export const IMPORTACIONES: ModuloSuite = {
   descripcion: "Cotiza y compra importado con empresas verificadas",
   flag: null,
   roles: ["solicitante", "importadora", "asesor"],
-  esPantalla: (screen) => !esPantallaLiquidaciones(screen),
+  esPantalla: (screen) => !esPantallaLiquidaciones(screen) && !esPantallaMaquilas(screen),
   inicio: (rol) => (rol === "importadora" ? "imp-dashboard" : rol === "asesor" ? "adv-dashboard" : "dashboard"),
   nav: { solicitante: NAV_ITEMS, importadora: NAV_IMPORTADORA, asesor: NAV_ASESOR },
 };
@@ -97,7 +98,33 @@ export const LIQUIDACIONES: ModuloSuite = {
   },
 };
 
-export const MODULOS_SUITE: ModuloSuite[] = [IMPORTACIONES, LIQUIDACIONES];
+const MAQ_MAQUILADORA: NavItem[] = [
+  { icon: LayoutGrid, label: "Panel", key: "maq-panel" },
+  { icon: Factory, label: "Mi maquila", key: "maq-perfil" },
+];
+
+/**
+ * Zarpi Maquilas. Fase 1: la maquiladora (rol propio) se registra, completa su
+ * expediente y el equipo la verifica; el flujo de los clientes llega en la fase 2.
+ */
+export const MAQUILAS: ModuloSuite = {
+  clave: "maquilas",
+  nombre: "Maquilas",
+  descripcion: "Fabrica tu marca con maquilas verificadas",
+  tituloPestana: "Zarpi Maquilas | Fabrica tu marca con maquilas verificadas",
+  flag: "modulo_maquilas_habilitado",
+  roles: ["maquiladora"],
+  esPantalla: esPantallaMaquilas,
+  inicio: (rol) => (rol === "maquiladora" ? "maq-panel" : "maq-landing"),
+  nav: { maquiladora: MAQ_MAQUILADORA },
+  admin: {
+    grupo: { key: "maquilas", label: "Maquilas", icon: Factory },
+    items: [{ icon: ShieldCheck, label: "Verificación", key: "maq-admin-verificacion" }],
+    soporte: [{ icon: ShieldCheck, label: "Verificación de maquilas", key: "maq-admin-verificacion" }],
+  },
+};
+
+export const MODULOS_SUITE: ModuloSuite[] = [IMPORTACIONES, LIQUIDACIONES, MAQUILAS];
 
 /** Iconos disponibles para las apps del selector radial (mapa en SuiteWheelSwitcher). */
 export type IconoApp = "package" | "tag" | "shopping-bag" | "factory";
@@ -138,7 +165,7 @@ export const APPS_SUITE: AppSuite[] = [
   },
   {
     id: "maquilas", name: "Zarpi Maquilas", shortName: "Maquilas", icon: "factory",
-    badge: "Prototipo", accentColor: "#FF007A", active: true, screen: "maq-landing",
+    badge: "Fabrica tu marca", accentColor: "#FF007A", active: true, producto: "maquilas", screen: "maq-landing",
   },
 ];
 
@@ -155,7 +182,7 @@ export function modulosActivos(config: PlatformConfig): ModuloSuite[] {
  * uso (el menú sigue siendo el de Liquidaciones si se venía de ahí).
  */
 // `chats` es la bandeja de toda la suite (tickets de soporte de cualquier producto): abrirla no cambia de producto.
-export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing", "maq-landing"];
+export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing", "maq-landing", "maq-registro"];
 
 /** Producto al que pertenece una pantalla. */
 export function productoDe(screen: Screen): Producto {

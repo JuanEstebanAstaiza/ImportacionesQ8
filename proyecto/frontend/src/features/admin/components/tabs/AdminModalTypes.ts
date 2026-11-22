@@ -1,4 +1,4 @@
-export type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte" | "designer";
+export type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora";
 export type CompanyFormState = {
   nombre_empresa: string;
   email_dueño: string;
@@ -41,6 +41,10 @@ export type UserFormState = {
   paises: string;
   tiempoRespuesta: string;
   nivelSoporte: number;
+  ciudad: string;
+  categoriasMaquila: string[];
+  procesosMaquila: string[];
+  pedidoMinimo: string;
 };
 export const TIPOS_DOCUMENTO = ["CC", "CE", "Pasaporte", "PPT", "DNI"];
 export const LOGO_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";

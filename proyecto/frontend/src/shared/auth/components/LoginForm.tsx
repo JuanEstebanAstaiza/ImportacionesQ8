@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Eye, EyeOff, Info, Loader2, LogIn, Mail, Lock, UserRound, Users } from "lucide-react";
+import { Building2, Eye, EyeOff, Factory, Info, Loader2, LogIn, Mail, Lock, UserRound, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -18,7 +18,7 @@ const loginSchema = z.object({
 });
 
 export type LoginFormValues = z.infer<typeof loginSchema> & { rol?: BackendAuthRole };
-export type PortalRole = "solicitante" | "importadora" | "asesor";
+export type PortalRole = "solicitante" | "importadora" | "asesor" | "maquiladora";
 
 interface LoginFormProps {
   onSubmit: (values: LoginFormValues) => void;
@@ -36,6 +36,7 @@ const ROLE_OPTIONS: Array<{ role: PortalRole; backendRole: BackendAuthRole; labe
   { role: "solicitante", backendRole: "solicitante", label: "Comprador", icon: <UserRound className="h-4 w-4" /> },
   { role: "importadora", backendRole: "importador", label: "Importadora", icon: <Building2 className="h-4 w-4" /> },
   { role: "asesor", backendRole: "asesor", label: "Asesor", icon: <Users className="h-4 w-4" /> },
+  { role: "maquiladora", backendRole: "maquiladora", label: "Maquila", icon: <Factory className="h-4 w-4" /> },
 ];
 
 export function LoginForm({
@@ -81,7 +82,7 @@ export function LoginForm({
       <CardContent className="space-y-5">
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Acceder como</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {ROLE_OPTIONS.map((option) => (
               <button
                 key={option.role}

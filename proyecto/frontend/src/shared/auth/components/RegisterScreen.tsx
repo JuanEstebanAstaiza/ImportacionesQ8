@@ -1,7 +1,10 @@
 ﻿import { Fragment, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowUpDown, Building2, Check, CheckCircle2, ChevronLeft, ChevDown, Globe, Eye, EyeOff, Lock, Mail, UserRound, Loader2, Phone } from "lucide-react";
+import { AlertCircle, ArrowUpDown, Building2, Check, CheckCircle2, ChevronLeft, Globe, Eye, EyeOff, Lock, Mail, Moon, Sun, UserRound, Loader2, Phone } from "lucide-react";
+import { clsx } from "clsx";
+import { toast } from "sonner";
 
-import { Badge, Button, Card, Input, Select, Textarea } from "@shared/ui/design-system";
+import { Badge, Button, Card, Input, Logo, Select, Textarea, openSmartContact } from "@shared/ui/design-system";
+import { CORREO_ADMINISTRACION } from "@/config/business";
 import { PublicSicLogo } from "@/components/navigation/PublicSicLogo";
 import { Modal } from "@shared/ui/kit/Modal";
 import type { LegalPage } from "@shared/legal/types";
@@ -10,7 +13,8 @@ import { authService } from "@/services/auth.service";
 import { TarjetaReferidos, leerCodigoReferidoDeLaUrl } from "@shared/referidos/TarjetaReferidos";
 import type { RegisterRequest } from "@/types/auth";
 
-type RegUserType = "solicitante";
+// «importadora» solo muestra cómo pedir el alta al equipo: no hay registro público de empresas.
+type RegUserType = "solicitante" | "importadora";
 type RegPersonType = "natural" | "juridica";
 
 export function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSuccess:(email:string)=>void;onPolicy:(page:LegalPage)=>void}) {
@@ -309,7 +313,7 @@ export function RegisterScreen({onBack,onSuccess,onPolicy}:{onBack:()=>void;onSu
                     variant="primary"
                     className="dark:bg-accent dark:hover:bg-accent/90 dark:text-accent-foreground"
                     size="md"
-                    icon={<MailIcon className="w-4 h-4" />}
+                    icon={<Mail className="w-4 h-4" />}
                     onClick={() => openSmartContact({ type: "email", email: CORREO_ADMINISTRACION })}
                   >
                     Contactar al equipo administrativo

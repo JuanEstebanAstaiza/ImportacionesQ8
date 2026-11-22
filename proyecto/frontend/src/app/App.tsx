@@ -124,6 +124,7 @@ import {
   NAV_SOPORTE,
   NAV_DISENO,
   PANTALLAS_DESIGNER,
+  PANTALLAS_MAQUILADORA,
 } from "@/config/navigation";
 import type { NavItem } from "@/types/navigation";
 import {
@@ -132,7 +133,7 @@ import {
 import { LiquidacionesRouter, LandingLiquidaciones } from "@apps/liquidaciones";
 import { crearDestinosSuite } from "@shared/suite/destinos";
 import { LandingMarketplace } from "@/features/marketplace/pantallas/LandingMarketplace";
-import { LandingMaquilas } from "@/features/maquilas/pantallas/LandingMaquilas";
+import { LandingMaquilas, MaquilasRouter, RegistroMaquila } from "@apps/maquilas";
 
 // Compatibilidad para las vistas de dominio que todavÃ­a consumen los contratos
 // pÃºblicos histÃ³ricos de App.tsx; la implementaciÃ³n vive en sus mÃ³dulos.
@@ -156,6 +157,9 @@ const PANTALLA_LEGAL: Record<LegalPage, Screen> = {
 // "designer" es el equipo de Diseño: pone portada e imágenes con la identidad de
 // Zarpi a lo aprobado en Tendencias y lo publica. Está en el canal del equipo,
 // pero no ve soporte ni clientes.
+
+/** Pantallas de los módulos de la suite que llevan un identificador propio en la URL (`idModulo`). */
+const esPantallaDeModulo = (s: Screen) => s.startsWith("liq-") || s.startsWith("maq-");
 
 function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
   if (!role) {
@@ -181,7 +185,7 @@ function normalizeStoredRole(role: string | null): UserRole | "admin" | null {
     return "admin";
   }
 
-  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte" || normalizedRole === "designer") {
+  if (normalizedRole === "solicitante" || normalizedRole === "asesor" || normalizedRole === "soporte" || normalizedRole === "designer" || normalizedRole === "maquiladora") {
     return normalizedRole;
   }
 
@@ -204,6 +208,9 @@ function getHomeScreenForRole(role: UserRole | "admin"): Screen {
   }
   if (role === "designer") {
     return "diseno";
+  }
+  if (role === "maquiladora") {
+    return "maq-panel";
   }
   return "dashboard";
 }
@@ -340,7 +347,7 @@ export default function App() {
   // Identificador que llevan en la URL las pantallas de los módulos de la suite
   // (lote, operación...). Uno solo para todos: cada módulo lo interpreta en su router.
   const [idModulo,setIdModulo]=useState<string>(() =>
-    destinoInicial?.screen.startsWith("liq-") ? destinoInicial.id ?? "" : "");
+    destinoInicial && esPantallaDeModulo(destinoInicial.screen) ? destinoInicial.id ?? "" : "");
   // Producto de la suite en uso (shared/suite/suite.ts). Lo marca la última pantalla de
   // un producto: abrir el perfil o las notificaciones no cambia el menú.
   const [productoActivo,setProductoActivo]=useState<Producto>(() => productoDe(destinoInicial?.screen ?? "landing"));
@@ -446,7 +453,7 @@ export default function App() {
     ? selectedImporterId
     : screen === "tendencia-detalle"
     ? selectedTendenciaId
-    : screen.startsWith("liq-")
+    : esPantallaDeModulo(screen)
     ? idModulo
     : screen === "chats"
     ? activeChatId || initialChatConvId || ""
@@ -506,7 +513,7 @@ export default function App() {
       if (destino.param === "importer") setSelectedImporterId(id);
       if (destino.param === "tendencia") setSelectedTendenciaId(id);
       if (destino.param === "conversation") setInitialChatConvId(id || undefined);
-      if (destino.screen.startsWith("liq-")) setIdModulo(id);
+      if (esPantallaDeModulo(destino.screen)) setIdModulo(id);
     }
 
     window.addEventListener("popstate", alNavegarAtrasOAdelante);
@@ -953,10 +960,10 @@ export default function App() {
     if (isInitializing || isAuthenticated) {
       return;
     }
-    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing"];
+    const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing", "maq-registro"];
     if (!publicScreens.includes(screen)) {
-      // Un enlace de Liquidaciones sin sesión lleva a la landing de Liquidaciones.
-      setScreen(screen.startsWith("liq-") ? "liq-landing" : "landing");
+      // Un enlace de un módulo sin sesión lleva a la landing de ese módulo.
+      setScreen(screen.startsWith("liq-") ? "liq-landing" : screen.startsWith("maq-") ? "maq-landing" : "landing");
     }
   }, [isAuthenticated, isInitializing, screen]);
 
@@ -1242,6 +1249,8 @@ export default function App() {
     const base = userRole==="admin" ? [...NAV_ADMIN, ...navAdminDeModulos(platformConfig,"admin")]
       : userRole==="soporte" ? [...NAV_SOPORTE, ...navAdminDeModulos(platformConfig,"soporte")]
       : userRole==="designer" ? NAV_DISENO
+      // La maquiladora solo usa Maquilas: su menú no depende del producto en uso.
+      : userRole==="maquiladora" ? (moduloDe("maquilas").nav.maquiladora ?? [])
       : menuProducto ? menuProducto
       : userRole==="importadora" ? NAV_IMPORTADORA
       : userRole==="asesor" ? NAV_ASESOR
@@ -1457,7 +1466,7 @@ export default function App() {
   }
   async function openNotification(notification: AppNotification){
     if (notification.destino) {
-      if (notification.destino.startsWith("liq-")) setIdModulo(notification.destinoId ?? "");
+      if (esPantallaDeModulo(notification.destino)) setIdModulo(notification.destinoId ?? "");
       goTo(notification.destino);
       return;
     }
@@ -1517,7 +1526,7 @@ export default function App() {
     ]);
   }
 
-  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing"];
+  const publicScreens: Screen[] = ["landing", "login", "register", "reset-password", "policy-data", "policy-terms", "policy-payments", "policy-planes", "planes-inscripcion", "lista-espera", "tendencias", "tendencia-detalle", "reto", "liq-landing", "mkt-landing", "maq-landing", "maq-registro"];
   const screenAllowedByRole: Partial<Record<Screen, UserRole[]>> = {
     "courses": ["solicitante", "importadora"],
     "imp-dashboard": ["importadora"],
@@ -1528,9 +1537,9 @@ export default function App() {
     "adv-available": ["asesor"],
     "adv-my-quotes": ["asesor"],
     // Perfil personal: cualquier cuenta con sesiÃ³n.
-    "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte", "designer"],
+    "user-profile": ["solicitante", "asesor", "importadora", "admin", "soporte", "designer", "maquiladora"],
     "help-support": ["solicitante", "importadora", "asesor"],
-    "notifications": ["solicitante", "importadora", "asesor", "admin", "soporte", "designer"],
+    "notifications": ["solicitante", "importadora", "asesor", "admin", "soporte", "designer", "maquiladora"],
     "admin-reto": ["admin"],
     "admin-tendencias": ["admin"],
     "admin-tendencias-aprobacion": ["admin"],
@@ -1574,6 +1583,10 @@ export default function App() {
     "liq-admin-resumen": ["admin"],
     "liq-admin-cuentas": ["admin"],
     "liq-admin-config": ["admin"],
+    // Zarpi Maquilas: la maquiladora y, en el panel, el equipo que la verifica.
+    "maq-panel": ["maquiladora"],
+    "maq-perfil": ["maquiladora"],
+    "maq-admin-verificacion": ["admin", "soporte"],
   };
 
   const allowedRoles = screenAllowedByRole[screen];
@@ -1593,6 +1606,13 @@ export default function App() {
     }
   }, [platformConfigLoading, platformConfig.modulo_liquidaciones_habilitado, screen, isAuthenticated, userRole]);
 
+  // Con Maquilas apagado, igual: sus enlaces llevan al inicio de siempre.
+  useEffect(() => {
+    if (!platformConfigLoading && !platformConfig.modulo_maquilas_habilitado && screen.startsWith("maq-")) {
+      setScreen(isAuthenticated ? getHomeScreenForRole(userRole) : "landing");
+    }
+  }, [platformConfigLoading, platformConfig.modulo_maquilas_habilitado, screen, isAuthenticated, userRole]);
+
   useEffect(() => {
     if (!isAuthenticated || isInitializing || !appRole) {
       return;
@@ -1601,7 +1621,9 @@ export default function App() {
     // sin entrada en la tabla es de libre acceso.
     const bloqueada = allowedRoles
       ? !allowedRoles.includes(userRole)
-      : userRole==="designer" && !PANTALLAS_DESIGNER.includes(screen);
+      : userRole==="designer" ? !PANTALLAS_DESIGNER.includes(screen)
+      // La maquiladora tampoco entra a las pantallas de Importaciones.
+      : userRole==="maquiladora" && !PANTALLAS_MAQUILADORA.includes(screen);
 
     if (bloqueada) {
       const home = getHomeScreenForRole(userRole);
@@ -1664,6 +1686,7 @@ export default function App() {
     goTo,
     inicioImportaciones:isAuthenticated?getHomeScreenForRole(userRole):"landing",
     liquidacionesActiva:Boolean(platformConfig.modulo_liquidaciones_habilitado),
+    maquilasActiva:Boolean(platformConfig.modulo_maquilas_habilitado),
   });
   const propsLandingSuite={
     autenticado:isAuthenticated,
@@ -1674,7 +1697,10 @@ export default function App() {
     onPolicy:(page:LegalPage)=>goTo(PANTALLA_LEGAL[page]),
   };
   if(screen==="mkt-landing")return <LandingMarketplace {...propsLandingSuite}/>;
-  if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite}/>;
+  if(screen==="maq-landing")return <LandingMaquilas {...propsLandingSuite} onRegistrarMaquila={()=>goTo("maq-registro")}/>;
+  // Registro propio de las maquiladoras (las empresas importadoras las sigue creando el equipo).
+  if(screen==="maq-registro"&&!registroAbierto())return <RegistroCerrado producto="maquilas" onLogin={()=>goTo("login")} onLanding={()=>goTo("maq-landing")} onListaEspera={()=>goTo("lista-espera")} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
+  if(screen==="maq-registro")return <RegistroMaquila onVolver={()=>goTo("maq-landing")} onLogin={()=>goTo("login")} onRegistrada={(email)=>{setLoginPrefillEmail(email);goTo("login");}} onPolicy={page=>goTo(PANTALLA_LEGAL[page])}/>;
   if(screen==="liq-landing")return <LandingLiquidaciones
     destinosSuite={destinosSuite}
     autenticado={isAuthenticated}
@@ -1714,6 +1740,8 @@ export default function App() {
 
   const renderPrivateScreen = () => {
     // Zarpi Liquidaciones resuelve sus pantallas (las del producto y las de su panel admin) en su propio router.
+    // Zarpi Maquilas, igual: la maquiladora y su verificación en el panel admin.
+    if (screen.startsWith("maq-")) return <MaquilasRouter screen={screen} sb={sb} idRuta={idModulo} navegar={navegarModulo} rol={userRole} />;
     if (screen.startsWith("liq-")) return <LiquidacionesRouter screen={screen} sb={sb} idRuta={idModulo} navegar={navegarModulo} rol={userRole as UserRole} empresa={companyProfile?.nombre_empresa || ""} onSoporte={(referencia) => abrirSoporte(referencia, "liquidaciones")} />;
     if (IMPORTER_ROUTES.includes(screen)) return <ImporterPortalProvider value={{ quotes: importerQuotes, advisors: companyAdvisors, chats: chatConversations, companyProfile, companyName: companyProfile?.nombre_empresa || "", userRole, onSave: handleSaveCompanyProfile, onCreateAdvisor: handleCreateAdvisor, onSetAdvisorActive: handleSetAdvisorActive, openInternalChat, onRespond: id => { setSelectedQuoteId(id); goTo("create-response"); }, openChat, onAssignAdvisor: handleAssignAdvisorToQuote, proposalsByQuoteId: companyProposalsByQuoteId, onConfirmProposal: handleConfirmProposalAsCompany, onRechazada: refreshQuoteLists }}><ImporterRouter screen={screen} sb={sb} /></ImporterPortalProvider>;
     if (ADVISOR_ROUTES.includes(screen)) return <AdvisorPortalProvider value={{ available: visibleAvailableQuotes, quotes: advisorAssignedQuotes, headerUser: advisorHeaderUser, proposals: advisorProposalsByQuoteId, chats: chatConversations, availableCount: visibleAvailableQuotes.length, activeChatsCount: activeChatCount, onClaim: claimQuote, refresh: refreshQuoteLists, onRespond: id => { setSelectedQuoteId(id); goTo("create-response"); }, openChat, onOpenInternalChat: () => openInternalChat(), onRechazada: refreshQuoteLists }}><AdvisorRouter screen={screen} sb={sb} /></AdvisorPortalProvider>;

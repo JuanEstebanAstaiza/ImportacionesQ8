@@ -13,9 +13,16 @@ const TEXTO_LIQUIDACIONES = {
   texto: "Por ahora el acceso a Zarpi es por invitación. Si ya tienes cuenta de Zarpi, como comprador o como empresa, entra con ella: es la misma para Liquidaciones.",
 };
 
-export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,producto}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void;producto?:"liquidaciones"}) {
+const TEXTO_MAQUILAS = {
+  titulo: "El registro de maquilas abre pronto",
+  texto: "Por ahora damos de alta las maquilas por invitación. Escríbenos y el equipo de Zarpi crea la cuenta de tu taller o planta.",
+};
+
+export function RegistroCerrado({onLogin,onLanding,onListaEspera,onPolicy,producto}:{onLogin:()=>void;onLanding:()=>void;onListaEspera:()=>void;onPolicy:(page:LegalPage)=>void;producto?:"liquidaciones"|"maquilas"}) {
   const { dark, toggleTheme } = useBrandTheme();
-  const textos = producto === "liquidaciones" ? TEXTO_LIQUIDACIONES : { titulo: LISTA_CERRADA.titulo.replace(/\.$/, ""), texto: LISTA_CERRADA.texto };
+  const textos = producto === "liquidaciones" ? TEXTO_LIQUIDACIONES
+    : producto === "maquilas" ? TEXTO_MAQUILAS
+    : { titulo: LISTA_CERRADA.titulo.replace(/\.$/, ""), texto: LISTA_CERRADA.texto };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

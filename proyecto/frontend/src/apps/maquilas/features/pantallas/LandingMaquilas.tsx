@@ -7,20 +7,20 @@ const CONTENIDO: ContenidoLandingApp = {
   nombre: "Zarpi Maquilas",
   acento: "#FF007A",
   eyebrow: "Zarpi Maquilas",
-  titulo: "Producción industrial y talleres de confección,",
-  tituloResaltado: "con pedidos bajo control.",
-  texto: "Encuentra talleres y plantas de manufactura para producir tus diseños, cotiza por lote y gestiona cada pedido de producción desde el corte hasta la entrega.",
-  ctaPrimario: "Cotizar producción",
-  ctaSecundario: "Soy taller o planta",
+  titulo: "Fabrica tus productos con maquilas verificadas",
+  tituloResaltado: "y crea tu propia marca.",
+  texto: "Encuentra talleres y plantas que fabrican lo que imaginas, compara propuestas por cantidad, aprueba la muestra y sigue cada etapa de la producción hasta la entrega.",
+  ctaPrimario: "Fabrica tu marca",
+  ctaSecundario: "Registra tu maquila",
   puntos: [
-    { icono: BadgeCheck, texto: "Talleres y plantas verificados por Zarpi" },
+    { icono: BadgeCheck, texto: "Maquilas verificadas por Zarpi: RUT y cámara de comercio revisados" },
     { icono: ClipboardList, texto: "Seguimiento del pedido por etapas de producción" },
   ],
   estadisticas: [
-    { valor: "60+", etiqueta: "Talleres" },
-    { valor: "12", etiqueta: "Tipos de proceso" },
-    { valor: "300", etiqueta: "Unidades mínimas" },
-    { valor: "48 h", etiqueta: "Cotización" },
+    { valor: "100 %", etiqueta: "Maquilas verificadas" },
+    { valor: "3 pasos", etiqueta: "Para registrar tu maquila" },
+    { valor: "Por etapas", etiqueta: "Seguimiento de producción" },
+    { valor: "1 cuenta", etiqueta: "Para toda la suite Zarpi" },
   ],
   pasosTitulo: "De tu diseño al producto terminado.",
   pasos: [
@@ -54,6 +54,7 @@ const CONTENIDO: ContenidoLandingApp = {
   cierreTexto: "Usa tu misma cuenta de Zarpi para entrar a todos los productos de la suite.",
 };
 
-export function LandingMaquilas(props: Omit<PropsLandingApp, "contenido">) {
-  return <LandingApp contenido={CONTENIDO} {...props} />;
+/** Landing pública de Zarpi Maquilas. «Registra tu maquila» lleva al registro propio de las maquiladoras. */
+export function LandingMaquilas({ onRegistrarMaquila, ...props }: Omit<PropsLandingApp, "contenido" | "onCtaSecundario"> & { onRegistrarMaquila: () => void }) {
+  return <LandingApp contenido={CONTENIDO} onCtaSecundario={onRegistrarMaquila} {...props} />;
 }

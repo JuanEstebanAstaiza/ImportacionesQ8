@@ -13,6 +13,7 @@
 
 // Import directo del archivo de rutas (no del index) para no arrastrar componentes ni ciclos.
 import { RUTAS_LIQUIDACIONES, type ScreenLiquidaciones } from "@apps/liquidaciones/rutas";
+import { RUTAS_MAQUILAS, type ScreenMaquilas } from "@apps/maquilas/rutas";
 
 export type Screen =
   | "landing"
@@ -78,11 +79,12 @@ export type Screen =
   | "admin-presentaciones"
   | "admin-cursos"
   | "admin-tipografia"
-  // Landings prototipo de Marketplace y Maquilas
+  // Landing prototipo de Marketplace
   | "mkt-landing"
-  | "maq-landing"
   // Zarpi Liquidaciones: sus pantallas se declaran en apps/liquidaciones/rutas.ts
-  | ScreenLiquidaciones;
+  | ScreenLiquidaciones
+  // Zarpi Maquilas: apps/maquilas/rutas.ts
+  | ScreenMaquilas;
 
 export type AdminTab =
   | "metricas"
@@ -119,7 +121,7 @@ export function adminTabFromPath(pathname: string): AdminTab | null {
 }
 
 /** Qué identificador viaja en la ruta de una pantalla de detalle. */
-export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia" | "lote" | "operacion";
+export type ParamRuta = "quote" | "response" | "order" | "importer" | "conversation" | "tendencia" | "lote" | "operacion" | "maquiladora";
 
 export interface Ruta {
   screen: Screen;
@@ -146,7 +148,6 @@ export const RUTAS: Ruta[] = [
   // «Avísame cuando abra»: lista de espera de la apertura al público (pública).
   { screen: "lista-espera", path: "/lista-espera" },
   { screen: "mkt-landing", path: "/marketplace" },
-  { screen: "maq-landing", path: "/maquilas" },
 
   // Solicitante
   { screen: "dashboard", path: "/inicio" },
@@ -225,6 +226,8 @@ export const RUTAS: Ruta[] = [
 
   // Zarpi Liquidaciones
   ...RUTAS_LIQUIDACIONES,
+  // Zarpi Maquilas
+  ...RUTAS_MAQUILAS,
 ];
 
 export const RUTA_RESTABLECER = "/restablecer-password";
