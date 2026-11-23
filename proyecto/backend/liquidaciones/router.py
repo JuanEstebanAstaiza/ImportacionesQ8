@@ -47,9 +47,10 @@ require_admin = require_rol("admin")
 
 @router.get("/publico/lotes")
 @limiter.limit(RATE_LIMIT_PUBLIC_READ)
-def vista_publica(request: Request, limite: int = Query(8, ge=1, le=24), mongo: Database = Depends(get_mongo)):
+def vista_publica(request: Request, limite: int = Query(8, ge=1, le=24), mongo: Database = Depends(get_mongo),
+                  db: Session = Depends(get_db)):
     """Vista previa de la landing: lotes publicados, destacados primero."""
-    return servicio.vista_publica(mongo, limite)
+    return servicio.vista_publica(mongo, db, limite)
 
 
 @router.get("/archivos/{bucket}/{archivo_id}")

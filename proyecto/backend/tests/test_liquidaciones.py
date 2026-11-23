@@ -316,11 +316,30 @@ def test_chat_reserva_unificado(client, db_session, empresa, comprador, equipo, 
         assert reserva["tipo"] == "reserva"
         assert reserva["lado_reserva"] == lado
     assert client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_otro).status_code == 403
-
-    r = client.post(f"/chat/conversaciones/{ident}/mensajes", json={"contenido": "Mensaje desde Chats"}, headers=h_empresa)
-    assert r.status_code == 201, r.text
+    # El aviso de la reserva ya está en el chat, como aviso del sistema.
     detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_comprador).json()
-    assert any(m["contenido"] == "Mensaje desde Chats" and m["autor"] == "contraparte" for m in detalle["mensajes"])
+    assert detalle["mensajes"][0]["tipo"] == "sistema" and detalle["mensajes"][0]["autor"] == "sistema"
+
+    # El equipo lee el chat, pero no escribe como si fuera una de las partes.
+    assert client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_equipo).status_code == 200
+    assert client.post(f"/chat/conversaciones/{ident}/mensajes", json={"contenido": "Hola"},
+                       headers=h_equipo).status_code == 403
+    r = client.post(f"/liquidaciones/admin/operaciones/{ident}/intervenir", json={"contenido": "Revisamos el caso"},
+                    headers=h_equipo)
+    assert r.status_code == 200, r.text
+    detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_comprador).json()
+    assert any(m["autor"] == "equipo" and m["remitente_nombre"] == "Soporte Zarpi" for m in detalle["mensajes"])
+
+    # Nadie se firma como Soporte Zarpi ni cuela un «documento» por la metadata.
+    falso = {"contenido": "Mensaje desde Chats",
+             "metadata": {"liquidaciones": {"autor": "Soporte Zarpi", "archivo": {"url": "https://evil.example/x"}}}}
+    r = client.post(f"/chat/conversaciones/{ident}/mensajes", json=falso, headers=h_empresa)
+    assert r.status_code == 201, r.text
+    assert "liquidaciones" not in (r.json().get("metadata") or {})
+    detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_comprador).json()
+    enviado = next(m for m in detalle["mensajes"] if m["contenido"] == "Mensaje desde Chats")
+    assert enviado["autor"] == "contraparte" and enviado["archivo"] is None
+    assert enviado["remitente_nombre"] != "Soporte Zarpi"
 
     r = client.post(f"/liquidaciones/operaciones/{ident}/mensajes", json={"contenido": "Mensaje desde la reserva"}, headers=h_comprador)
     assert r.status_code == 201, r.text
@@ -347,6 +366,8 @@ def test_chat_reserva_unificado(client, db_session, empresa, comprador, equipo, 
     adjuntos = client.get(f"/documentos/chats/{ident}/adjuntos", headers=h_empresa)
     assert adjuntos.status_code == 200 and len(adjuntos.json()) == 1
     assert client.get(adjuntos.json()[0]["storage_url"], headers=h_empresa).status_code == 200
+    # Reserva de antes del cambio: su historial está en Mongo y se copia una sola vez.
+    mongo_liq.operaciones.update_one({"_id": ident}, {"$unset": {"chat_en_suite": ""}})
     viejo_id = str(uuid4())
     mongo_liq.mensajes.insert_one({
         "_id": viejo_id, "operacion_id": ident, "remitente_id": comprador[0].id,
@@ -358,6 +379,7 @@ def test_chat_reserva_unificado(client, db_session, empresa, comprador, equipo, 
         assert sum(m["id"] == viejo_id for m in detalle["mensajes"]) == 1
     mensajes = client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_empresa).json()
     assert sum(m["id"] == viejo_id for m in mensajes) == 1
+    assert mongo_liq.operaciones.find_one({"_id": ident})["chat_en_suite"] is True
 
     r = client.post(f"/liquidaciones/operaciones/{ident}/cancelar", json={}, headers=h_comprador)
     assert r.status_code == 200, r.text
@@ -396,6 +418,45 @@ def test_chat_reserva_comprador_empresa_y_su_asesor(client, db_session, empresa,
         assert chats.status_code == 200, chats.text
         assert next(c for c in chats.json() if c["id"] == ident)["lado_reserva"] == "comprador"
         assert client.get(f"/chat/conversaciones/{ident}/mensajes", headers=headers).status_code == 200
+
+
+def test_si_el_chat_falla_la_reserva_sigue_y_el_chat_se_abre_despues(client, empresa, comprador, equipo,
+                                                                     mongo_liq, monkeypatch):
+    from liquidaciones import chat as chat_reserva
+
+    _, _, h_empresa = empresa
+    _, h_comprador = comprador
+    _, h_equipo = equipo
+    _activar(client, h_empresa)
+    _activar(client, h_comprador)
+    lote = _lote_publicado(client, h_empresa, h_equipo)
+
+    original = chat_reserva._crear_conversacion
+
+    def falla(*_args, **_kwargs):
+        raise ValueError("chat caído")
+
+    monkeypatch.setattr(chat_reserva, "_crear_conversacion", falla)
+    r = client.post(f"/liquidaciones/lotes/{lote['id']}/reservar", headers=h_comprador)
+    assert r.status_code == 201, r.text
+    ident = r.json()["id"]
+    assert r.json()["estado"] == "activa" and r.json()["mensajes"] == []
+
+    # Una reserva rota (comprador inexistente) no tumba la bandeja de nadie.
+    otra = dict(mongo_liq.operaciones.find_one({"_id": ident}), _id=str(uuid4()), lote_id=str(uuid4()),
+                estado="cancelada", comprador_usuario_id=str(uuid4()))
+    otra.pop(chat_reserva.CAMPO_EN_SUITE, None)
+    mongo_liq.operaciones.insert_one(otra)
+    monkeypatch.setattr(chat_reserva, "_crear_conversacion", original)
+    chats = client.get("/chat/conversaciones", headers=h_comprador)
+    assert chats.status_code == 200, chats.text
+    ids = {c["id"] for c in chats.json()}
+    assert ident in ids and otra["_id"] not in ids
+
+    r = client.post(f"/liquidaciones/operaciones/{ident}/mensajes", json={"contenido": "Ya hay chat"},
+                    headers=h_comprador)
+    assert r.status_code == 201, r.text
+    assert client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_empresa).status_code == 200
 
 
 def test_cancelar_devuelve_el_lote(client, empresa, comprador, equipo):

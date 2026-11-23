@@ -711,8 +711,8 @@ async def compartir_recursos_chat(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para compartir en una de las conversaciones")
 
         if acceso_chat.es_reserva(conversation):
-            from routers.chat import _verificar_reserva_abierta
-            _verificar_reserva_abierta(conversation)
+            from routers.chat import _verificar_escritura_reserva
+            _verificar_escritura_reserva(conversation, current_user)
 
         message_text = payload.mensaje or "Recursos compartidos desde gestión documental"
         message = MensajeChat(

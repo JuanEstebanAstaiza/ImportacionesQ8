@@ -19,6 +19,8 @@ export interface ChatMsg {
   dateGroup?: string;
   proposal?: PropuestaEnMensaje;
   authorName?: string;
+  /** Aviso automático (reservó, venció, canceló…): se pinta como aviso, no como burbuja. */
+  system?: boolean;
 }
 
 export interface ChatConv {

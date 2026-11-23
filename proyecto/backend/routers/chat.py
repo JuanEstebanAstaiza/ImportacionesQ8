@@ -96,24 +96,25 @@ def _nombre_de_usuario(db: Session, usuario_id: Optional[str]) -> Optional[str]:
     return usuario.nombre or usuario.email
 
 
-def _lado_de(conversacion: ConversacionChat, usuario_id: str, db: Session) -> str:
+def _operacion_reserva(conversacion: ConversacionChat) -> Optional[dict]:
+    """La operación de Liquidaciones detrás de un chat de reserva (o None)."""
+    if not acceso_chat.es_reserva(conversacion):
+        return None
+    from liquidaciones.chat import operacion_de_conversacion
+    from liquidaciones.db import obtener_db
+
+    return operacion_de_conversacion(obtener_db(), conversacion)
+
+
+def _lado_de(conversacion: ConversacionChat, usuario_id: str) -> str:
     """En qué lado del chat va un mensaje de `usuario_id`.
 
     En una negociación hay dos lados, el cliente y la empresa, aunque por la
     empresa escriban varias personas (el asesor y, supervisando, la dueña). En
     un ticket, quien pidió ayuda y el equipo de soporte (puede pasar por varios
     agentes). En el canal interno y en el del equipo cada persona es su propio
-    lado."""
-    if acceso_chat.es_reserva(conversacion):
-        from liquidaciones.chat import operacion_de_conversacion
-        from liquidaciones.db import obtener_db
-        from liquidaciones.identidad import cuenta_de
-
-        op = operacion_de_conversacion(obtener_db(), conversacion)
-        usuario = db.get(Usuario, str(usuario_id))
-        if op and usuario:
-            cuenta = cuenta_de({"user_id": str(usuario.id), "rol": usuario.rol, "importador_id": usuario.importador_id})
-            return "comprador" if cuenta == op["cuenta_comprador"] else "vendedor"
+    lado. En una reserva de Liquidaciones el lado es la cuenta (comprador o
+    vendedor) y se resuelve en `listar_mensajes` con una sola consulta."""
     if _es_interna(conversacion) or acceso_chat.es_equipo(conversacion):
         return str(usuario_id)
     return "solicitante" if str(usuario_id) == str(conversacion.solicitante_id) else "otro"
@@ -191,7 +192,8 @@ def _persona(db: Session, usuario_id: Optional[str]) -> _Contraparte:
     )
 
 
-def _contraparte(db: Session, conversacion: ConversacionChat, current_user: dict) -> _Contraparte:
+def _contraparte(db: Session, conversacion: ConversacionChat, current_user: dict, *,
+                 operacion: Optional[dict] = None) -> _Contraparte:
     """Con quién habla quien consulta.
 
     Se resuelve en el backend porque el frontend solo tiene ids de usuario, y
@@ -205,11 +207,9 @@ def _contraparte(db: Session, conversacion: ConversacionChat, current_user: dict
     user_id = current_user.get("user_id")
 
     if acceso_chat.es_reserva(conversacion):
-        from liquidaciones.chat import operacion_de_conversacion
-        from liquidaciones.db import obtener_db
         from liquidaciones.identidad import cuenta_de
 
-        op = operacion_de_conversacion(obtener_db(), conversacion)
+        op = operacion if operacion is not None else _operacion_reserva(conversacion)
         if op and cuenta_de(current_user) == op["cuenta_comprador"]:
             empresa = _nombre_empresa(db, conversacion.importador_id)
             return _Contraparte(nombre=empresa or "Empresa vendedora", rol="importador", empresa=empresa)
@@ -253,24 +253,25 @@ def _respuesta_conversacion(
     conversacion: ConversacionChat,
     current_user: dict,
     ultimo: Optional[MensajeChat] = None,
+    operaciones: Optional[dict] = None,
 ) -> ConversacionChatResponse:
+    """`operaciones`: las de Liquidaciones por id, cuando la bandeja ya las leyó."""
     rol_solicitante = None
     if _es_soporte(conversacion) and conversacion.solicitante_id:
         autor = db.query(Usuario).filter(Usuario.id == conversacion.solicitante_id).first()
         rol_solicitante = autor.rol if autor else None
 
-    contraparte = _contraparte(db, conversacion, current_user)
-    asesor_id = _supervisada_por(conversacion, current_user)
+    operacion = None
     lado_reserva = None
     if acceso_chat.es_reserva(conversacion):
-        from liquidaciones.chat import operacion_de_conversacion
-        from liquidaciones.db import obtener_db
+        from liquidaciones.chat import lado_de_cuenta
         from liquidaciones.identidad import cuenta_de
 
-        op = operacion_de_conversacion(obtener_db(), conversacion)
-        if op:
-            cuenta = cuenta_de(current_user)
-            lado_reserva = "comprador" if cuenta == op["cuenta_comprador"] else "vendedor"
+        operacion = (operaciones or {}).get(str(conversacion.id)) or _operacion_reserva(conversacion)
+        if operacion:
+            lado_reserva = lado_de_cuenta(operacion, cuenta_de(current_user))
+    contraparte = _contraparte(db, conversacion, current_user, operacion=operacion)
+    asesor_id = _supervisada_por(conversacion, current_user)
 
     return ConversacionChatResponse(
         id=str(conversacion.id),
@@ -1156,22 +1157,23 @@ async def listar_mis_conversaciones(
     try:
         rol = current_user["rol"]
 
-        reservas = []
+        # Chats de las reservas de Liquidaciones de la cuenta. Si Liquidaciones no
+        # responde, la bandeja sale igual con el resto de conversaciones.
+        operaciones_reserva: dict = {}
         if rol in ("solicitante", "importador", "asesor"):
-            from liquidaciones.chat import sincronizar
-            from liquidaciones.db import obtener_db
-            from liquidaciones.identidad import cuenta_de
             from services import modulos
 
-            if modulos.activo(db, "liquidaciones"):
-                mongo = obtener_db()
-                cuenta = cuenta_de(current_user)
-                operaciones = mongo.operaciones.find({
-                    "$or": [{"cuenta_comprador": cuenta}, {"cuenta_vendedor": cuenta}]
-                })
-                for operacion in operaciones:
-                    sincronizar(mongo, db, operacion)
-                    reservas.append(str(operacion["_id"]))
+            try:
+                if modulos.activo(db, "liquidaciones"):
+                    from liquidaciones.chat import reservas_de_cuenta
+                    from liquidaciones.db import obtener_db
+
+                    operaciones_reserva = reservas_de_cuenta(obtener_db(), db, current_user)
+            except Exception:
+                db.rollback()
+                logger.exception("No se pudieron cargar los chats de reservas para user_id=%s", user_id_str)
+                operaciones_reserva = {}
+        reservas = list(operaciones_reserva)
 
         # El canal del equipo entra en la bandeja de administración y soporte:
         # la sala común, más los hilos privados de quien pregunta.
@@ -1274,6 +1276,7 @@ async def listar_mis_conversaciones(
                 .filter(MensajeChat.conversacion_id == c.id)
                 .order_by(MensajeChat.fecha_envio.desc())
                 .first(),
+                operaciones=operaciones_reserva,
             )
             for c in conversaciones
         ]
@@ -1321,12 +1324,24 @@ async def listar_mensajes(
         str(u.id): (" ".join(p for p in (u.nombre, u.apellido) if p) or u.email)
         for u in db.query(Usuario).filter(Usuario.id.in_(remitentes)).all()
     } if remitentes else {}
-    mi_lado = _lado_de(conversacion, current_user["user_id"], db)
+    if acceso_chat.es_reserva(conversacion):
+        from liquidaciones.chat import lados_de_usuarios
+
+        operacion = _operacion_reserva(conversacion)
+        lados = lados_de_usuarios(db, operacion, remitentes | {str(current_user["user_id"])}) if operacion else {}
+
+        def lado(usuario_id) -> str:
+            return lados.get(str(usuario_id), str(usuario_id))
+    else:
+        def lado(usuario_id) -> str:
+            return _lado_de(conversacion, usuario_id)
+
+    mi_lado = lado(current_user["user_id"])
     respuesta = []
     for mensaje in mensajes:
         fila = MensajeChatResponse.model_validate(mensaje)
         fila.remitente_nombre = nombres.get(str(mensaje.remitente_id))
-        fila.de_mi_lado = _lado_de(conversacion, mensaje.remitente_id, db) == mi_lado
+        fila.de_mi_lado = lado(mensaje.remitente_id) == mi_lado
         respuesta.append(fila)
     return respuesta
 
@@ -1462,13 +1477,17 @@ def _publicar_mensaje(mensaje: MensajeChat) -> None:
         logger.warning("No se pudo publicar mensaje de chat en Redis para conversación %s", mensaje.conversacion_id)
 
 
-def _verificar_reserva_abierta(conversacion: ConversacionChat) -> None:
+def _verificar_escritura_reserva(conversacion: ConversacionChat, current_user: dict) -> None:
+    """En el chat de una reserva escriben solo comprador y vendedor, y solo
+    mientras está abierta. El equipo lo lee, pero interviene desde el monitoreo
+    de Liquidaciones (su mensaje queda firmado como Soporte Zarpi y avisa a las
+    dos partes), no como si fuera una de ellas."""
     if not acceso_chat.es_reserva(conversacion):
         return
-    from liquidaciones.chat import operacion_de_conversacion
-    from liquidaciones.db import obtener_db
-
-    operacion = operacion_de_conversacion(obtener_db(), conversacion)
+    if acceso_chat.es_equipo_plataforma(current_user.get("rol", "")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="El equipo interviene en las reservas desde el monitoreo de Liquidaciones")
+    operacion = _operacion_reserva(conversacion)
     if not operacion:
         raise HTTPException(status_code=404, detail="Reserva no encontrada")
     if operacion["estado"] in ("cancelada", "vencida") or (
@@ -1503,7 +1522,10 @@ async def enviar_mensaje(
     if not _verificar_acceso_conversacion(conversacion, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para escribir en esta conversación")
 
-    _verificar_reserva_abierta(conversacion)
+    _verificar_escritura_reserva(conversacion, current_user)
+    from liquidaciones.chat import limpiar_metadata_cliente
+
+    metadata = limpiar_metadata_cliente(datos.metadata)
     user_id_str = str(PyUUID(current_user["user_id"]))
     nuevo_mensaje = MensajeChat(
         id=str(uuid4()),
@@ -1511,7 +1533,7 @@ async def enviar_mensaje(
         remitente_id=user_id_str,
         contenido=datos.contenido,
         tipo=datos.tipo,
-        metadata_json=datos.metadata,
+        metadata_json=metadata,
     )
     db.add(nuevo_mensaje)
     db.flush()
@@ -1519,7 +1541,7 @@ async def enviar_mensaje(
         db,
         mensaje=nuevo_mensaje,
         owner_user_id=user_id_str,
-        metadata=datos.metadata,
+        metadata=metadata,
     )
     if nuevo_mensaje.tipo != TipoMensajeChat.sistema.value:
         _notificar_mensaje_chat(
@@ -1712,10 +1734,13 @@ async def websocket_chat(
                 continue
 
             try:
-                _verificar_reserva_abierta(conversacion)
+                _verificar_escritura_reserva(conversacion, current_user)
             except HTTPException:
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return
+            from liquidaciones.chat import limpiar_metadata_cliente
+
+            metadata = limpiar_metadata_cliente(metadata)
 
             user_id_str = str(PyUUID(current_user["user_id"]))
             nuevo_mensaje = MensajeChat(

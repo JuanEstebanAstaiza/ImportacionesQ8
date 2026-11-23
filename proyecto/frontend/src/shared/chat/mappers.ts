@@ -22,5 +22,6 @@ export function mapBackendChatMessage(
     read: true,
     proposal,
     archivoLiquidaciones,
+    system: message.tipo === "sistema",
   };
 }

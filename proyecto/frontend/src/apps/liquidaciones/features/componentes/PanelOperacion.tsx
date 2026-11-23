@@ -129,11 +129,12 @@ export function PanelOperacion({
   onReportar?: (referencia: string) => void;
 }) {
   const { data: op, isLoading, error } = useOperacion(operacionId);
-  const { data: adjuntos = [], error: errorAdjuntos } = useQuery({
+  // Adjuntos compartidos desde «Chats» o Documentos. Se recargan cuando llega un
+  // mensaje por el socket, en vez de consultarse cada pocos segundos.
+  const { data: adjuntos = [], error: errorAdjuntos, refetch: recargarAdjuntos } = useQuery({
     queryKey: ["chat", "adjuntos", operacionId],
     queryFn: () => businessService.listChatAttachments(operacionId),
     enabled: Boolean(op),
-    refetchInterval: 8_000,
   });
   const invalidar = useInvalidarLiquidaciones();
   const ahora = useAhora();
@@ -144,7 +145,7 @@ export function PanelOperacion({
   const [accionando, setAccionando] = useState(false);
   const finChat = useRef<HTMLDivElement>(null);
   const totalMensajes = op?.mensajes.length ?? 0;
-  useChatSocket(operacionId, () => { void invalidar(); });
+  useChatSocket(operacionId, () => { void invalidar(); void recargarAdjuntos(); });
 
   useEffect(() => {
     finChat.current?.scrollIntoView({ block: "nearest" });

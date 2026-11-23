@@ -3,8 +3,8 @@ import { MODULOS_SUITE, moduloDe, type Producto } from "@shared/suite/suite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
-import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline } from "@shared/ui/design-system";
+import { Archive, ArchiveRestore, ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSignature, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
+import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline, openSmartContact } from "@shared/ui/design-system";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@shared/layout/AppHeader";
 import { FormatFileIcon } from "@shared/ui/files/FormatFileIcon";
@@ -1303,15 +1303,28 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                   const mostrarAutor=Boolean(msg.authorName)
                     &&(isClient||enSalaEquipo||conv.type==="soporte"||Boolean(conv.atiendeNombre))
                     &&(!prevMsg||prevMsg.authorName!==msg.authorName||prevMsg.sender!==msg.sender);
+                  const divisorFecha=msg.dateGroup&&(
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 h-px bg-border"/>
+                      <span className="text-xs text-muted-foreground font-medium px-2 py-0.5 bg-white border border-border rounded-full">{msg.dateGroup}</span>
+                      <div className="flex-1 h-px bg-border"/>
+                    </div>
+                  );
+                  // En una reserva los avisos del sistema (reservó, venció, se
+                  // canceló, escribió Soporte Zarpi) no son de ninguna de las partes.
+                  if(msg.system&&conv.type==="reserva")return (
+                    <div key={msg.id}>
+                      {divisorFecha}
+                      <div className="my-2 flex justify-center">
+                        <p className="max-w-[85%] rounded-lg bg-muted px-3 py-1.5 text-center text-xs text-muted-foreground">
+                          {msg.text}<span className="ml-2 text-[10px] opacity-70">{msg.time}</span>
+                        </p>
+                      </div>
+                    </div>
+                  );
                   return (
                     <div key={msg.id}>
-                      {msg.dateGroup&&(
-                        <div className="flex items-center gap-3 my-4">
-                          <div className="flex-1 h-px bg-border"/>
-                          <span className="text-xs text-muted-foreground font-medium px-2 py-0.5 bg-white border border-border rounded-full">{msg.dateGroup}</span>
-                          <div className="flex-1 h-px bg-border"/>
-                        </div>
-                      )}
+                      {divisorFecha}
                       <div className={clsx("flex gap-2 items-end mb-0.5",isClient?"justify-end":"justify-start")}>
                         {!isClient&&(enSalaEquipo&&msg.authorName
                           ?<Avatar initials={initialsFromName(msg.authorName)} size="sm" color={importerColorFromId(msg.authorName)}/>
