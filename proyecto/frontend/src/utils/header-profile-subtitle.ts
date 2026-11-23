@@ -1,4 +1,4 @@
-export type HeaderSubtitleRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer";
+export type HeaderSubtitleRole = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora";
 
 export interface ResolveHeaderSubtitleInput {
   role: HeaderSubtitleRole;
@@ -36,6 +36,10 @@ export function resolveHeaderSubtitle(input: ResolveHeaderSubtitleInput): string
 
   if (role === "designer") {
     return "Equipo de diseño";
+  }
+
+  if (role === "maquiladora") {
+    return "Maquila · Zarpi Maquilas";
   }
 
   return "Comprador";

@@ -15,7 +15,7 @@ from services import configuracion
 
 # Productos de la suite. Un ticket de la mesa de ayuda dice de cuál viene; los que
 # no lo dicen (anteriores a la suite) son de Importaciones.
-MODULOS_SUITE = ("importaciones", "liquidaciones")
+MODULOS_SUITE = ("importaciones", "liquidaciones", "maquilas")
 MODULO_POR_DEFECTO = "importaciones"
 
 # clave pública → (clave en configuracion_plataforma, nombre, descripción)
@@ -60,6 +60,12 @@ MODULOS = {
         "Marketplace de lotes a precio fijo entre empresas. Apagado, desaparece del selector de producto "
         "y del panel, y su API responde 404; los datos se conservan en su base aparte.",
     ),
+    "maquilas": (
+        "modulos.maquilas",
+        "Zarpi Maquilas",
+        "Conecta a clientes con maquiladoras verificadas para fabricar su marca. Apagado, desaparece del "
+        "selector y del panel, y su API responde 404; los datos se conservan en su base aparte.",
+    ),
 }
 
 
@@ -78,6 +84,8 @@ def _por_defecto(nombre: str) -> bool:
         return bool(config.PAGO_MANUAL_CURSOS)
     if nombre == "liquidaciones":
         return bool(config.MODULO_LIQUIDACIONES_HABILITADO)
+    if nombre == "maquilas":
+        return bool(config.MODULO_MAQUILAS_HABILITADO)
     return True
 
 

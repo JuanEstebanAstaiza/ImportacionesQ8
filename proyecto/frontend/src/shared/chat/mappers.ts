@@ -7,6 +7,12 @@ export function mapBackendChatMessage(
   currentUserId: string | undefined,
 ): ChatMsg {
   const proposal = message.tipo === "propuesta" ? leerPropuestaDeMensaje(message.metadata) : undefined;
+  const liquidaciones = message.metadata?.liquidaciones;
+  const archivo = liquidaciones && typeof liquidaciones === "object" && "archivo" in liquidaciones
+    ? liquidaciones.archivo : null;
+  const archivoLiquidaciones = archivo && typeof archivo === "object" && "url" in archivo && typeof archivo.url === "string"
+    ? { url: archivo.url, nombre: "nombre" in archivo && typeof archivo.nombre === "string" ? archivo.nombre : "Documento" }
+    : undefined;
   return {
     id: message.id,
     sender: message.de_mi_lado && message.remitente_id === currentUserId ? "client" : "provider",
@@ -15,5 +21,7 @@ export function mapBackendChatMessage(
     time: formatChatTime(message.fecha_envio),
     read: true,
     proposal,
+    archivoLiquidaciones,
+    system: message.tipo === "sistema",
   };
 }

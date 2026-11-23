@@ -8,7 +8,7 @@ import type { PrefillSolicitud } from "./prefill";
 
 /** Piezas compartidas por el feed, la ficha, el envío de enlaces y los recomendados. */
 
-export type RolTendencias = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" | null;
+export type RolTendencias = "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora" | null;
 
 /** Solo compradores y visitantes ven el botón de cotizar; App lleva al visitante a registrarse. */
 export function puedeCotizar(rol: RolTendencias): boolean {

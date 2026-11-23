@@ -10,6 +10,33 @@ function destinoLiquidaciones(tipo: string, data: Record<string, unknown>): Pick
   return { destino: loteId ? "liq-mis-lotes" : "liq-catalogo" };
 }
 
+/** A qué pantalla lleva un aviso de Zarpi Maquilas (tipos `maquila_*`). */
+function destinoMaquilas(tipo: string, data: Record<string, unknown>): Pick<AppNotification, "destino" | "destinoId"> {
+  const texto = (clave: string) => (typeof data[clave] === "string" ? (data[clave] as string) : undefined);
+  const maquiladoraId = texto("maquiladora_id");
+  const solicitudId = texto("solicitud_id");
+  const pedidoId = texto("pedido_id");
+  const encargoId = texto("encargo_id");
+  // Encargos de diseño: el cliente y Diseño abren el mismo detalle.
+  if (encargoId) return { destino: "maq-encargo", destinoId: encargoId };
+  // Al equipo: el expediente que hay que revisar.
+  if (tipo === "maquila_en_revision" || tipo === "maquila_registrada") return { destino: "maq-admin-verificacion", destinoId: maquiladoraId };
+  // Pedido: cada lado lo ve en su sección.
+  if (pedidoId) return { destino: texto("lado_destino") === "cliente" ? "maq-pedidos" : "maq-produccion", destinoId: pedidoId };
+  // Mensajes de la negociación: al cliente, su solicitud; a la maquila, la recibida.
+  if (tipo === "maquila_mensaje" && solicitudId) {
+    return { destino: texto("lado_destino") === "cliente" ? "maq-solicitudes" : "maq-recibidas", destinoId: solicitudId };
+  }
+  if (tipo === "maquila_solicitud" || tipo === "maquila_solicitud_cancelada" || tipo === "maquila_propuesta_descartada") {
+    return { destino: "maq-recibidas", destinoId: solicitudId };
+  }
+  if (tipo === "maquila_propuesta" || tipo === "maquila_solicitud_rechazada") return { destino: "maq-solicitudes", destinoId: solicitudId };
+  if (tipo === "maquila_resena") return { destino: "maq-resenas" };
+  if (tipo === "maquila_producto_oculto") return { destino: "maq-catalogo" };
+  // Verificación: la maquila va a su perfil.
+  return { destino: "maq-perfil" };
+}
+
 function formatShortDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
@@ -35,6 +62,17 @@ export function mapBackendNotificationToUi(notification: { id: string; tipo: str
   const body = approval && cotizacionId
      ? `Tu cotización con ID ${cotizacionId} para la empresa ${company} ha sido aprobada. Se ha abierto un chat directo donde encontrarás las instrucciones y siguientes pasos para continuar.`
     : notification.mensaje;
+  if (notification.tipo.startsWith("maquila_")) {
+    return {
+      id: notification.id,
+      type: "status",
+      title: notification.titulo,
+      body: notification.mensaje,
+      date: formatShortDate(notification.fecha_creacion),
+      read: notification.leida,
+      ...destinoMaquilas(notification.tipo, data),
+    };
+  }
   if (notification.tipo.startsWith("liquidacion_")) {
     return {
       id: notification.id,

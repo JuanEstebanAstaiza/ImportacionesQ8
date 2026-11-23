@@ -76,6 +76,27 @@ DESIGNERS = [
     {"email": "designer@q8demo.com", "nombre": "Dani Diseño"},
 ]
 
+# Zarpi Maquilas: una ya verificada (aparece en el directorio) y otra por
+# completar, para probar el expediente y la verificación desde el admin.
+MAQUILADORAS = [
+    {
+        "email": "maquila@q8demo.com", "nombre": "Sofía", "apellido": "Arango",
+        "razon_social": "Confecciones Aburrá S.A.S.", "nombre_comercial": "Confecciones Aburrá",
+        "nit": "901555111-2", "ciudad": "Medellín", "estado": "verificada",
+        "descripcion": "Taller de confección con 40 operarias: camisetas, sudaderas y uniformes con tu marca.",
+        "categorias": ["textil"], "procesos": ["Corte", "Confección", "Estampado", "Bordado", "Empaque"],
+        "pedido_minimo": 100, "capacidad_mensual": 15000, "dias_muestra": 7, "dias_produccion": 25,
+    },
+    {
+        "email": "maquila2@q8demo.com", "nombre": "Andrés", "apellido": "Lozano",
+        "razon_social": "Laboratorio Cosmético del Valle S.A.S.", "nombre_comercial": "Cosmética del Valle",
+        "nit": "901555222-3", "ciudad": "Cali", "estado": "registrada",
+        "descripcion": "",
+        "categorias": ["cosmetica"], "procesos": ["Formulación", "Llenado y envasado", "Etiquetado"],
+        "pedido_minimo": 300, "capacidad_mensual": 20000, "dias_muestra": 15, "dias_produccion": 30,
+    },
+]
+
 
 def _upsert_usuario(db, *, email, rol, nombre=None, apellido=None, importador_id=None):
     """Deja la cuenta en un estado utilizable sin tocar su historial."""
@@ -135,6 +156,38 @@ def _upsert_empresa(db, datos):
     return empresa, creada
 
 
+def _upsert_maquiladora(usuario, datos):
+    """La empresa vive en la base de Maquilas (Mongo), no en MySQL."""
+    from maquilas.db import asegurar_indices, obtener_db
+    from maquilas.servicio import nit_normalizado
+
+    mongo = obtener_db()
+    asegurar_indices(mongo)
+    ahora = datetime.utcnow()
+    existente = mongo.miembros.find_one({"_id": usuario.id})
+    maquiladora_id = existente["maquiladora_id"] if existente else str(uuid4())
+    campos = {k: datos[k] for k in ("razon_social", "nombre_comercial", "nit", "ciudad", "estado", "descripcion",
+                                    "categorias", "procesos", "pedido_minimo", "capacidad_mensual",
+                                    "dias_muestra", "dias_produccion")}
+    campos.update({
+        "nit_normalizado": nit_normalizado(datos["nit"]),
+        "representante": {"nombre": datos["nombre"], "apellido": datos["apellido"], "email": datos["email"]},
+        "dueno_usuario_id": usuario.id,
+        "actualizado_en": ahora,
+        "verificada_en": ahora if datos["estado"] == "verificada" else None,
+    })
+    mongo.maquiladoras.update_one(
+        {"_id": maquiladora_id},
+        {"$set": campos, "$setOnInsert": {"creado_en": ahora, "certificaciones": [], "galeria": [],
+                                          "documentos": {"rut": None, "camara_comercio": None, "certificados": []}}},
+        upsert=True,
+    )
+    mongo.miembros.update_one({"_id": usuario.id},
+                              {"$set": {"maquiladora_id": maquiladora_id, "rol": "dueno"},
+                               "$setOnInsert": {"creado_en": ahora}}, upsert=True)
+    return existente is None
+
+
 def main() -> None:
     db = SessionLocal()
     filas = []
@@ -173,6 +226,18 @@ def main() -> None:
                     nombre=asesor["nombre"], importador_id=empresa.id,
                 )
                 filas.append(("asesor (empleado)", asesor["email"], etiqueta, creado))
+
+        for datos in MAQUILADORAS:
+            usuario, creado = _upsert_usuario(
+                db, email=datos["email"], rol="maquiladora", nombre=datos["nombre"], apellido=datos["apellido"])
+            usuario.tipo_persona, usuario.nit, usuario.razon_social = "juridica", datos["nit"], datos["razon_social"]
+            db.commit()
+            try:
+                _upsert_maquiladora(usuario, datos)
+                etiqueta = f"{datos['nombre_comercial']} ({datos['estado']})"
+            except Exception as exc:  # noqa: BLE001 - sin Mongo el resto de cuentas sigue sirviendo
+                etiqueta = f"sin Mongo: {exc.__class__.__name__}"
+            filas.append(("maquiladora", datos["email"], etiqueta, creado))
     finally:
         db.close()
 

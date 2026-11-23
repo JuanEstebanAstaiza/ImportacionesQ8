@@ -10,7 +10,7 @@ export interface AppNotification {
   cotizacionId?: string;
   conversationId?: string;
   approval?: boolean;
-  destino?: "tendencias-enviar" | "catalogos" | "reto" | "diseno" | "pagos" | "admin-pagos" | Extract<Screen, `liq-${string}`>;
+  destino?: "tendencias-enviar" | "catalogos" | "reto" | "diseno" | "pagos" | "admin-pagos" | Extract<Screen, `liq-${string}` | `maq-${string}`>;
   /** Identificador que la pantalla de destino lleva en la URL (lote u operación de Liquidaciones). */
   destinoId?: string;
 }

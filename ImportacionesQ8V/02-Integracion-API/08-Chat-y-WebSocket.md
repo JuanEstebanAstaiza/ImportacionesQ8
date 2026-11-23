@@ -139,6 +139,7 @@ Array de `ConversacionChatResponse`:
 | `urgencia` | `Optional[string]` | no |  |
 | `solicitante_rol` | `Optional[string]` | no |  |
 | `no_leidos` | `integer` | no |  |
+| `archivada` | `boolean` | no | Preferencia de archivo del usuario autenticado |
 | `cerrada` | `boolean` | no |  |
 | `resolucion` | `Optional[string]` | no |  |
 | `cerrada_por_nombre` | `Optional[string]` | no |  |
@@ -151,6 +152,15 @@ Array de `ConversacionChatResponse`:
 | `comentario_calificacion` | `Optional[string]` | no |  |
 | `fecha_creacion` | `string` | sí |  |
 | `ultimo_mensaje` | `Optional[MensajeChatResponse]` | no |  |
+
+---
+
+### `PUT /chat/conversaciones/{conversacion_id}/archivado`
+
+- **Auth:** Bearer JWT; requiere acceso a la conversación.
+- **Cuerpo:** `{"archivada": true}` para archivar o `{"archivada": false}` para desarchivar.
+- **Respuesta:** `{"archivada": true}` o `{"archivada": false}`.
+- El archivo es personal y no altera el estado de otros participantes. Los mensajes nuevos no desarchivan el hilo; se reflejan en `no_leidos`.
 
 ---
 

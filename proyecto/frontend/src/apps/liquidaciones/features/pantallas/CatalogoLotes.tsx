@@ -49,18 +49,18 @@ export function CatalogoLotes({ onAbrir, titulo = "Oportunidades por lote, a pre
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por producto, categoría o vendedor…"
-            className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:focus:border-accent dark:focus:ring-accent/20"
           />
         </label>
-        <Select aria-label="Ciudad" value={filtros.ciudad ?? ""} onChange={(e) => fijar({ ciudad: e.target.value || undefined })}>
+        <Select aria-label="Ciudad" value={filtros.ciudad ?? ""} onChange={(e) => fijar({ ciudad: e.target.value || undefined })} className="dark:focus:border-accent dark:focus:ring-accent/20">
           <option value="">Ciudad</option>
           {(data?.ciudades ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
         </Select>
-        <Select aria-label="Estado" value={filtros.condicion ?? ""} onChange={(e) => fijar({ condicion: (e.target.value || undefined) as Condicion | undefined })}>
+        <Select aria-label="Estado" value={filtros.condicion ?? ""} onChange={(e) => fijar({ condicion: (e.target.value || undefined) as Condicion | undefined })} className="dark:focus:border-accent dark:focus:ring-accent/20">
           <option value="">Estado</option>
           {ORDEN_CONDICIONES.map((c) => <option key={c} value={c}>{CONDICIONES[c].label}</option>)}
         </Select>
-        <Select aria-label="Forma de entrega" value={filtros.entrega ?? ""} onChange={(e) => fijar({ entrega: (e.target.value || undefined) as Entrega | undefined })}>
+        <Select aria-label="Forma de entrega" value={filtros.entrega ?? ""} onChange={(e) => fijar({ entrega: (e.target.value || undefined) as Entrega | undefined })} className="dark:focus:border-accent dark:focus:ring-accent/20">
           <option value="">Forma de entrega</option>
           {(Object.keys(ENTREGAS) as Entrega[]).map((e) => <option key={e} value={e}>{ENTREGAS[e]}</option>)}
         </Select>

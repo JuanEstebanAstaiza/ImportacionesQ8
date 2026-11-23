@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import type { MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import { ImageOff, Loader2, Play } from "lucide-react";
 
@@ -61,6 +63,66 @@ export function VideoLote({ video, estado, className }: { video: MedioRef; estad
   return <video src={url} controls preload="metadata" className={clsx("bg-black object-contain", className)} />;
 }
 
+function FotoConZoom({ foto, nombre }: { foto: MedioRef; nombre: string }) {
+  const [zoom, setZoom] = useState<{
+    src: string; left: number; top: number; size: number;
+    backgroundWidth: number; backgroundHeight: number; x: number; y: number;
+  } | null>(null);
+
+  function mover(e: MouseEvent<HTMLDivElement>) {
+    const imagen = e.currentTarget.querySelector("img");
+    if (!imagen || !imagen.naturalWidth || !imagen.naturalHeight) return;
+    const rect = imagen.getBoundingClientRect();
+    const escala = Math.min(rect.width / imagen.naturalWidth, rect.height / imagen.naturalHeight);
+    const ancho = imagen.naturalWidth * escala;
+    const alto = imagen.naturalHeight * escala;
+    const x = e.clientX - rect.left - (rect.width - ancho) / 2;
+    const y = e.clientY - rect.top - (rect.height - alto) / 2;
+    if (x < 0 || y < 0 || x > ancho || y > alto) {
+      setZoom(null);
+      return;
+    }
+
+    const size = Math.min(300, window.innerWidth - 24, window.innerHeight - 24);
+    const ampliacion = Math.max(2.5, size / ancho, size / alto);
+    const backgroundWidth = ancho * ampliacion;
+    const backgroundHeight = alto * ampliacion;
+    const left = rect.right + size + 12 <= window.innerWidth
+      ? rect.right + 8
+      : rect.left - size - 8 >= 0 ? rect.left - size - 8 : Math.max(12, Math.min(rect.right - size, window.innerWidth - size - 12));
+    setZoom({
+      src: imagen.currentSrc,
+      left,
+      top: Math.max(12, Math.min(rect.top, window.innerHeight - size - 12)),
+      size,
+      backgroundWidth,
+      backgroundHeight,
+      x: Math.max(size - backgroundWidth, Math.min(0, size / 2 - x * ampliacion)),
+      y: Math.max(size - backgroundHeight, Math.min(0, size / 2 - y * ampliacion)),
+    });
+  }
+
+  return (
+    <div className="h-full w-full [&_img]:!object-contain" onMouseMove={mover} onMouseLeave={() => setZoom(null)} onWheel={() => setZoom(null)}>
+      <FotoLote foto={foto} alt={nombre} className="h-full object-contain" />
+      {zoom && createPortal(
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed z-50 rounded-xl border border-border bg-white shadow-xl"
+          style={{
+            left: zoom.left, top: zoom.top, width: zoom.size, height: zoom.size,
+            backgroundImage: `url("${zoom.src}")`,
+            backgroundRepeat: "no-repeat",
+            backgroundSize: `${zoom.backgroundWidth}px ${zoom.backgroundHeight}px`,
+            backgroundPosition: `${zoom.x}px ${zoom.y}px`,
+          }}
+        />,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 /** Galería de la ficha: una vista grande y las miniaturas (fotos y videos). */
 export function GaleriaLote({ fotos, videos, estado, nombre }: { fotos: MedioRef[]; videos: MedioRef[]; estado: EstadoLote; nombre: string }) {
   const medios = [...fotos.map((m) => ({ ...m, tipo: "foto" as const })), ...videos.map((m) => ({ ...m, tipo: "video" as const }))];
@@ -75,7 +137,7 @@ export function GaleriaLote({ fotos, videos, estado, nombre }: { fotos: MedioRef
         ) : actual.tipo === "video" ? (
           <VideoLote video={actual} estado={estado} className="h-full w-full" />
         ) : (
-          <FotoLote foto={actual} alt={nombre} className="h-full object-contain" />
+          <FotoConZoom key={actual.id} foto={actual} nombre={nombre} />
         )}
       </div>
       {medios.length > 1 && (

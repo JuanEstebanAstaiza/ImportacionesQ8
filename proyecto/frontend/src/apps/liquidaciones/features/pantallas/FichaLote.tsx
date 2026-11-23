@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 import { Button, Card } from "@shared/ui/design-system";
+import { ImagenArchivo } from "@shared/ui/files/ImagenArchivo";
 import { Modal } from "@shared/ui/kit/Modal";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { liquidacionesService } from "@/services/liquidaciones.service";
@@ -143,7 +144,7 @@ export function FichaLote({
           ) : puedeComprar ? (
             <>
               <Button
-                variant="acento" className="mt-4"
+                variant="primary" className="mt-4 dark:bg-accent dark:text-black dark:hover:brightness-95 dark:active:brightness-90"
                 fullWidth
                 size="lg"
                 disabled={!disponible}
@@ -158,9 +159,13 @@ export function FichaLote({
         </Card>
 
         <Card padding="sm" className="flex items-center gap-3">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary dark:bg-accent/15 dark:text-accent">
-            {(lote.vendedor.razon_social || "?").split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}
-          </span>
+          {lote.vendedor.logo_url ? (
+            <ImagenArchivo src={lote.vendedor.logo_url} alt={`Logo de ${lote.vendedor.razon_social || "la empresa vendedora"}`} className="h-9 w-9 flex-shrink-0 rounded-lg border border-border bg-white" />
+          ) : (
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary dark:bg-accent/15 dark:text-accent">
+              {(lote.vendedor.razon_social || "?").split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}
+            </span>
+          )}
           <div className="min-w-0">
             <p className="flex items-center gap-1 truncate text-sm font-semibold">{lote.vendedor.razon_social}<CircleCheck className="h-3.5 w-3.5 text-emerald-500" /></p>
             <p className="text-xs text-muted-foreground">NIT {lote.vendedor.nit}{lote.vendedor.ciudad ? ` · ${lote.vendedor.ciudad}` : ""}</p>

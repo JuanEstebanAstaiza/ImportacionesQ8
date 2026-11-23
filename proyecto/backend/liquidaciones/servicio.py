@@ -19,6 +19,7 @@ alguien lo mira, sin depender de que un proceso aparte esté vivo.
 from __future__ import annotations
 
 import re
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -30,12 +31,14 @@ from pymongo.errors import DuplicateKeyError
 from sqlalchemy.orm import Session
 
 from liquidaciones import archivos, avisos, parametros
+from liquidaciones import chat as chat_reserva
 from liquidaciones.db import BUCKET_DOCUMENTOS, BUCKET_MEDIOS
 from liquidaciones.identidad import ROLES_CLIENTE, cuenta_de, es_empresa, es_equipo
 
 ESTADOS_LOTE = ("en_revision", "publicado", "rechazado", "reservado", "vendido", "cerrado_sin_venta")
 ESTADOS_EN_CATALOGO = ("publicado", "reservado")
 MAX_MENSAJES = 500
+logger = logging.getLogger("importacionesq8")
 
 
 def _ahora() -> datetime:
@@ -180,7 +183,8 @@ def vencer_pendientes(db: Database, sql: Optional[Session] = None) -> None:
         nuevo = "cerrado_sin_venta" if lote.get("cierra_en") and lote["cierra_en"] <= ahora else "publicado"
         db.lotes.update_one({"_id": op["lote_id"], "estado": "reservado"},
                             {"$set": {"estado": nuevo, "actualizado_en": ahora}})
-        _mensaje_sistema(db, op["_id"], "La reserva venció sin marcarse como vendida. El lote volvió a estar disponible.")
+        chat_reserva.avisar_en_chat(db, sql, op, "La reserva venció sin marcarse como vendida. "
+                                    "El lote volvió a estar disponible.")
         avisos.avisar(sql, cuenta=op["cuenta_comprador"], tipo="liquidacion_reserva_vencida",
                       titulo="Tu reserva venció", mensaje=f"La reserva de «{op['lote']['nombre']}» venció.",
                       data={"operacion_id": op["_id"], "lado": "comprador"})
@@ -300,6 +304,16 @@ def _campos_lote(datos) -> Dict[str, Any]:
 def _vendedor_de(activacion: Dict) -> Dict:
     return {"razon_social": activacion.get("razon_social"), "nit": activacion.get("nit"),
             "ciudad": activacion.get("ciudad")}
+
+
+def _logo_empresa(sql: Optional[Session], cuenta: Optional[str]) -> Optional[str]:
+    if not sql or not cuenta or not cuenta.startswith("empresa:"):
+        return None
+    from models.importador import Importador
+
+    empresa_id = cuenta.split(":", 1)[1]
+    empresa = sql.query(Importador).filter(Importador.id == empresa_id).first()
+    return empresa.logo_url if empresa else None
 
 
 def _requerir_empresa(usuario: dict) -> None:
@@ -454,8 +468,8 @@ def catalogo(
     }
 
 
-def vista_publica(db: Database, limite: int) -> List[Dict]:
-    vencer_pendientes(db)
+def vista_publica(db: Database, sql: Optional[Session], limite: int) -> List[Dict]:
+    vencer_pendientes(db, sql)
     lotes = db.lotes.find({"estado": "publicado"}).sort([("destacado", -1), ("cierra_en", 1)]).limit(limite)
     return [a_lote(l) for l in lotes]
 
@@ -469,6 +483,7 @@ def detalle_lote(db: Database, sql: Optional[Session], usuario: Optional[dict], 
     if lote["estado"] not in archivos.ESTADOS_LOTE_PUBLICOS and not propio and not (usuario and es_equipo(usuario)):
         raise _error(status.HTTP_404_NOT_FOUND, "Liquidación no encontrada")
     salida = a_lote(lote, usuario)
+    salida["vendedor"]["logo_url"] = _logo_empresa(sql, lote.get("cuenta_vendedor"))
     salida["mi_operacion_id"] = None
     if usuario:
         op = db.operaciones.find_one({"lote_id": lote_id, "cuenta_comprador": cuenta_de(usuario),
@@ -567,25 +582,6 @@ def lotes_admin(db: Database, sql: Session, usuario: dict, *, estado: Optional[s
 
 # ==================== Operaciones ====================
 
-def _mensaje_sistema(db: Database, operacion_id: str, contenido: str, *, remitente_id: Optional[str] = None,
-                     remitente_nombre: Optional[str] = None) -> Dict:
-    mensaje = {
-        "_id": str(uuid4()),
-        "operacion_id": operacion_id,
-        "remitente_id": remitente_id,
-        "remitente_cuenta": None,
-        "remitente_nombre": remitente_nombre,
-        "tipo": "sistema",
-        "contenido": contenido,
-        "archivo": None,
-        "fecha": _ahora(),
-    }
-    db.mensajes.insert_one(mensaje)
-    db.operaciones.update_one({"_id": operacion_id}, {"$set": {"ultimo_mensaje_en": mensaje["fecha"]},
-                                                       "$inc": {"total_mensajes": 1}})
-    return mensaje
-
-
 def reservar(db: Database, sql: Session, usuario: dict, lote_id: str) -> Dict:
     if usuario["rol"] not in ROLES_CLIENTE:
         raise _error(status.HTTP_403_FORBIDDEN, "El equipo de Zarpi no compra lotes")
@@ -632,6 +628,7 @@ def reservar(db: Database, sql: Session, usuario: dict, lote_id: str) -> Dict:
         "total_mensajes": 0,
         "ultimo_mensaje_en": ahora,
         "cerrada_en": None,
+        chat_reserva.CAMPO_EN_SUITE: True,
     }
     try:
         db.operaciones.insert_one(operacion)
@@ -643,9 +640,12 @@ def reservar(db: Database, sql: Session, usuario: dict, lote_id: str) -> Dict:
         db.lotes.update_one({"_id": lote_id, "estado": "reservado"}, {"$set": {"estado": "publicado"}})
         raise
 
-    _mensaje_sistema(db, operacion["_id"],
-                     f"{activacion.get('razon_social')} reservó el lote. Los datos de contacto ya están visibles "
-                     "para las dos partes.")
+    # La reserva ya es del comprador: si el chat falla aquí no se le devuelve un
+    # error (vería «falló» con el lote ya apartado). El chat se abre solo la
+    # próxima vez que alguno entre a la reserva o a «Chats».
+    chat_reserva.avisar_en_chat(db, sql, operacion,
+                                f"{activacion.get('razon_social')} reservó el lote. Los datos de contacto ya "
+                                "están visibles para las dos partes.")
     avisos.avisar(sql, cuenta=lote["cuenta_vendedor"], tipo="liquidacion_reservada",
                   titulo="Reservaron tu lote",
                   mensaje=f"{activacion.get('razon_social')} reservó «{lote['nombre']}». Tienes {horas} h para "
@@ -699,22 +699,6 @@ def a_operacion_resumen(op: Dict, usuario: Optional[dict] = None) -> Dict:
     }
 
 
-def a_mensaje(m: Dict, usuario: dict) -> Dict:
-    if m["tipo"] == "sistema":
-        autor = "equipo" if m.get("remitente_id") else "sistema"
-    else:
-        autor = "yo" if m.get("remitente_cuenta") == cuenta_de(usuario) else "contraparte"
-    return {
-        "id": m["_id"],
-        "tipo": m["tipo"],
-        "autor": autor,
-        "remitente_nombre": m.get("remitente_nombre"),
-        "contenido": m["contenido"],
-        "archivo": m.get("archivo"),
-        "fecha": _iso(m["fecha"]),
-    }
-
-
 def detalle_operacion(db: Database, sql: Optional[Session], usuario: dict, operacion_id: str, *,
                       vencer: bool = True) -> Dict:
     if vencer:
@@ -727,8 +711,43 @@ def detalle_operacion(db: Database, sql: Optional[Session], usuario: dict, opera
     }
     salida["comprobantes_pago"] = [archivos.ref_documento(r) for r in op.get("comprobantes_pago", [])]
     salida["facturas"] = [archivos.ref_documento(r) for r in op.get("facturas", [])]
-    mensajes = db.mensajes.find({"operacion_id": operacion_id}).sort("fecha", 1).limit(MAX_MENSAJES)
-    salida["mensajes"] = [a_mensaje(m, usuario) for m in mensajes]
+    salida["mensajes"] = _mensajes_de(db, sql, op, usuario)
+    return salida
+
+
+def _mensajes_de(db: Database, sql: Optional[Session], op: Dict, usuario: dict) -> List[Dict]:
+    """Los últimos mensajes del chat de la reserva, vistos por `usuario`."""
+    if sql is None:
+        return []
+    from models.chat import MensajeChat
+    from models.usuario import Usuario
+
+    try:
+        chat_reserva.asegurar_conversacion(db, sql, op)
+    except chat_reserva.ERRORES_CHAT:
+        # La ficha sigue sirviendo (estado, contactos, documentos) aunque el chat no.
+        sql.rollback()
+        logger.exception("No se pudo abrir el chat de la reserva %s", op["_id"])
+    mensajes = (sql.query(MensajeChat).filter(MensajeChat.conversacion_id == op["_id"])
+                .order_by(MensajeChat.fecha_envio.desc(), MensajeChat.id.desc()).limit(MAX_MENSAJES).all())
+    mensajes.reverse()
+    remitentes = {str(m.remitente_id) for m in mensajes}
+    nombres = {str(u.id): u.nombre for u in sql.query(Usuario.id, Usuario.nombre)
+               .filter(Usuario.id.in_(remitentes)).all()} if remitentes else {}
+    lados = chat_reserva.lados_de_usuarios(sql, op, remitentes)
+    mi_lado = _lado(op, usuario)
+    salida = []
+    for m in mensajes:
+        meta = (m.metadata_json or {}).get(chat_reserva.CLAVE_METADATA) or {}
+        if m.tipo == "sistema":
+            autor = "equipo" if meta.get("autor") == chat_reserva.AUTOR_EQUIPO else "sistema"
+        else:
+            autor = "yo" if lados.get(str(m.remitente_id)) == mi_lado else "contraparte"
+        salida.append({
+            "id": str(m.id), "tipo": str(m.tipo), "autor": autor,
+            "remitente_nombre": meta.get("autor") or nombres.get(str(m.remitente_id)),
+            "contenido": m.contenido, "archivo": meta.get("archivo"), "fecha": _iso(m.fecha_envio),
+        })
     return salida
 
 
@@ -746,26 +765,15 @@ def enviar_mensaje(db: Database, sql: Session, usuario: dict, operacion_id: str,
         raise _error(status.HTTP_403_FORBIDDEN, "El equipo interviene desde el panel de monitoreo")
     if op["estado"] in ("cancelada", "vencida"):
         raise _error(status.HTTP_409_CONFLICT, "Esta operación está cerrada")
-    activacion = obtener_activacion(db, cuenta_de(usuario)) or {}
-    mensaje = {
-        "_id": str(uuid4()),
-        "operacion_id": operacion_id,
-        "remitente_id": usuario["user_id"],
-        "remitente_cuenta": cuenta_de(usuario),
-        "remitente_nombre": activacion.get("contacto") or activacion.get("razon_social"),
-        "tipo": "texto",
-        "contenido": contenido,
-        "archivo": None,
-        "fecha": _ahora(),
-    }
-    db.mensajes.insert_one(mensaje)
-    db.operaciones.update_one({"_id": operacion_id}, {"$set": {"ultimo_mensaje_en": mensaje["fecha"]},
-                                                       "$inc": {"total_mensajes": 1}})
+    mensaje = chat_reserva.registrar_mensaje(db, sql, op, contenido=contenido, remitente_id=usuario["user_id"])
     otra = op["cuenta_vendedor"] if lado == "comprador" else op["cuenta_comprador"]
     avisos.avisar(sql, cuenta=otra, tipo="liquidacion_mensaje", titulo="Nuevo mensaje en una operación",
                   mensaje=f"«{op['lote']['nombre']}»: {contenido[:120]}",
                   data={"operacion_id": operacion_id, "lado": _otro_lado(lado)})
-    return a_mensaje(mensaje, usuario)
+    activacion = obtener_activacion(db, cuenta_de(usuario)) or {}
+    return {"id": str(mensaje.id), "tipo": "texto", "autor": "yo",
+            "remitente_nombre": activacion.get("contacto") or activacion.get("razon_social"),
+            "contenido": contenido, "archivo": None, "fecha": _iso(mensaje.fecha_envio)}
 
 
 def _cerrar_operacion(db: Database, op: Dict, nuevo_estado: str, extra: Dict) -> None:
@@ -791,7 +799,7 @@ def marcar_vendido(db: Database, sql: Session, usuario: dict, operacion_id: str)
     if _lado(op, usuario) != "vendedor":
         raise _error(status.HTTP_403_FORBIDDEN, "Solo el vendedor marca el lote como vendido")
     _cerrar_operacion(db, op, "vendida", {})
-    _mensaje_sistema(db, operacion_id, "El vendedor marcó el lote como vendido. Operación cerrada.")
+    chat_reserva.avisar_en_chat(db, sql, op, "El vendedor marcó el lote como vendido. Operación cerrada.")
     avisos.avisar(sql, cuenta=op["cuenta_comprador"], tipo="liquidacion_vendida",
                   titulo="Operación cerrada", mensaje=f"El vendedor marcó «{op['lote']['nombre']}» como vendido.",
                   data={"operacion_id": operacion_id, "lado": "comprador"})
@@ -808,7 +816,7 @@ def cancelar(db: Database, sql: Session, usuario: dict, operacion_id: str, motiv
     quien = {"comprador": "El comprador", "vendedor": "El vendedor", "equipo": "El equipo de Zarpi"}[lado]
     texto = f"{quien} canceló la reserva." + (f" Motivo: {motivo}" if motivo else "") + \
         " El lote volvió a estar disponible."
-    _mensaje_sistema(db, operacion_id, texto, remitente_id=usuario["user_id"] if lado == "equipo" else None)
+    chat_reserva.avisar_en_chat(db, sql, op, texto)
     for lado_destino, cuenta in (("vendedor", op["cuenta_vendedor"]), ("comprador", op["cuenta_comprador"])):
         if lado_destino == lado:
             continue
@@ -840,22 +848,9 @@ def adjuntar(db: Database, sql: Session, usuario: dict, operacion_id: str, archi
         raise _error(status.HTTP_409_CONFLICT, "Ese documento ya está adjunto")
 
     info = archivos.ref_documento(referencia)
-    activacion = obtener_activacion(db, cuenta_de(usuario)) or {}
     nombre = "el comprobante de pago" if tipo == "comprobante_pago" else "la factura"
-    mensaje = {
-        "_id": str(uuid4()),
-        "operacion_id": operacion_id,
-        "remitente_id": usuario["user_id"],
-        "remitente_cuenta": cuenta_de(usuario),
-        "remitente_nombre": activacion.get("contacto") or activacion.get("razon_social"),
-        "tipo": "archivo",
-        "contenido": f"Adjuntó {nombre}.",
-        "archivo": info,
-        "fecha": _ahora(),
-    }
-    db.mensajes.insert_one(mensaje)
-    db.operaciones.update_one({"_id": operacion_id}, {"$set": {"ultimo_mensaje_en": mensaje["fecha"]},
-                                                       "$inc": {"total_mensajes": 1}})
+    chat_reserva.avisar_en_chat(db, sql, op, f"Adjuntó {nombre}.", tipo="archivo",
+                                remitente_id=usuario["user_id"], archivo=info)
     otra = op["cuenta_vendedor"] if lado == "comprador" else op["cuenta_comprador"]
     avisos.avisar(sql, cuenta=otra, tipo=f"liquidacion_{tipo}",
                   titulo="Nuevo documento en una operación",
@@ -886,8 +881,9 @@ def intervenir(db: Database, sql: Session, usuario: dict, operacion_id: str, con
     op = db.operaciones.find_one({"_id": operacion_id})
     if not op:
         raise _error(status.HTTP_404_NOT_FOUND, "Operación no encontrada")
-    _mensaje_sistema(db, operacion_id, f"[Soporte Zarpi] {contenido}", remitente_id=usuario["user_id"],
-                     remitente_nombre="Soporte Zarpi")
+    chat_reserva.registrar_mensaje(db, sql, op, contenido=f"[{chat_reserva.AUTOR_EQUIPO}] {contenido}",
+                                   tipo="sistema", remitente_id=usuario["user_id"],
+                                   autor=chat_reserva.AUTOR_EQUIPO)
     for lado_destino, cuenta in (("vendedor", op["cuenta_vendedor"]), ("comprador", op["cuenta_comprador"])):
         avisos.avisar(sql, cuenta=cuenta, tipo="liquidacion_soporte", titulo="Soporte Zarpi escribió en tu operación",
                       mensaje=f"«{op['lote']['nombre']}»: {contenido[:120]}",

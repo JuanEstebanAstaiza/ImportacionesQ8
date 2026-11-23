@@ -235,21 +235,23 @@ export function ActivarLiquidaciones({ onActivada, onCancelar }: { onActivada: (
               value={form.razon_social}
               onChange={cambiar("razon_social")}
               error={errores.razon_social}
+              className="dark:focus:border-accent dark:focus:ring-accent/20"
               maxLength={200}
               autoComplete="organization"
             />
           </div>
-          <Input id="liq-nit" label="NIT" value={form.nit} onChange={cambiar("nit")} error={errores.nit} maxLength={30} />
+          <Input id="liq-nit" label="NIT" value={form.nit} onChange={cambiar("nit")} error={errores.nit} className="dark:focus:border-accent dark:focus:ring-accent/20" maxLength={30} />
           <Input
             id="liq-contacto"
             label="Persona de contacto"
             value={form.contacto}
             onChange={cambiar("contacto")}
             error={errores.contacto}
+            className="dark:focus:border-accent dark:focus:ring-accent/20"
             maxLength={120}
             autoComplete="name"
           />
-          <Input id="liq-ciudad" label="Ciudad" value={form.ciudad} onChange={cambiar("ciudad")} error={errores.ciudad} maxLength={80} />
+          <Input id="liq-ciudad" label="Ciudad" value={form.ciudad} onChange={cambiar("ciudad")} error={errores.ciudad} className="dark:focus:border-accent dark:focus:ring-accent/20" maxLength={80} />
           <Input
             id="liq-telefono"
             label="Celular"
@@ -258,6 +260,7 @@ export function ActivarLiquidaciones({ onActivada, onCancelar }: { onActivada: (
             value={form.telefono}
             onChange={cambiar("telefono")}
             error={errores.telefono}
+            className="dark:focus:border-accent dark:focus:ring-accent/20"
             maxLength={30}
             autoComplete="tel"
           />
@@ -268,6 +271,7 @@ export function ActivarLiquidaciones({ onActivada, onCancelar }: { onActivada: (
               value={form.direccion}
               onChange={cambiar("direccion")}
               error={errores.direccion}
+              className="dark:focus:border-accent dark:focus:ring-accent/20"
               maxLength={200}
               autoComplete="street-address"
             />

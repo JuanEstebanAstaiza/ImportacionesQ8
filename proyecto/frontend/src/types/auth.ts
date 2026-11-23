@@ -1,4 +1,4 @@
-export type BackendAuthRole = "solicitante" | "importador" | "admin" | "asesor";
+export type BackendAuthRole = "solicitante" | "importador" | "admin" | "asesor" | "maquiladora";
 
 export interface LoginRequest {
 	email: string;

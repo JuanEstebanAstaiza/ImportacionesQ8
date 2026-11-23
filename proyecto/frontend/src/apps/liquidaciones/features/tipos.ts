@@ -53,7 +53,7 @@ export interface Lote {
   cierra_en: string | null;
   destacado: boolean;
   estado: EstadoLote;
-  vendedor: { razon_social: string | null; nit: string | null; ciudad: string | null };
+  vendedor: { razon_social: string | null; nit: string | null; ciudad: string | null; logo_url?: string | null };
   es_mio: boolean;
   publicado_en: string | null;
   enviado_en: string | null;

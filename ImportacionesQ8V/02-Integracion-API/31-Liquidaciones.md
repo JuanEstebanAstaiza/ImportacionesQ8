@@ -6,7 +6,7 @@ Tono del producto: se habla de **oportunidad**, nunca de «baja rotación», «s
 
 ## Arquitectura
 
-- **Base aparte.** Todo el módulo vive en MongoDB (`zarpi_liquidaciones`); con MySQL solo comparte el login y los usuarios (el JWT dice quién es y con qué rol). Código: paquete `proyecto/backend/liquidaciones/`.
+- **Base aparte.** Los lotes, reservas y documentos viven en MongoDB (`zarpi_liquidaciones`); el chat de cada reserva usa el sistema común de conversaciones en MySQL. Código: paquete `proyecto/backend/liquidaciones/`.
 - **Archivos en GridFS**, en dos buckets:
   - `medios`: fotos y videos de los lotes.
   - `documentos`: fichas técnicas, comprobantes de pago, facturas y RUT.
@@ -75,6 +75,17 @@ en_revision → publicado → reservado → vendido
 ## Mesa de ayuda compartida
 
 `POST /chat/soporte` acepta `modulo` (`importaciones` | `liquidaciones`) y `referencia` (`lote:<id>`, `operacion:<id>`). El panel de contexto del ticket muestra el producto y la referencia; la bandeja `/chats` es común a la suite y abrirla no cambia de producto. La migración `20261024_0045` añade esas columnas a `conversaciones_chat`; los tickets anteriores se leen como de Importaciones. `GET /admin/conversaciones?modulo=` filtra, y la bandeja del equipo tiene chips por producto.
+
+### Chat de la reserva
+
+Al reservar se crea un chat de tipo `reserva` con el mismo identificador que la operación. El comprador y el equipo de la empresa vendedora lo encuentran en la bandeja común como `RES-...`; el detalle de la reserva y la bandeja leen y escriben en el mismo hilo. Código: `liquidaciones/chat.py`.
+
+- **Dónde viven los mensajes (decisión).** En el chat compartido de la suite (MySQL), como la mesa de ayuda: así tienen tiempo real, adjuntos, avisos y archivado sin repetir esa infraestructura. Los datos del negocio (lotes, operaciones, comprobantes, facturas) siguen en Mongo. Todos los mensajes se escriben ahí, también los avisos automáticos (reservó, venció, vendido, cancelado), los documentos adjuntos y las intervenciones del equipo; `total_mensajes` y `ultimo_mensaje_en` de la operación se actualizan para el monitoreo.
+- **Historial anterior.** La colección `mensajes` de Mongo solo guarda lo de antes del cambio. La primera vez que se toca una reserva vieja se copia al chat con su id original (idempotente) y la operación queda con `chat_en_suite: true`; las reservas nuevas nacen así y Mongo ya no se vuelve a leer.
+- **Si el chat falla.** La reserva, la cancelación o el vencimiento ya hechos no se deshacen ni responden con error: el aviso se registra en el log y el chat se abre la próxima vez que alguien entre a la reserva o a `/chats`. Una reserva con datos rotos se omite de la bandeja sin tumbarla.
+- **Quién escribe.** Comprador y vendedor (cualquiera de sus usuarios), solo con la reserva activa. El equipo de Zarpi lee el hilo pero no escribe desde `/chats` (403): interviene con `POST /admin/operaciones/{id}/intervenir`, que firma el mensaje como «Soporte Zarpi» y avisa a las dos partes.
+- **Metadata reservada.** La clave `liquidaciones` de `metadata` (autor y documento adjunto) solo la escribe el backend; si un cliente la manda por REST o WebSocket se descarta.
+- En `/chats` los avisos automáticos de una reserva se pintan como aviso centrado, no como burbuja de una de las partes.
 
 ## Frontend
 

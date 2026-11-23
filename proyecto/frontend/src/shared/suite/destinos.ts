@@ -8,12 +8,13 @@ export function crearDestinosSuite(opts: {
   /** Pantalla de inicio de Importaciones para quien ya tiene sesión. */
   inicioImportaciones: Screen;
   liquidacionesActiva: boolean;
+  maquilasActiva: boolean;
 }): DestinosSuite {
-  const { goTo, inicioImportaciones, liquidacionesActiva } = opts;
+  const { goTo, inicioImportaciones, liquidacionesActiva, maquilasActiva } = opts;
   return {
     importaciones: () => goTo(inicioImportaciones),
     liquidaciones: liquidacionesActiva ? () => goTo("liq-landing") : undefined,
     marketplace: () => goTo("mkt-landing"),
-    maquilas: () => goTo("maq-landing"),
+    maquilas: maquilasActiva ? () => goTo("maq-landing") : undefined,
   };
 }

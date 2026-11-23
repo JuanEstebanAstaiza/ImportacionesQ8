@@ -27,6 +27,8 @@ export interface ContenidoLandingApp {
   bloques: { icono: LucideIcon; titulo: string; texto: string; items: string[] }[];
   cierreTitulo: string;
   cierreTexto: string;
+  /** App que todavía es solo vitrina: muestra las notas de «prototipo». Por defecto, sí. */
+  prototipo?: boolean;
 }
 
 export type PropsLandingApp = {
@@ -38,6 +40,8 @@ export type PropsLandingApp = {
   onCrearCuenta: () => void;
   onEntrar: () => void;
   onPolicy: (page: LegalPage) => void;
+  /** Botón secundario del hero, si lleva a otro lado (p. ej. «Registra tu maquila»). Sin él, hace lo mismo que el principal. */
+  onCtaSecundario?: () => void;
 };
 
 const SECCIONES = [
@@ -46,7 +50,7 @@ const SECCIONES = [
 ] as const;
 
 /** Landing pública genérica de una app de la suite; el acento llega por `contenido.acento`. */
-export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesion, onCrearCuenta, onEntrar, onPolicy }: PropsLandingApp) {
+export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesion, onCrearCuenta, onEntrar, onPolicy, onCtaSecundario }: PropsLandingApp) {
   const acentoTexto: CSSProperties = { color: c.acento };
   const acentoFondo: CSSProperties = { backgroundColor: c.acento };
   const cta = () => (autenticado ? onEntrar() : onCrearCuenta());
@@ -63,7 +67,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
       onCrearCuenta={onCrearCuenta}
       onEntrar={onEntrar}
       onPolicy={onPolicy}
-      notaPie={`Prototipo visual con contenido de ejemplo. ${c.nombre} aún no está disponible.`}
+      notaPie={c.prototipo === false ? undefined : `Prototipo visual con contenido de ejemplo. ${c.nombre} aún no está disponible.`}
     >
       {/* HERO */}
       <section className="relative overflow-hidden px-4 pb-20 pt-14 sm:px-6 lg:pt-20">
@@ -78,7 +82,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">{c.texto}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <BotonAcento grande acento={c.acento} onClick={cta}>{c.ctaPrimario} <ArrowRight className="h-4 w-4" /></BotonAcento>
-              <Button variant="secondary" size="lg" className="h-11 px-6" onClick={cta}>{c.ctaSecundario}</Button>
+              <Button variant="secondary" size="lg" className="h-11 px-6" onClick={onCtaSecundario ?? cta}>{c.ctaSecundario}</Button>
             </div>
             <ul className="mt-8 space-y-2.5 text-sm text-muted-foreground">
               {c.puntos.map(({ icono: Icono, texto }) => (
@@ -98,7 +102,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
                 <p className="mt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">{e.etiqueta}</p>
               </div>
             ))}
-            <p className="col-span-2 text-center text-xs text-muted-foreground">Cifras de ejemplo del prototipo.</p>
+            {c.prototipo !== false && <p className="col-span-2 text-center text-xs text-muted-foreground">Cifras de ejemplo del prototipo.</p>}
           </div>
         </div>
       </section>
@@ -157,7 +161,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
               <p className="mt-2 leading-relaxed text-white/85">{c.cierreTexto}</p>
             </div>
             <div className="flex flex-shrink-0 flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={cta} className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90">
+              <button type="button" onClick={cta} style={{ backgroundColor: "#ffffff", color: "#0a0a0a" }} className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg px-6 text-sm font-semibold transition hover:opacity-90">
                 {c.ctaPrimario} <ArrowRight className="h-4 w-4" />
               </button>
               {!autenticado && (

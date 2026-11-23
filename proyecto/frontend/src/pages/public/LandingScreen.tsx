@@ -360,7 +360,7 @@ export function LandingScreen({onLogin,onRegister,onPolicy,onTendencias,onReto,o
                   type="button"
                   onClick={() => {
                     setMenuAbierto(false);
-                    if (section.key === "planes") onPlanes();
+                    if (section.key === "planes") irAPlanes();
                     else if (section.key === "tendencias") onTendencias();
                     else if (section.key === "reto") onReto();
                     else irA(section.key);
@@ -671,7 +671,7 @@ function LandingHowItWorksSection({onVerPlanes,onAplicarImportadora}:{onVerPlane
           <Card padding="lg" className="flex flex-col">
             <h2 className="text-base font-bold mb-3">Para empresas importadoras</h2>
             <div className="flex-1"><ListaChequeo items={PARA_IMPORTADORAS}/></div>
-            <Button variant="primary" className="mt-7 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" icon={<Building2 className="w-4 h-4"/>} onClick={()=>contactar("nacionalizadora")}>Aplicar como empresa importadora</Button>
+            <Button variant="primary" className="mt-7 dark:bg-accent dark:text-accent-foreground dark:hover:bg-accent/80" icon={<Building2 className="w-4 h-4"/>} onClick={onAplicarImportadora}>Aplicar como empresa importadora</Button>
           </Card>
         </div>
         <div id="preguntas" className="scroll-mt-28 max-w-5xl mx-auto">

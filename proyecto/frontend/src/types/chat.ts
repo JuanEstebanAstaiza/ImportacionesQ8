@@ -1,4 +1,4 @@
-export type ChatType = "orden" | "cotizacion" | "interno" | "soporte" | "equipo";
+export type ChatType = "orden" | "cotizacion" | "reserva" | "interno" | "soporte" | "equipo";
 
 export type MsgFileType = "pdf" | "excel" | "word" | "image";
 
@@ -13,11 +13,14 @@ export interface ChatMsg {
   sender: "client" | "provider";
   text?: string;
   file?: MsgFile;
+  archivoLiquidaciones?: { url: string; nombre: string };
   time: string;
   read: boolean;
   dateGroup?: string;
   proposal?: PropuestaEnMensaje;
   authorName?: string;
+  /** Aviso automático (reservó, venció, canceló…): se pinta como aviso, no como burbuja. */
+  system?: boolean;
 }
 
 export interface ChatConv {
@@ -48,6 +51,7 @@ export interface ChatConv {
   modulo?: string;
   /** Sobre qué se pidió ayuda, si se abrió desde algo concreto («operacion:<id>»). */
   referencia?: string;
+  ladoReserva?: "comprador" | "vendedor";
   requesterRole?: string;
   closed?: boolean;
   resolution?: string;

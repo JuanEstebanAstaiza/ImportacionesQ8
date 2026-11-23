@@ -16,6 +16,8 @@ import {
 
 import { businessService } from "@/services/business.service";
 import { tendenciasService } from "@/services/tendencias.service";
+import { maquilasService } from "@/services/maquilas.service";
+import type { TipoDocumento as TipoDocumentoMaquila } from "@apps/maquilas/features/tipos";
 
 import { toApiPath } from "@/services/api-client";
 import type { BackendImporter } from "@/services/business.service";
@@ -41,7 +43,7 @@ import {
   UserCreationModal,
 } from "@/features/admin/components";
 
-type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte" | "designer";
+type InviteRole = "solicitante" | "importador" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora";
 
 type CompanyUiDetails = {
   nit: string;
@@ -98,6 +100,11 @@ type UserFormState = {
   tiempoRespuesta: string;
   /** Solo para el rol de atención al cliente: nivel de la mesa (1-3). */
   nivelSoporte: number;
+  /** Maquiladora (Zarpi Maquilas): ciudad, qué fabrica y pedido mínimo. */
+  ciudad: string;
+  categoriasMaquila: string[];
+  procesosMaquila: string[];
+  pedidoMinimo: string;
 };
 
 export interface AdminDashboardProps {
@@ -126,7 +133,7 @@ const ADMIN_SECTION_HINTS: Record<AdminTab, { label: string; hint: string }> = {
   "tendencias-aprobacion": { label: "Aprobación de tendencias", hint: "Revisión y publicación de contenido" },
 };
 
-const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "designer", "admin"] as const;
+const ROLE_OPTIONS = ["todos", "solicitante", "importador", "asesor", "soporte", "designer", "maquiladora", "admin"] as const;
 
 type RoleFilter = (typeof ROLE_OPTIONS)[number];
 type ActiveFilter = "todos" | "activos" | "inactivos";
@@ -178,6 +185,10 @@ const EMPTY_USER_FORM: UserFormState = {
   paises: "China",
   tiempoRespuesta: "~24h",
   nivelSoporte: 1,
+  ciudad: "",
+  categoriasMaquila: [],
+  procesosMaquila: [],
+  pedidoMinimo: "",
 };
 
 type CertificationFormState = {
@@ -847,6 +858,49 @@ export function AdminDashboard({ onRefreshGlobal, section }: AdminDashboardProps
         setStatusMessage(
           `Cuenta de atención al cliente creada para ${userForm.email} en nivel ${userForm.nivelSoporte}.`,
         );
+      } else if (userForm.rol === "maquiladora") {
+        const faltan = [
+          !userForm.companyName.trim() && "nombre comercial",
+          !userForm.razonSocial.trim() && "razón social",
+          !userForm.nit.trim() && "NIT",
+          !userForm.ciudad.trim() && "ciudad",
+          !userForm.nombre.trim() && "nombre del representante",
+          !userForm.apellido.trim() && "apellido del representante",
+          !userForm.numeroDocumento.trim() && "documento del representante",
+          !userForm.telefono.trim() && "teléfono",
+          !userForm.email.trim() && "correo",
+          !userForm.password && "contraseña",
+          userForm.categoriasMaquila.length === 0 && "al menos una categoría",
+          userForm.procesosMaquila.length === 0 && "al menos un proceso",
+          !(Number(userForm.pedidoMinimo) >= 1) && "pedido mínimo",
+        ].filter(Boolean);
+        if (faltan.length > 0) {
+          throw new Error(`Para la maquila falta: ${faltan.join(", ")}.`);
+        }
+        await maquilasService.crearPorEquipo({
+          empresa: {
+            razon_social: userForm.razonSocial.trim(),
+            nombre_comercial: userForm.companyName.trim(),
+            nit: userForm.nit.trim(),
+            ciudad: userForm.ciudad.trim(),
+          },
+          representante: {
+            nombre: userForm.nombre.trim(),
+            apellido: userForm.apellido.trim(),
+            tipo_documento: userForm.tipoDocumento as TipoDocumentoMaquila,
+            numero_documento: userForm.numeroDocumento.trim(),
+            indicativo_pais_telefono: userForm.indicativo_pais_telefono.trim() || "+57",
+            telefono: userForm.telefono.trim(),
+            email: userForm.email.trim(),
+            password: userForm.password,
+          },
+          fabricacion: {
+            categorias: userForm.categoriasMaquila,
+            procesos: userForm.procesosMaquila,
+            pedido_minimo: Math.floor(Number(userForm.pedidoMinimo)),
+          },
+        });
+        setStatusMessage(`Maquila creada: ${userForm.email.trim()} ya puede iniciar sesión como «Maquila» y completar su expediente.`);
       } else if (userForm.rol === "importador") {
         const faltan = [
           !userForm.companyName.trim() && "nombre comercial",

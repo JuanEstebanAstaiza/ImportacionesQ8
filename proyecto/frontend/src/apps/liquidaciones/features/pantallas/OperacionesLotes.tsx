@@ -65,7 +65,7 @@ export function OperacionesLotes({
                     onClick={() => onElegir(op.id)}
                     className={clsx(
                       "w-full rounded-lg border px-3 py-2.5 text-left transition",
-                      activa ? "border-accent/60 bg-accent/10" : "border-border bg-white hover:border-muted-foreground/30",
+                      activa ? "border-primary/60 bg-primary/10 dark:border-accent/60 dark:bg-accent/10" : "border-border bg-white hover:border-muted-foreground/30",
                     )}
                   >
                     <p className="line-clamp-2 text-sm font-medium">{op.lote.nombre}</p>

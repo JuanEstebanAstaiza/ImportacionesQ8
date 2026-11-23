@@ -1,6 +1,6 @@
 import {
-  Bookmark, ClipboardCheck, LayoutGrid, MessagesSquare, PackageSearch, CirclePlus, Settings2, Store, Tag,
-  UserCheck, ChartColumn,
+  Bookmark, ClipboardCheck, ClipboardList, Factory, Inbox, LayoutGrid, MessagesSquare, Package, PackageSearch, CirclePlus,
+  Search, Settings2, Store, Tag, UserCheck, ChartColumn, ShieldCheck, Star, Calculator, Flag, Palette, Users, Activity,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -20,7 +20,7 @@ import type { UserRole } from "@/types/roles";
  * no repartir condicionales por App.tsx, el Sidebar y la navegación.
  */
 
-export type Producto = "importaciones" | "liquidaciones";
+export type Producto = "importaciones" | "liquidaciones" | "maquilas";
 
 export interface ModuloSuite {
   clave: Producto;
@@ -45,10 +45,12 @@ export interface ModuloSuite {
 }
 
 const esPantallaLiquidaciones = (screen: Screen) => screen.startsWith("liq-");
+const esPantallaMaquilas = (screen: Screen) => screen.startsWith("maq-");
 
 const LIQ_COMPRADOR: NavItem[] = [
   { icon: Tag, label: "Liquidaciones", key: "liq-catalogo" },
   { icon: Bookmark, label: "Mis reservas", key: "liq-reservas" },
+  { icon: MessagesSquare, label: "Chats", key: "chats" },
 ];
 
 const LIQ_EMPRESA: NavItem[] = [
@@ -70,7 +72,7 @@ export const IMPORTACIONES: ModuloSuite = {
   descripcion: "Cotiza y compra importado con empresas verificadas",
   flag: null,
   roles: ["solicitante", "importadora", "asesor"],
-  esPantalla: (screen) => !esPantallaLiquidaciones(screen),
+  esPantalla: (screen) => !esPantallaLiquidaciones(screen) && !esPantallaMaquilas(screen),
   inicio: (rol) => (rol === "importadora" ? "imp-dashboard" : rol === "asesor" ? "adv-dashboard" : "dashboard"),
   nav: { solicitante: NAV_ITEMS, importadora: NAV_IMPORTADORA, asesor: NAV_ASESOR },
 };
@@ -97,7 +99,59 @@ export const LIQUIDACIONES: ModuloSuite = {
   },
 };
 
-export const MODULOS_SUITE: ModuloSuite[] = [IMPORTACIONES, LIQUIDACIONES];
+const MAQ_MAQUILADORA: NavItem[] = [
+  { icon: LayoutGrid, label: "Panel", key: "maq-panel" },
+  { icon: Inbox, label: "Solicitudes", key: "maq-recibidas" },
+  { icon: Package, label: "Pedidos", key: "maq-produccion" },
+  { icon: Tag, label: "Marca blanca", key: "maq-catalogo" },
+  { icon: Star, label: "Reseñas", key: "maq-resenas" },
+  { icon: Factory, label: "Mi maquila", key: "maq-perfil" },
+  { icon: Users, label: "Equipo", key: "maq-equipo" },
+];
+
+const MAQ_CLIENTE: NavItem[] = [
+  { icon: Search, label: "Directorio", key: "maq-directorio" },
+  { icon: Tag, label: "Marca blanca", key: "maq-marca-blanca" },
+  { icon: Palette, label: "Mi marca", key: "maq-marca" },
+  { icon: CirclePlus, label: "Nueva solicitud", key: "maq-solicitar" },
+  { icon: ClipboardList, label: "Mis solicitudes", key: "maq-solicitudes" },
+  { icon: Package, label: "Mis pedidos", key: "maq-pedidos" },
+  { icon: Calculator, label: "Calculadora", key: "maq-calculadora" },
+];
+
+/**
+ * Zarpi Maquilas. Los clientes (cotizante y empresa) buscan maquilas verificadas,
+ * piden propuestas y siguen sus pedidos; la maquiladora (rol propio) responde y
+ * produce. El equipo verifica a las maquiladoras desde el panel admin.
+ */
+export const MAQUILAS: ModuloSuite = {
+  clave: "maquilas",
+  nombre: "Maquilas",
+  descripcion: "Fabrica tu marca con maquilas verificadas",
+  tituloPestana: "Zarpi Maquilas | Fabrica tu marca con maquilas verificadas",
+  flag: "modulo_maquilas_habilitado",
+  roles: ["solicitante", "importadora", "asesor", "maquiladora"],
+  esPantalla: esPantallaMaquilas,
+  inicio: (rol) => (rol === "maquiladora" ? "maq-panel" : "maq-directorio"),
+  nav: { maquiladora: MAQ_MAQUILADORA, solicitante: MAQ_CLIENTE, importadora: MAQ_CLIENTE, asesor: MAQ_CLIENTE },
+  admin: {
+    grupo: { key: "maquilas", label: "Maquilas", icon: Factory },
+    items: [
+      { icon: ChartColumn, label: "Resumen", key: "maq-admin-resumen" },
+      { icon: Activity, label: "Monitoreo", key: "maq-admin-monitoreo" },
+      { icon: ShieldCheck, label: "Verificación", key: "maq-admin-verificacion" },
+      { icon: Flag, label: "Moderación", key: "maq-admin-moderacion" },
+      { icon: Settings2, label: "Configuración", key: "maq-admin-config" },
+    ],
+    soporte: [
+      { icon: Activity, label: "Monitoreo de maquilas", key: "maq-admin-monitoreo" },
+      { icon: ShieldCheck, label: "Verificación de maquilas", key: "maq-admin-verificacion" },
+      { icon: Flag, label: "Moderación de maquilas", key: "maq-admin-moderacion" },
+    ],
+  },
+};
+
+export const MODULOS_SUITE: ModuloSuite[] = [IMPORTACIONES, LIQUIDACIONES, MAQUILAS];
 
 /** Iconos disponibles para las apps del selector radial (mapa en SuiteWheelSwitcher). */
 export type IconoApp = "package" | "tag" | "shopping-bag" | "factory";
@@ -126,7 +180,7 @@ export interface AppSuite {
 export const APPS_SUITE: AppSuite[] = [
   {
     id: "importaciones", name: "Zarpi Importaciones", shortName: "Importaciones", icon: "package",
-    badge: "Core", accentColor: "#4F06EB", active: true, producto: "importaciones", screen: "landing",
+    badge: "Solicita importaciones", accentColor: "#4F06EB", active: true, producto: "importaciones", screen: "landing",
   },
   {
     id: "liquidaciones", name: "Zarpi Liquidaciones", shortName: "Liquidaciones", icon: "tag",
@@ -134,11 +188,11 @@ export const APPS_SUITE: AppSuite[] = [
   },
   {
     id: "marketplace", name: "Zarpi Marketplace", shortName: "Marketplace", icon: "shopping-bag",
-    badge: "Prototipo", accentColor: "#3A86FF", active: true, screen: "mkt-landing",
+    badge: "Compra productos", accentColor: "#3A86FF", active: true, screen: "mkt-landing",
   },
   {
     id: "maquilas", name: "Zarpi Maquilas", shortName: "Maquilas", icon: "factory",
-    badge: "Prototipo", accentColor: "#FF007A", active: true, screen: "maq-landing",
+    badge: "Fabrica tu marca", accentColor: "#FF007A", active: true, producto: "maquilas", screen: "maq-landing",
   },
 ];
 
@@ -155,7 +209,7 @@ export function modulosActivos(config: PlatformConfig): ModuloSuite[] {
  * uso (el menú sigue siendo el de Liquidaciones si se venía de ahí).
  */
 // `chats` es la bandeja de toda la suite (tickets de soporte de cualquier producto): abrirla no cambia de producto.
-export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing", "maq-landing"];
+export const PANTALLAS_COMUNES: Screen[] = ["user-profile", "notifications", "help-support", "team-channel", "chats", "login", "register", "landing", "mkt-landing"];
 
 /** Producto al que pertenece una pantalla. */
 export function productoDe(screen: Screen): Producto {

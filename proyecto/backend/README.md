@@ -335,6 +335,12 @@ docker-compose exec backend python main.py
 
 ### Ejecutar tests con pytest
 
+Las pruebas de Liquidaciones eliminan las colecciones de MongoDB antes de cada
+caso. Ejecútalas únicamente con `MONGO_DB=zarpi_liquidaciones_test`, una base
+dedicada a pruebas que no contenga datos que quieras conservar. El servicio
+`tests` de Docker Compose ya configura ese nombre; no ejecutes estas pruebas
+dentro del contenedor `backend`, que utiliza la base de la aplicación.
+
 ```bash
 # Todos los tests
 pytest

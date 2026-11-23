@@ -21,7 +21,7 @@ export function TarjetaLote({ lote, onAbrir, compacta = false }: { lote: Lote; o
       className={clsx(
         "group flex h-full w-full flex-col overflow-hidden rounded-xl border bg-white text-left transition",
         onAbrir && "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg dark:hover:border-accent/40",
-        lote.destacado && !reservado ? "border-accent/60" : "border-border",
+        lote.destacado && !reservado ? "border-primary/60 dark:border-accent/60" : "border-primary/30 dark:border-accent/30",
       )}
     >
       <div className={clsx("relative w-full overflow-hidden", compacta ? "aspect-[4/3]" : "aspect-[4/3]")}>

@@ -35,7 +35,7 @@ import { fechaCorta } from "./piezas";
  * obligatorio (la URL); el resto es opcional. Debajo, el historial de envíos.
  */
 
-type Props = { rol: "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" };
+type Props = { rol: "solicitante" | "importadora" | "asesor" | "admin" | "soporte" | "designer" | "maquiladora" };
 
 type Resultado =
   | { tipo: "recibido"; datos: Extract<RespuestaEnvio, { estado: "recibido" }> }

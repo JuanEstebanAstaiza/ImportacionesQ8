@@ -9,6 +9,7 @@ import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 
 import type { LegalPage } from "@shared/legal/types";
 
+import { AdvisorQuoteDetailModal } from "@/features/advisor/components/tabs/AdvisorQuoteDetailModal";
 import { ModalRechazoCotizacion } from "@apps/importaciones/features/importador/RechazarCotizacion";
 
 import { Badge, Button, Card } from "@shared/ui/design-system";

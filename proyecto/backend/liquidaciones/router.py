@@ -19,6 +19,7 @@ from liquidaciones.esquemas import (
     MotivoEntrada, ParametrosEntrada, RechazoEntrada, SuspensionEntrada,
 )
 from liquidaciones.identidad import ROLES_CLIENTE, ROLES_EMPRESA, ROLES_EQUIPO, ROLES_MODULO, cuenta_de
+from utils import gridfs_archivos
 from utils.dependencies import get_db, get_optional_current_user, require_rol, require_rol_in
 from utils.limiter import RATE_LIMIT_PUBLIC_READ, limiter
 
@@ -46,9 +47,10 @@ require_admin = require_rol("admin")
 
 @router.get("/publico/lotes")
 @limiter.limit(RATE_LIMIT_PUBLIC_READ)
-def vista_publica(request: Request, limite: int = Query(8, ge=1, le=24), mongo: Database = Depends(get_mongo)):
+def vista_publica(request: Request, limite: int = Query(8, ge=1, le=24), mongo: Database = Depends(get_mongo),
+                  db: Session = Depends(get_db)):
     """Vista previa de la landing: lotes publicados, destacados primero."""
-    return servicio.vista_publica(mongo, limite)
+    return servicio.vista_publica(mongo, db, limite)
 
 
 @router.get("/archivos/{bucket}/{archivo_id}")
@@ -66,10 +68,9 @@ def descargar(
 
     meta = fila.get("metadata") or {}
     tamano = int(fila.get("length", 0))
-    nombre = (meta.get("nombre_original") or "archivo").replace('"', "")
     cabeceras = {
         "Accept-Ranges": "bytes",
-        "Content-Disposition": f'inline; filename="{nombre}"',
+        "Content-Disposition": gridfs_archivos.disposicion(meta.get("nombre_original") or "archivo"),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
     }

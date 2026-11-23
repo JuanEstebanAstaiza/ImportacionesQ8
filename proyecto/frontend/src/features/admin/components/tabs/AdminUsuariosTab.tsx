@@ -2,9 +2,9 @@
 import type { RefObject } from "react";
 import type { AdminUser } from "@/services/admin.service";
 
-type RoleFilter = "todos" | "solicitante" | "importador" | "asesor" | "soporte" | "designer" | "admin";
+type RoleFilter = "todos" | "solicitante" | "importador" | "asesor" | "soporte" | "designer" | "maquiladora" | "admin";
 type ActiveFilter = "todos" | "activos" | "inactivos";
-const ROLE_OPTIONS: RoleFilter[] = ["todos", "solicitante", "importador", "asesor", "soporte", "designer", "admin"];
+const ROLE_OPTIONS: RoleFilter[] = ["todos", "solicitante", "importador", "asesor", "soporte", "designer", "maquiladora", "admin"];
 
 function formatDate(value: string): string {
   const date = new Date(value);
