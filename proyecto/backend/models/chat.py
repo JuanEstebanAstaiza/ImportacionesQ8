@@ -37,6 +37,7 @@ class TipoConversacion(str, enum.Enum):
     negociacion = "negociacion"  # solicitante ↔ empresa (cotización y, después, orden)
     interna = "interna"          # cuenta dueña de la empresa ↔ uno de sus asesores
     soporte = "soporte"          # cualquier usuario ↔ equipo de la plataforma
+    reserva = "reserva"          # comprador ↔ empresa vendedora en Liquidaciones
     # Administración ↔ soporte. Es el canal propio del equipo de la plataforma:
     # un agente no puede abrirse un ticket a sí mismo, pero sí necesita hablar
     # con administración y con sus compañeros. Tiene dos formas, distinguidas
@@ -118,6 +119,7 @@ class ConversacionChat(Base):
     # "operacion:<id>"... Es texto libre del módulo, sin FK: los datos de cada
     # módulo viven en su propia base.
     referencia = Column(String(80), nullable=True)
+    archivada_por = Column(JSON, nullable=True)
     # Nivel de mesa que requiere el caso y agente que lo atiende. La asignación
     # es automática al abrirlo (ver `asignar_agente`), y un agente puede escalar
     # el ticket si al leerlo ve que le queda grande.

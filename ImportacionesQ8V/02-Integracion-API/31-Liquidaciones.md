@@ -6,7 +6,7 @@ Tono del producto: se habla de **oportunidad**, nunca de «baja rotación», «s
 
 ## Arquitectura
 
-- **Base aparte.** Todo el módulo vive en MongoDB (`zarpi_liquidaciones`); con MySQL solo comparte el login y los usuarios (el JWT dice quién es y con qué rol). Código: paquete `proyecto/backend/liquidaciones/`.
+- **Base aparte.** Los lotes, reservas y documentos viven en MongoDB (`zarpi_liquidaciones`); el chat de cada reserva usa el sistema común de conversaciones en MySQL. Código: paquete `proyecto/backend/liquidaciones/`.
 - **Archivos en GridFS**, en dos buckets:
   - `medios`: fotos y videos de los lotes.
   - `documentos`: fichas técnicas, comprobantes de pago, facturas y RUT.
@@ -75,6 +75,8 @@ en_revision → publicado → reservado → vendido
 ## Mesa de ayuda compartida
 
 `POST /chat/soporte` acepta `modulo` (`importaciones` | `liquidaciones`) y `referencia` (`lote:<id>`, `operacion:<id>`). El panel de contexto del ticket muestra el producto y la referencia; la bandeja `/chats` es común a la suite y abrirla no cambia de producto. La migración `20261024_0045` añade esas columnas a `conversaciones_chat`; los tickets anteriores se leen como de Importaciones. `GET /admin/conversaciones?modulo=` filtra, y la bandeja del equipo tiene chips por producto.
+
+Al reservar se crea un chat de tipo `reserva` con el mismo identificador que la operación. El comprador y el equipo de la empresa vendedora lo encuentran en la bandeja común como `RES-...`; el detalle de la reserva y la bandeja leen y escriben en el mismo hilo. Los mensajes anteriores de Liquidaciones se copian al hilo con su identificador original, sin borrar los documentos de MongoDB.
 
 ## Frontend
 

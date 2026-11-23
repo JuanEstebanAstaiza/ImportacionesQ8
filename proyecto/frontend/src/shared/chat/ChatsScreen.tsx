@@ -1,10 +1,10 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { MODULOS_SUITE, moduloDe, type Producto } from "@shared/suite/suite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
-import { ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSignature, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
-import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline, openSmartContact } from "@shared/ui/design-system";
+import { Archive, ArchiveRestore, ArrowUpDown, AtSign, Bell, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, Edit2, ExternalLink, File as FileIcon, FileCheck, FileSpreadsheet, FileText, FolderOpen, FolderTree, Image as ImageIcon, LayoutGrid, LifeBuoy, Loader2, LockKeyhole, MessageCircle, MessageSquare, MoreHorizontal, MoveRight, Paperclip, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Save, Search, Send, ShoppingCart, Smile, Star, Trash2, Upload, Users, Video, X } from "lucide-react";
+import { Avatar, BADGE_MAP, Badge, Button, Card, ContactBtn, Input, Select, Textarea, Timeline } from "@shared/ui/design-system";
 import { Breadcrumb } from "@/components/navigation/Breadcrumb";
 import { AppHeader, USER, USER_IMPORTADORA, USER_ASESOR } from "@shared/layout/AppHeader";
 import { FormatFileIcon } from "@shared/ui/files/FormatFileIcon";
@@ -120,8 +120,11 @@ function etiquetaReferencia(referencia: string): string {
   return `${nombre} ${id.slice(0, 8).toUpperCase()}`;
 }
 
-export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onOpenProposalForm,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers,onLoadResourceFolder,userPhotoUrl}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onOpenProposalForm?:(quoteId:string)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[];onLoadResourceFolder?:(parentId:string|null)=>Promise<BackendExplorerResponse>;userPhotoUrl?:string}) {
-  const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
+export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,onViewReserva,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onOpenProposalForm,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onArchiveChanged,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers,onLoadResourceFolder,userPhotoUrl}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;onViewReserva?:(id:string,lado:"comprador"|"vendedor")=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onOpenProposalForm?:(quoteId:string)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onArchiveChanged:(id:string,archivada:boolean)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[];onLoadResourceFolder?:(parentId:string|null)=>Promise<BackendExplorerResponse>;userPhotoUrl?:string}) {
+  const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations.find(c=>c.status==="activa")?.id||null);
+  const [mostrarArchivados,setMostrarArchivados]=useState(false);
+  const [archivandoId,setArchivandoId]=useState<string|null>(null);
+  const aperturaInicialAplicada=useRef<string|null>(null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
   const [filter,setFilter]=useState<string>("all");
@@ -211,17 +214,22 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
   },[selectedId,onActiveConversationChange]);
 
   useEffect(()=>{
-    if (!selectedId && conversations.length > 0) {
-      setSelectedId(initialConvId || conversations[0].id);
+    if (!selectedId && !mostrarArchivados) {
+      setSelectedId(conversations.find(c=>c.status==="activa")?.id || null);
     }
-  }, [selectedId, conversations, initialConvId]);
+  }, [selectedId, conversations, mostrarArchivados]);
 
   // Si desde fuera se pide abrir otra conversación (p. ej. un hilo privado del
   // equipo recién creado) estando ya en esta pantalla, se cambia a ella. Antes
   // la pantalla no se volvía a montar y seguía en el chat anterior.
   useEffect(()=>{
-    if(initialConvId) setSelectedId(initialConvId);
-  },[initialConvId]);
+    const inicial=conversations.find(c=>c.id===initialConvId);
+    if(initialConvId && inicial && aperturaInicialAplicada.current!==initialConvId) {
+      aperturaInicialAplicada.current=initialConvId;
+      setMostrarArchivados(inicial.status==="archivada");
+      setSelectedId(initialConvId);
+    }
+  },[initialConvId,conversations]);
 
   useEffect(() => {
     if (selectedId) {
@@ -243,6 +251,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
   const chatAdvisorColor = conv?.advisorColor || imp?.advisor.color || "bg-slate-500";
 
   const filteredConvs=conversations.filter(c=>{
+    if ((c.status==="archivada")!==mostrarArchivados) return false;
     // Los chats de los asesores no se mezclan con los propios: van en su
     // pestaña, agrupados por asesor. La pestaña sigue siendo un filtro
     // específico, pero sus conversaciones también deben aparecer en "Todas":
@@ -250,6 +259,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     if(filter==="asesores")return Boolean(c.atiendeNombre)&&(!searchConv||[c.atiendeNombre,c.refCode,c.counterpartName||""].some(t=>t.toLowerCase().includes(searchConv.toLowerCase())));
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
+    if(filter==="reservas"&&c.type!=="reserva")return false;
     if(filter==="interno"&&c.type!=="interno")return false;
     if(filter==="soporte"&&c.type!=="soporte")return false;
     if(filter.startsWith("urg-")&&c.urgency!==filter.slice(4))return false;
@@ -258,8 +268,8 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     if(filter==="no-leidas"&&c.unread===0)return false;
     // Un ticket cerrado solo aparece si se pide expresamente: si no, la bandeja
     // de pendientes se llenaría de casos ya atendidos.
-    if(filter==="cerrados"&&!c.closed)return false;
-    if(filter!=="cerrados"&&c.closed)return false;
+    if(!mostrarArchivados&&filter==="cerrados"&&!c.closed)return false;
+    if(!mostrarArchivados&&filter!=="cerrados"&&c.closed)return false;
     if(searchConv){
       const cImp=importers.find(i=>i.id===c.importerId);
       const q=c.type==="cotizacion"?quotes.find((quote)=>quote.id===c.refId):null;
@@ -283,14 +293,15 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
   function renderListaEquipo(){
     const q=searchConv.trim().toLowerCase();
     const rolEquipo=(rol:string,nivel?:number|null)=>rol==="soporte"?`Soporte N${nivel ? 1 : 0}`:rol==="designer"?"Diseño":"Administración";
-    const salas=conversations.filter(c=>c.counterpartRole==="plataforma");
+    const salas=conversations.filter(c=>c.counterpartRole==="plataforma"&&c.status==="activa");
     const hiloDe=(id:string)=>conversations.find(c=>c.counterpartId===id&&c.counterpartRole!=="plataforma");
     const soloNoLeidas=filter==="no-leidas";
     const personas=miembrosEquipo
       .filter(m=>!q||[m.nombre||"",m.email,rolEquipo(m.rol,m.nivel_soporte)].some(t=>t.toLowerCase().includes(q)))
+      .filter(m=>hiloDe(m.id)?.status!=="archivada")
       .filter(m=>!soloNoLeidas||(hiloDe(m.id)?.unread||0)>0);
     // Hilos con alguien que ya no está en el equipo (desactivado): se conservan.
-    const huerfanos=conversations.filter(c=>c.counterpartRole!=="plataforma"&&!miembrosEquipo.some(m=>m.id===c.counterpartId))
+    const huerfanos=conversations.filter(c=>c.status==="activa"&&c.counterpartRole!=="plataforma"&&!miembrosEquipo.some(m=>m.id===c.counterpartId))
       .filter(c=>(!q||(c.counterpartName||"").toLowerCase().includes(q))&&(!soloNoLeidas||c.unread>0));
     const fila=(clave:string,{nombre,detalle,colorId,activo,unread,ultimo,onClick,cargando}:{nombre:string;detalle:string;colorId:string;activo:boolean;unread:number;ultimo?:string;onClick:()=>void;cargando?:boolean})=>(
       <button key={clave} onClick={onClick} disabled={cargando}
@@ -337,6 +348,21 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     );
   }
 
+  async function cambiarArchivado(c:ChatConv){
+    const archivada=c.status!=="archivada";
+    setArchivandoId(c.id);
+    try {
+      await businessService.setConversationArchived(c.id,archivada);
+      onArchiveChanged(c.id,archivada);
+      if(selectedId===c.id) setSelectedId(null);
+      toast.success(archivada?"Chat archivado":"Chat desarchivado");
+    } catch(error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar el archivo");
+    } finally {
+      setArchivandoId(null);
+    }
+  }
+
   async function sendMsg(){
     if(!input.trim()||!selectedId)return;
     const content = input.trim();
@@ -346,6 +372,10 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     setSending(true);
     try{
       await onSendMessage(selectedId,content);
+    }catch(error){
+      setMsgs(prev=>({...prev,[selectedId]:(prev[selectedId]||[]).filter(m=>m.id!==newMsg.id)}));
+      setInput(content);
+      toast.error(error instanceof Error ? error.message : "No se pudo enviar el mensaje");
     }finally{
       setSending(false);
     }
@@ -876,6 +906,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
         {k:"no-leidas",label:"No leídas"},
         {k:"ordenes",label:"Operaciones"},
         {k:"cotizaciones",label:"Cotizaciones"},
+        ...(conversations.some(c=>c.type==="reserva")?[{k:"reservas",label:"Reservas"}]:[]),
         // La pestaña de equipo solo aparece si hay algún hilo interno: al
         // solicitante no le sirve de nada y nunca va a tener ninguno.
         ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"}]:[]),
@@ -1065,10 +1096,20 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                 </div>
               </div>
             )}
-            <div className="px-3 pt-3 pb-2 border-b border-border">
-              <Input placeholder={modoEquipo?"Buscar persona del equipo...":"Buscar por código, empresa, asesor..."} value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
+            <div className="px-3 pt-3 pb-2 border-b border-border flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Input placeholder={modoEquipo?"Buscar persona del equipo...":"Buscar por código, empresa, asesor..."} value={searchConv} onChange={e=>setSearchConv(e.target.value)} prefix={<Search className="w-3.5 h-3.5"/>}/>
+              </div>
+              <button type="button" onClick={()=>{setMostrarArchivados(!mostrarArchivados);setFilter("all");setSelectedId(null);}}
+                aria-pressed={mostrarArchivados}
+                aria-label={mostrarArchivados?"Volver a la bandeja":conversations.some(c=>c.status==="archivada"&&c.unread>0)?"Archivados, mensajes sin leer":"Archivados"}
+                title={mostrarArchivados?"Volver a la bandeja":"Ver chats archivados"}
+                className={clsx("relative flex flex-shrink-0 items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium",mostrarArchivados?"bg-primary text-white":"text-muted-foreground hover:text-foreground hover:bg-muted")}>
+                {mostrarArchivados?<><ChevronLeft className="w-3.5 h-3.5" aria-hidden="true"/>Volver</>:"Archivados"}
+                {!mostrarArchivados&&conversations.some(c=>c.status==="archivada"&&c.unread>0)&&<span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" aria-hidden="true"/>}
+              </button>
             </div>
-            <div className="flex gap-1 px-3 py-2 border-b border-border overflow-x-auto">
+            {!mostrarArchivados&&<div className="flex gap-1 px-3 py-2 border-b border-border overflow-x-auto">
               {FILTERS.map(f=>(
                 <button key={f.k} onClick={()=>setFilter(f.k)}
                   className={clsx("flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
@@ -1076,12 +1117,12 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                   {f.label}
                 </button>
               ))}
-            </div>
+            </div>}
             <div className="flex-1 overflow-y-auto">
-              {modoEquipo?renderListaEquipo():filteredConvs.length===0?(
+              {modoEquipo&&!mostrarArchivados?renderListaEquipo():filteredConvs.length===0?(
                 <div className="flex flex-col items-center justify-center py-12 gap-2 px-4 text-center">
                   <MessageSquare className="w-8 h-8 text-muted-foreground/30"/>
-                  <p className="text-sm text-muted-foreground">No hay conversaciones</p>
+                  <p className="text-sm text-muted-foreground">{mostrarArchivados?"No hay chats archivados":"No hay conversaciones"}</p>
                 </div>
               ):convsEnLista.map((c,i)=>{
                 const cImp=importers.find(i=>i.id===c.importerId);
@@ -1103,8 +1144,9 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                       Chats de {c.atiendeNombre}
                     </p>
                   )}
+                  <div className="relative">
                   <button onClick={()=>setSelectedId(c.id)}
-                    className={clsx("w-full text-left px-3 py-3 border-b border-border/50 transition-colors flex gap-2.5",
+                    className={clsx("w-full text-left pl-3 pr-9 py-3 border-b border-border/50 transition-colors flex gap-2.5",
                       isSelected?"bg-primary/8 dark:bg-accent/8 border-l-2 border-l-primary dark:border-l-accent":"hover:bg-muted/50")}>
                     {/* El avatar es de la PERSONA y el distintivo pequeño dice de
                         qué hilo se trata: antes solo había un icono por tipo,
@@ -1148,6 +1190,13 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                       {c.status==="archivada"&&<span className="text-[10px] text-muted-foreground/60 font-medium">Archivada</span>}
                     </div>
                   </button>
+                  <button type="button" disabled={archivandoId!==null} onClick={()=>void cambiarArchivado(c)}
+                    title={c.status==="archivada"?"Desarchivar":"Archivar"}
+                    aria-label={`${c.status==="archivada"?"Desarchivar":"Archivar"} ${c.subject||c.refCode}`}
+                    className="absolute right-2 top-2 w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50">
+                    {c.status==="archivada"?<ArchiveRestore className="w-3.5 h-3.5"/>:<Archive className="w-3.5 h-3.5"/>}
+                  </button>
+                  </div>
                   </React.Fragment>
                 );
               })}
@@ -1205,18 +1254,27 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                     {conv.type!=="soporte"&&(
                       <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
                         conv.type==="orden"?"bg-purple-50 text-purple-700":conv.type==="interno"?"bg-amber-50 text-amber-700":"bg-blue-50 text-blue-700")}>
-                        {conv.type==="orden"?`Operación · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
+                        {conv.type==="orden"?`Operación · ${conv.refCode}`:conv.type==="reserva"?`Reserva · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
                       </span>
                     )}
                     {conv.status==="activa"&&<span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>Activa</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button type="button" disabled={archivandoId!==null} onClick={()=>void cambiarArchivado(conv)}
+                    title={conv.status==="archivada"?"Desarchivar":"Archivar"}
+                    aria-label={conv.status==="archivada"?"Desarchivar chat":"Archivar chat"}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50">
+                    {conv.status==="archivada"?<ArchiveRestore className="w-4 h-4"/>:<Archive className="w-4 h-4"/>}
+                  </button>
                   {conv.type==="cotizacion"&&refQuote&&(
                     <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewQuote(refQuote.id)}>Ver cotización</Button>
                   )}
                   {conv.type==="orden"&&refOrderId&&(
                     <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(refOrderId)}>Ver operación</Button>
+                  )}
+                  {conv.type==="reserva"&&conv.ladoReserva&&onViewReserva&&(
+                    <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewReserva(conv.refId,conv.ladoReserva!)}>Ver reserva</Button>
                   )}
                   <button onClick={()=>setShowCtx(v=>!v)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -1261,6 +1319,11 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {mostrarAutor&&<span className="text-[10px] font-semibold text-muted-foreground px-1">{msg.authorName}</span>}
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
+                          {msg.archivoLiquidaciones&&(
+                            <button type="button" className="text-xs underline" onClick={()=>void abrirArchivoEnPestana(msg.archivoLiquidaciones!.url,msg.archivoLiquidaciones!.nombre)}>
+                              {msg.archivoLiquidaciones.nombre}
+                            </button>
+                          )}
                           {messageAttachments.length>0 && (
                             <div className={clsx("grid gap-2", messageAttachments.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1", isClient ? "justify-items-end" : "justify-items-start")}>
                               {messageAttachments.map((attachment) => {
@@ -1686,7 +1749,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                     para la cuenta dueña de la empresa: es la única que puede
                     reasignar (`PUT /importadores/cotizaciones/{id}/asignar`);
                     el comprador no tiene subcuentas y el asesor no reasigna. */}
-                {currentUserRole==="importadora"&&conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&(<>
+                {currentUserRole==="importadora"&&conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&conv.type!=="reserva"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">

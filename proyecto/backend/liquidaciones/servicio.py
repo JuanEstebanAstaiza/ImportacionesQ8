@@ -19,6 +19,7 @@ alguien lo mira, sin depender de que un proceso aparte esté vivo.
 from __future__ import annotations
 
 import re
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -27,6 +28,8 @@ from fastapi import HTTPException, status
 from pymongo import ReturnDocument
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
+from pymongo.errors import PyMongoError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from liquidaciones import archivos, avisos, parametros
@@ -36,6 +39,7 @@ from liquidaciones.identidad import ROLES_CLIENTE, cuenta_de, es_empresa, es_equ
 ESTADOS_LOTE = ("en_revision", "publicado", "rechazado", "reservado", "vendido", "cerrado_sin_venta")
 ESTADOS_EN_CATALOGO = ("publicado", "reservado")
 MAX_MENSAJES = 500
+logger = logging.getLogger("importacionesq8")
 
 
 def _ahora() -> datetime:
@@ -302,6 +306,16 @@ def _vendedor_de(activacion: Dict) -> Dict:
             "ciudad": activacion.get("ciudad")}
 
 
+def _logo_empresa(sql: Optional[Session], cuenta: Optional[str]) -> Optional[str]:
+    if not sql or not cuenta or not cuenta.startswith("empresa:"):
+        return None
+    from models.importador import Importador
+
+    empresa_id = cuenta.split(":", 1)[1]
+    empresa = sql.query(Importador).filter(Importador.id == empresa_id).first()
+    return empresa.logo_url if empresa else None
+
+
 def _requerir_empresa(usuario: dict) -> None:
     if not es_empresa(usuario):
         raise _error(status.HTTP_403_FORBIDDEN, "Solo las empresas registradas en Zarpi publican lotes")
@@ -469,6 +483,7 @@ def detalle_lote(db: Database, sql: Optional[Session], usuario: Optional[dict], 
     if lote["estado"] not in archivos.ESTADOS_LOTE_PUBLICOS and not propio and not (usuario and es_equipo(usuario)):
         raise _error(status.HTTP_404_NOT_FOUND, "Liquidación no encontrada")
     salida = a_lote(lote, usuario)
+    salida["vendedor"]["logo_url"] = _logo_empresa(sql, lote.get("cuenta_vendedor"))
     salida["mi_operacion_id"] = None
     if usuario:
         op = db.operaciones.find_one({"lote_id": lote_id, "cuenta_comprador": cuenta_de(usuario),
@@ -643,6 +658,15 @@ def reservar(db: Database, sql: Session, usuario: dict, lote_id: str) -> Dict:
         db.lotes.update_one({"_id": lote_id, "estado": "reservado"}, {"$set": {"estado": "publicado"}})
         raise
 
+    from liquidaciones.chat import sincronizar
+    try:
+        sincronizar(db, sql, operacion)
+    except (SQLAlchemyError, PyMongoError, ValueError) as exc:
+        sql.rollback()
+        logger.exception("No se pudo crear el chat de la reserva %s", operacion["_id"])
+        raise _error(status.HTTP_503_SERVICE_UNAVAILABLE,
+                     "La reserva se creó, pero no se pudo abrir su chat. Consulta Mis reservas para reintentarlo.") from exc
+
     _mensaje_sistema(db, operacion["_id"],
                      f"{activacion.get('razon_social')} reservó el lote. Los datos de contacto ya están visibles "
                      "para las dos partes.")
@@ -727,8 +751,35 @@ def detalle_operacion(db: Database, sql: Optional[Session], usuario: dict, opera
     }
     salida["comprobantes_pago"] = [archivos.ref_documento(r) for r in op.get("comprobantes_pago", [])]
     salida["facturas"] = [archivos.ref_documento(r) for r in op.get("facturas", [])]
-    mensajes = db.mensajes.find({"operacion_id": operacion_id}).sort("fecha", 1).limit(MAX_MENSAJES)
-    salida["mensajes"] = [a_mensaje(m, usuario) for m in mensajes]
+    if sql is None:
+        raise RuntimeError("Se necesita una sesión SQL para consultar el chat de la reserva")
+    from liquidaciones.chat import sincronizar
+    from models.chat import MensajeChat
+    from models.usuario import Usuario
+
+    sincronizar(db, sql, op)
+    mensajes = (sql.query(MensajeChat).filter(MensajeChat.conversacion_id == operacion_id)
+                .order_by(MensajeChat.fecha_envio.desc(), MensajeChat.id.desc()).limit(MAX_MENSAJES).all())
+    mensajes.reverse()
+    usuarios = {str(u.id): u for u in sql.query(Usuario).filter(
+        Usuario.id.in_({str(m.remitente_id) for m in mensajes})
+    ).all()}
+    salida["mensajes"] = []
+    for m in mensajes:
+        meta = (m.metadata_json or {}).get("liquidaciones") or {}
+        remitente = usuarios.get(str(m.remitente_id))
+        if m.tipo == "sistema":
+            autor = "equipo" if meta.get("autor") == "Soporte Zarpi" else "sistema"
+        elif remitente:
+            datos = {"user_id": str(remitente.id), "rol": remitente.rol, "importador_id": remitente.importador_id}
+            autor = "yo" if cuenta_de(datos) == cuenta_de(usuario) else "contraparte"
+        else:
+            autor = "contraparte"
+        salida["mensajes"].append({
+            "id": str(m.id), "tipo": str(m.tipo), "autor": autor,
+            "remitente_nombre": meta.get("autor") or (remitente.nombre if remitente else None),
+            "contenido": m.contenido, "archivo": meta.get("archivo"), "fecha": _iso(m.fecha_envio),
+        })
     return salida
 
 
@@ -746,26 +797,27 @@ def enviar_mensaje(db: Database, sql: Session, usuario: dict, operacion_id: str,
         raise _error(status.HTTP_403_FORBIDDEN, "El equipo interviene desde el panel de monitoreo")
     if op["estado"] in ("cancelada", "vencida"):
         raise _error(status.HTTP_409_CONFLICT, "Esta operación está cerrada")
-    activacion = obtener_activacion(db, cuenta_de(usuario)) or {}
-    mensaje = {
-        "_id": str(uuid4()),
-        "operacion_id": operacion_id,
-        "remitente_id": usuario["user_id"],
-        "remitente_cuenta": cuenta_de(usuario),
-        "remitente_nombre": activacion.get("contacto") or activacion.get("razon_social"),
-        "tipo": "texto",
-        "contenido": contenido,
-        "archivo": None,
-        "fecha": _ahora(),
-    }
-    db.mensajes.insert_one(mensaje)
-    db.operaciones.update_one({"_id": operacion_id}, {"$set": {"ultimo_mensaje_en": mensaje["fecha"]},
-                                                       "$inc": {"total_mensajes": 1}})
+    from liquidaciones.chat import actualizar_resumen, sincronizar
+    from models.chat import MensajeChat
+    from routers.chat import _publicar_mensaje
+
+    sincronizar(db, sql, op)
+    mensaje = MensajeChat(id=str(uuid4()), conversacion_id=operacion_id,
+                          remitente_id=str(usuario["user_id"]), tipo="texto",
+                          contenido=contenido, fecha_envio=_ahora())
+    sql.add(mensaje)
+    sql.commit()
+    sql.refresh(mensaje)
+    _publicar_mensaje(mensaje)
+    actualizar_resumen(db, sql, operacion_id)
     otra = op["cuenta_vendedor"] if lado == "comprador" else op["cuenta_comprador"]
     avisos.avisar(sql, cuenta=otra, tipo="liquidacion_mensaje", titulo="Nuevo mensaje en una operación",
                   mensaje=f"«{op['lote']['nombre']}»: {contenido[:120]}",
                   data={"operacion_id": operacion_id, "lado": _otro_lado(lado)})
-    return a_mensaje(mensaje, usuario)
+    activacion = obtener_activacion(db, cuenta_de(usuario)) or {}
+    return {"id": str(mensaje.id), "tipo": "texto", "autor": "yo",
+            "remitente_nombre": activacion.get("contacto") or activacion.get("razon_social"),
+            "contenido": contenido, "archivo": None, "fecha": _iso(mensaje.fecha_envio)}
 
 
 def _cerrar_operacion(db: Database, op: Dict, nuevo_estado: str, extra: Dict) -> None:

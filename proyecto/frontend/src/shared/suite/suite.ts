@@ -50,6 +50,7 @@ const esPantallaMaquilas = (screen: Screen) => screen.startsWith("maq-");
 const LIQ_COMPRADOR: NavItem[] = [
   { icon: Tag, label: "Liquidaciones", key: "liq-catalogo" },
   { icon: Bookmark, label: "Mis reservas", key: "liq-reservas" },
+  { icon: MessagesSquare, label: "Chats", key: "chats" },
 ];
 
 const LIQ_EMPRESA: NavItem[] = [
@@ -179,7 +180,7 @@ export interface AppSuite {
 export const APPS_SUITE: AppSuite[] = [
   {
     id: "importaciones", name: "Zarpi Importaciones", shortName: "Importaciones", icon: "package",
-    badge: "Core", accentColor: "#4F06EB", active: true, producto: "importaciones", screen: "landing",
+    badge: "Solicita importaciones", accentColor: "#4F06EB", active: true, producto: "importaciones", screen: "landing",
   },
   {
     id: "liquidaciones", name: "Zarpi Liquidaciones", shortName: "Liquidaciones", icon: "tag",
@@ -187,7 +188,7 @@ export const APPS_SUITE: AppSuite[] = [
   },
   {
     id: "marketplace", name: "Zarpi Marketplace", shortName: "Marketplace", icon: "shopping-bag",
-    badge: "Prototipo", accentColor: "#3A86FF", active: true, screen: "mkt-landing",
+    badge: "Compra productos", accentColor: "#3A86FF", active: true, screen: "mkt-landing",
   },
   {
     id: "maquilas", name: "Zarpi Maquilas", shortName: "Maquilas", icon: "factory",

@@ -137,6 +137,42 @@ class TestCreacionConversacionAlAceptar:
         assert conversacion.importador_usuario_id == str(dueño.id)
 
 
+def test_archivo_personal_y_no_leidos(client, db_session, solicitante, otro_solicitante, empresa):
+    _, dueño = empresa
+    conversacion = ConversacionChat(
+        id=str(uuid4()), solicitante_id=solicitante.id, importador_usuario_id=dueño.id,
+        archivada_por={str(solicitante.id): True},
+    )
+    db_session.add(conversacion)
+    db_session.commit()
+    url = f"/chat/conversaciones/{conversacion.id}/archivado"
+    h_cliente, h_empresa = auth_headers_for(solicitante), auth_headers_for(dueño)
+
+    def fila(headers):
+        response = client.get("/chat/conversaciones", headers=headers)
+        assert response.status_code == 200, response.text
+        return next(c for c in response.json() if c["id"] == conversacion.id)
+
+    assert fila(h_cliente)["archivada"] is True
+    assert fila(h_empresa)["archivada"] is False
+    assert client.put(url, json={"archivada": True}, headers=auth_headers_for(otro_solicitante)).status_code == 403
+    assert client.put(url, json={"archivada": True}, headers=h_empresa).status_code == 200
+    assert client.put(url, json={"archivada": True}, headers=h_empresa).status_code == 200
+    assert client.put(url, json={"archivada": False}, headers=h_cliente).status_code == 200
+    assert fila(h_cliente)["archivada"] is False
+    assert fila(h_empresa)["archivada"] is True
+
+    r = client.post(f"/chat/conversaciones/{conversacion.id}/mensajes",
+                    json={"contenido": "Mensaje pendiente"}, headers=h_cliente)
+    assert r.status_code == 201, r.text
+    assert fila(h_empresa)["no_leidos"] == 1
+    assert client.post(f"/chat/conversaciones/{conversacion.id}/leida", headers=h_empresa).status_code == 204
+    assert fila(h_empresa)["no_leidos"] == 0
+    assert fila(h_empresa)["archivada"] is True
+    assert client.put(url, json={"archivada": False}, headers=h_empresa).status_code == 200
+    assert fila(h_empresa)["archivada"] is False
+
+
 class TestMensajesRest:
     def test_solicitante_puede_leer_y_enviar_mensajes(self, client, db_session, solicitante, empresa):
         importador, dueño = empresa
