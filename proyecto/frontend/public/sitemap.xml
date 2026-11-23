@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://zarpi.co/</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://zarpi.co/tendencias</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/reto</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/liquidaciones</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/maquilas</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/marketplace</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/politica-de-datos</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/terminos</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/politica-de-pagos</loc>
+  </url>
+  <url>
+    <loc>https://zarpi.co/condiciones-de-los-planes</loc>
+  </url>
+</urlset>

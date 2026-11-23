@@ -462,6 +462,11 @@ export default function App() {
     : "";
 
   const rutaActual = rutaDe(screen, idEnLaRuta || undefined);
+  useEffect(() => {
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonical) canonical.href = `https://zarpi.co${rutaActual}`;
+  }, [rutaActual]);
+
   // Pantalla con la que se escribiÃ³ la Ãºltima vez, para decidir entre apilar una
   // entrada nueva o reemplazarla.
   const ultimaPantallaEscritaRef = useRef<Screen|null>(null);
