@@ -5,7 +5,7 @@ import type {
   Maquiladora, MensajeHilo, MetricasMaquila, ParametrosMaquilas, Pedido, PedidoResumen, PerfilEntrada, Producto, ProductoEntrada,
   PropuestaEntrada, RegistroMaquilaEntrada, RepresentanteEntrada, Resena, ResenaEntrada, Solicitud, SolicitudEntrada,
   SolicitudResumen, TipoArchivoMaquila, Colaborador, ConfiguracionMaquilas, Encargo, EncargoResumen, EstadoPaso, Marca,
-  MarcaEntrada, MarcaResumen, PedidoAdmin, ResumenAdminMaquilas, SolicitudAdmin,
+  MarcaEntrada, MarcaResumen, PedidoAdmin, ResumenAdminMaquilas, SolicitudAdmin, VitrinaMaquilas,
 } from "@apps/maquilas/features/tipos";
 
 /**
@@ -71,6 +71,7 @@ async function vistaPreviaFicha(datos: { titulo: string; categoria: string; cant
 export const maquilasService = {
   // Público
   parametros: () => apiRequest<ParametrosMaquilas>("/maquilas/parametros"),
+  vitrina: () => apiRequest<VitrinaMaquilas>("/maquilas/vitrina"),
   registrar: (datos: RegistroMaquilaEntrada) =>
     apiRequest<RegisterResponse>("/maquilas/registro", { method: "POST", body: datos }),
 

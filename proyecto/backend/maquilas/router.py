@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from config import RATE_LIMIT_REGISTER
 from maquilas import (
-    admin, archivos, chat, directorio, encargos, equipo, marca, marca_blanca, parametros, pedidos, resenas, servicio, solicitudes,
+    admin, archivos, chat, directorio, encargos, equipo, marca, marca_blanca, parametros, pedidos, resenas, servicio, solicitudes, vitrina,
 )
 from maquilas import ficha as fichas
 from maquilas.db import BUCKETS, get_mongo
@@ -66,6 +66,13 @@ require_admin = require_rol("admin")
 def ver_parametros(request: Request, mongo: Database = Depends(get_mongo)):
     """Categorías, procesos y certificaciones: los usa el formulario de registro."""
     return parametros.publicos(mongo)
+
+
+@router.get("/vitrina")
+@limiter.limit(RATE_LIMIT_PUBLIC_READ)
+def ver_vitrina(request: Request, mongo: Database = Depends(get_mongo)):
+    """Cifras reales, categorías y lo más destacado para la landing (sin sesión)."""
+    return vitrina.publica(mongo)
 
 
 @router.post("/registro", response_model=RegistroPendienteResponse, status_code=status.HTTP_201_CREATED)

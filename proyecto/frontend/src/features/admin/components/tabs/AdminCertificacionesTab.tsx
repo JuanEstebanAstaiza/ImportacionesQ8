@@ -212,7 +212,7 @@ export function AdminCertificacionesTab({ sectionRef, certifications, certificat
                         <div className="flex justify-end gap-1.5">
                           <button
                             type="button"
-                            onClick={() => startEditingCertification(certificacion)}
+                            onClick={() => onEdit(certificacion)}
                             className="rounded-lg border px-2.5 py-1.5 text-xs font-medium hover:!bg-primary hover:!text-white !border-primary/30 hover:!border-primary dark:hover:!bg-accent dark:hover:!text-black dark:!border-accent/30 dark:hover:!border-accent"
                           >
                             Editar

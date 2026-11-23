@@ -63,7 +63,7 @@ import { useOrderActions } from "@/hooks/useOrderActions";
 import { useDocumentActions } from "@/hooks/useDocumentActions";
 import { mapBackendChatMessage } from "@shared/chat/mappers";
 import { mapBackendImporterToUi } from "@apps/importaciones/features/importador/mappers";
-import { mapBackendQuoteToUi } from "@apps/importaciones/features/quotes/mappers";
+import { mapBackendQuoteToUi, parseTargetPriceCurrency } from "@apps/importaciones/features/quotes/mappers";
 import { mapBackendAdvisorToUi } from "@/features/advisors/mappers";
 import { mapBackendProposalToUiResponse } from "@apps/importaciones/features/propuestas/mappers";
 import { mapBackendOrderToUiOrder } from "@apps/importaciones/features/ordenes/mappers";

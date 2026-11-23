@@ -46,5 +46,5 @@ export function ImagenArchivo({ src, alt, className }: ImagenArchivoProps) {
       </div>
     );
   }
-  return <img src={url} alt={alt} className={`object-cover ${className ?? ""}`} />;
+  return <img src={url} alt={alt} onError={() => setFallo(true)} className={`object-cover ${className ?? ""}`} />;
 }

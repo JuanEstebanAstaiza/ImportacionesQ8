@@ -161,7 +161,7 @@ export function LandingApp({ contenido: c, autenticado, destinos, onIniciarSesio
               <p className="mt-2 leading-relaxed text-white/85">{c.cierreTexto}</p>
             </div>
             <div className="flex flex-shrink-0 flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={cta} className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90">
+              <button type="button" onClick={cta} style={{ backgroundColor: "#ffffff", color: "#0a0a0a" }} className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg px-6 text-sm font-semibold transition hover:opacity-90">
                 {c.ctaPrimario} <ArrowRight className="h-4 w-4" />
               </button>
               {!autenticado && (

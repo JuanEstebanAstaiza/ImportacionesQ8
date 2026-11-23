@@ -40,6 +40,11 @@ import type { ChatConv } from "@/types/chat";
 import type { QuoteResponse } from "@/types/response";
 import { cantidadConUnidad } from "@/utils/formatos";
 
+function initialsFromName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 ? `${words[0][0]}${words[1][0]}`.toUpperCase() : (words[0] || "?").slice(0, 2).toUpperCase();
+}
+
 export function ResponseDetailScreen({responseId,from,fromQuoteId,onBack,onBackToQuote,onOpenChat,sb,responses,quotes,chats,importers,orders,onRefreshData}:{
   responseId:string;from:ResponseFrom;fromQuoteId?:string;
   onBack:()=>void;onBackToQuote:(id:string)=>void;onOpenChat:(id:string)=>void;sb:SidebarCtrl;responses:QuoteResponse[];quotes:Quote[];chats:ChatConv[];importers:Importer[];orders:Order[];onRefreshData?:()=>Promise<void>;

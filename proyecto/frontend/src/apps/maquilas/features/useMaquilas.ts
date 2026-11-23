@@ -10,6 +10,7 @@ import { maquilasService } from "@/services/maquilas.service";
 export const claves = {
   todo: ["maquilas"] as const,
   parametros: ["maquilas", "parametros"] as const,
+  vitrina: ["maquilas", "vitrina"] as const,
   mia: ["maquilas", "mi-maquiladora"] as const,
   listado: (estado: string, q: string) => ["maquilas", "admin", "listado", estado, q] as const,
   detalle: (id: string) => ["maquilas", "admin", "detalle", id] as const,
@@ -42,6 +43,11 @@ export const claves = {
 
 export function useParametrosMaquilas() {
   return useQuery({ queryKey: claves.parametros, queryFn: maquilasService.parametros, staleTime: 5 * 60_000 });
+}
+
+/** Landing pública: si el módulo falla, la portada se muestra igual con su contenido fijo. */
+export function useVitrinaMaquilas() {
+  return useQuery({ queryKey: claves.vitrina, queryFn: maquilasService.vitrina, staleTime: 60_000, retry: false });
 }
 
 export function useMiMaquiladora() {

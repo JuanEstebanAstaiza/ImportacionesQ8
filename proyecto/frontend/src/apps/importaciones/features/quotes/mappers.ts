@@ -29,7 +29,7 @@ function backendEstadoToUi(estado: string): Quote["status"] {
   }
 }
 
-function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
+export function parseTargetPriceCurrency(value:string|undefined|null):string { const clean=(value||"").trim().toUpperCase(); if(!clean) return "USD"; return PRICE_CURRENCIES.includes(clean)?clean:"USD"; }
 
 export function mapBackendQuoteToUi(cot: BackendCotizacion, importers: Importer[]): Quote {
   const importerName = cot.importador_id

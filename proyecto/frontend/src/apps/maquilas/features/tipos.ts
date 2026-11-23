@@ -643,3 +643,13 @@ export type ConfiguracionMaquilas = ParametrosMaquilas & {
   colaboradores_max: number;
   [clave: string]: unknown;
 };
+
+/** Vitrina pública de la landing (`GET /maquilas/vitrina`). */
+export interface VitrinaMaquilas {
+  cifras: { maquilas: number; ciudades: number; productos: number; pedidos_entregados: number; calificacion: number | null; resenas: number };
+  categorias: { clave: string; nombre: string; maquilas: number }[];
+  etapas: string[];
+  ruta_legal: string[];
+  maquilas: { id: string; nombre_comercial: string; ciudad: string; categorias: string[]; pedido_minimo: number | null; foto: string | null; calificacion: number | null; resenas: number }[];
+  productos: { id: string; nombre: string; categoria: string; foto: string | null; precio_desde: number | null; pedido_minimo: number; maquila: string | null; ciudad: string | null }[];
+}

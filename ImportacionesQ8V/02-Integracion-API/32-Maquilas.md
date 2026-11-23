@@ -40,6 +40,7 @@ Se construye por fases:
 | Método | Ruta | Quién | Qué hace |
 |---|---|---|---|
 | GET | `/parametros` | Público | Categorías, procesos, certificaciones y límites |
+| GET | `/vitrina` | Público | Lo que muestra la landing: cifras, categorías con cuántas maquilas tienen, etapas, ruta legal general, hasta 6 maquilas y 4 productos de marca blanca |
 | POST | `/registro` | Público | Crea la cuenta y la maquiladora; envía el OTP |
 | GET | `/archivos/{bucket}/{id}` | Según el archivo | Descarga con `Range` (ver acceso abajo) |
 | POST | `/archivos/{bucket}` | Maquiladora | Sube `foto`, `rut`, `camara_comercio` o `certificado` |
@@ -58,6 +59,8 @@ Se construye por fases:
 
 - Módulo en `proyecto/frontend/src/apps/maquilas/` (rutas `maq-*`, `MaquilasRouter`, pantallas, `useMaquilas.ts` con react-query) y `services/maquilas.service.ts`.
 - Públicas: `maq-landing` (`/maquilas`, con «Registra tu maquila») y `maq-registro` (`/maquilas/registro`).
+- La landing (`LandingMaquilas.tsx`) tiene su propio contenido sobre `LandingShell`: hero con un pedido de ejemplo (las etapas salen de los parámetros), cifras, qué se puede fabricar, cómo funciona y las tres formas de pedir, maquilas y productos reales, estudio de marca, confianza, sección para maquilas y preguntas frecuentes. Todo lo que es dato sale de `GET /maquilas/vitrina`: no hay cifras inventadas. Las cifras solo aparecen desde 3 maquilas verificadas, y la calificación promedio desde 5 reseñas. Si la vitrina falla, la landing se muestra sin esas partes.
+- La vitrina solo expone lo que ya es público: nombre comercial, ciudad, categorías, pedido mínimo, calificación y la primera imagen de la galería o del producto de maquilas verificadas. No expone NIT, contacto ni documentos.
 - Maquiladora: `maq-panel` (estado y pasos de la verificación) y `maq-perfil` (perfil, documentos y galería). Inicia sesión eligiendo «Maquila» en el login.
 - Admin: grupo «Maquilas» › Verificación (`/admin/maquilas/verificacion[/<id>]`), también para soporte.
 - Registro de la suite: `MAQUILAS` en `shared/suite/suite.ts`.

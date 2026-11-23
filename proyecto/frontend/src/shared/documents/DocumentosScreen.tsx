@@ -11,7 +11,7 @@ import { Sidebar } from "@shared/layout/Sidebar";
 import { USER } from "@shared/layout/AppHeader";
 import type { SidebarCtrl } from "@/types/portal";
 import type { BackendArchivoItem, BackendExplorerResponse } from "@/services/business.service";
-import { resolveApiUrl } from "@/services/api-client";
+import { getStoredToken, resolveApiUrl } from "@/services/api-client";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { normalizeFolderName } from "@/utils/folders";
 import { SYSTEM_ROOT_FOLDER_NAMES } from "@/config/business";
