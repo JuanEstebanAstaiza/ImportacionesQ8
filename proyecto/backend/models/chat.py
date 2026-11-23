@@ -37,6 +37,7 @@ class TipoConversacion(str, enum.Enum):
     negociacion = "negociacion"  # solicitante ↔ empresa (cotización y, después, orden)
     interna = "interna"          # cuenta dueña de la empresa ↔ uno de sus asesores
     soporte = "soporte"          # cualquier usuario ↔ equipo de la plataforma
+    reserva = "reserva"          # comprador ↔ empresa vendedora en Liquidaciones
     # Administración ↔ soporte. Es el canal propio del equipo de la plataforma:
     # un agente no puede abrirse un ticket a sí mismo, pero sí necesita hablar
     # con administración y con sus compañeros. Tiene dos formas, distinguidas

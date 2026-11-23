@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   CircleCheck, FileText, Hourglass, LifeBuoy, Loader2, Mail, MapPin, Phone, Send, ShieldCheck,
@@ -9,6 +10,8 @@ import { Button, Card, Textarea } from "@shared/ui/design-system";
 import { Modal } from "@shared/ui/kit/Modal";
 import { abrirArchivoEnPestana } from "@/utils/abrir-archivo";
 import { liquidacionesService } from "@/services/liquidaciones.service";
+import { businessService, type BackendChatAttachmentItem } from "@/services/business.service";
+import { useChatSocket } from "@/hooks/useChatSocket";
 import { InsigniaEstadoOperacion } from "@apps/liquidaciones/features/componentes/Insignias";
 import { FotoLote } from "@apps/liquidaciones/features/componentes/MediosLote";
 import { useAhora } from "@apps/liquidaciones/features/componentes/CuentaRegresiva";
@@ -65,7 +68,7 @@ function ListaDocumentos({ titulo, documentos, vacio }: { titulo: string; docume
   );
 }
 
-function Burbuja({ mensaje }: { mensaje: MensajeOperacion }) {
+function Burbuja({ mensaje, adjuntos }: { mensaje: MensajeOperacion; adjuntos: BackendChatAttachmentItem[] }) {
   if (mensaje.tipo === "sistema") {
     const equipo = mensaje.autor === "equipo";
     return (
@@ -97,6 +100,13 @@ function Burbuja({ mensaje }: { mensaje: MensajeOperacion }) {
             <FileText className="h-3 w-3" />{mensaje.archivo.nombre || "Ver documento"}
           </button>
         )}
+        {adjuntos.map((adjunto) => adjunto.storage_url && (
+          <button key={adjunto.archivo_id} type="button"
+            onClick={() => void abrirArchivoEnPestana(adjunto.storage_url!, adjunto.nombre)}
+            className="mt-1 flex items-center gap-1.5 text-xs underline underline-offset-2">
+            <FileText className="h-3 w-3" />{adjunto.nombre}
+          </button>
+        ))}
       </div>
       <p className="mt-0.5 text-[10px] text-muted-foreground">{fechaHora(mensaje.fecha)}</p>
     </div>
@@ -119,6 +129,12 @@ export function PanelOperacion({
   onReportar?: (referencia: string) => void;
 }) {
   const { data: op, isLoading, error } = useOperacion(operacionId);
+  const { data: adjuntos = [], error: errorAdjuntos } = useQuery({
+    queryKey: ["chat", "adjuntos", operacionId],
+    queryFn: () => businessService.listChatAttachments(operacionId),
+    enabled: Boolean(op),
+    refetchInterval: 8_000,
+  });
   const invalidar = useInvalidarLiquidaciones();
   const ahora = useAhora();
   const [texto, setTexto] = useState("");
@@ -128,6 +144,7 @@ export function PanelOperacion({
   const [accionando, setAccionando] = useState(false);
   const finChat = useRef<HTMLDivElement>(null);
   const totalMensajes = op?.mensajes.length ?? 0;
+  useChatSocket(operacionId, () => { void invalidar(); });
 
   useEffect(() => {
     finChat.current?.scrollIntoView({ block: "nearest" });
@@ -245,7 +262,8 @@ export function PanelOperacion({
           <p className="text-xs text-muted-foreground">Queda registrado en Zarpi para las dos partes.</p>
         </div>
         <div className="max-h-[420px] min-h-[160px] space-y-3 overflow-y-auto px-4 py-3">
-          {op.mensajes.map((m) => <Burbuja key={m.id} mensaje={m} />)}
+          {errorAdjuntos && <p className="text-xs text-destructive">No se pudieron cargar los adjuntos del chat.</p>}
+          {op.mensajes.map((m) => <Burbuja key={m.id} mensaje={m} adjuntos={adjuntos.filter(a => a.mensaje_id === m.id)} />)}
           <div ref={finChat} />
         </div>
         {(esEquipo || (op.estado !== "cancelada" && op.estado !== "vencida")) && (

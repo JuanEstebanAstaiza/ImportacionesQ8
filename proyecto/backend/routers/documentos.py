@@ -702,12 +702,17 @@ async def compartir_recursos_chat(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Uno o más archivos no existen o no están disponibles")
 
     sent_messages = 0
+    mensajes_reserva = []
     for conversation_id in payload.conversacion_ids:
         conversation = db.query(ConversacionChat).filter(ConversacionChat.id == conversation_id).first()
         if not conversation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversación no encontrada: {conversation_id}")
         if not _can_access_chat(conversation, current_user, db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para compartir en una de las conversaciones")
+
+        if acceso_chat.es_reserva(conversation):
+            from routers.chat import _verificar_reserva_abierta
+            _verificar_reserva_abierta(conversation)
 
         message_text = payload.mensaje or "Recursos compartidos desde gestión documental"
         message = MensajeChat(
@@ -743,7 +748,12 @@ async def compartir_recursos_chat(
                 )
                 db.add(MensajeAdjunto(id=str(uuid4()), mensaje_id=message.id, archivo_id=cloned.id))
 
-        if config.redis_client:
+        if acceso_chat.es_reserva(conversation):
+            from routers.chat import _notificar_mensaje_chat
+            _notificar_mensaje_chat(db, conversacion=conversation, remitente_id=user_id,
+                                    contenido=message_text, tipo="archivo")
+            mensajes_reserva.append((conversation, message))
+        elif config.redis_client:
             try:
                 config.redis_client.publish(
                     f"chat:{conversation_id}",
@@ -764,6 +774,11 @@ async def compartir_recursos_chat(
         sent_messages += 1
 
     db.commit()
+    if mensajes_reserva:
+        from routers.chat import _actualizar_resumen_reserva, _publicar_mensaje
+        for conversation, message in mensajes_reserva:
+            _actualizar_resumen_reserva(db, conversation)
+            _publicar_mensaje(message)
     return {"success": True, "mensajes_creados": sent_messages}
 
 

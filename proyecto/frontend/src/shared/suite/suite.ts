@@ -49,6 +49,7 @@ const esPantallaLiquidaciones = (screen: Screen) => screen.startsWith("liq-");
 const LIQ_COMPRADOR: NavItem[] = [
   { icon: Tag, label: "Liquidaciones", key: "liq-catalogo" },
   { icon: Bookmark, label: "Mis reservas", key: "liq-reservas" },
+  { icon: MessagesSquare, label: "Chats", key: "chats" },
 ];
 
 const LIQ_EMPRESA: NavItem[] = [

@@ -20,6 +20,12 @@ MP4 = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * (3 * 1024 * 1024)
 @pytest.fixture(autouse=True)
 def mongo_liq():
     base = mongo.obtener_db()
+    if base.name != "zarpi_liquidaciones_test" and not base.name.startswith("zarpi_liquidaciones_test_"):
+        pytest.fail(
+            f"Las pruebas de Liquidaciones eliminan colecciones; MONGO_DB debe ser "
+            f"'zarpi_liquidaciones_test' o empezar por 'zarpi_liquidaciones_test_', no '{base.name}'.",
+            pytrace=False,
+        )
     for nombre in base.list_collection_names():
         base.drop_collection(nombre)
     mongo.asegurar_indices(base)
@@ -285,6 +291,111 @@ def test_chat_documentos_y_vendido(client, empresa, comprador, equipo):
     r = client.post(f"/liquidaciones/operaciones/{op['id']}/vendido", headers=h_empresa)
     assert r.status_code == 200 and r.json()["estado"] == "vendida"
     assert client.get(f"/liquidaciones/lotes/{lote['id']}", headers=h_comprador).json()["estado"] == "vendido"
+
+
+def test_chat_reserva_unificado(client, db_session, empresa, comprador, equipo, mongo_liq, monkeypatch):
+    import config
+    from models.chat import MensajeChat
+    from utils.security import create_access_token
+
+    importador, _, h_empresa = empresa
+    _, h_comprador = comprador
+    _, h_equipo = equipo
+    _activar(client, h_empresa)
+    _activar(client, h_comprador)
+    lote = _lote_publicado(client, h_empresa, h_equipo)
+    op = client.post(f"/liquidaciones/lotes/{lote['id']}/reservar", headers=h_comprador).json()
+    ident = op["id"]
+
+    _, h_asesor = crear_usuario_con_token(db_session, rol="asesor", importador_id=importador.id)
+    _, h_otro = crear_usuario_con_token(db_session, rol="solicitante")
+    for headers, lado in ((h_comprador, "comprador"), (h_empresa, "vendedor"), (h_asesor, "vendedor")):
+        chats = client.get("/chat/conversaciones", headers=headers)
+        assert chats.status_code == 200, chats.text
+        reserva = next(c for c in chats.json() if c["id"] == ident)
+        assert reserva["tipo"] == "reserva"
+        assert reserva["lado_reserva"] == lado
+    assert client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_otro).status_code == 403
+
+    r = client.post(f"/chat/conversaciones/{ident}/mensajes", json={"contenido": "Mensaje desde Chats"}, headers=h_empresa)
+    assert r.status_code == 201, r.text
+    detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_comprador).json()
+    assert any(m["contenido"] == "Mensaje desde Chats" and m["autor"] == "contraparte" for m in detalle["mensajes"])
+
+    r = client.post(f"/liquidaciones/operaciones/{ident}/mensajes", json={"contenido": "Mensaje desde la reserva"}, headers=h_comprador)
+    assert r.status_code == 201, r.text
+    mensajes = client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_empresa).json()
+    assert sum(m["contenido"] == "Mensaje desde la reserva" for m in mensajes) == 1
+    assert sum(m["contenido"] == "Mensaje desde Chats" for m in mensajes) == 1
+    assert mongo_liq.operaciones.find_one({"_id": ident})["total_mensajes"] == len(mensajes)
+
+    monkeypatch.setattr(config, "redis_client", None)
+    token = create_access_token(str(comprador[0].id), "solicitante")
+    with client.websocket_connect(f"/ws/chat/{ident}?token={token}") as websocket:
+        websocket.send_json({"contenido": "Mensaje por WebSocket", "tipo": "texto"})
+        assert websocket.receive_json()["contenido"] == "Mensaje por WebSocket"
+    detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_empresa).json()
+    assert any(m["contenido"] == "Mensaje por WebSocket" for m in detalle["mensajes"])
+
+    archivo = client.post("/documentos/archivos/upload",
+                          files={"archivo": ("ficha.pdf", PDF, "application/pdf")},
+                          data={"origen": "chat"}, headers=h_comprador)
+    assert archivo.status_code in (200, 201), archivo.text
+    compartir = {"archivo_ids": [archivo.json()["id"]], "conversacion_ids": [ident]}
+    r = client.post("/documentos/compartir-chat", json=compartir, headers=h_comprador)
+    assert r.status_code == 200, r.text
+    adjuntos = client.get(f"/documentos/chats/{ident}/adjuntos", headers=h_empresa)
+    assert adjuntos.status_code == 200 and len(adjuntos.json()) == 1
+    assert client.get(adjuntos.json()[0]["storage_url"], headers=h_empresa).status_code == 200
+    viejo_id = str(uuid4())
+    mongo_liq.mensajes.insert_one({
+        "_id": viejo_id, "operacion_id": ident, "remitente_id": comprador[0].id,
+        "remitente_nombre": "Comprador", "tipo": "texto", "contenido": "Mensaje anterior",
+        "archivo": None, "fecha": datetime.utcnow(),
+    })
+    for _ in range(2):
+        detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_comprador).json()
+        assert sum(m["id"] == viejo_id for m in detalle["mensajes"]) == 1
+    mensajes = client.get(f"/chat/conversaciones/{ident}/mensajes", headers=h_empresa).json()
+    assert sum(m["id"] == viejo_id for m in mensajes) == 1
+
+    r = client.post(f"/liquidaciones/operaciones/{ident}/cancelar", json={}, headers=h_comprador)
+    assert r.status_code == 200, r.text
+    assert client.post(f"/chat/conversaciones/{ident}/mensajes", json={"contenido": "No permitido"}, headers=h_empresa).status_code == 409
+    assert client.post("/documentos/compartir-chat", json=compartir, headers=h_comprador).status_code == 409
+
+    base = datetime.utcnow()
+    db_session.add_all([
+        MensajeChat(id=str(uuid4()), conversacion_id=ident, remitente_id=comprador[0].id,
+                    tipo="texto", contenido=f"Historial {i}", fecha_envio=base + timedelta(seconds=i))
+        for i in range(501)
+    ])
+    db_session.commit()
+    detalle = client.get(f"/liquidaciones/operaciones/{ident}", headers=h_comprador).json()
+    assert len(detalle["mensajes"]) == 500
+    assert detalle["mensajes"][0]["contenido"] == "Historial 1"
+    assert detalle["mensajes"][-1]["contenido"] == "Historial 500"
+
+
+def test_chat_reserva_comprador_empresa_y_su_asesor(client, db_session, empresa, equipo):
+    _, _, h_vendedor = empresa
+    _, h_equipo = equipo
+    empresa_compradora, dueño = crear_empresa_importadora(
+        db_session, nombre_empresa=f"Compradora {uuid4().hex[:6]}",
+        email_dueño=f"compradora_{uuid4().hex[:8]}@example.com")
+    h_dueño = auth_headers_for(dueño)
+    _, h_asesor = crear_usuario_con_token(db_session, rol="asesor", importador_id=empresa_compradora.id)
+    _activar(client, h_vendedor)
+    _activar(client, h_dueño)
+    lote = _lote_publicado(client, h_vendedor, h_equipo)
+    reserva = client.post(f"/liquidaciones/lotes/{lote['id']}/reservar", headers=h_asesor)
+    assert reserva.status_code == 201, reserva.text
+    ident = reserva.json()["id"]
+    for headers in (h_dueño, h_asesor):
+        chats = client.get("/chat/conversaciones", headers=headers)
+        assert chats.status_code == 200, chats.text
+        assert next(c for c in chats.json() if c["id"] == ident)["lado_reserva"] == "comprador"
+        assert client.get(f"/chat/conversaciones/{ident}/mensajes", headers=headers).status_code == 200
 
 
 def test_cancelar_devuelve_el_lote(client, empresa, comprador, equipo):

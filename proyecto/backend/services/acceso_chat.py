@@ -52,6 +52,10 @@ def es_equipo(conversacion: ConversacionChat) -> bool:
     return tipo_de(conversacion) == TipoConversacion.equipo.value
 
 
+def es_reserva(conversacion: ConversacionChat) -> bool:
+    return tipo_de(conversacion) == TipoConversacion.reserva.value
+
+
 def es_sala_del_equipo(conversacion: ConversacionChat) -> bool:
     """La sala común, en la que está todo el equipo (sin miembros concretos)."""
     return es_equipo(conversacion) and not conversacion.solicitante_id and not conversacion.importador_usuario_id
@@ -90,6 +94,15 @@ def participantes(db: Session, conversacion: ConversacionChat) -> Set[str]:
             }
         else:
             ids |= {conversacion.solicitante_id, conversacion.importador_usuario_id}
+    elif es_reserva(conversacion):
+        from liquidaciones import avisos
+        from liquidaciones.chat import operacion_de_conversacion
+        from liquidaciones.db import obtener_db
+
+        operacion = operacion_de_conversacion(obtener_db(), conversacion)
+        if operacion:
+            ids.update(avisos.usuarios_de_cuenta(db, operacion["cuenta_comprador"]))
+            ids.update(avisos.usuarios_de_cuenta(db, operacion["cuenta_vendedor"]))
     elif es_soporte(conversacion):
         ids |= {conversacion.solicitante_id, conversacion.agente_asignado_id}
     elif es_interna(conversacion):
@@ -125,6 +138,15 @@ def puede_acceder(
     """
     user_id = current_user["user_id"]
     rol = current_user["rol"]
+
+    if es_reserva(conversacion):
+        if es_equipo_plataforma(rol):
+            return True
+        from liquidaciones.chat import cuenta_participa, operacion_de_conversacion
+        from liquidaciones.db import obtener_db
+
+        operacion = operacion_de_conversacion(obtener_db(), conversacion)
+        return bool(operacion and cuenta_participa(operacion, current_user))
 
     if es_equipo(conversacion):
         # Canal del equipo: fuera de la plataforma nadie entra, ni siquiera el

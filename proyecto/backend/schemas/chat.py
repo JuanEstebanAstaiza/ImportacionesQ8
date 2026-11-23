@@ -80,6 +80,7 @@ class ConversacionChatResponse(BaseModel):
     urgencia: Optional[str] = None
     modulo: Optional[str] = None
     referencia: Optional[str] = None
+    lado_reserva: Optional[Literal["comprador", "vendedor"]] = None
     # Rol de quien abrió el ticket, para que soporte sepa a quién atiende.
     solicitante_rol: Optional[str] = None
     # Mensajes posteriores a la última lectura de quien consulta.

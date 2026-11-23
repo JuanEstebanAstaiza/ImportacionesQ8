@@ -1,4 +1,4 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { MODULOS_SUITE, moduloDe, type Producto } from "@shared/suite/suite";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
@@ -119,7 +119,7 @@ function etiquetaReferencia(referencia: string): string {
   return `${nombre} ${id.slice(0, 8).toUpperCase()}`;
 }
 
-export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onOpenProposalForm,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers,onLoadResourceFolder,userPhotoUrl}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onOpenProposalForm?:(quoteId:string)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[];onLoadResourceFolder?:(parentId:string|null)=>Promise<BackendExplorerResponse>;userPhotoUrl?:string}) {
+export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquipo,onViewQuote,onViewOrder,onViewReserva,sb,initialConvId,conversations,messagesByConversation,onSendMessage,onOpenProposalForm,proposalStateByQuoteId={},onShareLocalAttachment,onShareExistingResource,onTransferConversation,onUpdateOrderStatus,onAttachOrderDocument,onActiveConversationChange,onCloseTicket,onReopenTicket,onEscalateTicket,onRateTicket,companyAdvisors=[],currentUserRole,chatAttachmentsByConversation,orders,quotes,importers,onLoadResourceFolder,userPhotoUrl}:{modoEquipo?:boolean;miembrosEquipo?:BackendMiembroEquipo[];onAbrirHiloEquipo?:(miembroId:string)=>Promise<string|undefined>;onViewQuote:(id:string)=>void;onViewOrder:(id:string)=>void;onViewReserva?:(id:string,lado:"comprador"|"vendedor")=>void;sb:SidebarCtrl;initialConvId?:string;conversations:ChatConv[];messagesByConversation:Record<string,ChatMsg[]>;onSendMessage:(conversationId:string,contenido:string,metadata?:Record<string,unknown>)=>Promise<void>;onOpenProposalForm?:(quoteId:string)=>void;proposalStateByQuoteId?:Record<string,string>;onShareLocalAttachment:(conversationId:string,file:File)=>Promise<void>;onShareExistingResource:(conversationIds:string[],fileId:string,message?:string)=>Promise<void>;onTransferConversation:(conversationId:string,newAdvisorEmail:string)=>Promise<void>;onUpdateOrderStatus:(orderId:string,statusValue:string)=>Promise<void>;onAttachOrderDocument:(orderId:string,file:File)=>Promise<void>;onActiveConversationChange?:(conversationId:string|null)=>void;onCloseTicket:(conversationId:string,resolucion:string)=>Promise<void>;onReopenTicket:(conversationId:string)=>Promise<void>;onEscalateTicket:(conversationId:string,nivel:number)=>Promise<void>;onRateTicket:(conversationId:string,calificacion:number,comentario?:string)=>Promise<void>;companyAdvisors?:CompanyAdvisor[];currentUserRole:UserRole|"admin";chatAttachmentsByConversation:Record<string,BackendChatAttachmentItem[]>;orders:Order[];quotes:Quote[];importers:Importer[];onLoadResourceFolder?:(parentId:string|null)=>Promise<BackendExplorerResponse>;userPhotoUrl?:string}) {
   const [selectedId,setSelectedId]=useState<string|null>(initialConvId||conversations[0]?.id||null);
   // El equipo de la plataforma filtra por urgencia; los demás, por el tipo de
   // hilo. Por eso el filtro es una cadena libre y no una unión cerrada.
@@ -249,6 +249,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     if(filter==="asesores")return Boolean(c.atiendeNombre)&&(!searchConv||[c.atiendeNombre,c.refCode,c.counterpartName||""].some(t=>t.toLowerCase().includes(searchConv.toLowerCase())));
     if(filter==="ordenes"&&c.type!=="orden")return false;
     if(filter==="cotizaciones"&&c.type!=="cotizacion")return false;
+    if(filter==="reservas"&&c.type!=="reserva")return false;
     if(filter==="interno"&&c.type!=="interno")return false;
     if(filter==="soporte"&&c.type!=="soporte")return false;
     if(filter.startsWith("urg-")&&c.urgency!==filter.slice(4))return false;
@@ -345,6 +346,10 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
     setSending(true);
     try{
       await onSendMessage(selectedId,content);
+    }catch(error){
+      setMsgs(prev=>({...prev,[selectedId]:(prev[selectedId]||[]).filter(m=>m.id!==newMsg.id)}));
+      setInput(content);
+      toast.error(error instanceof Error ? error.message : "No se pudo enviar el mensaje");
     }finally{
       setSending(false);
     }
@@ -875,6 +880,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
         {k:"no-leidas",label:"No leídas"},
         {k:"ordenes",label:"Operaciones"},
         {k:"cotizaciones",label:"Cotizaciones"},
+        ...(conversations.some(c=>c.type==="reserva")?[{k:"reservas",label:"Reservas"}]:[]),
         // La pestaña de equipo solo aparece si hay algún hilo interno: al
         // solicitante no le sirve de nada y nunca va a tener ninguno.
         ...(conversations.some(c=>c.type==="interno")?[{k:"interno",label:"Equipo"}]:[]),
@@ -1204,7 +1210,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                     {conv.type!=="soporte"&&(
                       <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
                         conv.type==="orden"?"bg-purple-50 text-purple-700":conv.type==="interno"?"bg-amber-50 text-amber-700":"bg-blue-50 text-blue-700")}>
-                        {conv.type==="orden"?`Operación · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
+                        {conv.type==="orden"?`Operación · ${conv.refCode}`:conv.type==="reserva"?`Reserva · ${conv.refCode}`:conv.type==="interno"?"Canal interno · el cliente no lo ve":`Cotización · ${conv.refCode}`}
                       </span>
                     )}
                     {conv.status==="activa"&&<span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>Activa</span>}
@@ -1216,6 +1222,9 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                   )}
                   {conv.type==="orden"&&refOrderId&&(
                     <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewOrder(refOrderId)}>Ver operación</Button>
+                  )}
+                  {conv.type==="reserva"&&conv.ladoReserva&&onViewReserva&&(
+                    <Button variant="secondary" size="sm" icon={<ExternalLink className="w-3 h-3"/>} onClick={()=>onViewReserva(conv.refId,conv.ladoReserva!)}>Ver reserva</Button>
                   )}
                   <button onClick={()=>setShowCtx(v=>!v)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -1260,6 +1269,11 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                         <div className={clsx("max-w-[70%] flex flex-col gap-1",isClient?"items-end":"items-start")}>
                           {mostrarAutor&&<span className="text-[10px] font-semibold text-muted-foreground px-1">{msg.authorName}</span>}
                           {msg.file&&<FileAttachmentBubble file={msg.file}/>}
+                          {msg.archivoLiquidaciones&&(
+                            <button type="button" className="text-xs underline" onClick={()=>void abrirArchivoEnPestana(msg.archivoLiquidaciones!.url,msg.archivoLiquidaciones!.nombre)}>
+                              {msg.archivoLiquidaciones.nombre}
+                            </button>
+                          )}
                           {messageAttachments.length>0 && (
                             <div className={clsx("grid gap-2", messageAttachments.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1", isClient ? "justify-items-end" : "justify-items-start")}>
                               {messageAttachments.map((attachment) => {
@@ -1685,7 +1699,7 @@ export function ChatsScreen({modoEquipo=false,miembrosEquipo=[],onAbrirHiloEquip
                     para la cuenta dueña de la empresa: es la única que puede
                     reasignar (`PUT /importadores/cotizaciones/{id}/asignar`);
                     el comprador no tiene subcuentas y el asesor no reasigna. */}
-                {currentUserRole==="importadora"&&conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&(<>
+                {currentUserRole==="importadora"&&conv.type!=="interno"&&conv.type!=="soporte"&&conv.type!=="equipo"&&conv.type!=="reserva"&&(<>
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Transferir chat</p>
                   <div className="space-y-2">

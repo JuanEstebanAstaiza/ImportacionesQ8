@@ -564,7 +564,7 @@ export interface BackendChatConversation {
    * de un usuario con el equipo de la plataforma; "equipo", el canal propio
    * de ese equipo (sala común o hilo entre dos de sus miembros).
    */
-  tipo: "negociacion" | "interna" | "soporte" | "equipo";
+  tipo: "negociacion" | "interna" | "soporte" | "equipo" | "reserva";
   cotizacion_id: string | null;
   orden_id: string | null;
   solicitante_id: string | null;
@@ -587,6 +587,7 @@ export interface BackendChatConversation {
   /** Producto de la suite del ticket; null en los que no son de soporte. */
   modulo?: string | null;
   referencia?: string | null;
+  lado_reserva?: "comprador" | "vendedor" | null;
   solicitante_rol: string | null;
   /** Mensajes ajenos posteriores a la última lectura de quien consulta. */
   no_leidos: number;
