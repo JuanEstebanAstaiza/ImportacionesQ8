@@ -302,6 +302,16 @@ def _vendedor_de(activacion: Dict) -> Dict:
             "ciudad": activacion.get("ciudad")}
 
 
+def _logo_empresa(sql: Optional[Session], cuenta: Optional[str]) -> Optional[str]:
+    if not sql or not cuenta or not cuenta.startswith("empresa:"):
+        return None
+    from models.importador import Importador
+
+    empresa_id = cuenta.split(":", 1)[1]
+    empresa = sql.query(Importador).filter(Importador.id == empresa_id).first()
+    return empresa.logo_url if empresa else None
+
+
 def _requerir_empresa(usuario: dict) -> None:
     if not es_empresa(usuario):
         raise _error(status.HTTP_403_FORBIDDEN, "Solo las empresas registradas en Zarpi publican lotes")
@@ -469,6 +479,7 @@ def detalle_lote(db: Database, sql: Optional[Session], usuario: Optional[dict], 
     if lote["estado"] not in archivos.ESTADOS_LOTE_PUBLICOS and not propio and not (usuario and es_equipo(usuario)):
         raise _error(status.HTTP_404_NOT_FOUND, "Liquidación no encontrada")
     salida = a_lote(lote, usuario)
+    salida["vendedor"]["logo_url"] = _logo_empresa(sql, lote.get("cuenta_vendedor"))
     salida["mi_operacion_id"] = None
     if usuario:
         op = db.operaciones.find_one({"lote_id": lote_id, "cuenta_comprador": cuenta_de(usuario),

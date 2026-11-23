@@ -10,41 +10,41 @@ export const CONDICIONES: Record<Condicion, { label: string; dot: string; chip: 
   nuevo: {
     label: "Nuevo",
     dot: "bg-emerald-500",
-    chip: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30",
+    chip: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-accent/10 dark:text-accent dark:border-accent/30",
   },
   devolucion: {
     label: "Devolución",
     dot: "bg-sky-500",
-    chip: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30",
+    chip: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-accent/10 dark:text-accent dark:border-accent/30",
   },
   empaque_abierto: {
     label: "Empaque abierto",
     dot: "bg-amber-500",
-    chip: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30",
+    chip: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-accent/10 dark:text-accent dark:border-accent/30",
   },
   con_averias: {
     label: "Con averías",
     dot: "bg-rose-500",
-    chip: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30",
+    chip: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-accent/10 dark:text-accent dark:border-accent/30",
   },
 };
 
 export const ORDEN_CONDICIONES: Condicion[] = ["nuevo", "devolucion", "empaque_abierto", "con_averias"];
 
 export const ESTADOS_LOTE: Record<EstadoLote, { label: string; chip: string; dot: string }> = {
-  en_revision: { label: "Pendiente de revisión", dot: "bg-amber-500", chip: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300" },
-  publicado: { label: "Disponible", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" },
-  rechazado: { label: "Necesita cambios", dot: "bg-rose-500", chip: "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" },
-  reservado: { label: "Reservado", dot: "bg-violet-500", chip: "bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" },
-  vendido: { label: "Vendido", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300" },
-  cerrado_sin_venta: { label: "Cerrada sin venta", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300" },
+  en_revision: { label: "Pendiente de revisión", dot: "bg-amber-500", chip: "bg-amber-50 text-amber-700 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  publicado: { label: "Disponible", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  rechazado: { label: "Necesita cambios", dot: "bg-rose-500", chip: "bg-rose-50 text-rose-700 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  reservado: { label: "Reservado", dot: "bg-violet-500", chip: "bg-violet-50 text-violet-700 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  vendido: { label: "Vendido", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  cerrado_sin_venta: { label: "Cerrada sin venta", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
 };
 
 export const ESTADOS_OPERACION: Record<EstadoOperacion, { label: string; chip: string; dot: string }> = {
-  activa: { label: "Reservado", dot: "bg-violet-500", chip: "bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" },
-  vendida: { label: "Vendido", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" },
-  cancelada: { label: "Cancelada", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300" },
-  vencida: { label: "Vencida", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300" },
+  activa: { label: "Reservado", dot: "bg-violet-500", chip: "bg-violet-50 text-violet-700 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  vendida: { label: "Vendido", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  cancelada: { label: "Cancelada", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
+  vencida: { label: "Vencida", dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 dark:border dark:border-accent/30 dark:bg-accent/10 dark:text-accent" },
 };
 
 export const ENTREGAS: Record<Entrega, string> = {

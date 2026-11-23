@@ -132,10 +132,12 @@ def test_asesor_hereda_activacion_de_su_empresa(client, db_session, empresa):
 
 # ==================== Publicación y revisión ====================
 
-def test_publicar_revisar_y_aprobar(client, empresa, comprador, equipo):
-    _, _, h_empresa = empresa
+def test_publicar_revisar_y_aprobar(client, db_session, empresa, comprador, equipo):
+    importador, _, h_empresa = empresa
     _, h_equipo = equipo
     _, h_comprador = comprador
+    importador.logo_url = "/documentos/archivos/logo-empresa/descargar"
+    db_session.commit()
     _activar(client, h_empresa, "Importadora Andina")
     lote = _lote(client, h_empresa)
     assert lote["estado"] == "en_revision"
@@ -156,6 +158,8 @@ def test_publicar_revisar_y_aprobar(client, empresa, comprador, equipo):
     catalogo = client.get("/liquidaciones/lotes", headers=h_comprador).json()
     assert catalogo["disponibles"] == 1
     assert catalogo["lotes"][0]["vendedor"]["razon_social"] == "Importadora Andina"
+    detalle = client.get(f"/liquidaciones/lotes/{lote['id']}", headers=h_comprador).json()
+    assert detalle["vendedor"]["logo_url"] == importador.logo_url
 
 
 def test_rechazo_con_motivos_y_reenvio(client, empresa, equipo):
