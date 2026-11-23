@@ -136,7 +136,7 @@ class AbrirSoporteRequest(BaseModel):
     urgencia: Literal["critica", "alta", "media", "baja"] = "media"
     mensaje: Optional[str] = Field(None, max_length=2000)
     # Producto de la suite desde el que se pide ayuda y, opcionalmente, sobre qué.
-    modulo: Literal["importaciones", "liquidaciones"] = "importaciones"
+    modulo: Literal["importaciones", "liquidaciones", "maquilas"] = "importaciones"
     referencia: Optional[str] = Field(None, max_length=80, pattern=r"^[a-z_]+:[A-Za-z0-9-]+$")
 
 

@@ -21,6 +21,8 @@ export interface PlatformConfig {
   cotizaciones_abiertas: boolean;
   /** Zarpi Liquidaciones: apagado, desaparece del selector de producto y del panel. */
   modulo_liquidaciones_habilitado: boolean;
+  /** Zarpi Maquilas: apagado, desaparece del selector, del registro de maquilas y del panel. */
+  modulo_maquilas_habilitado: boolean;
   correo_contacto: string;
   notificaciones_email: boolean;
   /** Tamaño máximo por archivo subido, en bytes. Ver `lib/limite-subida.ts`. */
@@ -36,6 +38,7 @@ const DEFAULT_CONFIG: PlatformConfig = {
   solo_con_plan: false,
   cotizaciones_abiertas: true,
   modulo_liquidaciones_habilitado: true,
+  modulo_maquilas_habilitado: true,
   correo_contacto: "contacto@zarpi.co",
   notificaciones_email: false,
   max_subida_bytes: 300 * 1024 * 1024,

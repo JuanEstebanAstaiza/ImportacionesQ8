@@ -15,32 +15,21 @@ Colecciones:
 from __future__ import annotations
 
 import logging
-import threading
 from typing import Optional
 
 from gridfs import GridFSBucket
-from pymongo import ASCENDING, DESCENDING, MongoClient, TEXT
+from pymongo import ASCENDING, DESCENDING, TEXT
 from pymongo.database import Database
 
 import config
+# El cliente es uno solo para todos los módulos de la suite (cada uno usa su base).
+from utils.mongo import cliente, ping  # noqa: F401 - `ping` lo usa /health/ready
 
 logger = logging.getLogger("importacionesq8")
-
-_cliente: Optional[MongoClient] = None
-_candado = threading.Lock()
 
 BUCKET_MEDIOS = "medios"
 BUCKET_DOCUMENTOS = "documentos"
 BUCKETS = (BUCKET_MEDIOS, BUCKET_DOCUMENTOS)
-
-
-def cliente() -> MongoClient:
-    global _cliente
-    if _cliente is None:
-        with _candado:
-            if _cliente is None:
-                _cliente = MongoClient(config.MONGO_URL, serverSelectionTimeoutMS=3000, uuidRepresentation="standard")
-    return _cliente
 
 
 def obtener_db() -> Database:
@@ -76,9 +65,3 @@ def asegurar_indices(db: Optional[Database] = None) -> None:
     db.operaciones.create_index([("cuenta_vendedor", ASCENDING), ("reservada_en", DESCENDING)])
     db.mensajes.create_index([("operacion_id", ASCENDING), ("fecha", ASCENDING)])
 
-
-def ping() -> bool:
-    try:
-        return bool(cliente().admin.command("ping").get("ok"))
-    except Exception:
-        return False

@@ -17,7 +17,10 @@ from database import Base
 # - "designer": diseñador de Zarpi, creado por un admin. Pone la portada y las imágenes con la
 #   identidad de marca a los productos de Tendencias ya aprobados y los publica. Está en el canal
 #   del equipo, pero no atiende soporte ni administra nada.
-ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin", "soporte", "designer")
+# - "maquiladora": cuenta de una maquiladora de Zarpi Maquilas (dueño o colaborador). Se registra
+#   sola en /maquilas/registro o la crea un admin; su empresa vive en la base del módulo (Mongo,
+#   colecciones `maquiladoras` y `miembros`), no en MySQL. Solo usa ese módulo.
+ROLES_VALIDOS = ("solicitante", "importador", "asesor", "admin", "soporte", "designer", "maquiladora")
 
 # Cuentas del equipo de la plataforma: comparten la bandeja de soporte y las
 # acciones de resolución. Se agrupan aquí para no repetir la pareja por todo el

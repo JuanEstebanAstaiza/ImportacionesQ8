@@ -40,6 +40,7 @@ from routers.comprobantes import router as comprobantes_router
 from routers.planes import router as planes_router
 from routers.condiciones_propuesta import router as condiciones_propuesta_router
 from liquidaciones.router import router as liquidaciones_router
+from maquilas.router import router as maquilas_router
 from utils.limiter import limiter
 from utils.security_middleware import (
     SecurityHeadersMiddleware,
@@ -148,6 +149,11 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(asegurar_indices)
     except Exception as e:
         logger.warning("No se pudieron asegurar los índices de Liquidaciones (MongoDB): %s", e)
+    try:
+        from maquilas.db import asegurar_indices as asegurar_indices_maquilas
+        await asyncio.to_thread(asegurar_indices_maquilas)
+    except Exception as e:
+        logger.warning("No se pudieron asegurar los índices de Maquilas (MongoDB): %s", e)
 
     import config
 
@@ -328,6 +334,7 @@ app.include_router(comprobantes_router)
 app.include_router(planes_router)
 app.include_router(condiciones_propuesta_router)
 app.include_router(liquidaciones_router)
+app.include_router(maquilas_router)
 
 @app.get("/", tags=["Salud"])
 async def root():
@@ -357,6 +364,7 @@ def configuracion_publica(db=Depends(get_db)):
     solo_con_plan = modulos.activo(db, "solo_con_plan")
     cotizaciones_abiertas = modulos.activo(db, "cotizaciones_abiertas")
     liquidaciones = modulos.activo(db, "liquidaciones")
+    maquilas = modulos.activo(db, "maquilas")
 
     return {
         "modulo_educativo_habilitado": modulo_educativo,
@@ -369,6 +377,8 @@ def configuracion_publica(db=Depends(get_db)):
         "cotizaciones_abiertas": cotizaciones_abiertas,
         # Zarpi Liquidaciones: apagado, desaparece del selector de producto y del panel.
         "modulo_liquidaciones_habilitado": liquidaciones,
+        # Zarpi Maquilas: apagado, desaparece del selector, del registro de maquilas y del panel.
+        "modulo_maquilas_habilitado": maquilas,
         "correo_contacto": app_config.CONTACT_EMAIL,
         "notificaciones_whatsapp": app_config.NOTIFICACIONES_WHATSAPP and bool(app_config.OPENWA_API_URL),
         "notificaciones_email": app_config.NOTIFICACIONES_EMAIL,
@@ -391,7 +401,7 @@ async def readiness_check():
     de enviar tráfico.
     """
     from database import check_database
-    from config import MODULO_LIQUIDACIONES_HABILITADO, redis_client
+    from config import MODULO_LIQUIDACIONES_HABILITADO, MODULO_MAQUILAS_HABILITADO, redis_client
     from liquidaciones.db import ping as mongo_ping
 
     checks = {"database": False, "redis": False, "mongo": False}
@@ -405,7 +415,7 @@ async def readiness_check():
 
     checks["mongo"] = await asyncio.to_thread(mongo_ping)
 
-    if checks["database"] and checks["redis"] and (checks["mongo"] or not MODULO_LIQUIDACIONES_HABILITADO):
+    if checks["database"] and checks["redis"] and (checks["mongo"] or not (MODULO_LIQUIDACIONES_HABILITADO or MODULO_MAQUILAS_HABILITADO)):
         return {"status": "ready", "checks": checks}
 
     return JSONResponse(

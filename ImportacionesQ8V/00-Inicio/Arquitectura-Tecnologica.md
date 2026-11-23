@@ -9,7 +9,7 @@ Resumen del stack de Zarpi y dónde está documentada cada pieza.
 | Capa | Tecnología |
 |------|------------|
 | API | FastAPI (Python 3.11), Uvicorn |
-| Datos | MySQL 8 + SQLAlchemy 2 + Alembic (plataforma: usuarios, Importaciones). Cada módulo nuevo de la suite tiene base aparte: **MongoDB 7** + GridFS para Zarpi Liquidaciones (ver [[31-Liquidaciones]]) |
+| Datos | MySQL 8 + SQLAlchemy 2 + Alembic (plataforma: usuarios, Importaciones). Cada módulo nuevo de la suite tiene base aparte: **MongoDB 7** + GridFS, una base por módulo en la misma instancia: Zarpi Liquidaciones ([[31-Liquidaciones]]) y Zarpi Maquilas ([[32-Maquilas]]) |
 | Cache / realtime | Redis 7 (matching y cupo de abiertas, pub/sub de chat y notificaciones, rate limits, modo mantenimiento) |
 | Auth | JWT (PyJWT) + OTP email + blacklist `jti` |
 | Pagos | Wompi (simulado mientras no haya llaves reales; el solicitante no paga por cotizar) |

@@ -15,6 +15,7 @@ from schemas.orden import (
 )
 from models.orden import Orden, HistorialEstadosOrden, DocumentoOrden, EstadoOrden, TipoDocumentoOrden
 from models.usuario import Usuario
+from models.usuario import ROLES_PLATAFORMA
 from utils.dependencies import get_db, get_current_user, require_rol, require_rol_in
 
 logger = logging.getLogger("importacionesq8")
@@ -131,11 +132,15 @@ async def listar_ordenes(
         ordenes = db.query(Orden).filter(
             Orden.importador_id == current_user.get("importador_id")
         ).order_by(Orden.fecha_creacion.desc()).all()
-    else:
-        # Admin ve todas las órdenes (limitado)
+    elif rol in ROLES_PLATAFORMA:
+        # El equipo de la plataforma (admin y soporte) ve todas las órdenes (limitado).
         ordenes = db.query(Orden).order_by(
             Orden.fecha_creacion.desc()
         ).limit(50).all()
+    else:
+        # Cualquier otro rol (diseño, maquiladora...) no tiene órdenes: antes caía
+        # en la rama del admin y veía las de todos.
+        ordenes = []
     
     return [
         OrdenResponse(

@@ -566,6 +566,7 @@ class CambioModulos(BaseModel):
     cobro_cotizaciones: Optional[bool] = None
     pago_manual_cursos: Optional[bool] = None
     liquidaciones: Optional[bool] = None
+    maquilas: Optional[bool] = None
 
 
 @router.get("/modulos")

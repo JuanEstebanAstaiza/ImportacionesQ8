@@ -10,10 +10,12 @@ decide aquello a lo que está ligado (ver `puede_ver`).
 """
 from __future__ import annotations
 
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import BinaryIO, Dict, Iterator, List, Optional, Tuple
+
+from utils import gridfs_archivos
+from utils.gridfs_archivos import MIME_POR_EXTENSION, TROZO, rango  # noqa: F401 - el router usa `rango`
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -34,15 +36,8 @@ TIPOS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "rut": (mongo.BUCKET_DOCUMENTOS, ("pdf", "jpg", "jpeg", "png")),
 }
 
-MIME_POR_EXTENSION = {
-    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp",
-    "mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime", "pdf": "application/pdf",
-}
-
 # Lotes cuyos medios y ficha técnica son públicos (los ve la landing sin sesión).
 ESTADOS_LOTE_PUBLICOS = ("publicado", "reservado", "vendido")
-
-TROZO = 1024 * 1024
 
 # Un archivo que se sube y nunca se adjunta (formulario abandonado, foto quitada
 # antes de enviar) no lo ve nadie: pasado este plazo se borra.
@@ -59,20 +54,7 @@ class ArchivoDemasiadoGrande(ArchivoInvalido):
 
 
 def _firma_valida(extension: str, cabecera: bytes) -> bool:
-    """Comprueba los primeros bytes: la extensión sola la cambia cualquiera."""
-    if extension in ("jpg", "jpeg"):
-        return cabecera.startswith(b"\xff\xd8\xff")
-    if extension == "png":
-        return cabecera.startswith(b"\x89PNG\r\n\x1a\n")
-    if extension == "webp":
-        return cabecera[:4] == b"RIFF" and cabecera[8:12] == b"WEBP"
-    if extension == "pdf":
-        return cabecera.startswith(b"%PDF")
-    if extension in ("mp4", "mov"):
-        return cabecera[4:8] == b"ftyp" or cabecera[4:8] in (b"moov", b"mdat", b"wide", b"free")
-    if extension == "webm":
-        return cabecera.startswith(b"\x1a\x45\xdf\xa3")
-    return False
+    return gridfs_archivos.firma_valida(extension, cabecera)
 
 
 def _limite_bytes(db: Database, tipo: str) -> int:
@@ -304,44 +286,5 @@ def puede_ver(db: Database, fila: Dict, usuario: Optional[dict]) -> bool:
     return False
 
 
-_RANGO = re.compile(r"bytes=(\d*)-(\d*)$")
-
-
-def rango(cabecera: Optional[str], tamano: int) -> Optional[Tuple[int, int]]:
-    """Interpreta `Range: bytes=a-b` (un solo rango). None si no aplica."""
-    if not cabecera:
-        return None
-    m = _RANGO.match(cabecera.strip())
-    if not m or (not m.group(1) and not m.group(2)):
-        return None
-    if m.group(1):
-        inicio = int(m.group(1))
-        fin = int(m.group(2)) if m.group(2) else tamano - 1
-    else:
-        # bytes=-N: los últimos N bytes.
-        inicio = max(tamano - int(m.group(2)), 0)
-        fin = tamano - 1
-    fin = min(fin, tamano - 1)
-    if inicio > fin:
-        return None
-    return inicio, fin
-
-
 def leer_trozos(db: Database, nombre_bucket: str, archivo_id, inicio: int = 0, fin: Optional[int] = None) -> Iterator[bytes]:
-    try:
-        salida = mongo.bucket(db, nombre_bucket).open_download_stream(archivo_id)
-    except NoFile:
-        return
-    try:
-        if inicio:
-            salida.seek(inicio)
-        restante = (fin - inicio + 1) if fin is not None else None
-        while restante is None or restante > 0:
-            trozo = salida.read(TROZO if restante is None else min(TROZO, restante))
-            if not trozo:
-                break
-            if restante is not None:
-                restante -= len(trozo)
-            yield trozo
-    finally:
-        salida.close()
+    return gridfs_archivos.leer_trozos(mongo.bucket(db, nombre_bucket), archivo_id, inicio, fin)

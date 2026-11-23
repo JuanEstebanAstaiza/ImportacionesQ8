@@ -2,7 +2,7 @@ import {
   Award, BookOpen, Building2, ClipboardList, CreditCard, DatabaseBackup, Film,
   FileText, FolderOpen, Flame, GitCompare, GraduationCap, Layers, LayoutGrid,
   LibraryBig, LifeBuoy, Mail, MessageSquare, Palette, ShoppingCart, Sparkles,
-  ToggleRight, Trophy, Type, Users, WalletCards, Zap,
+  PenTool, ToggleRight, Trophy, Type, Users, WalletCards, Zap,
 } from "lucide-react";
 import type { Screen } from "@/app/rutas";
 import type { NavItem } from "@/types/navigation";
@@ -48,5 +48,8 @@ export const NAV_SOPORTE: NavItem[] = [
 export const NAV_DISENO: NavItem[] = [
   { icon: Palette, label: "Diseño", key: "diseno" }, { icon: Sparkles, label: "Tendencias", key: "tendencias" },
   { icon: FolderOpen, label: "Documentos", key: "documentos" },
+  { icon: PenTool, label: "Encargos de marca", key: "maq-encargos" },
 ];
-export const PANTALLAS_DESIGNER: Screen[] = ["diseno", "team-channel", "user-profile", "notifications", "documentos", "tendencias", "tendencia-detalle"];
+export const PANTALLAS_DESIGNER: Screen[] = ["diseno", "team-channel", "user-profile", "notifications", "documentos", "tendencias", "tendencia-detalle", "maq-encargos", "maq-encargo"];
+/** La maquiladora solo usa Zarpi Maquilas: sus pantallas y las de la cuenta (perfil, avisos, ayuda). */
+export const PANTALLAS_MAQUILADORA: Screen[] = ["maq-panel", "maq-perfil", "maq-recibidas", "maq-produccion", "maq-catalogo", "maq-resenas", "maq-equipo", "maq-landing", "user-profile", "notifications", "chats"];

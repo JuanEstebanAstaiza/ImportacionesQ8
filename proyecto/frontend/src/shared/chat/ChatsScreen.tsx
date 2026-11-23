@@ -14,6 +14,7 @@ import type { SidebarCtrl } from "@/types/portal";
 import type { UserRole } from "@/types/roles";
 import type { ChatConv, ChatMsg, MsgFile, MsgFileType } from "@/types/chat";
 import type { Order } from "@/types/order";
+import type { Quote } from "@/types/quote";
 import {
   initialsFromName,
   importerColorFromId,
@@ -115,7 +116,7 @@ function puedeVerTierDeContraparte(currentUserRole: UserRole | "admin", counterp
 /** «operacion:<id>» → «Operación 1A2B3C4D»: la referencia que guarda un ticket abierto desde un producto. */
 function etiquetaReferencia(referencia: string): string {
   const [tipo, id = ""] = referencia.split(":");
-  const nombre = tipo === "operacion" ? "Operación" : tipo === "lote" ? "Lote" : tipo;
+  const nombre = tipo === "operacion" ? "Operación" : tipo === "lote" ? "Lote" : tipo === "pedido" ? "Pedido" : tipo === "solicitud" ? "Solicitud" : tipo;
   return `${nombre} ${id.slice(0, 8).toUpperCase()}`;
 }
 

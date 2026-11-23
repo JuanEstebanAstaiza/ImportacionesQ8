@@ -262,6 +262,7 @@ function isProtectedPath(pathname: string): boolean {
     "/catalogos",
     "/reto",
     "/liquidaciones",
+    "/maquilas",
   ];
   // Excepciones públicas dentro de prefijos protegidos: el feed y la ficha de
   // Tendencias y la página del reto se ven sin sesión.
@@ -270,6 +271,8 @@ function isProtectedPath(pathname: string): boolean {
   const publicPrefixes = [
     "/tendencias/feed", "/tendencias/items/", "/reto/rondas/abierta", "/reto/lista-espera",
     "/liquidaciones/publico/", "/liquidaciones/archivos/",
+    // Maquilas: el formulario de registro (sin sesión), la vitrina de la landing y la galería pública de las verificadas.
+    "/maquilas/registro", "/maquilas/parametros", "/maquilas/vitrina", "/maquilas/archivos/",
   ];
   if (publicPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix))) {
     return false;
