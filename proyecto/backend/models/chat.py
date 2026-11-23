@@ -119,6 +119,7 @@ class ConversacionChat(Base):
     # "operacion:<id>"... Es texto libre del módulo, sin FK: los datos de cada
     # módulo viven en su propia base.
     referencia = Column(String(80), nullable=True)
+    archivada_por = Column(JSON, nullable=True)
     # Nivel de mesa que requiere el caso y agente que lo atiende. La asignación
     # es automática al abrirlo (ver `asignar_agente`), y un agente puede escalar
     # el ticket si al leerlo ve que le queda grande.

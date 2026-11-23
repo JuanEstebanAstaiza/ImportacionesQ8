@@ -22,7 +22,7 @@ from schemas.chat import (
     MensajeChatCreate, MensajeChatResponse, ConversacionChatResponse, IniciarChatRequest,
     IniciarChatInternoRequest, AbrirSoporteRequest, CerrarTicketRequest,
     EscalarTicketRequest, CalificarSoporteRequest,
-    AbrirCanalEquipoRequest, MiembroEquipoItem,
+    AbrirCanalEquipoRequest, MiembroEquipoItem, ArchivarConversacionRequest,
 )
 from services import acceso_chat
 from services.mesa_soporte import acotar_nivel, elegir_agente, nivel_inicial
@@ -310,6 +310,7 @@ def _respuesta_conversacion(
         lado_reserva=lado_reserva,
         solicitante_rol=rol_solicitante,
         no_leidos=_contar_no_leidos(db, str(conversacion.id), current_user["user_id"]),
+        archivada=bool((conversacion.archivada_por or {}).get(str(current_user["user_id"]), False)),
         fecha_creacion=conversacion.fecha_creacion,
         ultimo_mensaje=ultimo,
     )
@@ -1071,6 +1072,32 @@ async def reabrir_ticket_soporte(
         MensajeChat.conversacion_id == conversacion.id
     ).order_by(MensajeChat.fecha_envio.desc()).first()
     return _respuesta_conversacion(db, conversacion, current_user, ultimo)
+
+
+@router.put("/conversaciones/{conversacion_id}/archivado")
+async def cambiar_archivado(
+    conversacion_id: str,
+    datos: ArchivarConversacionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    conversacion = (db.query(ConversacionChat)
+                    .filter(ConversacionChat.id == conversacion_id)
+                    .with_for_update().first())
+    if not conversacion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversación no encontrada")
+    if not _verificar_acceso_conversacion(conversacion, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para archivar esta conversación")
+
+    preferencias = dict(conversacion.archivada_por or {})
+    usuario_id = str(current_user["user_id"])
+    if datos.archivada:
+        preferencias[usuario_id] = True
+    else:
+        preferencias.pop(usuario_id, None)
+    conversacion.archivada_por = preferencias
+    db.commit()
+    return {"archivada": datos.archivada}
 
 
 @router.post("/conversaciones/{conversacion_id}/leida", status_code=status.HTTP_204_NO_CONTENT)

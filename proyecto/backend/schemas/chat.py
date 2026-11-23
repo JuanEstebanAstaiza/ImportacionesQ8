@@ -85,6 +85,7 @@ class ConversacionChatResponse(BaseModel):
     solicitante_rol: Optional[str] = None
     # Mensajes posteriores a la última lectura de quien consulta.
     no_leidos: int = 0
+    archivada: bool = False
     # Cierre del ticket: qué se hizo, quién lo cerró y cuándo.
     cerrada: bool = False
     resolucion: Optional[str] = None
@@ -106,6 +107,10 @@ class ConversacionChatResponse(BaseModel):
     ultimo_mensaje: Optional[MensajeChatResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ArchivarConversacionRequest(BaseModel):
+    archivada: bool
 
 
 class CerrarTicketRequest(BaseModel):

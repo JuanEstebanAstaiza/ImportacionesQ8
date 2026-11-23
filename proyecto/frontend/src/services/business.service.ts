@@ -591,6 +591,7 @@ export interface BackendChatConversation {
   solicitante_rol: string | null;
   /** Mensajes ajenos posteriores a la última lectura de quien consulta. */
   no_leidos: number;
+  archivada: boolean;
   /** Cierre del ticket: qué se hizo, quién lo cerró y cuándo. */
   cerrada: boolean;
   resolucion: string | null;
@@ -936,6 +937,13 @@ export const businessService = {
   /** Marca el hilo como leído hasta ahora para el usuario en sesión. */
   markConversationRead(conversationId: string): Promise<void> {
     return apiRequest<void>(`/chat/conversaciones/${conversationId}/leida`, { method: "POST" });
+  },
+
+  setConversationArchived(conversationId: string, archivada: boolean): Promise<{ archivada: boolean }> {
+    return apiRequest<{ archivada: boolean }>(`/chat/conversaciones/${conversationId}/archivado`, {
+      method: "PUT",
+      body: { archivada },
+    });
   },
 
   listChatMessages(conversationId: string): Promise<BackendChatMessage[]> {

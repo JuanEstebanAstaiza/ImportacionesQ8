@@ -719,7 +719,7 @@ export default function App() {
         advisorInitials: importer?.advisor.initials,
         advisorColor: importer?.advisor.color,
         atiendeNombre: row.asesor_nombre ?? undefined,
-        status: "activa",
+        status: row.archivada ? "archivada" : "activa",
         // Lo calcula el backend contra la marca de lectura del usuario; antes
         // estaba escrito a cero y el filtro de no leÃ­das no filtraba nada.
         unread: row.no_leidos ?? 0,
@@ -1119,6 +1119,14 @@ export default function App() {
     // resto se refresca al volver a la pestaÃ±a.
     if (reason === "focus") {
       tareas.push(reloadChatData());
+    } else {
+      tareas.push(domainService.listChatConversations().then(rows => {
+        const estados = new Map(rows.map(row => [row.id, row]));
+        setChatConversations(previous => previous.map(conversation => {
+          const row = estados.get(conversation.id);
+          return row ? { ...conversation, status: row.archivada ? "archivada" : "activa", unread: row.no_leidos } : conversation;
+        }));
+      }));
     }
 
     // El detalle abierto se refresca en silencio (sin desmontar la pantalla).
@@ -1311,13 +1319,14 @@ export default function App() {
    * los tickets de clientes y empresas, y mezclar las dos cosas es justo lo que
    * no debe pasar en un canal interno.
    */
+  const markConversationRead = useCallback((conversationId: string) => {
+    setChatConversations((previous) => previous.some((conversation) => conversation.id === conversationId && conversation.unread > 0)
+      ? previous.map((conversation) => conversation.id === conversationId ? { ...conversation, unread: 0 } : conversation) : previous);
+  }, []);
   const actionOptions = {
     userRole, currentUserProfile, chatConversations, companyAdvisors, selectedOrderId,
     setInitialChatConvId, setSoporteAbierto, openChat, goTo, setChatMessagesByConversation,
-    setActiveChatId, markConversationRead: (conversationId: string) => {
-      setChatConversations((previous) => previous.some((conversation) => conversation.id === conversationId && conversation.unread > 0)
-        ? previous.map((conversation) => conversation.id === conversationId ? { ...conversation, unread: 0 } : conversation) : previous);
-    },
+    setActiveChatId, markConversationRead,
     setMiembrosEquipo, reloadChatData, reloadAdvisorAvailableQuotes, reloadAdvisorAssignedQuotes,
     reloadRequesterQuotes, reloadRequesterResponses, reloadRequesterOrders, reloadImporterQuotes,
     reloadImporterOrders, reloadCompanyAdvisors, reloadCurrentUserProfile, reloadImporters,
@@ -1383,6 +1392,9 @@ export default function App() {
   }
   const conversacionesDelEquipo = chatConversations.filter((c)=>c.type==="equipo");
   const conversacionesDeChats = chatConversations.filter((c)=>c.type!=="equipo");
+  function actualizarArchivoChat(id:string,archivada:boolean) {
+    setChatConversations(previous=>previous.map(c=>c.id===id?{...c,status:archivada?"archivada":"activa"}:c));
+  }
 
   function openChat(convId:string){setInitialChatConvId(convId);goTo("chats");}
 
@@ -1790,8 +1802,8 @@ export default function App() {
       if(userRole!=="admin"&&!currentUserProfile?.es_curador)return unauthorizedFallback;
       return <PantallaPortal sb={sb} active="tendencias-aprobacion" titulo="Tendencias Â· Aprobación"><PanelAprobacion esAdmin={userRole==="admin"}/></PantallaPortal>;
     }
-    if(screen==="chats")return <ChatsScreen onViewQuote={verCotizacionDeChat} onViewOrder={verOrdenDeChat} onViewReserva={verReservaDeChat} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters} onLoadResourceFolder={reloadDocumentExplorer} userPhotoUrl={currentUserProfile?.foto_url || undefined}/>;
-    if(screen==="team-channel")return <ChatsScreen modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={verCotizacionDeChat} onViewOrder={verOrdenDeChat} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters} onLoadResourceFolder={reloadDocumentExplorer} userPhotoUrl={currentUserProfile?.foto_url || undefined}/>;
+    if(screen==="chats")return <ChatsScreen onArchiveChanged={actualizarArchivoChat} onViewQuote={verCotizacionDeChat} onViewOrder={verOrdenDeChat} onViewReserva={verReservaDeChat} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDeChats} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters} onLoadResourceFolder={reloadDocumentExplorer} userPhotoUrl={currentUserProfile?.foto_url || undefined}/>;
+    if(screen==="team-channel")return <ChatsScreen onArchiveChanged={actualizarArchivoChat} modoEquipo miembrosEquipo={miembrosEquipo} onAbrirHiloEquipo={abrirHiloEquipo} onViewQuote={verCotizacionDeChat} onViewOrder={verOrdenDeChat} sb={sb} initialConvId={initialChatConvId} conversations={conversacionesDelEquipo} messagesByConversation={chatMessagesByConversation} onSendMessage={handleSendChatMessage} onOpenProposalForm={openProposalForm} proposalStateByQuoteId={Object.fromEntries(Object.entries(advisorProposalsByQuoteId).map(([id,propuesta])=>[id,propuesta.estado]))} onShareLocalAttachment={handleShareLocalAttachment} onShareExistingResource={handleShareExistingResource} onTransferConversation={handleTransferConversation} onUpdateOrderStatus={handleUpdateOrderStatus} onAttachOrderDocument={handleAttachOrderDocument} onActiveConversationChange={handleActiveConversationChange} onCloseTicket={handleCloseTicket} onReopenTicket={handleReopenTicket} onEscalateTicket={handleEscalateTicket} onRateTicket={handleRateTicket} companyAdvisors={companyAdvisors} currentUserRole={userRole} chatAttachmentsByConversation={chatAttachmentsByConversation} orders={userRole==="importadora"?importerOrders:requesterOrders} quotes={userRole==="importadora"?importerQuotes:requesterQuotes} importers={marketplaceImporters} onLoadResourceFolder={reloadDocumentExplorer} userPhotoUrl={currentUserProfile?.foto_url || undefined}/>;
     if(screen==="documentos")return <DocumentosScreen sb={sb} explorer={documentExplorer} isLoading={isDocumentExplorerLoading} currentFolderId={documentCurrentFolderId} onLoadFolder={async(parentId)=>{await reloadDocumentExplorer(parentId);}} onCreateFolder={handleCreateDocumentFolder} onRegisterFile={handleRegisterLocalDocument} onSearch={handleSearchDocuments} onMoveFile={handleMoveDocumentFile} onMoveFolder={handleMoveDocumentFolder} onRenameFile={handleRenameDocumentFile} onRenameFolder={handleRenameDocumentFolder} onDeleteFile={handleDeleteDocumentFile} onDeleteFolder={handleDeleteDocumentFolder} protectedFolders={protectedRootFolders}/>;
     if(screen==="pagos")return <PantallaPortal sb={sb} active="pagos" titulo="Pagos"><CargueDescarguePagos rol={userRole} cursoInicial={cursoAPagar} onCursoInicialUsado={()=>setCursoAPagar(null)} carpetaInicial={carpetaPagos}/></PantallaPortal>;
     if(screen==="user-profile")return (
